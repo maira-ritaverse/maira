@@ -14,7 +14,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Maira - あなただけのAI転職エージェント",
-  description: "求人を持たないから、あなたの利益だけで動けるAI転職エージェント。完全プライベート設計で、運営者もあなたのデータを閲覧できません。",
+  description:
+    "求人を持たないから、あなたの利益だけで動けるAI転職エージェント。完全プライベート設計で、運営者もあなたのデータを閲覧できません。",
 };
 
 export default function RootLayout({
@@ -23,11 +24,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+      <body className="flex min-h-full flex-col">{children}</body>
     </html>
   );
 }
