@@ -57,3 +57,6 @@ coverage/
 *.pem
 .cache/
 .turbo/
+
+# Claude Code ローカル設定(個人の許可ポリシーなど)
+.claude/settings.local.json
