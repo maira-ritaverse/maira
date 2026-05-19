@@ -13,8 +13,11 @@ declare global {
       NEXT_PUBLIC_SUPABASE_ANON_KEY: string;
       SUPABASE_SERVICE_ROLE_KEY: string;
 
-      // Anthropic(後続)
-      ANTHROPIC_API_KEY?: string;
+      // Site URL
+      NEXT_PUBLIC_SITE_URL: string;
+
+      // Anthropic(サーバーサイドのみ。NEXT_PUBLIC_ を付けないこと)
+      ANTHROPIC_API_KEY: string;
     }
   }
 }

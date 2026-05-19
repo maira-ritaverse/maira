@@ -14,10 +14,14 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.78",
+    "@ai-sdk/react": "^3.0.186",
+    "@anthropic-ai/sdk": "^0.96.0",
     "@base-ui/react": "^1.4.1",
     "@hookform/resolvers": "^5.2.2",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.105.4",
+    "ai": "^6.0.184",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.16.0",

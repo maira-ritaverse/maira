@@ -4,6 +4,7 @@ import Link from "next/link";
 
 const navItems = [
   { href: "/app", label: "ダッシュボード", icon: "📊" },
+  { href: "/app/test-chat", label: "AI動作確認", icon: "🤖" },
   { href: "/app/career", label: "キャリア棚卸し", icon: "💬", disabled: true },
   { href: "/app/documents", label: "書類作成", icon: "📝", disabled: true },
   { href: "/app/applications", label: "応募管理", icon: "📋", disabled: true },
