@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { GenerateProfileButton } from "@/components/features/generate-profile-button";
 import { Button } from "@/components/ui/button";
 import { getMessages, verifyConversationOwner } from "@/lib/career/conversations";
 import { createClient } from "@/lib/supabase/server";
@@ -32,14 +33,17 @@ export default async function CareerConversationPage({
 
   return (
     <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-3xl flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold">キャリア棚卸し</h1>
           <p className="text-muted-foreground text-xs">会話は自動的に保存されます</p>
         </div>
-        <Button render={<Link href="/app/career" />} variant="outline" size="sm">
-          一覧に戻る
-        </Button>
+        <div className="flex items-center gap-2">
+          <GenerateProfileButton conversationId={id} />
+          <Button render={<Link href="/app/career" />} variant="outline" size="sm">
+            一覧に戻る
+          </Button>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1">

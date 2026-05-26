@@ -44,12 +44,21 @@ function Button({
   className,
   variant = "default",
   size = "default",
+  render,
+  nativeButton,
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  // render に <Link>(=<a>)など非 <button> 要素を渡すケースでは
+  // base-ui の nativeButton=true(デフォルト)と矛盾してエラーになる。
+  // render が指定されているとき、明示の nativeButton 指定がなければ false を既定にする。
+  const resolvedNativeButton = nativeButton ?? render === undefined;
+
   return (
     <ButtonPrimitive
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
+      render={render}
+      nativeButton={resolvedNativeButton}
       {...props}
     />
   );

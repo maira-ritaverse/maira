@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { listCareerConversations } from "@/lib/career/conversations";
+import { getCareerProfile, listCareerConversations } from "@/lib/career/conversations";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -20,6 +20,7 @@ export default async function CareerListPage() {
   if (!user) redirect("/auth/login");
 
   const conversations = await listCareerConversations(user.id);
+  const profileData = await getCareerProfile(user.id);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -29,6 +30,23 @@ export default async function CareerListPage() {
           雑談感覚であなたの強みや価値観を整理します
         </p>
       </div>
+
+      {profileData && (
+        <Card className="border-primary/40 bg-primary/5 p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <p className="text-muted-foreground mb-2 text-xs font-medium">
+                現在の棚卸し結果(v{profileData.version})
+              </p>
+              <p className="text-sm leading-relaxed">{profileData.profile.summary}</p>
+              <p className="text-muted-foreground mt-3 text-xs">
+                最終更新: {new Date(profileData.updatedAt).toLocaleString("ja-JP")} ・ 強み{" "}
+                {profileData.profile.strengths.length}個
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       <div className="flex justify-end">
         <Button render={<Link href="/app/career/new" />}>新しく棚卸しを始める</Button>

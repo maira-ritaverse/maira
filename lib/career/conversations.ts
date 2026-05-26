@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { careerProfileSchema, type CareerProfile } from "./profile-schema";
 
 /**
  * キャリア棚卸し用の会話/メッセージ操作ヘルパー
@@ -96,15 +97,15 @@ export async function saveMessage(params: {
 }): Promise<void> {
   const supabase = await createClient();
 
-  const contentBytes = textToBytes(params.content);
+  const contentBytea = textToByteaInput(params.content);
   // 暗号化なし版のダミーIV(本実装で本物のIVに置き換える)
-  const dummyIv = textToBytes("");
+  const dummyIv = textToByteaInput("");
 
   const { error: insertError } = await supabase.from("messages").insert({
     conversation_id: params.conversationId,
     user_id: params.userId,
     role: params.role,
-    encrypted_content: contentBytes,
+    encrypted_content: contentBytea,
     encryption_iv: dummyIv,
     model_used: params.modelUsed,
     input_tokens: params.inputTokens,
@@ -157,8 +158,20 @@ export async function listCareerConversations(userId: string) {
 // Week 3 で AES-256-GCM の本物の暗号化に置き換える。
 // ====================================================================
 
-function textToBytes(text: string): Buffer {
-  return Buffer.from(text, "utf-8");
+/**
+ * テキストを PostgreSQL bytea 入力用の文字列に変換する。
+ *
+ * supabase-js は insert/update の値を JSON.stringify するため、Node の Buffer を
+ * そのまま渡すと Buffer.toJSON() が呼ばれて `{"type":"Buffer","data":[...]}` という
+ * オブジェクトに変換され、PostgREST はそのバイト列(=JSON文字列)を bytea に書き込む。
+ * 結果として読み戻したデータが文字化けする。
+ *
+ * これを避けるため、bytea には PostgreSQL の bytea テキスト入力形式
+ * `\x` + hex 文字列を渡す。supabase-js が文字列として送り、PostgreSQL 側が
+ * bytea にデコードしてくれる。読み出し側の bytesToText は既に `\x` 対応済み。
+ */
+function textToByteaInput(text: string): string {
+  return "\\x" + Buffer.from(text, "utf-8").toString("hex");
 }
 
 /**
@@ -183,4 +196,106 @@ function bytesToText(value: unknown): string {
 
   // 想定外の形式が来た場合は安全側に倒して空文字
   return "";
+}
+
+// ====================================================================
+// career_profiles の CRUD ヘルパー
+// 1ユーザー1レコードの想定。version は更新ごとにインクリメントする。
+// 暗号化は未実装(Week 3で本実装、ここも encrypted_data に本物の暗号文を入れる)。
+// ====================================================================
+
+/**
+ * career_profile の保存(upsert、1ユーザー1レコード)
+ */
+export async function saveCareerProfile(userId: string, profile: CareerProfile): Promise<void> {
+  const supabase = await createClient();
+
+  // JSON文字列 → bytea テキスト入力形式(暗号化なし版)
+  // saveMessage と同じ理由で Buffer ではなく \x hex 文字列を渡す。
+  const dataBytea = textToByteaInput(JSON.stringify(profile));
+  const dummyIv = textToByteaInput("");
+
+  // 既存レコードがあるかチェック
+  const { data: existing } = await supabase
+    .from("career_profiles")
+    .select("id, version")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existing) {
+    // 更新(version をインクリメント)
+    const { error } = await supabase
+      .from("career_profiles")
+      .update({
+        encrypted_data: dataBytea,
+        encryption_iv: dummyIv,
+        version: existing.version + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", userId);
+
+    if (error) {
+      throw new Error(`Failed to update career profile: ${error.message}`);
+    }
+  } else {
+    // 新規作成
+    const { error } = await supabase.from("career_profiles").insert({
+      user_id: userId,
+      encrypted_data: dataBytea,
+      encryption_iv: dummyIv,
+      version: 1,
+    });
+
+    if (error) {
+      throw new Error(`Failed to create career profile: ${error.message}`);
+    }
+  }
+}
+
+/**
+ * career_profile の取得
+ */
+export async function getCareerProfile(
+  userId: string,
+): Promise<{ profile: CareerProfile; version: number; updatedAt: string } | null> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("career_profiles")
+    .select("encrypted_data, version, updated_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to fetch career profile: ${error.message}`);
+  }
+
+  if (!data) return null;
+
+  // バイト列 → JSON文字列 → オブジェクト
+  const jsonString = bytesToText(data.encrypted_data);
+
+  // 読み出し時にスキーマで検証(stale/破損データで UI を crash させないため防御的に)
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(jsonString);
+  } catch (e) {
+    console.error("career_profiles: stored data is not valid JSON", e);
+    return null;
+  }
+
+  const validated = careerProfileSchema.safeParse(parsedJson);
+  if (!validated.success) {
+    console.error("career_profiles: stored data does not match schema", {
+      issues: validated.error.issues,
+      raw: parsedJson,
+    });
+    return null;
+  }
+
+  return {
+    profile: validated.data,
+    version: data.version,
+    updatedAt: data.updated_at,
+  };
 }
