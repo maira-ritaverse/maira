@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { getCareerProfile, listCareerConversations } from "@/lib/career/conversations";
 import { createClient } from "@/lib/supabase/server";
 
@@ -53,12 +54,11 @@ export default async function CareerListPage() {
       </div>
 
       {conversations.length === 0 ? (
-        <Card className="p-12 text-center">
-          <p className="text-lg">まだ棚卸し履歴がありません</p>
-          <p className="text-muted-foreground mt-2 text-sm">
-            「新しく棚卸しを始める」ボタンから始められます
-          </p>
-        </Card>
+        <EmptyState
+          icon="💬"
+          title="まだ棚卸し履歴がありません"
+          description="「新しく棚卸しを始める」ボタンから始められます"
+        />
       ) : (
         <div className="space-y-3">
           {conversations.map((conv) => (

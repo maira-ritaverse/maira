@@ -1,6 +1,7 @@
 import { convertToModelMessages, streamText, type UIMessage } from "ai";
 import { NextResponse } from "next/server";
 import { getModel, MODELS } from "@/lib/ai/client";
+import { categorizeAIError } from "@/lib/ai/error-handler";
 import {
   APPLICATION_ADVISOR_SYSTEM_PROMPT,
   buildAdvisorContext,
@@ -127,6 +128,12 @@ export async function POST(request: Request, { params }: RouteParams) {
     model: getModel(MODELS.CONVERSATION),
     system: fullSystemPrompt,
     messages: modelMessages,
+    onError: ({ error }) => {
+      // ストリーミング中のエラーはサーバーログに分類して残す。
+      // クライアントには AI SDK 経由で useChat.error として伝わる。
+      const info = categorizeAIError(error);
+      console.error("Advisor streaming error:", info.category, info.userMessage, error);
+    },
     onFinish: async ({ text, usage }) => {
       // ストリーミング完了時の保存失敗はユーザー応答に影響させない
       try {

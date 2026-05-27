@@ -1,6 +1,7 @@
 import { streamText, convertToModelMessages, type UIMessage } from "ai";
 import { NextResponse } from "next/server";
 import { getModel, MODELS } from "@/lib/ai/client";
+import { categorizeAIError } from "@/lib/ai/error-handler";
 import { CAREER_INVENTORY_SYSTEM_PROMPT } from "@/lib/ai/prompts/career-inventory";
 import { createClient } from "@/lib/supabase/server";
 import { saveMessage, verifyConversationOwner } from "@/lib/career/conversations";
@@ -84,6 +85,12 @@ export async function POST(request: Request) {
     model: getModel(MODELS.CONVERSATION),
     system: CAREER_INVENTORY_SYSTEM_PROMPT,
     messages: modelMessages,
+    onError: ({ error }) => {
+      // ストリーミング中のエラーはサーバーログに分類して残す。
+      // クライアントには AI SDK 経由で useChat.error として伝わる。
+      const info = categorizeAIError(error);
+      console.error("Career chat streaming error:", info.category, info.userMessage, error);
+    },
     onFinish: async ({ text, usage }) => {
       // ストリーミング完了時にAI応答をDB保存。
       // ここで失敗してもユーザーへの応答ストリームには影響させない。

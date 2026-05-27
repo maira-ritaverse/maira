@@ -1,6 +1,7 @@
 import { streamText, convertToModelMessages, type UIMessage } from "ai";
 import { NextResponse } from "next/server";
 import { getModel, MODELS } from "@/lib/ai/client";
+import { categorizeAIError } from "@/lib/ai/error-handler";
 import { TEST_CHAT_SYSTEM_PROMPT } from "@/lib/ai/prompts/test-chat";
 import { createClient } from "@/lib/supabase/server";
 
@@ -45,6 +46,12 @@ export async function POST(request: Request) {
     model: getModel(MODELS.CONVERSATION),
     system: TEST_CHAT_SYSTEM_PROMPT,
     messages: modelMessages,
+    onError: ({ error }) => {
+      // ストリーミング中のエラーはサーバーログに分類して残す。
+      // クライアントには AI SDK 経由で useChat.error として伝わる。
+      const info = categorizeAIError(error);
+      console.error("Chat streaming error:", info.category, info.userMessage, error);
+    },
   });
 
   return result.toUIMessageStreamResponse();

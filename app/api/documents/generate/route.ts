@@ -1,6 +1,7 @@
 import { generateText } from "ai";
 import { NextResponse } from "next/server";
 import { getModel, MODELS } from "@/lib/ai/client";
+import { aiErrorToStatusCode, categorizeAIError } from "@/lib/ai/error-handler";
 import { buildDocumentPrompt } from "@/lib/ai/prompts/document-writer";
 import { generateDocumentRequestSchema, requiresJobInfo } from "@/lib/documents/types";
 import { createClient } from "@/lib/supabase/server";
@@ -114,12 +115,17 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Document generation error:", error);
+
+    // categorizeAIError でエラーを分類し、ユーザー向け文言と HTTP ステータスを統一
+    const info = categorizeAIError(error);
     return NextResponse.json(
       {
         error: "Failed to generate document",
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: info.userMessage,
+        category: info.category,
+        retryable: info.retryable,
       },
-      { status: 500 },
+      { status: aiErrorToStatusCode(info.category) },
     );
   }
 }

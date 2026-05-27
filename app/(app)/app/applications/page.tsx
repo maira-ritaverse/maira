@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { listApplications } from "@/lib/applications/queries";
 import {
   applicationStatuses,
@@ -73,16 +74,15 @@ export default async function ApplicationsListPage({ searchParams }: Props) {
       </div>
 
       {applications.length === 0 ? (
-        <Card className="p-12 text-center">
-          <p className="text-lg">
-            {statusFilter
+        <EmptyState
+          icon="📋"
+          title={
+            statusFilter
               ? `「${applicationStatusLabels[statusFilter]}」の応募はまだありません`
-              : "応募がまだ登録されていません"}
-          </p>
-          <p className="text-muted-foreground mt-2 text-sm">
-            「+ 新規応募を追加」ボタンから追加できます
-          </p>
-        </Card>
+              : "応募がまだ登録されていません"
+          }
+          description="「+ 新規応募を追加」ボタンから追加できます"
+        />
       ) : (
         <div className="space-y-3">
           {applications.map((app) => (

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { getCareerProfile } from "@/lib/career/conversations";
 import { listDocumentConversations } from "@/lib/documents/conversations";
 import { documentTypeLabels, type DocumentType } from "@/lib/documents/types";
@@ -59,14 +60,15 @@ export default async function DocumentsListPage() {
       </div>
 
       {documents.length === 0 ? (
-        <Card className="p-12 text-center">
-          <p className="text-lg">まだ書類がありません</p>
-          <p className="text-muted-foreground mt-2 text-sm">
-            {hasProfile
+        <EmptyState
+          icon="📝"
+          title="まだ書類がありません"
+          description={
+            hasProfile
               ? "「新しく書類を作る」ボタンから生成できます"
-              : "キャリア棚卸しを完了させると書類を作成できます"}
-          </p>
-        </Card>
+              : "キャリア棚卸しを完了させると書類を作成できます"
+          }
+        />
       ) : (
         <div className="space-y-3">
           {documents.map((doc) => {

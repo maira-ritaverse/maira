@@ -6,6 +6,7 @@ import { listApplications } from "@/lib/applications/queries";
 import { taskPriorityLabels, type Task } from "@/lib/tasks/types";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 
 /**
  * 横断タスクビュー(/app/tasks)。
@@ -81,10 +82,11 @@ export default async function TasksPage() {
       </div>
 
       {tasks.length === 0 ? (
-        <Card className="p-12 text-center">
-          <p className="text-lg">タスクはありません</p>
-          <p className="text-muted-foreground mt-2 text-sm">応募詳細画面でタスクを追加できます</p>
-        </Card>
+        <EmptyState
+          icon="✅"
+          title="タスクはありません"
+          description="応募詳細画面でタスクを追加できます"
+        />
       ) : (
         <>
           <TaskSection

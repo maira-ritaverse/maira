@@ -328,7 +328,9 @@ function PopupChatActive({
       {error && (
         <div className="px-3 pb-2">
           <Alert variant="destructive">
-            <AlertDescription className="text-xs">エラー: {error.message}</AlertDescription>
+            <AlertDescription className="text-xs">
+              申し訳ありません、エラーが発生しました。少し時間を置いてから再度お試しください。
+            </AlertDescription>
           </Alert>
         </div>
       )}

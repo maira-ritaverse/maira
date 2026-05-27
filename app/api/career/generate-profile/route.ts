@@ -1,6 +1,7 @@
 import { generateObject } from "ai";
 import { NextResponse } from "next/server";
 import { getModel, MODELS } from "@/lib/ai/client";
+import { aiErrorToStatusCode, categorizeAIError } from "@/lib/ai/error-handler";
 import { CAREER_PROFILE_GENERATOR_SYSTEM_PROMPT } from "@/lib/ai/prompts/career-profile-generator";
 import { careerProfileSchema } from "@/lib/career/profile-schema";
 import {
@@ -79,12 +80,17 @@ ${conversationText}`,
     return NextResponse.json({ profile: result.object });
   } catch (error) {
     console.error("Profile generation error:", error);
+
+    // categorizeAIError でエラーを分類し、ユーザー向け文言と HTTP ステータスを統一
+    const info = categorizeAIError(error);
     return NextResponse.json(
       {
         error: "Failed to generate profile",
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: info.userMessage,
+        category: info.category,
+        retryable: info.retryable,
       },
-      { status: 500 },
+      { status: aiErrorToStatusCode(info.category) },
     );
   }
 }
