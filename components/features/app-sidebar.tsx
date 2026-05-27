@@ -10,9 +10,17 @@ const navItems = [
   { href: "/app/applications", label: "応募管理", icon: "📋" },
 ];
 
+// オンボーディングツアーで個別ハイライトしたいナビ項目に data-tour 属性を割り当てるための対応表。
+// 該当しない項目は undefined を返し、属性そのものが付かないようにする。
+function getTourAttr(href: string): string | undefined {
+  if (href === "/app/career") return "nav-career";
+  if (href === "/app/documents") return "nav-documents";
+  return undefined;
+}
+
 export function AppSidebar() {
   return (
-    <aside className="bg-card hidden w-60 flex-col border-r p-4 md:flex">
+    <aside data-tour="sidebar" className="bg-card hidden w-60 flex-col border-r p-4 md:flex">
       <div className="mb-6">
         <Link href="/app" className="text-xl font-bold">
           Maira
@@ -24,6 +32,7 @@ export function AppSidebar() {
           <Link
             key={item.href}
             href={item.href}
+            data-tour={getTourAttr(item.href)}
             className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors"
           >
             <span>{item.icon}</span>

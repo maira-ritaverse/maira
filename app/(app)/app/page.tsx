@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getDashboardData } from "@/lib/dashboard/queries";
+import { isOnboardingCompleted } from "@/lib/onboarding/queries";
 import { DashboardEmpty } from "./dashboard-empty";
 import { DashboardStarter } from "./dashboard-starter";
 import { DashboardActive } from "./dashboard-active";
+import { OnboardingTour } from "@/components/features/onboarding/onboarding-tour";
 
 /**
  * ダッシュボード(認証後の入口)。
@@ -12,6 +14,9 @@ import { DashboardActive } from "./dashboard-active";
  * 3 つの状態別コンポーネント(empty / starter / active)を出し分ける。
  * layout.tsx 側でも未認証ガードはしているが、user.id を直接使うため
  * ここでも明示的に取得する(防御的)。
+ *
+ * 併せて、オンボーディングツアーの完了状態も取得し、未完了なら
+ * ツアーを自動起動する(OnboardingTour に autoStart で渡す)。
  */
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -23,10 +28,15 @@ export default async function DashboardPage() {
     redirect("/auth/login");
   }
 
-  const data = await getDashboardData(user.id);
+  // ダッシュボードデータと onboarded_at 判定を並行取得。
+  // それぞれ独立した SELECT なので待ち時間を圧縮する。
+  const [data, onboardingDone] = await Promise.all([
+    getDashboardData(user.id),
+    isOnboardingCompleted(user.id),
+  ]);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6" data-tour="dashboard-content">
       <div>
         <h1 className="text-2xl font-bold">おかえりなさい、{data.profile.displayName}さん</h1>
         <p className="text-muted-foreground mt-1 text-sm">
@@ -39,6 +49,9 @@ export default async function DashboardPage() {
       {data.status === "empty" && <DashboardEmpty />}
       {data.status === "starter" && <DashboardStarter data={data} />}
       {data.status === "active" && <DashboardActive data={data} />}
+
+      {/* オンボーディングツアー(未完了の時のみ自動起動) */}
+      <OnboardingTour autoStart={!onboardingDone} />
     </div>
   );
 }

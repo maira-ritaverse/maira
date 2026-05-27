@@ -36,7 +36,7 @@ export function UserMenu({ email, displayName }: Props) {
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+          <Button variant="ghost" className="relative h-9 w-9 rounded-full" data-tour="user-menu">
             <Avatar className="h-9 w-9">
               <AvatarFallback>{initial}</AvatarFallback>
             </Avatar>

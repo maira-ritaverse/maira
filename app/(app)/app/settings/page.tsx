@@ -8,9 +8,6 @@ import { Card } from "@/components/ui/card";
  *
  * 各設定カテゴリへの導線を並べるだけのメニュー。
  * 認証は middleware と layout でガード済みだが、防御的に再チェック。
- *
- * パスワード変更は Phase 2 で実装するため、現時点で /app/settings/password を
- * クリックすると 404 になる(意図的)。
  */
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -32,6 +29,12 @@ export default async function SettingsPage() {
       icon: "🔒",
       title: "パスワード",
       description: "ログインパスワードの変更",
+    },
+    {
+      href: "/app/settings/onboarding",
+      icon: "🎓",
+      title: "オンボーディングツアー",
+      description: "Mairaの使い方ツアーを再表示",
     },
   ];
 
