@@ -17,8 +17,6 @@ export default function HomePage() {
             ログイン
           </Button>
         </div>
-
-        <div className="text-muted-foreground text-xs">© 2026 株式会社RITAVERSE</div>
       </div>
     </main>
   );
