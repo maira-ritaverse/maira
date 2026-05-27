@@ -7,7 +7,7 @@ const navItems = [
   { href: "/app/test-chat", label: "AI動作確認", icon: "🤖" },
   { href: "/app/career", label: "キャリア棚卸し", icon: "💬" },
   { href: "/app/documents", label: "書類作成", icon: "📝" },
-  { href: "/app/applications", label: "応募管理", icon: "📋", disabled: true },
+  { href: "/app/applications", label: "応募管理", icon: "📋" },
 ];
 
 export function AppSidebar() {
@@ -23,17 +23,11 @@ export function AppSidebar() {
         {navItems.map((item) => (
           <Link
             key={item.href}
-            href={item.disabled ? "#" : item.href}
-            className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
-              item.disabled
-                ? "text-muted-foreground cursor-not-allowed opacity-50"
-                : "hover:bg-accent"
-            }`}
-            onClick={item.disabled ? (e) => e.preventDefault() : undefined}
+            href={item.href}
+            className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors"
           >
             <span>{item.icon}</span>
             <span>{item.label}</span>
-            {item.disabled && <span className="text-muted-foreground ml-auto text-xs">準備中</span>}
           </Link>
         ))}
       </nav>
