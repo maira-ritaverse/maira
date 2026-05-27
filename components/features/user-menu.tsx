@@ -1,9 +1,11 @@
 "use client";
 
 import { useTransition } from "react";
+import Link from "next/link";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -43,12 +45,17 @@ export function UserMenu({ email, displayName }: Props) {
       />
 
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm leading-none font-medium">{displayName ?? "ユーザー"}</p>
-            <p className="text-muted-foreground text-xs leading-none">{email}</p>
-          </div>
-        </DropdownMenuLabel>
+        {/* base-ui の GroupLabel は Menu.Group 内に置く必要があるため、必ず Group で囲む */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="font-normal">
+            <div className="flex flex-col space-y-1">
+              <p className="text-sm leading-none font-medium">{displayName ?? "ユーザー"}</p>
+              <p className="text-muted-foreground text-xs leading-none">{email}</p>
+            </div>
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem render={<Link href="/app/settings" />}>⚙️ 設定</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={handleLogout} disabled={isPending}>
           {isPending ? "ログアウト中..." : "ログアウト"}
