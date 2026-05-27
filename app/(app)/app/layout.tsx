@@ -1,6 +1,11 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppSidebar } from "@/components/features/app-sidebar";
+import {
+  PopupChatLauncher,
+  PopupChatProvider,
+  PopupChatWindow,
+} from "@/components/features/popup-chat";
 import { UserMenu } from "@/components/features/user-menu";
 
 /**
@@ -27,14 +32,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .single();
 
   return (
-    <div className="bg-background flex min-h-screen">
-      <AppSidebar />
-      <div className="flex flex-1 flex-col">
-        <header className="flex h-14 items-center justify-end border-b px-4">
-          <UserMenu email={user.email ?? ""} displayName={profile?.display_name ?? null} />
-        </header>
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+    // ポップアップチャットは認証後の領域全体で利用するため、ここで Provider を張る。
+    // Launcher/Window 自体は内部で「現在の応募ID」を見て表示制御するので、
+    // 応募詳細ページ以外では何も描画されない。
+    <PopupChatProvider>
+      <div className="bg-background flex min-h-screen">
+        <AppSidebar />
+        <div className="flex flex-1 flex-col">
+          <header className="flex h-14 items-center justify-end border-b px-4">
+            <UserMenu email={user.email ?? ""} displayName={profile?.display_name ?? null} />
+          </header>
+          <main className="flex-1 overflow-auto p-6">{children}</main>
+        </div>
       </div>
-    </div>
+      <PopupChatLauncher />
+      <PopupChatWindow />
+    </PopupChatProvider>
   );
 }

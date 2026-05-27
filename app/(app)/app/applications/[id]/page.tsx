@@ -9,6 +9,7 @@ import { listTasksByApplication } from "@/lib/tasks/queries";
 import { ApplicationForm } from "../application-form";
 import { AdvisorButton } from "./advisor-button";
 import { DeleteButton } from "./delete-button";
+import { SetPopupApplication } from "./set-popup-application";
 import { TaskList } from "./task-list";
 
 /**
@@ -49,6 +50,9 @@ export default async function ApplicationDetailPage({
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
+      {/* PopupChatContext に「現在見ている応募ID」を伝える(Launcher 表示用) */}
+      <SetPopupApplication applicationId={application.id} />
+
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-2xl font-bold">{application.details.company}</h1>
