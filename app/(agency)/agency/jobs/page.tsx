@@ -1,0 +1,88 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { getUserRole } from "@/lib/organizations/queries";
+import { listJobPostings } from "@/lib/jobs/queries";
+import { jobStatusLabels, formatSalaryRange } from "@/lib/jobs/types";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+
+/**
+ * 求人一覧画面
+ *
+ * layout.tsx でロールガード済みだが、organization 取り出しのため再度 getUserRole を呼ぶ。
+ * listJobPostings は RLS により自社の求人のみ返す。
+ */
+export default async function JobsPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/auth/login");
+
+  const role = await getUserRole(user.id);
+  if (role.accountType !== "organization_member" || !role.organization) {
+    redirect("/app");
+  }
+
+  const jobs = await listJobPostings(role.organization.id);
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">求人管理</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            クライアントに紹介する求人を管理します
+          </p>
+        </div>
+        <Button render={<Link href="/agency/jobs/new" />}>+ 求人登録</Button>
+      </div>
+
+      {jobs.length === 0 ? (
+        <EmptyState
+          icon="💼"
+          title="求人がまだ登録されていません"
+          description="「求人登録」ボタンから追加できます"
+        />
+      ) : (
+        <div className="space-y-2">
+          {jobs.map((job) => (
+            <Card key={job.id} className="p-0">
+              <Link
+                href={`/agency/jobs/${job.id}`}
+                className="hover:bg-accent flex items-center justify-between gap-4 p-4 transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{job.companyName}</p>
+                  <p className="text-muted-foreground truncate text-sm">
+                    {job.position}
+                    {job.location ? ` ・ ${job.location}` : ""}
+                  </p>
+                  <p className="text-muted-foreground mt-0.5 text-xs">
+                    {formatSalaryRange(job.salaryMin, job.salaryMax)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs ${
+                      job.status === "open"
+                        ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300"
+                        : job.status === "paused"
+                          ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300"
+                          : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {jobStatusLabels[job.status]}
+                  </span>
+                </div>
+              </Link>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
