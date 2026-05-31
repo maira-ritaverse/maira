@@ -4,9 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { getClientRecord } from "@/lib/clients/queries";
 import { clientStatusLabels, clientLinkStatusLabels } from "@/lib/clients/types";
+import { listJobPostings } from "@/lib/jobs/queries";
+import { listReferralsByClient } from "@/lib/referrals/queries";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ClientDetailForm } from "./client-detail-form";
+import { ReferralSection } from "./referral-section";
 
 /**
  * クライアント詳細画面
@@ -36,6 +39,13 @@ export default async function ClientDetailPage({ params }: RouteParams) {
   if (!client || client.organizationId !== role.organization.id) {
     notFound();
   }
+
+  // 紹介セクション用:このクライアントの紹介一覧と、自社の募集中求人を並行取得
+  const [referrals, allJobs] = await Promise.all([
+    listReferralsByClient(client.id),
+    listJobPostings(role.organization.id),
+  ]);
+  const openJobs = allJobs.filter((j) => j.status === "open");
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -94,6 +104,8 @@ export default async function ClientDetailPage({ params }: RouteParams) {
       )}
 
       <ClientDetailForm client={client} />
+
+      <ReferralSection clientId={client.id} referrals={referrals} openJobs={openJobs} />
     </div>
   );
 }
