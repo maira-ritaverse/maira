@@ -57,7 +57,9 @@ export function UserMenu({ email, displayName }: Props) {
         <DropdownMenuSeparator />
         <DropdownMenuItem render={<Link href="/app/settings" />}>⚙️ 設定</DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={handleLogout} disabled={isPending}>
+        {/* base-ui の Menu.Item は onSelect を持たない(onClick のみ)。
+            以前 onSelect で書いていたためハンドラが発火していなかった。 */}
+        <DropdownMenuItem onClick={handleLogout} disabled={isPending}>
           {isPending ? "ログアウト中..." : "ログアウト"}
         </DropdownMenuItem>
       </DropdownMenuContent>
