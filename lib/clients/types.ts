@@ -51,6 +51,12 @@ export type ClientRecord = {
   updatedAt: string;
 };
 
+// クライアント一覧表示用に担当アドバイザーの表示名を付与した型
+// assigneeName が null の場合は「未割当」または display_name 未設定を意味する
+export type ClientRecordWithAssignee = ClientRecord & {
+  assigneeName: string | null;
+};
+
 // クライアント登録リクエスト
 export const createClientRequestSchema = z.object({
   name: z.string().min(1, "氏名を入力してください").max(100),

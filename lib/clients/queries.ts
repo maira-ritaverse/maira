@@ -6,7 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
-import type { ClientRecord } from "./types";
+import type { ClientRecord, ClientRecordWithAssignee } from "./types";
 
 type ClientRecordRow = {
   id: string;
@@ -77,6 +77,58 @@ export async function getClientRecord(clientId: string): Promise<ClientRecord | 
   if (error || !data) return null;
 
   return rowToClientRecord(data as ClientRecordRow);
+}
+
+/**
+ * 担当アドバイザー名を含む企業のクライアント一覧を取得
+ *
+ * 一覧テーブル表示用。listClientRecords と同じく RLS により
+ * 自社のクライアントのみ返る。
+ *
+ * 担当者名の取得手順:
+ *   1. client_records を取得
+ *   2. SECURITY DEFINER 関数 list_organization_member_display_names で
+ *      組織メンバーの (member_id, display_name) Map を作成
+ *      (profiles の RLS は緩めずに display_name のみを公開するため)
+ *   3. assigned_member_id をキーに表示名を合流
+ *
+ * 担当者未割当・display_name 未設定の場合は assigneeName = null。
+ */
+export async function listClientRecordsWithAssignee(
+  organizationId: string,
+): Promise<ClientRecordWithAssignee[]> {
+  const supabase = await createClient();
+
+  const { data: clientRows, error: clientError } = await supabase
+    .from("client_records")
+    .select("*")
+    .eq("organization_id", organizationId)
+    .order("created_at", { ascending: false });
+
+  if (clientError || !clientRows) return [];
+
+  const clients = (clientRows as ClientRecordRow[]).map(rowToClientRecord);
+
+  // 組織メンバーの表示名 Map を取得(RLS バイパス関数経由)
+  const { data: memberRows, error: memberError } = await supabase.rpc(
+    "list_organization_member_display_names",
+    { target_organization_id: organizationId },
+  );
+
+  // メンバー名取得に失敗してもクライアント一覧自体は返す(担当者名のみ null)
+  const nameByMemberId = new Map<string, string | null>();
+  if (!memberError && memberRows) {
+    for (const row of memberRows as Array<{ member_id: string; display_name: string | null }>) {
+      nameByMemberId.set(row.member_id, row.display_name);
+    }
+  }
+
+  return clients.map((client) => ({
+    ...client,
+    assigneeName: client.assignedMemberId
+      ? (nameByMemberId.get(client.assignedMemberId) ?? null)
+      : null,
+  }));
 }
 
 /**

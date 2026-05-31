@@ -2,17 +2,20 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
-import { listClientRecords } from "@/lib/clients/queries";
-import { clientStatusLabels, clientLinkStatusLabels } from "@/lib/clients/types";
+import { listClientRecordsWithAssignee } from "@/lib/clients/queries";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ClientsTable } from "./clients-table";
 
 /**
  * クライアント一覧画面
  *
  * layout.tsx でロールガード済みだが、organization 取り出しのため再度 getUserRole を呼ぶ。
- * listClientRecords は RLS により自社のクライアントのみ返す。
+ * listClientRecordsWithAssignee は RLS により自社のクライアントのみ返し、
+ * 担当アドバイザー名を SECURITY DEFINER 関数経由で合流させる。
+ *
+ * 表示はテーブル(行×列)形式。エージェントがスプレッドシートで顧客管理する
+ * 慣れに合わせるため、カード表示から切り替えた。
  */
 export default async function ClientsPage() {
   const supabase = await createClient();
@@ -27,10 +30,10 @@ export default async function ClientsPage() {
     redirect("/app");
   }
 
-  const clients = await listClientRecords(role.organization.id);
+  const clients = await listClientRecordsWithAssignee(role.organization.id);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">クライアント管理</h1>
@@ -46,35 +49,7 @@ export default async function ClientsPage() {
           description="「クライアント登録」ボタンから追加できます"
         />
       ) : (
-        <div className="space-y-2">
-          {clients.map((client) => (
-            <Card key={client.id} className="p-0">
-              <Link
-                href={`/agency/clients/${client.id}`}
-                className="hover:bg-accent flex items-center justify-between gap-4 p-4 transition-colors"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{client.name}</p>
-                  <p className="text-muted-foreground truncate text-sm">{client.email}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <span className="bg-muted rounded-full px-2 py-0.5 text-xs">
-                    {clientStatusLabels[client.status]}
-                  </span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs ${
-                      client.linkStatus === "linked"
-                        ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {clientLinkStatusLabels[client.linkStatus]}
-                  </span>
-                </div>
-              </Link>
-            </Card>
-          ))}
-        </div>
+        <ClientsTable clients={clients} />
       )}
     </div>
   );
