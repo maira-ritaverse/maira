@@ -31,7 +31,7 @@ export function buildResumeHtml(resume: Resume): string {
   const age = calcAge(resume.birthDate);
   const genderLabel = resume.gender ? genderLabels[resume.gender] : "";
   const birthDateText = formatBirthDate(resume.birthDate, age);
-  const today = formatReiwaToday();
+  const today = formatDocumentDate(resume.documentDate);
 
   const allHistory = resume.educationHistory;
   const historyPage1 = padRows(allHistory.slice(0, ROWS_HISTORY_PAGE_1), ROWS_HISTORY_PAGE_1);
@@ -216,6 +216,8 @@ export function buildResumeHtml(resume: Resume): string {
   }
   .photo-box p { margin: 0 0 2px 0; }
   .photo-box .gap-2 { margin-top: 8px; }
+  /* 「横 24〜30mm」は「1. 縦 36〜40mm」の続きとして数字位置を揃えるためのインデント */
+  .photo-box .photo-indent { padding-left: 12px; }
   .photo-img {
     width: 100%;
     height: 100%;
@@ -428,11 +430,13 @@ function renderPhotoBox(photoUrl: string | null): string {
     // 値はユーザー由来なので必ずエスケープ。
     return `<div class="photo-box"><img src="${escapeHtml(photoUrl)}" alt="本人写真" class="photo-img"></div>`;
   }
+  // 厚労省様式の規定寸法。原本注記をそのまま再現することで本人の貼り間違いを防ぐ。
   return `<div class="photo-box">
     <p>写真をはる位置</p>
     <p class="gap-2">写真をはる必要が</p>
     <p>ある場合</p>
-    <p class="gap-2">1. 縦 横</p>
+    <p class="gap-2">1. 縦 36〜40mm</p>
+    <p class="photo-indent">横 24〜30mm</p>
     <p>2. 本人単身胸から上</p>
     <p>3. 裏面のりづけ</p>
   </div>`;
@@ -545,14 +549,17 @@ function calcAge(birthDate: string | null): number | null {
 }
 
 /**
- * 今日を「令和○年○月○日」表記で返す。令和元年は「元」。
+ * 履歴書「○年○月○日 現在」の日付を西暦で返す。
+ *
+ * documentDate(YYYY-MM-DD)が指定されていればそれを採用し、
+ * 未指定なら本日の日付にフォールバックする。
+ * 生年月日・学歴・職歴も西暦表記なので、現在日付も西暦に揃える。
  */
-function formatReiwaToday(): string {
-  const d = new Date();
-  const year = d.getFullYear();
-  const reiwa = year - 2018;
-  const yearText = reiwa === 1 ? "元" : String(reiwa);
-  return `令和 ${yearText} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日`;
+function formatDocumentDate(documentDate: string | null): string {
+  const d = documentDate ? new Date(documentDate) : new Date();
+  // パース不能(壊れた値を渡された場合)は本日にフォールバック
+  const safe = Number.isNaN(d.getTime()) ? new Date() : d;
+  return `${safe.getFullYear()} 年 ${safe.getMonth() + 1} 月 ${safe.getDate()} 日`;
 }
 
 /**

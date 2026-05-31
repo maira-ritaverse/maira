@@ -135,17 +135,32 @@ export function ResumeForm(props: Props) {
           </p>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="title">
-            タイトル(管理用) <span className="text-red-600">*</span>
-          </Label>
-          <Input
-            id="title"
-            {...register("title")}
-            disabled={isPending}
-            placeholder="例:汎用、○○社向け など"
-          />
-          {errors.title && <p className="text-sm text-red-600">{errors.title.message}</p>}
+        <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
+          <div className="space-y-2">
+            <Label htmlFor="title">
+              タイトル(管理用) <span className="text-red-600">*</span>
+            </Label>
+            <Input
+              id="title"
+              {...register("title")}
+              disabled={isPending}
+              placeholder="例:汎用、○○社向け など"
+            />
+            {errors.title && <p className="text-sm text-red-600">{errors.title.message}</p>}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="document_date">履歴書作成日</Label>
+            <Input
+              id="document_date"
+              type="date"
+              {...register("document_date")}
+              disabled={isPending}
+            />
+            {/* 提出日を意図して設定したい人向け。未入力でも壊れないよう、表示時は今日にフォールバック。 */}
+            <p className="text-muted-foreground text-xs">
+              未入力の場合は表示時点の本日の日付になります
+            </p>
+          </div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -222,6 +237,10 @@ export function ResumeForm(props: Props) {
             disabled={isPending}
             placeholder="例:トウキョウト チヨダク..."
           />
+          {/* 厚労省様式では番地・建物名にはフリガナを振らない慣習なので明示。 */}
+          <p className="text-muted-foreground text-xs">
+            町名までのふりがなで構いません(番地・建物名は不要)
+          </p>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -266,6 +285,9 @@ export function ResumeForm(props: Props) {
             disabled={isPending}
             placeholder="任意"
           />
+          <p className="text-muted-foreground text-xs">
+            町名までのふりがなで構いません(番地・建物名は不要)
+          </p>
         </div>
 
         <div className="space-y-2">
@@ -540,6 +562,7 @@ function buildDefaultValues(existing: Resume | undefined): SaveResumeRequest {
       contact_address: "",
       contact_address_kana: "",
       contact_phone: "",
+      document_date: "",
       education_history: [],
       licenses: [],
       motivation_note: "",
@@ -561,6 +584,7 @@ function buildDefaultValues(existing: Resume | undefined): SaveResumeRequest {
     contact_address: existing.contactAddress ?? "",
     contact_address_kana: existing.contactAddressKana ?? "",
     contact_phone: existing.contactPhone ?? "",
+    document_date: existing.documentDate ?? "",
     education_history: existing.educationHistory,
     licenses: existing.licenses,
     motivation_note: existing.motivationNote ?? "",

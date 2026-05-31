@@ -165,6 +165,7 @@ type ResumeRow = {
   licenses: unknown;
   motivation_note: string | null;
   personal_requests: string | null;
+  document_date: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -197,6 +198,7 @@ function mapResumeRow(row: ResumeRow): Resume {
     licenses: parseLicenses(row.licenses),
     motivationNote: row.motivation_note,
     personalRequests: row.personal_requests,
+    documentDate: row.document_date,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -250,6 +252,7 @@ function normalizeSaveInput(input: SaveResumeRequest) {
     licenses: input.licenses,
     motivation_note: emptyToNull(input.motivation_note),
     personal_requests: emptyToNull(input.personal_requests),
+    document_date: emptyToNull(input.document_date),
   };
 }
 

@@ -120,7 +120,7 @@ function HeaderAndBasicInfo({ resume }: { resume: Resume }) {
           {/* タイトル行 */}
           <div className="flex items-end justify-between border-b border-black px-3 py-2">
             <h2 className="text-[20px] font-bold tracking-[0.3em]">履 歴 書</h2>
-            <p className="text-[11px]">{formatReiwaToday()} 現在</p>
+            <p className="text-[11px]">{formatDocumentDate(resume.documentDate)} 現在</p>
           </div>
 
           {/* ふりがな */}
@@ -198,7 +198,9 @@ function PhotoBox({ photoUrl }: { photoUrl: string | null }) {
           <p>写真をはる位置</p>
           <p className="mt-2">写真をはる必要が</p>
           <p>ある場合</p>
-          <p className="mt-2">1. 縦 横</p>
+          {/* 厚労省様式の規定寸法。原本注記をそのまま再現することで本人の貼り間違いを防ぐ。 */}
+          <p className="mt-2">1. 縦 36〜40mm</p>
+          <p className="pl-3">横 24〜30mm</p>
           <p>2. 本人単身胸から上</p>
           <p>3. 裏面のりづけ</p>
         </>
@@ -474,14 +476,15 @@ function calcAge(birthDate: string | null): number | null {
 }
 
 /**
- * 今日の日付を「令和○年○月○日」表記で返す。
+ * 履歴書「○年○月○日 現在」の日付を西暦で返す。
  *
- * 令和は 2019-05-01〜。それ以前を渡すケースは履歴書では発生しない前提。
+ * documentDate(YYYY-MM-DD)が指定されていればそれを採用し、
+ * 未指定なら本日の日付にフォールバックする。
+ * 生年月日・学歴・職歴も西暦表記なので、現在日付も西暦に揃える。
  */
-function formatReiwaToday(): string {
-  const d = new Date();
-  const year = d.getFullYear();
-  const reiwa = year - 2018; // 2019 = 令和元年(1)
-  const yearText = reiwa === 1 ? "元" : reiwa;
-  return `令和 ${yearText} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日`;
+function formatDocumentDate(documentDate: string | null): string {
+  const d = documentDate ? new Date(documentDate) : new Date();
+  // パース不能(壊れた値を渡された場合)は本日にフォールバック
+  const safe = Number.isNaN(d.getTime()) ? new Date() : d;
+  return `${safe.getFullYear()} 年 ${safe.getMonth() + 1} 月 ${safe.getDate()} 日`;
 }

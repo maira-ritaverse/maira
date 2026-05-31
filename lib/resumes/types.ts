@@ -64,6 +64,9 @@ export type Resume = {
   contactAddressKana: string | null;
   contactPhone: string | null;
   photoUrl: string | null;
+  // 履歴書の「○年○月○日 現在」として表示する作成日/提出日。
+  // null の場合はプレビュー/PDF 表示時に本日の日付にフォールバック。
+  documentDate: string | null;
   educationHistory: EducationItem[];
   licenses: LicenseItem[];
   // 厚労省様式の自由記述欄(志望動機、特技、好きな学科、アピールポイント等)。
@@ -100,6 +103,8 @@ export const saveResumeRequestSchema = z.object({
   contact_address: z.string().max(200).optional().or(z.literal("")),
   contact_address_kana: z.string().max(200).optional().or(z.literal("")),
   contact_phone: z.string().max(20).optional().or(z.literal("")),
+  // 履歴書の作成日(右上「現在」表示用)。空文字なら今日の日付にフォールバック。
+  document_date: z.string().optional().or(z.literal("")), // YYYY-MM-DD
   education_history: z.array(educationItemSchema),
   licenses: z.array(licenseItemSchema),
   motivation_note: z.string().max(1000).optional().or(z.literal("")),
