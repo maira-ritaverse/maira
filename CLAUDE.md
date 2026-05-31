@@ -101,6 +101,19 @@ supabase/ # マイグレーション・Edge Functions
   (Stripe Webhook経由でのみ書き込む)
 - RLSを無効化したり、ポリシーを削除したりするマイグレーションは作らない
 
+## データベース(Supabase)運用ルール
+
+- マイグレーションの `supabase db push` は、開発環境 maira-dev
+  (pfebbpgcufintmulhydg)に対してのみ実行する。
+- 本番環境 maira-prod(xxatkimjfiaidxfuglae)への適用は、
+  リリース前にまとめて、かつユーザーからの明示的な指示があった時のみ。
+- `supabase db push` の前に、必ず `supabase projects list` で
+  現在リンクしているプロジェクトが maira-dev であることを確認する。
+- 「リモートSupabase = 本番」ではない。dev も prod も別々のリモート
+  プロジェクトである。URLやプロジェクトIDで必ず区別すること。
+- 報告時、「本番に適用」「リモートに適用」等の表現を使う場合は、
+  実際にどのプロジェクト(dev/prod)に適用したかを正確に確認してから書く。
+
 ## 作業の進め方
 
 ### ユーザーが指示を出したら
