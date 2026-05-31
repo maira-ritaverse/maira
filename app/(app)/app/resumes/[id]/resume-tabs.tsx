@@ -25,13 +25,25 @@ export function ResumeTabs({ resume }: { resume: Resume }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2 border-b">
-        <TabButton active={tab === "edit"} onClick={() => setTab("edit")}>
-          編集
-        </TabButton>
-        <TabButton active={tab === "preview"} onClick={() => setTab("preview")}>
-          プレビュー
-        </TabButton>
+      <div className="flex items-center justify-between gap-2 border-b">
+        <div className="flex gap-2">
+          <TabButton active={tab === "edit"} onClick={() => setTab("edit")}>
+            編集
+          </TabButton>
+          <TabButton active={tab === "preview"} onClick={() => setTab("preview")}>
+            プレビュー
+          </TabButton>
+        </div>
+        {/* PDF ダウンロード:
+            プレビュー中の見た目を Puppeteer でそのまま PDF 化する。
+            <a download> + サーバー側 Content-Disposition で確実にダウンロード扱いにする。
+            ※ プレビューは「保存済みの内容」を出すので、未保存の編集中値は出ない点に注意。 */}
+        <a
+          href={`/api/resumes/${resume.id}/pdf`}
+          className="bg-foreground text-background mb-1 inline-flex h-9 items-center rounded-md px-3 text-sm font-medium hover:opacity-90"
+        >
+          PDFをダウンロード
+        </a>
       </div>
 
       <div className={tab === "edit" ? "" : "hidden"}>
