@@ -158,9 +158,12 @@ type ResumeRow = {
   phone: string | null;
   email: string | null;
   contact_address: string | null;
+  contact_address_kana: string | null;
+  contact_phone: string | null;
   photo_url: string | null;
   education_history: unknown;
   licenses: unknown;
+  motivation_note: string | null;
   personal_requests: string | null;
   created_at: string;
   updated_at: string;
@@ -187,9 +190,12 @@ function mapResumeRow(row: ResumeRow): Resume {
     phone: row.phone,
     email: row.email,
     contactAddress: row.contact_address,
+    contactAddressKana: row.contact_address_kana,
+    contactPhone: row.contact_phone,
     photoUrl: row.photo_url,
     educationHistory: parseEducationHistory(row.education_history),
     licenses: parseLicenses(row.licenses),
+    motivationNote: row.motivation_note,
     personalRequests: row.personal_requests,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -238,8 +244,11 @@ function normalizeSaveInput(input: SaveResumeRequest) {
     phone: emptyToNull(input.phone),
     email: emptyToNull(input.email),
     contact_address: emptyToNull(input.contact_address),
+    contact_address_kana: emptyToNull(input.contact_address_kana),
+    contact_phone: emptyToNull(input.contact_phone),
     education_history: input.education_history,
     licenses: input.licenses,
+    motivation_note: emptyToNull(input.motivation_note),
     personal_requests: emptyToNull(input.personal_requests),
   };
 }

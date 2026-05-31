@@ -17,8 +17,6 @@ import { genderLabels, type Resume } from "@/lib/resumes/types";
  * 注意:
  * - 厚労省様式なので 通勤時間/扶養家族/配偶者 欄はない(意図的に省略)
  * - 性別は任意(空欄可)
- * - Phase 1 の Resume 型に「志望の動機」フィールドが無いため、その欄は
- *   見た目だけ用意して空欄表示にする(将来のデータ追加で表示できる)
  */
 
 type Props = {
@@ -69,7 +67,7 @@ export function ResumePreview({ resume }: Props) {
           {/* 学歴・職歴の続き。原本では右ページ上部にも同じ見出し行がある */}
           <HistoryTable rows={padRows(historyPage2, ROWS_HISTORY_PAGE_2)} showHeader />
           <LicenseTable rows={padRows(resume.licenses, ROWS_LICENSE)} />
-          <MotivationBox />
+          <MotivationBox text={resume.motivationNote} />
           <RequestsBox text={resume.personalRequests} />
         </Page>
       </div>
@@ -170,10 +168,10 @@ function HeaderAndBasicInfo({ resume }: { resume: Resume }) {
 
       {/* 連絡先ブロック */}
       <AddressBlock
-        addressKana=""
+        addressKana={resume.contactAddressKana}
         postalCode={null}
         address={resume.contactAddress}
-        phone={null}
+        phone={resume.contactPhone}
         email={null}
         label="連絡先"
         note="(現住所以外に連絡を希望する場合のみ記入)"
@@ -336,18 +334,15 @@ function LicenseTable({ rows }: { rows: (LicenseRow | null)[] }) {
 
 // ====================================================================
 // 志望の動機ブロック
-//
-// 原本に存在するが、Phase 1 の Resume 型に該当フィールドが無いため
-// 見た目だけ用意して空欄にしておく。将来データを追加すれば表示できる。
 // ====================================================================
 
-function MotivationBox() {
+function MotivationBox({ text }: { text: string | null }) {
   return (
     <div className="mt-3 border border-black">
       <div className="border-b border-black bg-white px-2 py-1 text-[11px]">
         志望の動機、特技、好きな学科、アピールポイントなど
       </div>
-      <div className="min-h-[60mm] px-3 py-2" />
+      <div className="min-h-[60mm] px-3 py-2 text-[12px] whitespace-pre-wrap">{text ?? ""}</div>
     </div>
   );
 }

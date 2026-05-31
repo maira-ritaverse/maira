@@ -60,9 +60,15 @@ export type Resume = {
   phone: string | null;
   email: string | null;
   contactAddress: string | null;
+  // 連絡先のふりがな・電話(現住所と異なる連絡先を使う場合)
+  contactAddressKana: string | null;
+  contactPhone: string | null;
   photoUrl: string | null;
   educationHistory: EducationItem[];
   licenses: LicenseItem[];
+  // 厚労省様式の自由記述欄(志望動機、特技、好きな学科、アピールポイント等)。
+  // 本人希望記入欄(personalRequests)とは別の欄。
+  motivationNote: string | null;
   personalRequests: string | null;
   createdAt: string;
   updatedAt: string;
@@ -92,8 +98,11 @@ export const saveResumeRequestSchema = z.object({
   // メール:未入力は許可(空文字 or 省略)、入力されている場合のみ形式チェック
   email: z.string().email("メール形式が正しくありません").optional().or(z.literal("")),
   contact_address: z.string().max(200).optional().or(z.literal("")),
+  contact_address_kana: z.string().max(200).optional().or(z.literal("")),
+  contact_phone: z.string().max(20).optional().or(z.literal("")),
   education_history: z.array(educationItemSchema),
   licenses: z.array(licenseItemSchema),
+  motivation_note: z.string().max(1000).optional().or(z.literal("")),
   personal_requests: z.string().max(1000).optional().or(z.literal("")),
 });
 

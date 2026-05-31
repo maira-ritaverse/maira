@@ -257,6 +257,28 @@ export function ResumeForm(props: Props) {
             placeholder="任意。現住所と同じ場合は空欄"
           />
         </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="contact_address_kana">連絡先(フリガナ)</Label>
+          <Input
+            id="contact_address_kana"
+            {...register("contact_address_kana")}
+            disabled={isPending}
+            placeholder="任意"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="contact_phone">連絡先 電話番号</Label>
+          <Input
+            id="contact_phone"
+            type="tel"
+            {...register("contact_phone")}
+            disabled={isPending}
+            placeholder="任意"
+            className="sm:w-64"
+          />
+        </div>
       </Card>
 
       {/* ============================================ */}
@@ -437,7 +459,28 @@ export function ResumeForm(props: Props) {
       </Card>
 
       {/* ============================================ */}
-      {/* セクション4:本人希望記入欄                   */}
+      {/* セクション4:志望の動機・特技・アピールポイント */}
+      {/*                                                 */}
+      {/* 厚労省様式の自由記述欄(本人希望記入欄とは別欄)。*/}
+      {/* 順序は厚労省様式に合わせ「志望動機 → 本人希望」 */}
+      {/* ============================================ */}
+      <Card className="space-y-4 p-6">
+        <div>
+          <h2 className="text-lg font-semibold">志望の動機・特技・アピールポイント</h2>
+          <p className="text-muted-foreground mt-1 text-xs">
+            志望の動機、特技、好きな学科、自己PRなど自由に記入
+          </p>
+        </div>
+        <Textarea
+          {...register("motivation_note")}
+          disabled={isPending}
+          rows={6}
+          placeholder="例:貴社の○○という事業に共感し..."
+        />
+      </Card>
+
+      {/* ============================================ */}
+      {/* セクション5:本人希望記入欄                   */}
       {/* ============================================ */}
       <Card className="space-y-4 p-6">
         <div>
@@ -495,8 +538,11 @@ function buildDefaultValues(existing: Resume | undefined): SaveResumeRequest {
       phone: "",
       email: "",
       contact_address: "",
+      contact_address_kana: "",
+      contact_phone: "",
       education_history: [],
       licenses: [],
+      motivation_note: "",
       personal_requests: "",
     };
   }
@@ -513,8 +559,11 @@ function buildDefaultValues(existing: Resume | undefined): SaveResumeRequest {
     phone: existing.phone ?? "",
     email: existing.email ?? "",
     contact_address: existing.contactAddress ?? "",
+    contact_address_kana: existing.contactAddressKana ?? "",
+    contact_phone: existing.contactPhone ?? "",
     education_history: existing.educationHistory,
     licenses: existing.licenses,
+    motivation_note: existing.motivationNote ?? "",
     personal_requests: existing.personalRequests ?? "",
   };
 }
