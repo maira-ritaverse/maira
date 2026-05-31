@@ -4,7 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import { useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 /**
  * AI動作確認用のチャットフォーム
@@ -25,6 +25,18 @@ export function ChatForm() {
     if (!input.trim() || isLoading) return;
     sendMessage({ text: input });
     setInput("");
+  };
+
+  // キー操作:Enter で送信、Shift+Enter で改行(ChatGPT / Slack と同じ挙動)
+  // 日本語IMEの変換確定 Enter は誤送信になりやすいので isComposing で除外する
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.nativeEvent.isComposing || e.key === "Process") return;
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!input.trim() || isLoading) return;
+      sendMessage({ text: input });
+      setInput("");
+    }
   };
 
   return (
@@ -82,13 +94,15 @@ export function ChatForm() {
       )}
 
       {/* 入力フォーム */}
-      <form onSubmit={handleSubmit} className="flex gap-2">
-        <Input
+      <form onSubmit={handleSubmit} className="flex items-end gap-2">
+        <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="メッセージを入力..."
+          onKeyDown={handleKeyDown}
+          placeholder="メッセージを入力... (Shift+Enterで改行)"
           disabled={isLoading}
-          className="flex-1"
+          rows={1}
+          className="max-h-40 flex-1 resize-none"
         />
         <Button type="submit" disabled={isLoading || !input.trim()}>
           {isLoading ? "送信中" : "送信"}

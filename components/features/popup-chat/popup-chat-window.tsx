@@ -5,7 +5,7 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import type { MessageForChat } from "@/lib/career/conversations";
 import { usePopupChat } from "./popup-chat-context";
 
@@ -279,6 +279,18 @@ function PopupChatActive({
     setInput("");
   };
 
+  // キー操作:Enter で送信、Shift+Enter で改行(ChatGPT / Slack と同じ挙動)
+  // 日本語IMEの変換確定 Enter は誤送信になりやすいので isComposing で除外する
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.nativeEvent.isComposing || e.key === "Process") return;
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!input.trim() || isLoading) return;
+      sendMessage({ text: input });
+      setInput("");
+    }
+  };
+
   // ダミーオープナーは画面に出さない
   const visibleMessages = messages.filter((m) => {
     if (m.role !== "user") return true;
@@ -336,13 +348,15 @@ function PopupChatActive({
       )}
 
       <form onSubmit={handleSubmit} className="border-t p-3">
-        <div className="flex gap-2">
-          <Input
+        <div className="flex items-end gap-2">
+          <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="メッセージを入力..."
+            onKeyDown={handleKeyDown}
+            placeholder="メッセージを入力... (Shift+Enterで改行)"
             disabled={isLoading}
-            className="flex-1"
+            rows={1}
+            className="max-h-32 flex-1 resize-none"
           />
           <Button type="submit" disabled={isLoading || !input.trim()} size="sm">
             送信
