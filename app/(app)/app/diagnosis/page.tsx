@@ -2,9 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { createClient } from "@/lib/supabase/server";
-import { axisQuestions } from "@/lib/diagnosis/axis-questions";
+import { getCareerProfile } from "@/lib/career/conversations";
 import { aptitudeQuestions } from "@/lib/diagnosis/aptitude-questions";
+import { axisTypeLabels } from "@/lib/diagnosis/axis-questions";
+import { axisQuestions } from "@/lib/diagnosis/axis-questions";
+import { createClient } from "@/lib/supabase/server";
 
 /**
  * キャリア診断:入口ページ
@@ -26,6 +28,11 @@ export default async function DiagnosisIntroPage() {
 
   const totalQuestions = axisQuestions.length + aptitudeQuestions.length;
 
+  // 過去に診断を受けていれば、結果へのリンクを上部に出す。
+  // 入口に戻ってきたユーザーが再び 26 問やらずに結果を見られるようにするため。
+  const profileData = await getCareerProfile(user.id);
+  const existingDiagnosis = profileData?.profile.diagnosis ?? null;
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
@@ -34,6 +41,28 @@ export default async function DiagnosisIntroPage() {
           自分の「軸」と「強み」を見つけ、向いている仕事の方向性を発見します
         </p>
       </div>
+
+      {existingDiagnosis && (
+        <Card className="border-primary/40 bg-primary/5 p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <p className="text-muted-foreground text-xs font-medium">前回の診断結果</p>
+              <p className="mt-1 text-sm">
+                あなたの軸:
+                <span className="font-semibold">
+                  {axisTypeLabels[existingDiagnosis.axis.primary]}
+                </span>
+              </p>
+              <p className="text-muted-foreground mt-1 text-xs">
+                {new Date(existingDiagnosis.createdAt).toLocaleString("ja-JP")}
+              </p>
+            </div>
+            <Button variant="outline" size="sm" render={<Link href="/app/diagnosis/result" />}>
+              結果を見る
+            </Button>
+          </div>
+        </Card>
+      )}
 
       <Card className="space-y-5 p-6">
         <div>
@@ -64,7 +93,9 @@ export default async function DiagnosisIntroPage() {
       </Card>
 
       <div className="flex justify-end">
-        <Button render={<Link href="/app/diagnosis/take" />}>診断を始める</Button>
+        <Button render={<Link href="/app/diagnosis/take" />}>
+          {existingDiagnosis ? "もう一度診断する" : "診断を始める"}
+        </Button>
       </div>
     </div>
   );

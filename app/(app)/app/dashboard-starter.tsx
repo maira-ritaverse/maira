@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { AptitudeRadar } from "@/components/features/diagnosis/aptitude-radar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { axisTypeLabels } from "@/lib/diagnosis/axis-questions";
 import { DashboardSuggestions } from "./dashboard-suggestions";
 import { generateSuggestions } from "@/lib/dashboard/suggestions";
 import type { DashboardData } from "@/lib/dashboard/queries";
@@ -17,9 +19,52 @@ type Props = {
  */
 export function DashboardStarter({ data }: Props) {
   const suggestions = generateSuggestions(data);
+  const diagnosis = data.career.profileData?.diagnosis;
 
   return (
     <div className="space-y-6">
+      {/* キャリア診断カード:レーダー + 軸を visible に */}
+      {diagnosis ? (
+        <Card className="space-y-3 p-6">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-muted-foreground text-xs">あなたの軸</p>
+              <p className="text-base font-semibold">
+                {axisTypeLabels[diagnosis.axis.primary]}
+                {diagnosis.axis.secondary && (
+                  <span className="text-muted-foreground ml-2 text-xs font-normal">
+                    次いで {axisTypeLabels[diagnosis.axis.secondary]}
+                  </span>
+                )}
+              </p>
+            </div>
+            <Button variant="outline" size="sm" render={<Link href="/app/diagnosis/result" />}>
+              診断結果
+            </Button>
+          </div>
+          <div className="flex justify-center">
+            <div className="aspect-square w-full max-w-65">
+              <AptitudeRadar scores={diagnosis.aptitude.scores} />
+            </div>
+          </div>
+        </Card>
+      ) : (
+        // 未診断ユーザーには軽い誘導を出す(starter 段階は棚卸し済みなので、診断は次の一歩)
+        <Card className="border-primary/30 bg-primary/5 p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">🧭 キャリア診断を受けてみませんか</p>
+              <p className="text-muted-foreground mt-1 text-xs">
+                5〜7分で、自分の軸と強みが分かります
+              </p>
+            </div>
+            <Button size="sm" render={<Link href="/app/diagnosis" />}>
+              診断へ
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* キャリアサマリー */}
       {data.career.profileData && (
         <Card className="border-primary/40 bg-primary/5 p-6">

@@ -1,0 +1,132 @@
+// 適性レーダーチャート(5因子)。
+//
+// なぜ自前 SVG?
+// - recharts は ~300KB の追加バンドル。固定 5 角形を 1 個描くだけならネイティブ SVG で十分。
+// - Tailwind のテーマカラー(--primary / --muted-foreground 等)を className でそのまま当てられ、
+//   ダーク/ライト切替に自然に追従する。
+// - 依存ゼロ、サーバーコンポーネントからも安全に描画できる(use client 不要)。
+//
+// 仕様:
+// - 5 軸、各因子の最大スコアは 8(2問×4点)。0-100% に正規化して描画。
+// - グリッドは 4 重(25% / 50% / 75% / 100%)で読み取りやすく。
+// - ラベルは「強み表現」(発想力・責任感 など)で、学術用語を見せない。
+
+import { aptitudeStrengthLabels, type AptitudeFactor } from "@/lib/diagnosis/aptitude-questions";
+
+const FACTORS: AptitudeFactor[] = [
+  "openness",
+  "conscientiousness",
+  "extraversion",
+  "agreeableness",
+  "stability",
+];
+
+// 適性 1 因子あたりの最大スコア。質問2問 × 4段階の最大値 = 8。
+const MAX_SCORE = 8;
+
+type Props = {
+  scores: Record<AptitudeFactor, number>;
+  // 表示サイズ。デフォルトは 280。ダッシュボード等で小さく出したい場合に調整。
+  size?: number;
+  // 軸ラベルを描画するかどうか。小サイズ表示(=ダッシュボード)では切る選択肢。
+  showLabels?: boolean;
+};
+
+export function AptitudeRadar({ scores, size = 280, showLabels = true }: Props) {
+  // ラベル描画のための余白を確保する。ラベル無しなら margin を詰める。
+  const padding = showLabels ? 56 : 16;
+  const cx = size / 2;
+  const cy = size / 2;
+  const radius = (size - padding * 2) / 2;
+
+  // 5 軸を上から時計回りに配置(0番目を真上にするため -90° スタート)。
+  const angles = FACTORS.map((_, i) => -Math.PI / 2 + (i * 2 * Math.PI) / FACTORS.length);
+
+  // グリッド多角形の頂点を返すヘルパー(scale: 0.25 / 0.5 / 0.75 / 1.0)。
+  function polygonPoints(scale: number): string {
+    return angles
+      .map((a) => {
+        const x = cx + Math.cos(a) * radius * scale;
+        const y = cy + Math.sin(a) * radius * scale;
+        return `${x.toFixed(2)},${y.toFixed(2)}`;
+      })
+      .join(" ");
+  }
+
+  // 実データの多角形。各軸でスコアを 0-1 に正規化。
+  const dataPoints = FACTORS.map((f, i) => {
+    const norm = Math.max(0, Math.min(1, (scores[f] ?? 0) / MAX_SCORE));
+    const x = cx + Math.cos(angles[i]) * radius * norm;
+    const y = cy + Math.sin(angles[i]) * radius * norm;
+    return { x, y };
+  });
+  const dataPolygon = dataPoints.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" ");
+
+  return (
+    <svg
+      viewBox={`0 0 ${size} ${size}`}
+      width="100%"
+      height="100%"
+      role="img"
+      aria-label="適性レーダーチャート"
+      className="max-w-full"
+    >
+      {/* グリッド(同心多角形)。currentColor + opacity で muted を表現。 */}
+      <g className="text-muted-foreground/40">
+        {[0.25, 0.5, 0.75, 1].map((scale) => (
+          <polygon
+            key={scale}
+            points={polygonPoints(scale)}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1}
+          />
+        ))}
+        {/* 軸線(中心から各頂点へ) */}
+        {angles.map((a, i) => {
+          const x = cx + Math.cos(a) * radius;
+          const y = cy + Math.sin(a) * radius;
+          return (
+            <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="currentColor" strokeWidth={1} />
+          );
+        })}
+      </g>
+
+      {/* データ多角形(主軸の塗り)。primary 色を Tailwind の text- 経由で当てる。 */}
+      <g className="text-primary">
+        <polygon
+          points={dataPolygon}
+          fill="currentColor"
+          fillOpacity={0.18}
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinejoin="round"
+        />
+        {dataPoints.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r={3.5} fill="currentColor" />
+        ))}
+      </g>
+
+      {/* ラベル(強み表現)。中央寄せで配置、各軸の角度に応じて少し外側へ。 */}
+      {showLabels && (
+        <g className="fill-foreground text-[10px]">
+          {FACTORS.map((f, i) => {
+            const a = angles[i];
+            // ラベル位置:データ最外周より少し外側へ。横位置は角度の cos 符号で揃える。
+            const labelR = radius + 18;
+            const x = cx + Math.cos(a) * labelR;
+            const y = cy + Math.sin(a) * labelR;
+            // テキストアンカー:左半分なら end、右半分なら start、上下は middle。
+            const cos = Math.cos(a);
+            const anchor = Math.abs(cos) < 0.2 ? "middle" : cos > 0 ? "start" : "end";
+            return (
+              <text key={f} x={x} y={y} textAnchor={anchor} dominantBaseline="middle">
+                {aptitudeStrengthLabels[f]}
+              </text>
+            );
+          })}
+        </g>
+      )}
+    </svg>
+  );
+}

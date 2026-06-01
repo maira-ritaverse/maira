@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { AptitudeRadar } from "@/components/features/diagnosis/aptitude-radar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { applicationStatusLabels } from "@/lib/applications/types";
+import { axisTypeLabels } from "@/lib/diagnosis/axis-questions";
 import { DashboardSuggestions } from "./dashboard-suggestions";
 import { generateSuggestions } from "@/lib/dashboard/suggestions";
 import type { DashboardData } from "@/lib/dashboard/queries";
@@ -21,6 +23,7 @@ type Props = {
  */
 export function DashboardActive({ data }: Props) {
   const suggestions = generateSuggestions(data);
+  const diagnosis = data.career.profileData?.diagnosis;
 
   return (
     <div className="space-y-6">
@@ -30,6 +33,32 @@ export function DashboardActive({ data }: Props) {
           <div className="flex items-center justify-between gap-4">
             <p className="line-clamp-2 flex-1 text-sm">{data.career.profileData.summary}</p>
             <Button render={<Link href="/app/career" />} variant="outline" size="sm">
+              詳細
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* 診断結果コンパクト表示(active は応募中心のため、サムネ的に表示) */}
+      {diagnosis && (
+        <Card className="p-4">
+          <div className="flex items-center gap-4">
+            {/* ラベル省略の小サイズレーダー */}
+            <div className="aspect-square w-24 shrink-0">
+              <AptitudeRadar scores={diagnosis.aptitude.scores} showLabels={false} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-muted-foreground text-xs">あなたの軸</p>
+              <p className="truncate text-sm font-semibold">
+                {axisTypeLabels[diagnosis.axis.primary]}
+              </p>
+              {diagnosis.axis.secondary && (
+                <p className="text-muted-foreground mt-0.5 truncate text-xs">
+                  次いで {axisTypeLabels[diagnosis.axis.secondary]}
+                </p>
+              )}
+            </div>
+            <Button variant="outline" size="sm" render={<Link href="/app/diagnosis/result" />}>
               詳細
             </Button>
           </div>

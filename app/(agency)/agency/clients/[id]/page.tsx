@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { getUserRole } from "@/lib/organizations/queries";
-import { getClientRecord } from "@/lib/clients/queries";
-import { clientStatusLabels, clientLinkStatusLabels } from "@/lib/clients/types";
-import { listJobPostings } from "@/lib/jobs/queries";
-import { listReferralsByClient } from "@/lib/referrals/queries";
+import { DiagnosisResultView } from "@/components/features/diagnosis/diagnosis-result-view";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { getClientRecord } from "@/lib/clients/queries";
+import { clientLinkStatusLabels, clientStatusLabels } from "@/lib/clients/types";
+import { getDiagnosisForUser } from "@/lib/diagnosis/queries";
+import { listJobPostings } from "@/lib/jobs/queries";
+import { getUserRole } from "@/lib/organizations/queries";
+import { listReferralsByClient } from "@/lib/referrals/queries";
+import { createClient } from "@/lib/supabase/server";
 import { ClientDetailForm } from "./client-detail-form";
 import { ReferralSection } from "./referral-section";
 
@@ -40,10 +42,14 @@ export default async function ClientDetailPage({ params }: RouteParams) {
     notFound();
   }
 
-  // 紹介セクション用:このクライアントの紹介一覧と、自社の募集中求人を並行取得
-  const [referrals, allJobs] = await Promise.all([
+  // 紹介セクション用 + 診断結果(リンク済みクライアントのみ)を並行取得。
+  // 診断結果は client.linkStatus === "linked" の場合のみ、求職者 user_id を辿って取得する。
+  // RLS で linked のみ可だが、コード側でも二重チェックして無駄なクエリを抑える。
+  const linkedUserId = client.linkStatus === "linked" ? client.linkedUserId : null;
+  const [referrals, allJobs, diagnosis] = await Promise.all([
     listReferralsByClient(client.id),
     listJobPostings(role.organization.id),
+    linkedUserId ? getDiagnosisForUser(linkedUserId) : Promise.resolve(null),
   ]);
   const openJobs = allJobs.filter((j) => j.status === "open");
 
@@ -104,6 +110,27 @@ export default async function ClientDetailPage({ params }: RouteParams) {
       )}
 
       <ClientDetailForm client={client} />
+
+      {/* 診断結果(リンク済みクライアントが診断を受けていれば表示) */}
+      {client.linkStatus === "linked" && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-lg font-bold">キャリア診断結果</h2>
+            <p className="text-muted-foreground text-xs">
+              本人が受けた診断の結果(軸・強み・職種候補)
+            </p>
+          </div>
+          {diagnosis ? (
+            <DiagnosisResultView diagnosis={diagnosis} />
+          ) : (
+            <Card className="p-4">
+              <p className="text-muted-foreground text-sm">
+                このクライアントはまだキャリア診断を受けていません
+              </p>
+            </Card>
+          )}
+        </section>
+      )}
 
       <ReferralSection clientId={client.id} referrals={referrals} openJobs={openJobs} />
     </div>
