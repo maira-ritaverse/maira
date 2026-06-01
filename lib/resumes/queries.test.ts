@@ -2,20 +2,13 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { __resetFieldEncryptionCacheForTests } from "@/lib/crypto/field-encryption";
 
 /**
- * queries.ts のテスト
+ * queries.ts のテスト(Step 3c: blob-only)
  *
- * Supabase クライアントを最小限のスタブで差し替える。
- * 目的は「lib/resumes/queries.ts が dual-write し、読み取り時に blob を
- * 優先する」を実際の SQL ではなくロジックレベルで検証すること。
+ * 旧個別 PII カラムは DB から DROP 済み。書き込みは encrypted_pii のみ、
+ * 読み取りも encrypted_pii からの復号のみ。encrypted_pii が NULL/空の行は
+ * fail-closed で throw することを検証する。
  */
 
-// ============================================
-// Supabase スタブ
-//
-// supabase.from("resumes") の戻りオブジェクトを 1 つのスタブで完結させる。
-// insert / update / select / eq / order / single / maybeSingle / delete を
-// 全部チェーン可能にする。
-// ============================================
 type StubState = {
   insertedRow: Record<string, unknown> | null;
   updatedValues: Record<string, unknown> | null;
@@ -53,10 +46,6 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({ from: fromMock })),
 }));
 
-// ============================================
-// セットアップ
-// ============================================
-
 function generateTestKey(seed: number): string {
   const bytes = new Uint8Array(32);
   for (let i = 0; i < 32; i++) bytes[i] = (seed + i) % 256;
@@ -78,9 +67,6 @@ beforeEach(() => {
   fromMock.mockClear();
 });
 
-// ============================================
-// テスト用の標準入力
-// ============================================
 import type { SaveResumeRequest } from "./types";
 
 const SAMPLE_INPUT: SaveResumeRequest = {
@@ -105,10 +91,10 @@ const SAMPLE_INPUT: SaveResumeRequest = {
 };
 
 // ============================================
-// 書き込み(dual-write)テスト
+// 書き込み(blob-only)
 // ============================================
-describe("queries.ts - dual-write 書き込み", () => {
-  it("createResume は encrypted_pii と個別 PII カラムの両方を書く", async () => {
+describe("queries.ts - blob-only 書き込み", () => {
+  it("createResume は encrypted_pii と [KEEP] 項目だけを書く(平文 PII を書かない)", async () => {
     const { createResume } = await import("./queries");
     const { decryptField } = await import("@/lib/crypto/field-encryption");
     const { deserializeResumePii } = await import("./pii-fields");
@@ -117,27 +103,37 @@ describe("queries.ts - dual-write 書き込み", () => {
 
     const row = state.insertedRow;
     expect(row).not.toBeNull();
-    expect(row).toBeTypeOf("object");
 
-    // user_id とタイトルが書かれている
+    // [KEEP] 項目だけが平文として書き込まれる
     expect(row?.user_id).toBe("user-1");
     expect(row?.title).toBe(SAMPLE_INPUT.title);
-
-    // 個別 PII カラムにも従来どおり平文が書かれている(dual-write)
-    expect(row?.name).toBe("山田 太郎");
-    expect(row?.email).toBe("taro@example.com");
-    expect(row?.birth_date).toBe("1995-04-12");
-    expect(row?.gender).toBe("male");
-    expect(row?.education_history).toEqual(SAMPLE_INPUT.education_history);
-    expect(row?.licenses).toEqual(SAMPLE_INPUT.licenses);
-    // [KEEP] 項目
     expect(row?.document_date).toBe("2026-06-01");
 
-    // encrypted_pii は v1: プレフィックス付きで埋まっている
+    // encrypted_pii は v1: プレフィックス付き
     expect(typeof row?.encrypted_pii).toBe("string");
     expect(row?.encrypted_pii as string).toMatch(/^v1:/);
 
-    // 復号した内容も個別カラムと一致している
+    // 旧個別 PII カラムは absent(undefined)。
+    // ここに値があると DROP 後の DB に書き込み失敗するため critical。
+    expect(row).not.toHaveProperty("name");
+    expect(row).not.toHaveProperty("name_kana");
+    expect(row).not.toHaveProperty("birth_date");
+    expect(row).not.toHaveProperty("gender");
+    expect(row).not.toHaveProperty("postal_code");
+    expect(row).not.toHaveProperty("address");
+    expect(row).not.toHaveProperty("address_kana");
+    expect(row).not.toHaveProperty("phone");
+    expect(row).not.toHaveProperty("email");
+    expect(row).not.toHaveProperty("contact_address");
+    expect(row).not.toHaveProperty("contact_address_kana");
+    expect(row).not.toHaveProperty("contact_phone");
+    expect(row).not.toHaveProperty("photo_url");
+    expect(row).not.toHaveProperty("education_history");
+    expect(row).not.toHaveProperty("licenses");
+    expect(row).not.toHaveProperty("motivation_note");
+    expect(row).not.toHaveProperty("personal_requests");
+
+    // 復号した PII が SAMPLE_INPUT と一致する
     const decrypted = await decryptField(row?.encrypted_pii as string);
     const pii = deserializeResumePii(decrypted as string);
     expect(pii.name).toBe("山田 太郎");
@@ -147,188 +143,124 @@ describe("queries.ts - dual-write 書き込み", () => {
     expect(pii.licenses).toEqual(SAMPLE_INPUT.licenses);
   });
 
-  it("updateResume も dual-write する(encrypted_pii + 個別カラム)", async () => {
+  it("updateResume も encrypted_pii と [KEEP] 項目だけを書く", async () => {
     const { updateResume } = await import("./queries");
 
     await updateResume("resume-1", "user-1", SAMPLE_INPUT);
 
     const updates = state.updatedValues;
     expect(updates).not.toBeNull();
-    expect(updates?.name).toBe("山田 太郎");
-    expect(updates?.phone).toBe("090-1234-5678");
+    expect(updates?.title).toBe(SAMPLE_INPUT.title);
+    expect(updates?.document_date).toBe("2026-06-01");
     expect(typeof updates?.encrypted_pii).toBe("string");
     expect(updates?.encrypted_pii as string).toMatch(/^v1:/);
-    // updated_at は ISO 文字列で上書きされている
     expect(typeof updates?.updated_at).toBe("string");
+
+    // 旧個別 PII カラムは含めない
+    expect(updates).not.toHaveProperty("name");
+    expect(updates).not.toHaveProperty("phone");
+    expect(updates).not.toHaveProperty("education_history");
   });
 
-  it("空文字の項目は null に正規化されてから dual-write される", async () => {
+  it("空文字の [KEEP] 項目(document_date)は null に正規化される", async () => {
     const { createResume } = await import("./queries");
-    const { decryptField } = await import("@/lib/crypto/field-encryption");
-    const { deserializeResumePii } = await import("./pii-fields");
 
-    const sparse: SaveResumeRequest = {
-      title: "ほぼ空の履歴書",
-      name: "",
-      email: "",
-      education_history: [],
-      licenses: [],
-    };
-
-    await createResume("user-1", sparse);
-
-    const row = state.insertedRow;
-    expect(row?.name).toBeNull();
-    expect(row?.email).toBeNull();
-    // 空でも encrypted_pii は埋める(Step 3b の判定をシンプルに保つため)
-    expect(typeof row?.encrypted_pii).toBe("string");
-    const pii = deserializeResumePii((await decryptField(row?.encrypted_pii as string)) as string);
-    expect(pii.name).toBeNull();
-    expect(pii.email).toBeNull();
-    expect(pii.education_history).toEqual([]);
+    await createResume("user-1", { ...SAMPLE_INPUT, document_date: "  " });
+    expect(state.insertedRow?.document_date).toBeNull();
   });
 });
 
 // ============================================
-// 読み取り(blob 優先 + フォールバック)テスト
+// 読み取り(blob からのみ)
 // ============================================
-describe("queries.ts - 読み取り境界", () => {
-  it("encrypted_pii ありの行は blob から復元する(個別カラムより blob が優先)", async () => {
+describe("queries.ts - blob-only 読み取り", () => {
+  it("encrypted_pii だけがある行を正しく復元できる", async () => {
     const { encryptField } = await import("@/lib/crypto/field-encryption");
     const { serializeResumePii, pickResumePii } = await import("./pii-fields");
     const { getResume } = await import("./queries");
 
-    // 個別カラムには「古い値」、blob には「新しい値」を入れて、
-    // 戻り値が必ず blob 由来になることを確認する。
-    const blobPii = pickResumePii({
-      name: "新しい名前",
-      email: "new@example.com",
-      birth_date: "2000-01-01",
+    const pii = pickResumePii({
+      name: "blob 太郎",
+      email: "blob@example.com",
+      birth_date: "1995-05-05",
       gender: "female",
-      education_history: [{ year: 2020, month: 3, description: "新しい学校 卒業" }],
+      education_history: [{ year: 2020, month: 3, description: "卒業" }],
       licenses: [],
     });
-    const encryptedPii = await encryptField(serializeResumePii(blobPii));
+    const encryptedPii = await encryptField(serializeResumePii(pii));
 
     state.selectedRow = {
       id: "r-1",
       user_id: "u-1",
       title: "履歴書",
-      // 個別カラムは古い値
-      name: "古い名前",
-      name_kana: null,
-      birth_date: "1990-01-01",
-      gender: "male",
-      postal_code: null,
-      address: null,
-      address_kana: null,
-      phone: null,
-      email: "old@example.com",
-      contact_address: null,
-      contact_address_kana: null,
-      contact_phone: null,
-      photo_url: null,
-      education_history: [{ year: 1990, month: 1, description: "古い学校" }],
-      licenses: [],
-      motivation_note: null,
-      personal_requests: null,
       document_date: "2026-06-01",
-      // blob 優先で復号されることを検証
       encrypted_pii: encryptedPii,
       created_at: "2026-06-01T00:00:00Z",
       updated_at: "2026-06-01T01:00:00Z",
     };
 
     const resume = await getResume("r-1", "u-1");
-
     expect(resume).not.toBeNull();
-    expect(resume?.name).toBe("新しい名前");
-    expect(resume?.email).toBe("new@example.com");
-    expect(resume?.birthDate).toBe("2000-01-01");
+    expect(resume?.name).toBe("blob 太郎");
+    expect(resume?.email).toBe("blob@example.com");
+    expect(resume?.birthDate).toBe("1995-05-05");
     expect(resume?.gender).toBe("female");
-    expect(resume?.educationHistory).toEqual([
-      { year: 2020, month: 3, description: "新しい学校 卒業" },
-    ]);
-    // [KEEP] 項目は行から
+    expect(resume?.educationHistory).toEqual([{ year: 2020, month: 3, description: "卒業" }]);
     expect(resume?.documentDate).toBe("2026-06-01");
-    expect(resume?.title).toBe("履歴書");
   });
 
-  it("encrypted_pii が NULL の行は個別カラムから復元する(フォールバック)", async () => {
+  it("encrypted_pii が NULL の行は fail-closed で throw する(行 ID のみ、PII は出さない)", async () => {
     const { getResume } = await import("./queries");
 
     state.selectedRow = {
-      id: "r-2",
+      id: "broken-1",
       user_id: "u-1",
-      title: "古い履歴書",
-      name: "未移行 太郎",
-      name_kana: "みいこう たろう",
-      birth_date: "1990-05-05",
-      gender: "male",
-      postal_code: "100-0000",
-      address: "東京都",
-      address_kana: "とうきょうと",
-      phone: "090-0000-0000",
-      email: "legacy@example.com",
-      contact_address: null,
-      contact_address_kana: null,
-      contact_phone: null,
-      photo_url: null,
-      education_history: [{ year: 2010, month: 3, description: "卒業" }],
-      licenses: [{ year: 2015, month: 4, name: "免許" }],
-      motivation_note: "古い動機",
-      personal_requests: null,
+      title: "壊れた行",
       document_date: null,
-      encrypted_pii: null, // ← 移行前
-      created_at: "2026-05-01T00:00:00Z",
-      updated_at: "2026-05-01T00:00:00Z",
+      encrypted_pii: null, // ← 想定に反して NULL
+      created_at: "2026-06-01T00:00:00Z",
+      updated_at: "2026-06-01T00:00:00Z",
     };
 
-    const resume = await getResume("r-2", "u-1");
-
-    expect(resume).not.toBeNull();
-    expect(resume?.name).toBe("未移行 太郎");
-    expect(resume?.email).toBe("legacy@example.com");
-    expect(resume?.birthDate).toBe("1990-05-05");
-    expect(resume?.educationHistory).toEqual([{ year: 2010, month: 3, description: "卒業" }]);
-    expect(resume?.licenses).toEqual([{ year: 2015, month: 4, name: "免許" }]);
-    expect(resume?.motivationNote).toBe("古い動機");
+    await expect(getResume("broken-1", "u-1")).rejects.toThrow(/broken-1/);
   });
 
-  it("下流に返る Resume オブジェクトの形(キー一覧)が現行と一致", async () => {
+  it("encrypted_pii が空文字の行も throw する", async () => {
     const { getResume } = await import("./queries");
+
+    state.selectedRow = {
+      id: "broken-2",
+      user_id: "u-1",
+      title: "空文字",
+      document_date: null,
+      encrypted_pii: "",
+      created_at: "2026-06-01T00:00:00Z",
+      updated_at: "2026-06-01T00:00:00Z",
+    };
+
+    await expect(getResume("broken-2", "u-1")).rejects.toThrow(/broken-2/);
+  });
+
+  it("下流に返る Resume オブジェクトの形(キー一覧)は現行と完全に同一", async () => {
+    const { encryptField } = await import("@/lib/crypto/field-encryption");
+    const { serializeResumePii, pickResumePii } = await import("./pii-fields");
+    const { getResume } = await import("./queries");
+
+    const encryptedPii = await encryptField(serializeResumePii(pickResumePii({})));
 
     state.selectedRow = {
       id: "r-3",
       user_id: "u-1",
       title: "形状チェック",
-      name: null,
-      name_kana: null,
-      birth_date: null,
-      gender: null,
-      postal_code: null,
-      address: null,
-      address_kana: null,
-      phone: null,
-      email: null,
-      contact_address: null,
-      contact_address_kana: null,
-      contact_phone: null,
-      photo_url: null,
-      education_history: [],
-      licenses: [],
-      motivation_note: null,
-      personal_requests: null,
       document_date: null,
-      encrypted_pii: null,
+      encrypted_pii: encryptedPii,
       created_at: "2026-06-01T00:00:00Z",
       updated_at: "2026-06-01T00:00:00Z",
     };
 
     const resume = await getResume("r-3", "u-1");
 
-    // Resume 型のキー一覧(camelCase)を網羅的に検査する。
-    // 増減があれば失敗するので、契約が崩れたら気づける。
+    // Resume 型のキー一覧(camelCase)。Step 3a と完全に同じ。
     expect(Object.keys(resume ?? {}).sort()).toEqual(
       [
         "address",
@@ -358,7 +290,7 @@ describe("queries.ts - 読み取り境界", () => {
     );
   });
 
-  it("listResumes も blob 優先で復元する", async () => {
+  it("listResumes も blob からのみ復元する", async () => {
     const { encryptField } = await import("@/lib/crypto/field-encryption");
     const { serializeResumePii, pickResumePii } = await import("./pii-fields");
     const { listResumes } = await import("./queries");
@@ -379,23 +311,6 @@ describe("queries.ts - 読み取り境界", () => {
         id: "r-A",
         user_id: "u-1",
         title: "履歴書A",
-        name: "stale",
-        name_kana: null,
-        birth_date: null,
-        gender: null,
-        postal_code: null,
-        address: null,
-        address_kana: null,
-        phone: null,
-        email: "stale@example.com",
-        contact_address: null,
-        contact_address_kana: null,
-        contact_phone: null,
-        photo_url: null,
-        education_history: [],
-        licenses: [],
-        motivation_note: null,
-        personal_requests: null,
         document_date: null,
         encrypted_pii: encryptedPii,
         created_at: "2026-06-01T00:00:00Z",
@@ -407,5 +322,23 @@ describe("queries.ts - 読み取り境界", () => {
     expect(resumes).toHaveLength(1);
     expect(resumes[0].name).toBe("リスト ユーザ");
     expect(resumes[0].email).toBe("list@example.com");
+  });
+
+  it("listResumes は NULL 行があれば throw する(fail-closed)", async () => {
+    const { listResumes } = await import("./queries");
+
+    state.selectedRows = [
+      {
+        id: "broken-3",
+        user_id: "u-1",
+        title: "壊れた",
+        document_date: null,
+        encrypted_pii: null,
+        created_at: "2026-06-01T00:00:00Z",
+        updated_at: "2026-06-01T00:00:00Z",
+      },
+    ];
+
+    await expect(listResumes("u-1")).rejects.toThrow(/broken-3/);
   });
 });
