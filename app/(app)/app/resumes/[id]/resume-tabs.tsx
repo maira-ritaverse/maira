@@ -20,7 +20,13 @@ import { ResumeForm } from "../resume-form";
  * 編集中の見た目を見たい場合は一度保存してからプレビューに切り替える運用。
  * — フォームの値を Resume に逐次変換するのは複雑かつ Phase 2-A の目的外。
  */
-export function ResumeTabs({ resume }: { resume: Resume }) {
+export function ResumeTabs({
+  resume,
+  hasCareerProfile,
+}: {
+  resume: Resume;
+  hasCareerProfile: boolean;
+}) {
   const [tab, setTab] = useState<"edit" | "preview">("edit");
 
   return (
@@ -47,7 +53,7 @@ export function ResumeTabs({ resume }: { resume: Resume }) {
       </div>
 
       <div className={tab === "edit" ? "" : "hidden"}>
-        <ResumeForm mode="edit" existing={resume} />
+        <ResumeForm mode="edit" existing={resume} hasCareerProfile={hasCareerProfile} />
       </div>
       <div className={tab === "preview" ? "" : "hidden"}>
         <ResumePreview resume={resume} />

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Sparkles } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -19,6 +20,17 @@ import {
   type SaveResumeRequest,
 } from "@/lib/resumes/types";
 
+/** AI下書き生成の対象フィールド(API側と一致させる) */
+type DraftField = "motivation_note" | "personal_requests";
+const DRAFT_FIELD_TO_API: Record<DraftField, "motivation" | "personal_requests"> = {
+  motivation_note: "motivation",
+  personal_requests: "personal_requests",
+};
+const DRAFT_FIELD_LABEL: Record<DraftField, string> = {
+  motivation_note: "志望の動機・アピールポイント",
+  personal_requests: "本人希望記入欄",
+};
+
 /**
  * 履歴書 新規作成・編集 フォーム(共通)
  *
@@ -31,7 +43,13 @@ import {
  * (camelCase に変換するレイヤを増やさず、API への送信時にそのまま JSON にできる)
  */
 
-type Props = { mode: "create"; existing?: undefined } | { mode: "edit"; existing: Resume };
+type Props = ({ mode: "create"; existing?: undefined } | { mode: "edit"; existing: Resume }) & {
+  /**
+   * このユーザーの career_profile が存在するか。
+   * AI下書き生成ボタンを有効化するかの判定に使う(なければボタンは無効化)。
+   */
+  hasCareerProfile: boolean;
+};
 
 // 学歴・職歴/免許資格の年・月セレクタ用
 const YEAR_OPTIONS = (() => {
@@ -50,21 +68,80 @@ const GENDER_OPTIONS: { value: Gender; label: string }[] = [
 ];
 
 export function ResumeForm(props: Props) {
-  const { mode, existing } = props;
+  const { mode, existing, hasCareerProfile } = props;
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  // AI下書き生成中のフィールド(同時押し防止と、押した側だけスピナーを出すため)
+  const [draftingField, setDraftingField] = useState<DraftField | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
     control,
+    setValue,
+    getValues,
     formState: { errors },
   } = useForm<SaveResumeRequest>({
     resolver: zodResolver(saveResumeRequestSchema),
     defaultValues: buildDefaultValues(existing),
   });
+
+  /**
+   * AI下書き生成を呼び、結果を該当フィールドに setValue する。
+   *
+   * 既存の入力がある場合は confirm で上書きの意思を確認する
+   * (生成内容で勝手に書き換えると、書きかけの文章が失われる懸念がある)。
+   */
+  const handleGenerateDraft = async (field: DraftField) => {
+    setDraftError(null);
+
+    const currentValue = (getValues(field) ?? "").trim();
+    if (currentValue.length > 0) {
+      const ok = window.confirm(
+        `「${DRAFT_FIELD_LABEL[field]}」には既に入力があります。AIの下書きで上書きしてもよろしいですか?\n\n(現在の入力は失われます)`,
+      );
+      if (!ok) return;
+    }
+
+    setDraftingField(field);
+    try {
+      const response = await fetch("/api/resumes/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ field: DRAFT_FIELD_TO_API[field] }),
+      });
+
+      const json = (await response.json()) as {
+        content?: string;
+        message?: string;
+        error?: string;
+        code?: string;
+      };
+
+      if (!response.ok) {
+        if (json.code === "no_career_profile") {
+          setDraftError(
+            "先にキャリア棚卸しを完了してください。棚卸し結果を元にAIが下書きを作成します。",
+          );
+        } else {
+          setDraftError(json.message ?? json.error ?? "下書き生成に失敗しました");
+        }
+        return;
+      }
+
+      if (json.content) {
+        // shouldDirty: true で未保存マークが付き、ユーザーに「保存が必要」と気付きやすくなる
+        setValue(field, json.content, { shouldDirty: true });
+      }
+    } catch (err) {
+      setDraftError(err instanceof Error ? err.message : "通信エラーが発生しました");
+    } finally {
+      setDraftingField(null);
+    }
+  };
 
   const educationFieldArray = useFieldArray({
     control,
@@ -480,6 +557,13 @@ export function ResumeForm(props: Props) {
         </Button>
       </Card>
 
+      {/* AI下書き生成のエラー表示(両セクション共通) */}
+      {draftError && (
+        <Alert variant="destructive">
+          <AlertDescription>AI下書き生成エラー: {draftError}</AlertDescription>
+        </Alert>
+      )}
+
       {/* ============================================ */}
       {/* セクション4:志望の動機・特技・アピールポイント */}
       {/*                                                 */}
@@ -487,36 +571,60 @@ export function ResumeForm(props: Props) {
       {/* 順序は厚労省様式に合わせ「志望動機 → 本人希望」 */}
       {/* ============================================ */}
       <Card className="space-y-4 p-6">
-        <div>
-          <h2 className="text-lg font-semibold">志望の動機・特技・アピールポイント</h2>
-          <p className="text-muted-foreground mt-1 text-xs">
-            志望の動機、特技、好きな学科、自己PRなど自由に記入
-          </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">志望の動機・特技・アピールポイント</h2>
+            <p className="text-muted-foreground mt-1 text-xs">
+              志望の動機、特技、好きな学科、自己PRなど自由に記入
+            </p>
+          </div>
+          <AIDraftButton
+            field="motivation_note"
+            isDrafting={draftingField === "motivation_note"}
+            disabled={isPending || draftingField !== null}
+            hasCareerProfile={hasCareerProfile}
+            onClick={() => handleGenerateDraft("motivation_note")}
+          />
         </div>
         <Textarea
           {...register("motivation_note")}
-          disabled={isPending}
+          disabled={isPending || draftingField === "motivation_note"}
           rows={6}
           placeholder="例:貴社の○○という事業に共感し..."
         />
+        <p className="text-muted-foreground text-xs">
+          AIで下書きを生成した場合も、内容は必ずご自身で確認・編集してください。
+        </p>
       </Card>
 
       {/* ============================================ */}
       {/* セクション5:本人希望記入欄                   */}
       {/* ============================================ */}
       <Card className="space-y-4 p-6">
-        <div>
-          <h2 className="text-lg font-semibold">本人希望記入欄</h2>
-          <p className="text-muted-foreground mt-1 text-xs">
-            希望職種・勤務時間・勤務地など、特記したい事項があれば記入
-          </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">本人希望記入欄</h2>
+            <p className="text-muted-foreground mt-1 text-xs">
+              希望職種・勤務時間・勤務地など、特記したい事項があれば記入
+            </p>
+          </div>
+          <AIDraftButton
+            field="personal_requests"
+            isDrafting={draftingField === "personal_requests"}
+            disabled={isPending || draftingField !== null}
+            hasCareerProfile={hasCareerProfile}
+            onClick={() => handleGenerateDraft("personal_requests")}
+          />
         </div>
         <Textarea
           {...register("personal_requests")}
-          disabled={isPending}
+          disabled={isPending || draftingField === "personal_requests"}
           rows={5}
           placeholder="特になければ「貴社規定に従います」など"
         />
+        <p className="text-muted-foreground text-xs">
+          AIで下書きを生成した場合も、内容は必ずご自身で確認・編集してください。
+        </p>
       </Card>
 
       <div className="flex justify-between gap-2">
@@ -533,6 +641,66 @@ export function ResumeForm(props: Props) {
         </Button>
       </div>
     </form>
+  );
+}
+
+// ====================================================================
+// AI下書き生成ボタン
+// ====================================================================
+
+/**
+ * 「✨AIで下書き生成」ボタン。
+ *
+ * career_profile が無い場合は disabled にし、tooltip 代わりの title 属性に
+ * 「先に棚卸しを」の案内を出す(ホバーで分かる)。Linkで棚卸しへ誘導する
+ * 文言は、ボタン下部のテキストではなく、無効状態のヒントに留めることで
+ * フォームのレイアウトを乱さないようにする。
+ */
+function AIDraftButton({
+  field,
+  isDrafting,
+  disabled,
+  hasCareerProfile,
+  onClick,
+}: {
+  field: DraftField;
+  isDrafting: boolean;
+  disabled: boolean;
+  hasCareerProfile: boolean;
+  onClick: () => void;
+}) {
+  const profileMissing = !hasCareerProfile;
+
+  if (profileMissing) {
+    // 棚卸し未実施:ボタンを無効にしつつ、棚卸しへの導線を1行で示す
+    return (
+      <div className="flex flex-col items-end gap-1">
+        <Button type="button" variant="outline" size="sm" disabled aria-disabled="true">
+          <Sparkles className="mr-1 h-4 w-4" />
+          AIで下書き
+        </Button>
+        <p className="text-muted-foreground text-xs">
+          <Link href="/app/career" className="underline hover:no-underline">
+            キャリア棚卸し
+          </Link>
+          を完了すると利用できます
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={`${DRAFT_FIELD_LABEL[field]}のAI下書きを生成`}
+    >
+      <Sparkles className="mr-1 h-4 w-4" />
+      {isDrafting ? "生成中..." : "AIで下書き"}
+    </Button>
   );
 }
 
