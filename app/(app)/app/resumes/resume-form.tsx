@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useFieldArray, useForm } from "react-hook-form";
+import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import {
   type Resume,
   type SaveResumeRequest,
 } from "@/lib/resumes/types";
+import { LicenseInput } from "./license-input";
 
 /**
  * 履歴書 新規作成・編集 フォーム(共通)
@@ -449,10 +450,23 @@ export function ResumeForm(props: Props) {
               </div>
               <div className="space-y-1">
                 {index === 0 && <Label className="text-xs">資格名</Label>}
-                <Input
-                  {...register(`licenses.${index}.name`)}
-                  disabled={isPending}
-                  placeholder="例:普通自動車第一種運転免許"
+                {/*
+                  資格名は辞書ベースのオートコンプリート。
+                  Controller で react-hook-form と接続することで、候補クリック時の
+                  setValue を素直に書ける(register だと候補選択時に dispatch
+                  が必要になり、行ごとの管理が煩雑になるため Controller を採用)。
+                */}
+                <Controller
+                  control={control}
+                  name={`licenses.${index}.name`}
+                  render={({ field }) => (
+                    <LicenseInput
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                      disabled={isPending}
+                      placeholder="例:普通自動車第一種運転免許"
+                    />
+                  )}
                 />
               </div>
               <Button
