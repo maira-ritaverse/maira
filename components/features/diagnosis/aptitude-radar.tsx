@@ -10,6 +10,9 @@
 // - 5 軸、各因子の最大スコアは 8(2問×4点)。0-100% に正規化して描画。
 // - グリッドは 4 重(25% / 50% / 75% / 100%)で読み取りやすく。
 // - ラベルは「強み表現」(発想力・責任感 など)で、学術用語を見せない。
+// - 各頂点のドットは因子のスコア(0..1)で半径と不透明度を変化させ、
+//   強い因子ほど濃く・大きく表示する(「あなたの強み」を視覚で即把握)。
+//   面と外形線はブランド単色のままで、派手にしすぎない。
 
 import { aptitudeStrengthLabels, type AptitudeFactor } from "@/lib/diagnosis/aptitude-questions";
 
@@ -54,11 +57,12 @@ export function AptitudeRadar({ scores, size = 280, showLabels = true }: Props) 
   }
 
   // 実データの多角形。各軸でスコアを 0-1 に正規化。
+  // norm は頂点座標だけでなく、ドットの濃淡・サイズにも使う。
   const dataPoints = FACTORS.map((f, i) => {
     const norm = Math.max(0, Math.min(1, (scores[f] ?? 0) / MAX_SCORE));
     const x = cx + Math.cos(angles[i]) * radius * norm;
     const y = cy + Math.sin(angles[i]) * radius * norm;
-    return { x, y };
+    return { x, y, norm };
   });
   const dataPolygon = dataPoints.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" ");
 
@@ -102,9 +106,16 @@ export function AptitudeRadar({ scores, size = 280, showLabels = true }: Props) 
           strokeWidth={2}
           strokeLinejoin="round"
         />
-        {dataPoints.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={3.5} fill="currentColor" />
-        ))}
+        {dataPoints.map((p, i) => {
+          // 強い因子ほど大きく・濃く。
+          // 半径: 2.5(弱)→ 5.5(強)、不透明度: 0.35(弱)→ 1.0(強)。
+          // currentColor を維持してダーク/ライト両対応、ブランド単色のトーンを崩さない。
+          const r = 2.5 + p.norm * 3;
+          const opacity = 0.35 + p.norm * 0.65;
+          return (
+            <circle key={i} cx={p.x} cy={p.y} r={r} fill="currentColor" fillOpacity={opacity} />
+          );
+        })}
       </g>
 
       {/* ラベル(強み表現)。中央寄せで配置、各軸の角度に応じて少し外側へ。 */}
