@@ -13,6 +13,7 @@
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "backfill:resume-pii": "tsx --env-file=.env.local scripts/backfill-resume-pii.ts",
     "prepare": "husky"
   },
   "dependencies": {
@@ -56,6 +57,7 @@
     "puppeteer": "^25.1.0",
     "shadcn": "^4.7.0",
     "tailwindcss": "^4",
+    "tsx": "^4.22.3",
     "typescript": "^5",
     "typescript-eslint": "^8.59.3",
     "vitest": "^4.1.7"
