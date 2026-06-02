@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import {
+  getAdvisorPerformance,
   getClientStatusDistribution,
   getMonthlyDealsRevenue,
   getReferralStatusDistribution,
@@ -13,6 +14,7 @@ import { PeriodFilter } from "./period-filter";
 import { StatusDistributionSection } from "./status-distribution-section";
 import { MonthlyDealsSection } from "./monthly-deals-section";
 import { SelectionFunnelSection } from "./selection-funnel-section";
+import { AdvisorPerformanceSection } from "./advisor-performance-section";
 
 /**
  * エージェント向けレポート画面(土台 + D:ステータス分布)
@@ -46,12 +48,21 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
   const preset = normalizePeriodPreset(params.period);
   const period = resolvePeriod(preset, params.from, params.to);
 
+  // 🔴 C(アドバイザー別)はサーバー側で権限フィルタを掛ける。
+  //    advisor の場合、自分のデータしか取得しないため、devtools でも他人のデータは見えない。
+  const viewer = {
+    memberId: role.member.id,
+    userId: user.id,
+    isAdmin: role.member.role === "admin",
+  };
+
   // 後続レポートの並行取得を見越して Promise.all で固める
-  const [clients, referrals, monthlyDeals, funnel] = await Promise.all([
+  const [clients, referrals, monthlyDeals, funnel, advisor] = await Promise.all([
     getClientStatusDistribution(role.organization.id),
     getReferralStatusDistribution(role.organization.id),
     getMonthlyDealsRevenue(role.organization.id, period),
     getSelectionFunnel(role.organization.id, period),
+    getAdvisorPerformance(role.organization.id, viewer, period),
   ]);
 
   return (
@@ -69,8 +80,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
         <StatusDistributionSection clients={clients} referrals={referrals} />
         <MonthlyDealsSection data={monthlyDeals} />
         <SelectionFunnelSection data={funnel} />
+        <AdvisorPerformanceSection data={advisor} />
         {/*
-          ここに後で C(アドバイザー別)/ E(所要日数)を Card として並べていく。
+          ここに後で E(所要日数)を Card として並べていく。
         */}
       </div>
     </div>

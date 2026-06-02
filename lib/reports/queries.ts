@@ -583,3 +583,326 @@ function nextJstDay(ymd: string): string {
   const nd = String(next.getUTCDate()).padStart(2, "0");
   return `${ny}-${nm}-${nd}`;
 }
+
+// ============================================
+// C:アドバイザー別成績
+//
+// 🔴 権限の鉄則:
+//   - admin    : 全メンバーの成績を返す(0 件メンバーも roster で含める)
+//   - advisor  : 自分の成績だけを返す。他人のデータは「サーバー側のクエリ時点」で
+//                 そもそも取得しない(UI で隠す方式は禁止)
+//
+// 担当の辿り方:
+//   placement → referral.client_record_id → client_records.assigned_member_id
+//   (placements や referrals 自体に assigned_member_id は無い)
+//
+// メトリクス:
+//   - referralCount  : 期間内に作成された担当 referral の件数(created_at)
+//   - placementCount : 期間内の placement イベント件数(event_date)
+//   - netRevenue     : 期間内 placements の純売上(aggregatePlacements 再利用)
+//
+// 期間カラム:
+//   - referrals は created_at、placements は event_date を採用。
+//     A(売上)と数字が揃うよう、placements は A と同じ event_date 基準にしている。
+// ============================================
+
+export type AdvisorMetric = {
+  /** null = 未割当(admin ビューでのみ出現) */
+  memberId: string | null;
+  displayName: string | null;
+  isUnassigned: boolean;
+  /** viewer が advisor のとき、自分の行を強調するためのフラグ */
+  isYou: boolean;
+  referralCount: number;
+  placementCount: number;
+  netRevenue: number;
+};
+
+export type AdvisorPerformance = {
+  rows: AdvisorMetric[];
+  isAdmin: boolean;
+  period: Period;
+};
+
+export type AdvisorPerformanceViewer = {
+  memberId: string;
+  userId: string;
+  isAdmin: boolean;
+};
+
+/**
+ * アドバイザー別成績を取得する。
+ *
+ * 🔴 権限フィルタは必ずサーバーで適用する。advisor が他人のデータを
+ *    一行たりとも取得してはならない(devtools で見えてしまうため)。
+ *
+ *    admin   : RPC で全メンバー roster を取得し、各メンバーの数値を集計して返す
+ *    advisor : 担当 client_records の id を先に絞り込み、以降のクエリは
+ *              すべてその id 集合の中だけで実行する
+ */
+export async function getAdvisorPerformance(
+  organizationId: string,
+  viewer: AdvisorPerformanceViewer,
+  period: Period,
+): Promise<AdvisorPerformance> {
+  if (viewer.isAdmin) {
+    return getAdvisorPerformanceForAdmin(organizationId, period);
+  }
+  return getAdvisorPerformanceForSelf(organizationId, viewer, period);
+}
+
+/**
+ * 自分の成績だけを取得(advisor 用)。
+ *
+ * 防御:
+ *   1) client_record_id 集合を assigned_member_id = me で先に絞る
+ *   2) 以降の referrals / placements は (1) の id 集合の IN クエリでしか叩かない
+ *   ⇒ 他人の referral / placement はサーバーが一切取得しない
+ *
+ * 自分の display_name は profiles から取得(自分の行は RLS で読める)。
+ */
+async function getAdvisorPerformanceForSelf(
+  organizationId: string,
+  viewer: AdvisorPerformanceViewer,
+  period: Period,
+): Promise<AdvisorPerformance> {
+  const supabase = await createClient();
+
+  // 1) 自分が担当している client_records の id を取得(org スコープも二重防御)
+  const { data: clientRows } = await supabase
+    .from("client_records")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("assigned_member_id", viewer.memberId);
+
+  const clientIds = (clientRows ?? []).map((r) => (r as { id: string }).id);
+
+  // 自分の表示名(自分自身の profiles 行は RLS で読める)
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("display_name")
+    .eq("id", viewer.userId)
+    .maybeSingle();
+  const displayName = (profile as { display_name: string | null } | null)?.display_name ?? null;
+
+  // 担当クライアントがゼロなら全部 0 で返す(以降のクエリも不要)
+  if (clientIds.length === 0) {
+    return {
+      isAdmin: false,
+      period,
+      rows: [emptyRowForSelf(viewer.memberId, displayName)],
+    };
+  }
+
+  // 2) 自分の referrals(id, created_at)を取得
+  //    後で referral_count(期間で絞った件数)と placements 用の referral_id 集合の
+  //    両方に使うので id + created_at の最小カラムで一括取得。
+  const { data: refRows } = await supabase
+    .from("referrals")
+    .select("id, created_at")
+    .eq("organization_id", organizationId)
+    .in("client_record_id", clientIds);
+
+  const refs = (refRows ?? []) as Array<{ id: string; created_at: string }>;
+
+  // 期間内に作成された referral の件数
+  const startIso = `${period.from}T00:00:00+09:00`;
+  const endExclusiveIso = `${nextJstDay(period.to)}T00:00:00+09:00`;
+  const referralCount = refs.filter(
+    (r) => r.created_at >= startIso && r.created_at < endExclusiveIso,
+  ).length;
+
+  const referralIds = refs.map((r) => r.id);
+
+  // 3) placements(自分の referral_id の中だけ、event_date で期間絞り)
+  const { data: placementRows } =
+    referralIds.length === 0
+      ? { data: [] as PlacementRowMinimal[] }
+      : await supabase
+          .from("placements")
+          .select("id, organization_id, referral_id, event_type, amount, event_date")
+          .eq("organization_id", organizationId)
+          .in("referral_id", referralIds)
+          .gte("event_date", period.from)
+          .lte("event_date", period.to);
+
+  const placementsTyped = (placementRows ?? []) as PlacementRowMinimal[];
+  const agg = aggregatePlacements(placementsTyped.map(placementRowToAggregateItem));
+  const placementCount = placementsTyped.filter((p) => p.event_type === "placement").length;
+
+  return {
+    isAdmin: false,
+    period,
+    rows: [
+      {
+        memberId: viewer.memberId,
+        displayName,
+        isUnassigned: false,
+        isYou: true,
+        referralCount,
+        placementCount,
+        netRevenue: agg.netRevenue,
+      },
+    ],
+  };
+}
+
+/**
+ * 全メンバーの成績を取得(admin 用)。
+ *
+ * 1) RPC でメンバー roster(0 件メンバーも含めて全員返す)
+ * 2) client_records(id, assigned_member_id)で id → メンバー の対応 Map を作る
+ * 3) referrals(id, client_record_id, created_at)を org 全体で取得
+ * 4) placements(referral_id, event_type, amount, event_date)を org 全体・期間で取得
+ * 5) メンバーごとに集計。assigned_member_id が null のものは「未割当」行へ寄せる
+ */
+async function getAdvisorPerformanceForAdmin(
+  organizationId: string,
+  period: Period,
+): Promise<AdvisorPerformance> {
+  const supabase = await createClient();
+
+  // 1) メンバー roster(member_id, display_name)
+  const { data: memberRows } = await supabase.rpc("list_organization_member_display_names", {
+    target_organization_id: organizationId,
+  });
+  const roster = (memberRows ?? []) as Array<{ member_id: string; display_name: string | null }>;
+
+  // 2) client_record → assigned_member_id の Map
+  const { data: clientRows } = await supabase
+    .from("client_records")
+    .select("id, assigned_member_id")
+    .eq("organization_id", organizationId);
+  const memberByClient = new Map<string, string | null>();
+  for (const row of (clientRows ?? []) as Array<{
+    id: string;
+    assigned_member_id: string | null;
+  }>) {
+    memberByClient.set(row.id, row.assigned_member_id);
+  }
+
+  // 3) referrals 全件(id, client_record_id, created_at)
+  //    placements 集計でも referral_id → client_record_id の lookup が必要なので
+  //    全件持ってくる(beta 規模なら現実的)。将来、件数が増えたら
+  //    placements 側の referral_id 集合で逆引きする形に書き換えればよい。
+  const { data: refRows } = await supabase
+    .from("referrals")
+    .select("id, client_record_id, created_at")
+    .eq("organization_id", organizationId);
+  const refs = (refRows ?? []) as Array<{
+    id: string;
+    client_record_id: string;
+    created_at: string;
+  }>;
+  const clientByReferral = new Map<string, string>();
+  for (const r of refs) clientByReferral.set(r.id, r.client_record_id);
+
+  // 4) placements(期間内、org 全体)
+  const { data: placementRows } = await supabase
+    .from("placements")
+    .select("id, organization_id, referral_id, event_type, amount, event_date")
+    .eq("organization_id", organizationId)
+    .gte("event_date", period.from)
+    .lte("event_date", period.to);
+  const placements = (placementRows ?? []) as PlacementRowMinimal[];
+
+  // 5) 集計
+  type Acc = {
+    referralCount: number;
+    placementCount: number;
+    placements: PlacementRowMinimal[];
+  };
+  const byMember = new Map<string | null, Acc>();
+  const getAcc = (memberId: string | null): Acc => {
+    let a = byMember.get(memberId);
+    if (!a) {
+      a = { referralCount: 0, placementCount: 0, placements: [] };
+      byMember.set(memberId, a);
+    }
+    return a;
+  };
+
+  // referral 件数(期間内に作成された分)
+  const startIso = `${period.from}T00:00:00+09:00`;
+  const endExclusiveIso = `${nextJstDay(period.to)}T00:00:00+09:00`;
+  for (const r of refs) {
+    if (r.created_at < startIso || r.created_at >= endExclusiveIso) continue;
+    const memberId = memberByClient.get(r.client_record_id) ?? null;
+    getAcc(memberId).referralCount += 1;
+  }
+
+  // placements を referral 経由でメンバーに紐付け
+  for (const p of placements) {
+    const clientId = clientByReferral.get(p.referral_id);
+    const memberId = clientId ? (memberByClient.get(clientId) ?? null) : null;
+    const acc = getAcc(memberId);
+    acc.placements.push(p);
+    if (p.event_type === "placement") acc.placementCount += 1;
+  }
+
+  // roster の全員分を行として生成(0 件メンバーも残す)
+  const rows: AdvisorMetric[] = roster.map((m) => {
+    const acc = byMember.get(m.member_id);
+    const agg = aggregatePlacements((acc?.placements ?? []).map(placementRowToAggregateItem));
+    return {
+      memberId: m.member_id,
+      displayName: m.display_name,
+      isUnassigned: false,
+      isYou: false,
+      referralCount: acc?.referralCount ?? 0,
+      placementCount: acc?.placementCount ?? 0,
+      netRevenue: agg.netRevenue,
+    };
+  });
+
+  // 未割当行(該当 client_records.assigned_member_id が null のデータがあれば)
+  const unassigned = byMember.get(null);
+  if (unassigned && (unassigned.referralCount > 0 || unassigned.placements.length > 0)) {
+    const agg = aggregatePlacements(unassigned.placements.map(placementRowToAggregateItem));
+    rows.push({
+      memberId: null,
+      displayName: null,
+      isUnassigned: true,
+      isYou: false,
+      referralCount: unassigned.referralCount,
+      placementCount: unassigned.placementCount,
+      netRevenue: agg.netRevenue,
+    });
+  }
+
+  // 並び順:純売上 → 成約数 → 担当 referral 数 の優先順位で降順。
+  // 未割当行は最後尾固定(運営の見方として「担当付き」を優先表示するため)。
+  rows.sort((a, b) => {
+    if (a.isUnassigned !== b.isUnassigned) return a.isUnassigned ? 1 : -1;
+    if (b.netRevenue !== a.netRevenue) return b.netRevenue - a.netRevenue;
+    if (b.placementCount !== a.placementCount) return b.placementCount - a.placementCount;
+    return b.referralCount - a.referralCount;
+  });
+
+  return { isAdmin: true, period, rows };
+}
+
+type PlacementRowMinimal = {
+  id: string;
+  organization_id: string;
+  referral_id: string;
+  event_type: string;
+  amount: number | null;
+  event_date: string;
+};
+
+function placementRowToAggregateItem(row: PlacementRowMinimal): Placement {
+  return toPlacementForAggregate(row);
+}
+
+function emptyRowForSelf(memberId: string, displayName: string | null): AdvisorMetric {
+  return {
+    memberId,
+    displayName,
+    isUnassigned: false,
+    isYou: true,
+    referralCount: 0,
+    placementCount: 0,
+    netRevenue: 0,
+  };
+}
