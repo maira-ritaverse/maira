@@ -5,12 +5,14 @@ import {
   getClientStatusDistribution,
   getMonthlyDealsRevenue,
   getReferralStatusDistribution,
+  getSelectionFunnel,
   resolvePeriod,
   type PeriodPreset,
 } from "@/lib/reports/queries";
 import { PeriodFilter } from "./period-filter";
 import { StatusDistributionSection } from "./status-distribution-section";
 import { MonthlyDealsSection } from "./monthly-deals-section";
+import { SelectionFunnelSection } from "./selection-funnel-section";
 
 /**
  * エージェント向けレポート画面(土台 + D:ステータス分布)
@@ -45,10 +47,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
   const period = resolvePeriod(preset, params.from, params.to);
 
   // 後続レポートの並行取得を見越して Promise.all で固める
-  const [clients, referrals, monthlyDeals] = await Promise.all([
+  const [clients, referrals, monthlyDeals, funnel] = await Promise.all([
     getClientStatusDistribution(role.organization.id),
     getReferralStatusDistribution(role.organization.id),
     getMonthlyDealsRevenue(role.organization.id, period),
+    getSelectionFunnel(role.organization.id, period),
   ]);
 
   return (
@@ -65,9 +68,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
       <div className="space-y-4">
         <StatusDistributionSection clients={clients} referrals={referrals} />
         <MonthlyDealsSection data={monthlyDeals} />
+        <SelectionFunnelSection data={funnel} />
         {/*
-          ここに後で B(ファネル)/ C(アドバイザー別)/ E(所要日数)を
-          Card として並べていく。
+          ここに後で C(アドバイザー別)/ E(所要日数)を Card として並べていく。
         */}
       </div>
     </div>
