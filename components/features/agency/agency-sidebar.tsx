@@ -16,10 +16,20 @@ type Props = {
   memberRole: OrganizationRole;
 };
 
-const navItems: { href: string; icon: string; label: string }[] = [
+type NavItem = {
+  href: string;
+  icon: string;
+  label: string;
+  // 表示に必要なロール。未指定なら全メンバーに表示。
+  requiredRole?: OrganizationRole;
+};
+
+const navItems: NavItem[] = [
   { href: "/agency/clients", icon: "👥", label: "クライアント管理" },
   { href: "/agency/jobs", icon: "💼", label: "求人管理" },
   { href: "/agency/reports", icon: "📊", label: "レポート" },
+  // メンバー管理は admin 専用(サーバー側でも /agency/members を redirect)
+  { href: "/agency/members", icon: "⚙️", label: "メンバー管理", requiredRole: "admin" },
   // 将来追加予定:
   // { href: "/agency/matching", icon: "🔗", label: "マッチング" },
 ];
@@ -39,6 +49,8 @@ export function AgencySidebar({ organizationName, memberRole }: Props) {
 
       <nav className="flex-1 space-y-1">
         {navItems.map((item) => {
+          // ロール要件を満たさない項目は出さない(admin 専用メニュー等)
+          if (item.requiredRole && item.requiredRole !== memberRole) return null;
           // 完全一致ではなく前方一致で判定(/agency/clients/[id] でもアクティブにする)
           const isActive = pathname.startsWith(item.href);
           return (
