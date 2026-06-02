@@ -118,13 +118,18 @@ export default async function ClientDetailPage({ params }: RouteParams) {
 
       <ClientDetailForm client={client} />
 
-      <InteractionsSection clientId={client.id} interactions={interactions} />
+      <InteractionsSection
+        clientId={client.id}
+        interactions={interactions}
+        isAdmin={role.member.role === "admin"}
+      />
 
       <TasksSection
         clientId={client.id}
         tasks={tasks}
         members={members}
         currentMemberId={role.member.id}
+        isAdmin={role.member.role === "admin"}
       />
 
       <ReferralSection clientId={client.id} referrals={referrals} openJobs={openJobs} />

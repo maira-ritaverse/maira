@@ -19,22 +19,26 @@ import { Label } from "@/components/ui/label";
  * 役割:
  *   - このクライアントへの対応履歴を時系列(新しい順)で表示
  *   - 「対応を記録」インラインフォーム:種別/対応日時/メモ を POST で作成
+ *   - 各行から編集(同 org の誰でも)・削除(admin のみ)
  *
  * 履歴は server 側(page.tsx)で取得して props で渡す。
- * 記録後は router.refresh() で再取得する(楽観更新はしない)。
+ * 変更後は router.refresh() で再取得する(楽観更新はしない)。
  *
- * 設計方針(指示書):
- *   - 入力を軽くする:項目を増やしすぎず、デフォルト値(日時=今)を活用
- *   - エージェントが手早く記録できることが最重要
+ * 削除権限:
+ *   - DB の RLS は DELETE = admin のみ
+ *   - API でも明示的に role.member.role を確認
+ *   - UI 側は isAdmin の時のみ削除ボタンを表示(無駄なフォーム提示を避ける)
  */
 
 type Props = {
   clientId: string;
   interactions: ClientInteractionWithAuthor[];
+  isAdmin: boolean;
 };
 
-export function InteractionsSection({ clientId, interactions }: Props) {
+export function InteractionsSection({ clientId, interactions, isAdmin }: Props) {
   const router = useRouter();
+  const refresh = () => router.refresh();
 
   return (
     <Card className="space-y-6 p-6">
@@ -45,9 +49,9 @@ export function InteractionsSection({ clientId, interactions }: Props) {
         </p>
       </div>
 
-      <InteractionCreateForm clientId={clientId} onCreated={() => router.refresh()} />
+      <InteractionCreateForm clientId={clientId} onCreated={refresh} />
 
-      <InteractionList interactions={interactions} />
+      <InteractionList interactions={interactions} isAdmin={isAdmin} onChanged={refresh} />
     </Card>
   );
 }
@@ -56,7 +60,15 @@ export function InteractionsSection({ clientId, interactions }: Props) {
 // 履歴一覧(時系列、新しい順)
 // ============================================
 
-function InteractionList({ interactions }: { interactions: ClientInteractionWithAuthor[] }) {
+function InteractionList({
+  interactions,
+  isAdmin,
+  onChanged,
+}: {
+  interactions: ClientInteractionWithAuthor[];
+  isAdmin: boolean;
+  onChanged: () => void;
+}) {
   if (interactions.length === 0) {
     return (
       <div className="border-muted-foreground/20 text-muted-foreground rounded-md border border-dashed p-4 text-center text-sm">
@@ -70,18 +82,87 @@ function InteractionList({ interactions }: { interactions: ClientInteractionWith
       <h3 className="text-sm font-medium">対応履歴({interactions.length}件)</h3>
       <ul className="space-y-2">
         {interactions.map((it) => (
-          <InteractionRow key={it.id} interaction={it} />
+          <InteractionRow key={it.id} interaction={it} isAdmin={isAdmin} onChanged={onChanged} />
         ))}
       </ul>
     </div>
   );
 }
 
-function InteractionRow({ interaction }: { interaction: ClientInteractionWithAuthor }) {
-  const typeConfig = getInteractionTypeConfig(interaction.interactionType);
+function InteractionRow({
+  interaction,
+  isAdmin,
+  onChanged,
+}: {
+  interaction: ClientInteractionWithAuthor;
+  isAdmin: boolean;
+  onChanged: () => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+
+  if (isEditing) {
+    return (
+      <li className="border-border rounded-md border p-3">
+        <InteractionEditForm
+          interaction={interaction}
+          onSaved={() => {
+            setIsEditing(false);
+            onChanged();
+          }}
+          onCancel={() => setIsEditing(false)}
+        />
+      </li>
+    );
+  }
 
   return (
     <li className="border-border rounded-md border p-3">
+      <InteractionView
+        interaction={interaction}
+        isAdmin={isAdmin}
+        onEdit={() => setIsEditing(true)}
+        onDeleted={onChanged}
+      />
+    </li>
+  );
+}
+
+function InteractionView({
+  interaction,
+  isAdmin,
+  onEdit,
+  onDeleted,
+}: {
+  interaction: ClientInteractionWithAuthor;
+  isAdmin: boolean;
+  onEdit: () => void;
+  onDeleted: () => void;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const typeConfig = getInteractionTypeConfig(interaction.interactionType);
+
+  const handleDelete = () => {
+    if (!window.confirm("この対応履歴を削除しますか?(元に戻せません)")) return;
+    startTransition(async () => {
+      setError(null);
+      try {
+        const res = await fetch(`/api/agency/interactions/${interaction.id}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) {
+          const errData = (await res.json()) as { error?: string; message?: string };
+          throw new Error(errData.message ?? errData.error ?? "削除に失敗しました");
+        }
+        onDeleted();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unknown error");
+      }
+    });
+  };
+
+  return (
+    <div className="space-y-2">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -107,7 +188,154 @@ function InteractionRow({ interaction }: { interaction: ClientInteractionWithAut
           </span>
         )}
       </div>
-    </li>
+      <div className="flex gap-3 text-xs">
+        <button
+          type="button"
+          onClick={onEdit}
+          disabled={isPending}
+          className="text-muted-foreground hover:text-foreground"
+        >
+          編集
+        </button>
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={isPending}
+            className="text-muted-foreground hover:text-destructive"
+          >
+            {isPending ? "削除中..." : "削除"}
+          </button>
+        )}
+      </div>
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>エラー: {error}</AlertDescription>
+        </Alert>
+      )}
+    </div>
+  );
+}
+
+// ============================================
+// 編集フォーム(行内展開)
+// ============================================
+
+function InteractionEditForm({
+  interaction,
+  onSaved,
+  onCancel,
+}: {
+  interaction: ClientInteractionWithAuthor;
+  onSaved: () => void;
+  onCancel: () => void;
+}) {
+  const [interactionType, setInteractionType] = useState<InteractionType>(
+    interaction.interactionType,
+  );
+  const [occurredAtLocal, setOccurredAtLocal] = useState<string>(
+    formatLocalDatetime(new Date(interaction.occurredAt)),
+  );
+  const [summary, setSummary] = useState<string>(interaction.summary ?? "");
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!summary.trim()) {
+      setError("メモを入力してください");
+      return;
+    }
+    startTransition(async () => {
+      setError(null);
+      try {
+        const occurredAtIso = new Date(occurredAtLocal).toISOString();
+        const res = await fetch(`/api/agency/interactions/${interaction.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            interaction_type: interactionType,
+            occurred_at: occurredAtIso,
+            summary: summary.trim(),
+          }),
+        });
+        if (!res.ok) {
+          const errData = (await res.json()) as { error?: string; message?: string };
+          throw new Error(errData.message ?? errData.error ?? "更新に失敗しました");
+        }
+        onSaved();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unknown error");
+      }
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor={`edit-type-${interaction.id}`}>
+            種別 <span className="text-red-600">*</span>
+          </Label>
+          <select
+            id={`edit-type-${interaction.id}`}
+            value={interactionType}
+            onChange={(e) => setInteractionType(e.target.value as InteractionType)}
+            disabled={isPending}
+            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+          >
+            {interactionTypeConfig.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor={`edit-occurred-${interaction.id}`}>
+            対応日時 <span className="text-red-600">*</span>
+          </Label>
+          <input
+            id={`edit-occurred-${interaction.id}`}
+            type="datetime-local"
+            value={occurredAtLocal}
+            onChange={(e) => setOccurredAtLocal(e.target.value)}
+            disabled={isPending}
+            required
+            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+          />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor={`edit-summary-${interaction.id}`}>
+          メモ <span className="text-red-600">*</span>
+        </Label>
+        <textarea
+          id={`edit-summary-${interaction.id}`}
+          value={summary}
+          onChange={(e) => setSummary(e.target.value)}
+          disabled={isPending}
+          rows={3}
+          maxLength={200}
+          required
+          className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+        />
+        <p className="text-muted-foreground text-xs">{summary.length}/200</p>
+      </div>
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>エラー: {error}</AlertDescription>
+        </Alert>
+      )}
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={isPending}>
+          {isPending ? "保存中..." : "保存"}
+        </Button>
+        <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={onCancel}>
+          キャンセル
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -124,7 +352,6 @@ function InteractionCreateForm({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [interactionType, setInteractionType] = useState<InteractionType>("call");
-  // datetime-local 用の初期値はローカルタイムの "YYYY-MM-DDTHH:mm" 文字列
   const [occurredAtLocal, setOccurredAtLocal] = useState<string>(() =>
     formatLocalDatetime(new Date()),
   );
@@ -148,10 +375,7 @@ function InteractionCreateForm({
     startTransition(async () => {
       setError(null);
       try {
-        // datetime-local(ローカルタイム、TZ無し)を ISO 8601(UTC、TZ付き)に変換
-        // zod 側で .datetime() を満たすために必要
         const occurredAtIso = new Date(occurredAtLocal).toISOString();
-
         const res = await fetch("/api/agency/interactions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -183,7 +407,6 @@ function InteractionCreateForm({
           variant="outline"
           size="sm"
           onClick={() => {
-            // フォームを開くたびに「今」を初期値にする
             setOccurredAtLocal(formatLocalDatetime(new Date()));
             setIsOpen(true);
           }}
@@ -196,7 +419,6 @@ function InteractionCreateForm({
 
   return (
     <form onSubmit={handleSubmit} className="border-border space-y-3 rounded-md border p-4">
-      {/* 種別と日時は横並びにして縦の圧迫感を減らす(スマホでは grid-cols-1) */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="interaction-type">

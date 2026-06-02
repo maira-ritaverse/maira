@@ -1,20 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
-import { updateAgencyTaskRequestSchema } from "@/lib/agency-tasks/types";
+import { updateInteractionRequestSchema } from "@/lib/interactions/types";
 
 /**
- * PATCH /api/agency/tasks/[id]
- * DELETE /api/agency/tasks/[id]
+ * PATCH /api/agency/interactions/[id]
+ * DELETE /api/agency/interactions/[id]
  *
- * エージェント業務タスクの更新・削除。
- * - PATCH: 同 organization のメンバーなら誰でも更新可
- *   - status を completed にしたら completed_at = now() を自動セット
- *   - status を pending に戻したら completed_at をクリア
- *   - 完了/編集は組織内なら誰でも可(指示書方針:業務制限は UI/API 層で。RLS では絞らない)
- * - DELETE: 管理者(admin)のみ削除可
- *   (RLS でも DELETE は admin 限定だが、API 層でも明示的に弾く)
- * - どちらも RLS により自社のタスクのみ操作可能。念のため organization_id でも絞る
+ * 対応履歴の編集・削除。
+ * - PATCH: 同 organization のメンバーなら誰でも更新可(RLS と同じ方針)
+ * - DELETE: 管理者(admin)のみ削除可(RLS でも DELETE は admin 限定だが、
+ *   API 層でも明示的に弾いて分かりやすいエラーを返す)
+ * - どちらも organization_id でも明示的に絞って二重防御
  */
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -43,7 +40,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const parsed = updateAgencyTaskRequestSchema.safeParse(body);
+  const parsed = updateInteractionRequestSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Invalid request", details: parsed.error.format() },
@@ -53,37 +50,17 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
   const updateData: Record<string, unknown> = {};
   const d = parsed.data;
-  if (d.title !== undefined) updateData.title = d.title;
-  if (d.status !== undefined) {
-    updateData.status = d.status;
-    // 完了/未完了の切り替えに合わせて completed_at を自動制御
-    updateData.completed_at = d.status === "completed" ? new Date().toISOString() : null;
-  }
-  if (d.priority !== undefined) updateData.priority = d.priority;
-  if (d.due_at !== undefined) updateData.due_at = d.due_at;
-  if (d.assigned_member_id !== undefined) {
-    // 担当を変える場合も、その担当者が自社かを検証
-    const { data: memberRow } = await supabase
-      .from("organization_members")
-      .select("organization_id")
-      .eq("id", d.assigned_member_id)
-      .maybeSingle();
-
-    if (!memberRow || memberRow.organization_id !== role.organization.id) {
-      return NextResponse.json(
-        { error: "Assignee not found in your organization" },
-        { status: 404 },
-      );
-    }
-    updateData.assigned_member_id = d.assigned_member_id;
-  }
+  if (d.interaction_type !== undefined) updateData.interaction_type = d.interaction_type;
+  if (d.occurred_at !== undefined) updateData.occurred_at = d.occurred_at;
+  if (d.summary !== undefined) updateData.summary = d.summary || null;
+  if (d.body !== undefined) updateData.body = d.body || null;
 
   if (Object.keys(updateData).length === 0) {
     return NextResponse.json({ success: true });
   }
 
   const { error } = await supabase
-    .from("agency_tasks")
+    .from("client_interactions")
     .update(updateData)
     .eq("id", id)
     .eq("organization_id", role.organization.id);
@@ -118,13 +95,13 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
   // 削除は admin のみ(RLS でも弾けるが、API 層で明示的に 403 を返す)
   if (role.member.role !== "admin") {
     return NextResponse.json(
-      { error: "Forbidden", message: "タスクの削除は管理者のみ可能です" },
+      { error: "Forbidden", message: "対応履歴の削除は管理者のみ可能です" },
       { status: 403 },
     );
   }
 
   const { error } = await supabase
-    .from("agency_tasks")
+    .from("client_interactions")
     .delete()
     .eq("id", id)
     .eq("organization_id", role.organization.id);

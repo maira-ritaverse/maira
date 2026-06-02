@@ -20,16 +20,14 @@ import { Label } from "@/components/ui/label";
  *   - このクライアントに対するタスクを一覧表示(未完了が上、期限が近い順)
  *   - 「タスクを追加」インラインフォーム:title/期限/優先度/担当 を POST で作成
  *   - チェックボックスで完了/未完了をトグル
+ *   - 各行から編集(同 org の誰でも)・削除(admin のみ)
  *
- * タスクとメンバー一覧は server 側(page.tsx)で取得して props で渡す。
- * 変更後は router.refresh() で再取得する(楽観更新はしない)。
+ * 削除権限:
+ *   - DB の RLS は DELETE = admin のみ
+ *   - API でも明示的に role.member.role を確認
+ *   - UI 側は isAdmin の時のみ削除ボタンを表示
  *
- * 設計方針(指示書):
- *   - 入力を軽く(対応履歴と同じ思想)
- *   - 完了タスクは薄く表示(消さない、見返せる)
- *   - 完了は組織内なら誰でも可(RLS では絞らず、UI 上のロックも今はかけない)
- *
- * 期限アラート(色分け)は次のステップ4で追加予定なので、ここでは未実装。
+ * 期限アラート(色分け)は次のステップで追加予定なので、ここでは未実装。
  */
 
 type OrgMember = { memberId: string; displayName: string | null };
@@ -39,9 +37,10 @@ type Props = {
   tasks: AgencyTaskWithAssignee[];
   members: OrgMember[];
   currentMemberId: string;
+  isAdmin: boolean;
 };
 
-export function TasksSection({ clientId, tasks, members, currentMemberId }: Props) {
+export function TasksSection({ clientId, tasks, members, currentMemberId, isAdmin }: Props) {
   const router = useRouter();
   const refresh = () => router.refresh();
 
@@ -64,7 +63,13 @@ export function TasksSection({ clientId, tasks, members, currentMemberId }: Prop
         onCreated={refresh}
       />
 
-      <TaskList pendingTasks={pending} completedTasks={completed} onUpdated={refresh} />
+      <TaskList
+        pendingTasks={pending}
+        completedTasks={completed}
+        members={members}
+        isAdmin={isAdmin}
+        onChanged={refresh}
+      />
     </Card>
   );
 }
@@ -76,11 +81,15 @@ export function TasksSection({ clientId, tasks, members, currentMemberId }: Prop
 function TaskList({
   pendingTasks,
   completedTasks,
-  onUpdated,
+  members,
+  isAdmin,
+  onChanged,
 }: {
   pendingTasks: AgencyTaskWithAssignee[];
   completedTasks: AgencyTaskWithAssignee[];
-  onUpdated: () => void;
+  members: OrgMember[];
+  isAdmin: boolean;
+  onChanged: () => void;
 }) {
   const [showCompleted, setShowCompleted] = useState(false);
 
@@ -102,7 +111,13 @@ function TaskList({
         ) : (
           <ul className="space-y-2">
             {pendingTasks.map((t) => (
-              <TaskRow key={t.id} task={t} onUpdated={onUpdated} />
+              <TaskRow
+                key={t.id}
+                task={t}
+                members={members}
+                isAdmin={isAdmin}
+                onChanged={onChanged}
+              />
             ))}
           </ul>
         )}
@@ -121,7 +136,13 @@ function TaskList({
           {showCompleted && (
             <ul className="space-y-2">
               {completedTasks.map((t) => (
-                <TaskRow key={t.id} task={t} onUpdated={onUpdated} />
+                <TaskRow
+                  key={t.id}
+                  task={t}
+                  members={members}
+                  isAdmin={isAdmin}
+                  onChanged={onChanged}
+                />
               ))}
             </ul>
           )}
@@ -131,7 +152,61 @@ function TaskList({
   );
 }
 
-function TaskRow({ task, onUpdated }: { task: AgencyTaskWithAssignee; onUpdated: () => void }) {
+function TaskRow({
+  task,
+  members,
+  isAdmin,
+  onChanged,
+}: {
+  task: AgencyTaskWithAssignee;
+  members: OrgMember[];
+  isAdmin: boolean;
+  onChanged: () => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const isDone = task.status === "completed";
+
+  if (isEditing) {
+    return (
+      <li
+        className={`border-border rounded-md border p-3 ${isDone ? "bg-muted/30 opacity-60" : ""}`}
+      >
+        <TaskEditForm
+          task={task}
+          members={members}
+          onSaved={() => {
+            setIsEditing(false);
+            onChanged();
+          }}
+          onCancel={() => setIsEditing(false)}
+        />
+      </li>
+    );
+  }
+
+  return (
+    <li className={`border-border rounded-md border p-3 ${isDone ? "bg-muted/30 opacity-60" : ""}`}>
+      <TaskView
+        task={task}
+        isAdmin={isAdmin}
+        onEdit={() => setIsEditing(true)}
+        onChanged={onChanged}
+      />
+    </li>
+  );
+}
+
+function TaskView({
+  task,
+  isAdmin,
+  onEdit,
+  onChanged,
+}: {
+  task: AgencyTaskWithAssignee;
+  isAdmin: boolean;
+  onEdit: () => void;
+  onChanged: () => void;
+}) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -151,7 +226,26 @@ function TaskRow({ task, onUpdated }: { task: AgencyTaskWithAssignee; onUpdated:
           const errData = (await res.json()) as { error?: string; message?: string };
           throw new Error(errData.message ?? errData.error ?? "更新に失敗しました");
         }
-        onUpdated();
+        onChanged();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unknown error");
+      }
+    });
+  };
+
+  const handleDelete = () => {
+    if (!window.confirm("このタスクを削除しますか?(元に戻せません)")) return;
+    startTransition(async () => {
+      setError(null);
+      try {
+        const res = await fetch(`/api/agency/tasks/${task.id}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) {
+          const errData = (await res.json()) as { error?: string; message?: string };
+          throw new Error(errData.message ?? errData.error ?? "削除に失敗しました");
+        }
+        onChanged();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unknown error");
       }
@@ -159,9 +253,8 @@ function TaskRow({ task, onUpdated }: { task: AgencyTaskWithAssignee; onUpdated:
   };
 
   return (
-    <li className={`border-border rounded-md border p-3 ${isDone ? "bg-muted/30 opacity-60" : ""}`}>
+    <div className="space-y-2">
       <div className="flex items-start gap-3">
-        {/* 完了チェックボックス。base-ui ガイドに従い onClick(onSelect ではない) */}
         <input
           type="checkbox"
           checked={isDone}
@@ -182,6 +275,26 @@ function TaskRow({ task, onUpdated }: { task: AgencyTaskWithAssignee; onUpdated:
             {task.assigneeName && <span>担当: {task.assigneeName}</span>}
             {isDone && task.completedAt && <span>完了: {formatDue(task.completedAt)}</span>}
           </div>
+          <div className="mt-2 flex gap-3 text-xs">
+            <button
+              type="button"
+              onClick={onEdit}
+              disabled={isPending}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              編集
+            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={isPending}
+                className="text-muted-foreground hover:text-destructive"
+              >
+                {isPending ? "..." : "削除"}
+              </button>
+            )}
+          </div>
           {error && (
             <Alert variant="destructive" className="mt-2">
               <AlertDescription>エラー: {error}</AlertDescription>
@@ -189,7 +302,147 @@ function TaskRow({ task, onUpdated }: { task: AgencyTaskWithAssignee; onUpdated:
           )}
         </div>
       </div>
-    </li>
+    </div>
+  );
+}
+
+// ============================================
+// 編集フォーム(行内展開)
+// ============================================
+
+function TaskEditForm({
+  task,
+  members,
+  onSaved,
+  onCancel,
+}: {
+  task: AgencyTaskWithAssignee;
+  members: OrgMember[];
+  onSaved: () => void;
+  onCancel: () => void;
+}) {
+  const [title, setTitle] = useState(task.title);
+  const [dueAtLocal, setDueAtLocal] = useState<string>(
+    task.dueAt ? formatLocalDatetime(new Date(task.dueAt)) : "",
+  );
+  // priority が null の時は normal にしておく(UI で「なし」を表現するより簡潔)
+  const [priority, setPriority] = useState<AgencyTaskPriority>(task.priority ?? "normal");
+  const [assignedMemberId, setAssignedMemberId] = useState<string>(task.assignedMemberId);
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) {
+      setError("タイトルを入力してください");
+      return;
+    }
+    startTransition(async () => {
+      setError(null);
+      try {
+        const dueAtIso = dueAtLocal ? new Date(dueAtLocal).toISOString() : null;
+        const res = await fetch(`/api/agency/tasks/${task.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: title.trim(),
+            priority,
+            due_at: dueAtIso,
+            assigned_member_id: assignedMemberId,
+          }),
+        });
+        if (!res.ok) {
+          const errData = (await res.json()) as { error?: string; message?: string };
+          throw new Error(errData.message ?? errData.error ?? "更新に失敗しました");
+        }
+        onSaved();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unknown error");
+      }
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <div className="space-y-2">
+        <Label htmlFor={`edit-title-${task.id}`}>
+          タイトル <span className="text-red-600">*</span>
+        </Label>
+        <input
+          id={`edit-title-${task.id}`}
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          disabled={isPending}
+          maxLength={200}
+          required
+          className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="space-y-2">
+          <Label htmlFor={`edit-due-${task.id}`}>期限</Label>
+          <input
+            id={`edit-due-${task.id}`}
+            type="datetime-local"
+            value={dueAtLocal}
+            onChange={(e) => setDueAtLocal(e.target.value)}
+            disabled={isPending}
+            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`edit-priority-${task.id}`}>優先度</Label>
+          <select
+            id={`edit-priority-${task.id}`}
+            value={priority}
+            onChange={(e) => setPriority(e.target.value as AgencyTaskPriority)}
+            disabled={isPending}
+            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+          >
+            {agencyTaskPriorityConfig.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`edit-assignee-${task.id}`}>担当</Label>
+          <select
+            id={`edit-assignee-${task.id}`}
+            value={assignedMemberId}
+            onChange={(e) => setAssignedMemberId(e.target.value)}
+            disabled={isPending}
+            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+          >
+            {members.map((m) => (
+              <option key={m.memberId} value={m.memberId}>
+                {m.displayName ?? "(名前未設定)"}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>エラー: {error}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={isPending}>
+          {isPending ? "保存中..." : "保存"}
+        </Button>
+        <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={onCancel}>
+          キャンセル
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -210,7 +463,7 @@ function TaskCreateForm({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const [dueAtLocal, setDueAtLocal] = useState<string>(""); // 任意。未入力は null で送る
+  const [dueAtLocal, setDueAtLocal] = useState<string>("");
   const [priority, setPriority] = useState<AgencyTaskPriority>("normal");
   const [assignedMemberId, setAssignedMemberId] = useState<string>(currentMemberId);
   const [isPending, startTransition] = useTransition();
@@ -233,10 +486,7 @@ function TaskCreateForm({
     startTransition(async () => {
       setError(null);
       try {
-        // datetime-local(ローカルタイム)を ISO 8601 (UTC) に変換
-        // 空文字なら null として送る(zod は nullable optional)
         const dueAtIso = dueAtLocal ? new Date(dueAtLocal).toISOString() : null;
-
         const res = await fetch("/api/agency/tasks", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -290,7 +540,6 @@ function TaskCreateForm({
         />
       </div>
 
-      {/* 期限・優先度・担当を横並びにして縦の圧迫感を減らす(スマホでは grid-cols-1) */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="space-y-2">
           <Label htmlFor="task-due-at">期限</Label>
@@ -369,6 +618,13 @@ function TaskCreateForm({
 // ============================================
 // 日時フォーマット
 // ============================================
+
+function formatLocalDatetime(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours(),
+  )}:${pad(date.getMinutes())}`;
+}
 
 /**
  * 期限・完了日時の表示。
