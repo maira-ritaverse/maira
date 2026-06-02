@@ -3,12 +3,14 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import {
   getClientStatusDistribution,
+  getMonthlyDealsRevenue,
   getReferralStatusDistribution,
   resolvePeriod,
   type PeriodPreset,
 } from "@/lib/reports/queries";
 import { PeriodFilter } from "./period-filter";
 import { StatusDistributionSection } from "./status-distribution-section";
+import { MonthlyDealsSection } from "./monthly-deals-section";
 
 /**
  * エージェント向けレポート画面(土台 + D:ステータス分布)
@@ -43,9 +45,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
   const period = resolvePeriod(preset, params.from, params.to);
 
   // 後続レポートの並行取得を見越して Promise.all で固める
-  const [clients, referrals] = await Promise.all([
+  const [clients, referrals, monthlyDeals] = await Promise.all([
     getClientStatusDistribution(role.organization.id),
     getReferralStatusDistribution(role.organization.id),
+    getMonthlyDealsRevenue(role.organization.id, period),
   ]);
 
   return (
@@ -61,8 +64,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
 
       <div className="space-y-4">
         <StatusDistributionSection clients={clients} referrals={referrals} />
+        <MonthlyDealsSection data={monthlyDeals} />
         {/*
-          ここに後で A(成約・売上)/ B(ファネル)/ C(アドバイザー別)/ E(所要日数)を
+          ここに後で B(ファネル)/ C(アドバイザー別)/ E(所要日数)を
           Card として並べていく。
         */}
       </div>

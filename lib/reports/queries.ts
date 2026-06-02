@@ -17,6 +17,8 @@ import type { ClientStatus } from "@/lib/clients/types";
 import { clientStatusLabels } from "@/lib/clients/types";
 import type { ReferralStatus } from "@/lib/referrals/types";
 import { referralStatusConfig } from "@/lib/referrals/types";
+import { aggregatePlacements } from "@/lib/placements/aggregate";
+import type { Placement, PlacementEventType, PaymentStatus } from "@/lib/placements/types";
 
 // ============================================
 // 期間フィルタ(レポート共通)
@@ -220,3 +222,183 @@ const referralStatusColors: Record<ReferralStatus, string> = {
   joined: "#059669", // emerald-600
   declined: "#ef4444", // red-500
 };
+
+// ============================================
+// A:成約数・売上(月別)
+// ============================================
+
+export type MonthlyDealsBucket = {
+  /** YYYY-MM(チャート横軸の識別子) */
+  month: string;
+  /** チャート表示用ラベル(例: "2026/06") */
+  label: string;
+  /** 成約イベント(event_type='placement')の件数 */
+  placementCount: number;
+  /** 純売上 = placement + additional − refund(円、整数) */
+  netRevenue: number;
+  /** 入金済み(payment 合計、円、整数) */
+  paid: number;
+};
+
+export type MonthlyDealsRevenue = {
+  /** 月別バケット(期間内の月をすべて含む。0 件月も埋める) */
+  buckets: MonthlyDealsBucket[];
+  /** 期間合計 */
+  total: {
+    placementCount: number;
+    netRevenue: number;
+    paid: number;
+    placementTotal: number;
+    additionalTotal: number;
+    refundTotal: number;
+  };
+  /** 集計対象の期間(画面表示用に同梱) */
+  period: Period;
+};
+
+/**
+ * 期間内の placements を月別に集計して、成約数・純売上・入金済みを返す。
+ *
+ * ⚠️ お金の計算は `aggregatePlacements`(成約画面と同じロジック)を再利用する。
+ *    レポートと成約画面で金額がズレないようにするためで、独自実装は厳禁。
+ *    純売上 = placement + additional − refund(円、整数)。
+ *
+ * フィルタは event_date(date 型)で organization_id をサーバー側で絞る。
+ * RLS でも自社のみに絞られるが、念のため二重防御。
+ *
+ * 月の生成は period.from / period.to から純粋に文字列処理で行う
+ * (event_date は date 型でタイムゾーン無し、JST/UTC 差を持ち込まない)。
+ * 0 件月もバケットに含めることで、画面で「データが無い月」を可視化する。
+ */
+export async function getMonthlyDealsRevenue(
+  organizationId: string,
+  period: Period,
+): Promise<MonthlyDealsRevenue> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("placements")
+    .select("id, organization_id, referral_id, event_type, amount, event_date")
+    .eq("organization_id", organizationId)
+    .gte("event_date", period.from)
+    .lte("event_date", period.to);
+
+  type Row = {
+    id: string;
+    organization_id: string;
+    referral_id: string;
+    event_type: string;
+    amount: number | null;
+    event_date: string;
+  };
+
+  const rows: Row[] = error || !data ? [] : (data as Row[]);
+
+  // event_date から YYYY-MM を取って月別に振り分け。
+  // aggregatePlacements を再利用するため、最低限のフィールドを Placement 型に詰め直す。
+  // 集計に使わないフィールドは null/空でよい(aggregatePlacements は eventType と amount しか見ない)。
+  const byMonth = new Map<string, Placement[]>();
+  const placementCountByMonth = new Map<string, number>();
+
+  for (const row of rows) {
+    const month = row.event_date.slice(0, 7); // YYYY-MM
+    const item = toPlacementForAggregate(row);
+    const list = byMonth.get(month);
+    if (list) list.push(item);
+    else byMonth.set(month, [item]);
+
+    if (row.event_type === "placement") {
+      placementCountByMonth.set(month, (placementCountByMonth.get(month) ?? 0) + 1);
+    }
+  }
+
+  // 期間内のすべての月を列挙(0 件月も含める)。
+  const months = enumerateMonths(period.from, period.to);
+
+  const buckets: MonthlyDealsBucket[] = months.map((month) => {
+    const items = byMonth.get(month) ?? [];
+    const agg = aggregatePlacements(items);
+    return {
+      month,
+      label: formatMonthLabel(month),
+      placementCount: placementCountByMonth.get(month) ?? 0,
+      netRevenue: agg.netRevenue,
+      paid: agg.paid,
+    };
+  });
+
+  // 期間全体は「全 placements を一括で aggregatePlacements」する。
+  // 月別合算と同じ値になるが、誤差ゼロ保証のため別ルートでも算出。
+  const allItems = rows.map(toPlacementForAggregate);
+  const totalAgg = aggregatePlacements(allItems);
+
+  return {
+    buckets,
+    total: {
+      placementCount: buckets.reduce((s, b) => s + b.placementCount, 0),
+      netRevenue: totalAgg.netRevenue,
+      paid: totalAgg.paid,
+      placementTotal: totalAgg.placementTotal,
+      additionalTotal: totalAgg.additionalTotal,
+      refundTotal: totalAgg.refundTotal,
+    },
+    period,
+  };
+}
+
+/**
+ * aggregatePlacements は Placement[] を受けるので、SELECT で絞った行を最低限詰め直す。
+ * 計算に使うのは eventType と amount だけなので、他のフィールドは型を満たすための null/空文字。
+ */
+function toPlacementForAggregate(row: {
+  id: string;
+  organization_id: string;
+  referral_id: string;
+  event_type: string;
+  amount: number | null;
+  event_date: string;
+}): Placement {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    referralId: row.referral_id,
+    eventType: row.event_type as PlacementEventType,
+    amount: row.amount,
+    expectedSalary: null,
+    commissionRate: null,
+    eventDate: row.event_date,
+    paymentStatus: null as PaymentStatus | null,
+    notes: null,
+    reason: null,
+    createdByMemberId: null,
+    createdAt: "",
+    updatedAt: "",
+  };
+}
+
+/**
+ * "YYYY-MM-DD" の from/to から、含まれる月(YYYY-MM)を昇順で列挙する。
+ * 日にちは丸めて月単位の包含チェックにする(月内の任意の日付が範囲に入っていれば含める)。
+ */
+function enumerateMonths(from: string, to: string): string[] {
+  const [fy, fm] = from.split("-").map(Number);
+  const [ty, tm] = to.split("-").map(Number);
+  const result: string[] = [];
+  let y = fy;
+  let m = fm;
+  while (y < ty || (y === ty && m <= tm)) {
+    result.push(`${y}-${String(m).padStart(2, "0")}`);
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return result;
+}
+
+/** "YYYY-MM" → "2026/06" 表記。グラフの横軸ラベル用。 */
+function formatMonthLabel(month: string): string {
+  const [y, m] = month.split("-");
+  return `${y}/${m}`;
+}
