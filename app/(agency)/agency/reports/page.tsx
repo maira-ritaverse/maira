@@ -8,6 +8,7 @@ import {
   getPhaseDuration,
   getReferralStatusDistribution,
   getSelectionFunnel,
+  getSelectionFunnelByCandidate,
   resolvePeriod,
   type PeriodPreset,
 } from "@/lib/reports/queries";
@@ -58,12 +59,22 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
     isAdmin: role.member.role === "admin",
   };
 
-  // 後続レポートの並行取得を見越して Promise.all で固める
-  const [clients, referrals, monthlyDeals, funnel, advisor, phaseDuration] = await Promise.all([
+  // 後続レポートの並行取得を見越して Promise.all で固める。
+  // ファネルは「応募ベース」「求職者ベース」の 2 視点を別関数で取得して両方渡す。
+  const [
+    clients,
+    referrals,
+    monthlyDeals,
+    funnelByApplication,
+    funnelByCandidate,
+    advisor,
+    phaseDuration,
+  ] = await Promise.all([
     getClientStatusDistribution(role.organization.id),
     getReferralStatusDistribution(role.organization.id),
     getMonthlyDealsRevenue(role.organization.id, period),
     getSelectionFunnel(role.organization.id, period),
+    getSelectionFunnelByCandidate(role.organization.id, period),
     getAdvisorPerformance(role.organization.id, viewer, period),
     getPhaseDuration(role.organization.id, period),
   ]);
@@ -82,7 +93,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
       <div className="space-y-4">
         <StatusDistributionSection clients={clients} referrals={referrals} />
         <MonthlyDealsSection data={monthlyDeals} />
-        <SelectionFunnelSection data={funnel} />
+        <SelectionFunnelSection application={funnelByApplication} candidate={funnelByCandidate} />
         <AdvisorPerformanceSection data={advisor} />
         <PhaseDurationSection data={phaseDuration} />
       </div>

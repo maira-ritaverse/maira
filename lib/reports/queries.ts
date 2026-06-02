@@ -523,9 +523,114 @@ export async function getSelectionFunnel(
     if (reachedStage(status, "joined")) joined += 1;
   }
 
-  const passRate = (n: number) => (base === 0 ? 0 : Math.round((n / base) * 1000) / 10);
+  const stages = buildFunnelStages({ recommended, screening, interview, offer, joined }, base);
 
-  const stages: FunnelStageBucket[] = [
+  return { stages, base, declinedCount, period };
+}
+
+/**
+ * 求職者ベースの選考ファネル(case C 拡張)。
+ *
+ * 数え方:
+ *   - 期間内に作られた referrals を client_record_id で GROUP BY(求職者単位)
+ *   - 各求職者の中の referrals から「最高到達段階」を取る
+ *       declined は最高到達の判定から除外(過去どこまで進んだか追えないため)
+ *   - 母数(referred)= 期間内に referral を持った全求職者(全 declined 含む)
+ *   - declinedCount = 「保有 referral がすべて declined」の求職者数
+ *       1 つでも生きていれば、その最高段階に算入され declined 扱いにはしない
+ *
+ * 例:
+ *   1 求職者が 3 社応募(書類・書類・面接)
+ *     → 応募ベース:書類 2 / 面接 1
+ *     → 求職者ベース:面接到達 1(最高=面接)、書類到達 1(面接以上に含まれる)、推薦到達 1
+ *   1 求職者が 3 社応募(declined・declined・interview)
+ *     → 求職者ベース:面接到達 1(declined を除いた最高=interview)、declinedCount は +0
+ *   1 求職者が 3 社応募(declined・declined・declined)
+ *     → 求職者ベース:母数のみ +1、declinedCount +1
+ *
+ * 期間判定は応募ベースと揃え referrals.created_at 基準
+ * (期間外の referral は集計に含めない。グループ化前にフィルタする)。
+ */
+export async function getSelectionFunnelByCandidate(
+  organizationId: string,
+  period: Period,
+): Promise<SelectionFunnel> {
+  const supabase = await createClient();
+
+  const startIso = `${period.from}T00:00:00+09:00`;
+  const endExclusiveIso = `${nextJstDay(period.to)}T00:00:00+09:00`;
+
+  const { data, error } = await supabase
+    .from("referrals")
+    .select("client_record_id, status")
+    .eq("organization_id", organizationId)
+    .gte("created_at", startIso)
+    .lt("created_at", endExclusiveIso);
+
+  type Row = { client_record_id: string; status: string };
+  const rows: Row[] = error || !data ? [] : (data as Row[]);
+
+  // client_record_id ごとに status 一覧を集める。
+  const statusesByCandidate = new Map<string, ReferralStatus[]>();
+  for (const r of rows) {
+    const arr = statusesByCandidate.get(r.client_record_id) ?? [];
+    arr.push(r.status as ReferralStatus);
+    statusesByCandidate.set(r.client_record_id, arr);
+  }
+
+  let base = 0;
+  let recommended = 0;
+  let screening = 0;
+  let interview = 0;
+  let offer = 0;
+  let joined = 0;
+  let declinedCount = 0;
+
+  for (const statuses of statusesByCandidate.values()) {
+    base += 1;
+
+    // declined を除いた中での最高 index を求める。
+    // すべて declined なら -1 のままで、declinedCount に寄せる。
+    let highestIdx = -1;
+    for (const s of statuses) {
+      if (s === "declined") continue;
+      const idx = referralStatusOrder.indexOf(s);
+      if (idx > highestIdx) highestIdx = idx;
+    }
+    if (highestIdx === -1) {
+      declinedCount += 1;
+      continue;
+    }
+
+    // highestIdx 以上のキャノニカル段階すべてに +1。
+    const reaches = (target: ReferralStatus) => highestIdx >= referralStatusOrder.indexOf(target);
+    if (reaches("recommended")) recommended += 1;
+    if (reaches("screening")) screening += 1;
+    if (reaches("interview")) interview += 1;
+    if (reaches("offer")) offer += 1;
+    if (reaches("joined")) joined += 1;
+  }
+
+  const stages = buildFunnelStages({ recommended, screening, interview, offer, joined }, base);
+
+  return { stages, base, declinedCount, period };
+}
+
+/**
+ * 応募ベース・求職者ベースのファネルバケット定義は同一。
+ * count の意味だけが変わるので、ステージ構造は 1 箇所に集約する。
+ */
+type FunnelCounts = {
+  recommended: number;
+  screening: number;
+  interview: number;
+  offer: number;
+  joined: number;
+};
+
+function buildFunnelStages(counts: FunnelCounts, base: number): FunnelStageBucket[] {
+  const passRate = (n: number) => (base === 0 ? 0 : Math.round((n / base) * 1000) / 10);
+  return [
     {
       key: "referred",
       label: "紹介到達",
@@ -536,41 +641,39 @@ export async function getSelectionFunnel(
     {
       key: "recommended_reached",
       label: "推薦到達",
-      count: recommended,
-      passRate: passRate(recommended),
+      count: counts.recommended,
+      passRate: passRate(counts.recommended),
       color: "#3b82f6", // blue-500
     },
     {
       key: "screening_reached",
       label: "書類到達",
-      count: screening,
-      passRate: passRate(screening),
+      count: counts.screening,
+      passRate: passRate(counts.screening),
       color: "#6366f1", // indigo-500
     },
     {
       key: "interview_reached",
       label: "面接到達",
-      count: interview,
-      passRate: passRate(interview),
+      count: counts.interview,
+      passRate: passRate(counts.interview),
       color: "#a855f7", // purple-500
     },
     {
       key: "offer_reached",
       label: "内定到達",
-      count: offer,
-      passRate: passRate(offer),
+      count: counts.offer,
+      passRate: passRate(counts.offer),
       color: "#10b981", // emerald-500
     },
     {
       key: "joined",
       label: "成約",
-      count: joined,
-      passRate: passRate(joined),
+      count: counts.joined,
+      passRate: passRate(counts.joined),
       color: "#059669", // emerald-600
     },
   ];
-
-  return { stages, base, declinedCount, period };
 }
 
 /** "YYYY-MM-DD" の翌日を返す。JST 境界の半開区間を作るためのヘルパー。 */
