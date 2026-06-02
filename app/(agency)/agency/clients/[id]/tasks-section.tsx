@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   type AgencyTaskPriority,
@@ -21,14 +21,133 @@ import { Label } from "@/components/ui/label";
  *   - 「タスクを追加」インラインフォーム:title/期限/優先度/担当 を POST で作成
  *   - チェックボックスで完了/未完了をトグル
  *   - 各行から編集(同 org の誰でも)・削除(admin のみ)
+ *   - 期限の状態(超過/間近/余裕)に応じて色分け
  *
  * 削除権限:
  *   - DB の RLS は DELETE = admin のみ
  *   - API でも明示的に role.member.role を確認
  *   - UI 側は isAdmin の時のみ削除ボタンを表示
  *
- * 期限アラート(色分け)は次のステップで追加予定なので、ここでは未実装。
+ * 期限アラート:
+ *   - 判定はクライアント側(現在時刻との比較)。サーバ側で固定値を埋めると
+ *     時間が経つにつれ古くなる(SSR キャッシュ・ハイドレーション後の現在時刻
+ *     ずれを避けるため、useNow で実時計を保持して 5 分ごとに更新)。
+ *   - 初回レンダリング時は now=null として「色なし」を返し、マウント後に
+ *     正しい色が当たる。これで hydration mismatch を回避できる。
  */
+
+// 「期限間近」とみなす残り時間(時間単位)。指示書は 48h 目安。
+const SOON_THRESHOLD_HOURS = 48;
+
+type DueStatus = "completed" | "overdue" | "soon" | "normal" | "none";
+
+/**
+ * タスクの期限状態を判定する。
+ *
+ * @param dueAt   タスクの期限(ISO 文字列 or null)
+ * @param now     比較に使う現在時刻(useNow で取得。マウント前は null)
+ * @param isDone  完了済みかどうか
+ *
+ * - isDone: 完了は色を主張させない("completed" = 薄く表示)
+ * - now が null(マウント前): "normal" を返し、ハイドレーション後に再評価
+ * - 期限なし: "none"(色なし)
+ * - now > dueAt: "overdue"
+ * - now <= dueAt < now + 48h: "soon"
+ * - それより先: "normal"
+ */
+function getDueStatus(dueAt: string | null, now: Date | null, isDone: boolean): DueStatus {
+  if (isDone) return "completed";
+  if (!now) return "normal";
+  if (!dueAt) return "none";
+  const due = new Date(dueAt).getTime();
+  const t = now.getTime();
+  if (due < t) return "overdue";
+  const soonCutoff = t + SOON_THRESHOLD_HOURS * 60 * 60 * 1000;
+  if (due < soonCutoff) return "soon";
+  return "normal";
+}
+
+/**
+ * 期限状態ごとのスタイル定義。
+ * 派手にしすぎないよう、背景は 50/40(薄く)、ボーダーは少し濃く。
+ * priority バッジ(既存)と同じトーン(red-100/amber-100 系)で揃える。
+ */
+const dueStatusConfig: Record<
+  DueStatus,
+  {
+    containerClass: string;
+    badgeClass: string | null;
+    badgeLabel: string | null;
+    dueTextClass: string;
+  }
+> = {
+  overdue: {
+    containerClass: "border-red-300 bg-red-50/40 dark:border-red-900 dark:bg-red-950/20",
+    badgeClass: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+    badgeLabel: "期限超過",
+    dueTextClass: "text-red-700 dark:text-red-300 font-medium",
+  },
+  soon: {
+    containerClass: "border-amber-300 bg-amber-50/40 dark:border-amber-900 dark:bg-amber-950/20",
+    badgeClass: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+    badgeLabel: "まもなく期限",
+    dueTextClass: "text-amber-700 dark:text-amber-300",
+  },
+  normal: {
+    containerClass: "border-border",
+    badgeClass: null,
+    badgeLabel: null,
+    dueTextClass: "",
+  },
+  none: {
+    containerClass: "border-border",
+    badgeClass: null,
+    badgeLabel: null,
+    dueTextClass: "",
+  },
+  completed: {
+    containerClass: "border-border bg-muted/30 opacity-60",
+    badgeClass: null,
+    badgeLabel: null,
+    dueTextClass: "",
+  },
+};
+
+/**
+ * 現在時刻を 5 分ごとに更新する hook。
+ * - SSR 時は null(server snapshot)。マウント後に client snapshot で Date を返す
+ * - useSyncExternalStore を使う理由:
+ *   - SSR の null と マウント直後の Date の差し替えを React が正しく扱える
+ *     (hydration mismatch を回避)
+ *   - useEffect 内で同期 setState を呼ぶ react-hooks/set-state-in-effect 警告も避けられる
+ * - 5 分(300_000ms)ごとに更新。タスク超過の境界を分単位で検知できれば十分
+ * - clientNow をモジュールスコープで保持して getSnapshot の参照同一性を担保
+ *   (毎回 new Date() を返すと useSyncExternalStore が無限ループ警告を出す)
+ */
+let clientNow: Date = new Date();
+
+function subscribeNow(callback: () => void): () => void {
+  const id = setInterval(
+    () => {
+      clientNow = new Date();
+      callback();
+    },
+    5 * 60 * 1000,
+  );
+  return () => clearInterval(id);
+}
+
+function getClientSnapshot(): Date {
+  return clientNow;
+}
+
+function getServerSnapshot(): null {
+  return null;
+}
+
+function useNow(): Date | null {
+  return useSyncExternalStore(subscribeNow, getClientSnapshot, getServerSnapshot);
+}
 
 type OrgMember = { memberId: string; displayName: string | null };
 
@@ -43,6 +162,8 @@ type Props = {
 export function TasksSection({ clientId, tasks, members, currentMemberId, isAdmin }: Props) {
   const router = useRouter();
   const refresh = () => router.refresh();
+  // 期限色分け用の現在時刻。全タスク行で共有(各行で setInterval を回さないため)
+  const now = useNow();
 
   const pending = tasks.filter((t) => t.status === "pending");
   const completed = tasks.filter((t) => t.status === "completed");
@@ -68,6 +189,7 @@ export function TasksSection({ clientId, tasks, members, currentMemberId, isAdmi
         completedTasks={completed}
         members={members}
         isAdmin={isAdmin}
+        now={now}
         onChanged={refresh}
       />
     </Card>
@@ -83,12 +205,14 @@ function TaskList({
   completedTasks,
   members,
   isAdmin,
+  now,
   onChanged,
 }: {
   pendingTasks: AgencyTaskWithAssignee[];
   completedTasks: AgencyTaskWithAssignee[];
   members: OrgMember[];
   isAdmin: boolean;
+  now: Date | null;
   onChanged: () => void;
 }) {
   const [showCompleted, setShowCompleted] = useState(false);
@@ -116,6 +240,7 @@ function TaskList({
                 task={t}
                 members={members}
                 isAdmin={isAdmin}
+                now={now}
                 onChanged={onChanged}
               />
             ))}
@@ -141,6 +266,7 @@ function TaskList({
                   task={t}
                   members={members}
                   isAdmin={isAdmin}
+                  now={now}
                   onChanged={onChanged}
                 />
               ))}
@@ -156,21 +282,24 @@ function TaskRow({
   task,
   members,
   isAdmin,
+  now,
   onChanged,
 }: {
   task: AgencyTaskWithAssignee;
   members: OrgMember[];
   isAdmin: boolean;
+  now: Date | null;
   onChanged: () => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const isDone = task.status === "completed";
+  // 編集モード中も「期限超過」のコンテナ色は維持したい(状況把握のため)
+  const dueStatus = getDueStatus(task.dueAt, now, isDone);
+  const statusStyle = dueStatusConfig[dueStatus];
 
   if (isEditing) {
     return (
-      <li
-        className={`border-border rounded-md border p-3 ${isDone ? "bg-muted/30 opacity-60" : ""}`}
-      >
+      <li className={`rounded-md border p-3 ${statusStyle.containerClass}`}>
         <TaskEditForm
           task={task}
           members={members}
@@ -185,10 +314,11 @@ function TaskRow({
   }
 
   return (
-    <li className={`border-border rounded-md border p-3 ${isDone ? "bg-muted/30 opacity-60" : ""}`}>
+    <li className={`rounded-md border p-3 ${statusStyle.containerClass}`}>
       <TaskView
         task={task}
         isAdmin={isAdmin}
+        dueStatus={dueStatus}
         onEdit={() => setIsEditing(true)}
         onChanged={onChanged}
       />
@@ -199,11 +329,13 @@ function TaskRow({
 function TaskView({
   task,
   isAdmin,
+  dueStatus,
   onEdit,
   onChanged,
 }: {
   task: AgencyTaskWithAssignee;
   isAdmin: boolean;
+  dueStatus: DueStatus;
   onEdit: () => void;
   onChanged: () => void;
 }) {
@@ -212,6 +344,7 @@ function TaskView({
 
   const isDone = task.status === "completed";
   const priorityConfig = task.priority ? getAgencyTaskPriorityConfig(task.priority) : null;
+  const statusStyle = dueStatusConfig[dueStatus];
 
   const handleToggle = () => {
     startTransition(async () => {
@@ -264,9 +397,19 @@ function TaskView({
           className="border-input mt-1 h-4 w-4 cursor-pointer rounded border"
         />
         <div className="min-w-0 flex-1">
-          <p className={`text-sm font-medium ${isDone ? "line-through" : ""}`}>{task.title}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className={`text-sm font-medium ${isDone ? "line-through" : ""}`}>{task.title}</p>
+            {/* 期限アラートのバッジ(overdue / soon の時のみ) */}
+            {statusStyle.badgeLabel && statusStyle.badgeClass && (
+              <span className={`rounded-full px-2 py-0.5 text-xs ${statusStyle.badgeClass}`}>
+                {statusStyle.badgeLabel}
+              </span>
+            )}
+          </div>
           <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-            {task.dueAt && <span>期限: {formatDue(task.dueAt)}</span>}
+            {task.dueAt && (
+              <span className={statusStyle.dueTextClass}>期限: {formatDue(task.dueAt)}</span>
+            )}
             {priorityConfig && (
               <span className={`rounded-full px-2 py-0.5 ${priorityConfig.className}`}>
                 優先度: {priorityConfig.label}
