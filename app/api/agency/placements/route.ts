@@ -59,6 +59,14 @@ export async function POST(request: Request) {
   } = parsed.data;
   const orgId = role.organization.id;
 
+  // 入金イベントは「お金の確定」なので admin 限定。
+  // UI でもボタンを出し分けるが、サーバ側でも強制する(多層防御)。
+  // RLS では列レベル(payment_status のみ admin 限定)の表現が難しいため、
+  // event_type 単位で API 層で弾く。
+  if (event_type === "payment" && role.member.role !== "admin") {
+    return NextResponse.json({ error: "Only admins can record payment events" }, { status: 403 });
+  }
+
   // referral が自社のものか検証(RLS に加え明示)
   const { data: referralRow } = await supabase
     .from("referrals")

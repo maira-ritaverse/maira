@@ -9,7 +9,14 @@ import {
   getReferralStatusConfig,
   referralStatusConfig,
 } from "@/lib/referrals/types";
-import { type PlacementWithAuthor, getPlacementEventTypeConfig } from "@/lib/placements/types";
+import {
+  type PaymentStatus,
+  type PlacementEventType,
+  type PlacementWithAuthor,
+  getPaymentStatusConfig,
+  getPlacementEventTypeConfig,
+  paymentStatusConfig,
+} from "@/lib/placements/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -32,9 +39,10 @@ type Props = {
   referrals: ReferralWithJob[];
   openJobs: JobPosting[];
   placements: PlacementWithAuthor[];
+  isAdmin: boolean;
 };
 
-export function ReferralSection({ clientId, referrals, openJobs, placements }: Props) {
+export function ReferralSection({ clientId, referrals, openJobs, placements, isAdmin }: Props) {
   const router = useRouter();
 
   // referralId ごとに placements を分けておく(各 row の表示用)
@@ -68,6 +76,7 @@ export function ReferralSection({ clientId, referrals, openJobs, placements }: P
       <ReferralList
         referrals={referrals}
         placementsByReferral={placementsByReferral}
+        isAdmin={isAdmin}
         onUpdated={() => router.refresh()}
       />
     </Card>
@@ -81,10 +90,12 @@ export function ReferralSection({ clientId, referrals, openJobs, placements }: P
 function ReferralList({
   referrals,
   placementsByReferral,
+  isAdmin,
   onUpdated,
 }: {
   referrals: ReferralWithJob[];
   placementsByReferral: Map<string, PlacementWithAuthor[]>;
+  isAdmin: boolean;
   onUpdated: () => void;
 }) {
   if (referrals.length === 0) {
@@ -104,6 +115,7 @@ function ReferralList({
             key={r.id}
             referral={r}
             placements={placementsByReferral.get(r.id) ?? []}
+            isAdmin={isAdmin}
             onUpdated={onUpdated}
           />
         ))}
@@ -115,10 +127,12 @@ function ReferralList({
 function ReferralRow({
   referral,
   placements,
+  isAdmin,
   onUpdated,
 }: {
   referral: ReferralWithJob;
   placements: PlacementWithAuthor[];
+  isAdmin: boolean;
   onUpdated: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -181,7 +195,12 @@ function ReferralRow({
         </Alert>
       )}
 
-      <PlacementBlock referralId={referral.id} placements={placements} onChanged={onUpdated} />
+      <PlacementBlock
+        referralId={referral.id}
+        placements={placements}
+        isAdmin={isAdmin}
+        onChanged={onUpdated}
+      />
     </li>
   );
 }
@@ -189,71 +208,146 @@ function ReferralRow({
 // ============================================
 // 成約(placements)ブロック
 //
-// この referral に紐づく placement イベントの一覧 + 「成約を登録」フォーム。
-// このステップでは event_type='placement' のみ扱う。
-// 入金 / 返金 / 追加報酬は次のステップ3で同じ場所に追加する。
+// この referral に紐づく全イベント(placement/payment/refund/additional)を
+// 時系列で表示し、各種イベントを追加する。
+//
+// 表示・登録のルール:
+//   - placement(成約)は最初に登録する。なければ他イベントは追加できない
+//   - payment(入金)は admin のみ登録できる(API でも強制)
+//   - refund / additional は同 org の誰でも登録できる
+// 純売上の集計は次のステップで実装する。
 // ============================================
+
+// 同時に開けるフォームは1つに絞る(UI を素直にするため)。
+type EventFormKind = "placement" | "payment" | "refund" | "additional";
+
+// 各イベント種別ごとの日付ラベル
+function eventDateLabel(eventType: PlacementEventType): string {
+  switch (eventType) {
+    case "placement":
+      return "入社日";
+    case "payment":
+      return "入金日";
+    case "refund":
+      return "返金日";
+    case "additional":
+      return "発生日";
+  }
+}
 
 function PlacementBlock({
   referralId,
   placements,
+  isAdmin,
   onChanged,
 }: {
   referralId: string;
   placements: PlacementWithAuthor[];
+  isAdmin: boolean;
   onChanged: () => void;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [openForm, setOpenForm] = useState<EventFormKind | null>(null);
 
-  // このステップでは表示も placement イベントだけに絞る
-  // (他イベントは次のステップで集計表示する)
-  const placementEvents = placements.filter((p) => p.eventType === "placement");
+  // 成約(placement)があるかどうか。なければ追加イベント類は登録不可。
+  const hasPlacement = placements.some((p) => p.eventType === "placement");
+
+  const close = () => setOpenForm(null);
+  const handleCreated = () => {
+    close();
+    onChanged();
+  };
 
   return (
     <div className="border-border/60 mt-3 space-y-2 border-t pt-3">
-      <div className="flex items-center justify-between gap-2">
-        <h4 className="text-muted-foreground text-xs font-medium">成約</h4>
-        {!isOpen && (
-          <Button type="button" variant="outline" size="sm" onClick={() => setIsOpen(true)}>
-            + 成約を登録
-          </Button>
-        )}
-      </div>
+      <h4 className="text-muted-foreground text-xs font-medium">成約</h4>
 
-      {placementEvents.length > 0 ? (
+      {placements.length > 0 ? (
         <ul className="space-y-1.5">
-          {placementEvents.map((p) => (
-            <PlacementSummaryRow key={p.id} placement={p} />
+          {placements.map((p) => (
+            <PlacementEventRow key={p.id} placement={p} />
           ))}
         </ul>
       ) : (
         <p className="text-muted-foreground text-xs">まだ成約は登録されていません。</p>
       )}
 
-      {isOpen && (
-        <PlacementCreateForm
+      {openForm === null && (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setOpenForm("placement")}
+          >
+            + 成約を登録
+          </Button>
+          {hasPlacement && (
+            <>
+              {/* 入金確定は admin 限定。非 admin にはボタン自体を出さない。 */}
+              {isAdmin && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setOpenForm("payment")}
+                >
+                  + 入金を記録
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setOpenForm("refund")}
+              >
+                + 返金を記録
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setOpenForm("additional")}
+              >
+                + 追加報酬を記録
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+
+      {openForm === "placement" && (
+        <PlacementCreateForm referralId={referralId} onCreated={handleCreated} onCancel={close} />
+      )}
+      {(openForm === "payment" || openForm === "refund" || openForm === "additional") && (
+        <EventCreateForm
           referralId={referralId}
-          onCreated={() => {
-            setIsOpen(false);
-            onChanged();
-          }}
-          onCancel={() => setIsOpen(false)}
+          eventType={openForm}
+          onCreated={handleCreated}
+          onCancel={close}
         />
       )}
     </div>
   );
 }
 
-// 成約1件の表示(入社日、売上額、計算根拠があれば 年収×率)
-function PlacementSummaryRow({ placement }: { placement: PlacementWithAuthor }) {
+// 1イベントの表示(全 event_type に対応)
+function PlacementEventRow({ placement }: { placement: PlacementWithAuthor }) {
   const config = getPlacementEventTypeConfig(placement.eventType);
   const amountLabel =
     placement.amount !== null ? `¥${placement.amount.toLocaleString()}` : "(金額未設定)";
 
-  // 計算根拠が両方ある時のみ「年収×率」表記を付ける
-  const hasCalc = placement.expectedSalary !== null && placement.commissionRate !== null;
+  // placement の計算根拠(年収×率)があれば添える
+  const hasCalc =
+    placement.eventType === "placement" &&
+    placement.expectedSalary !== null &&
+    placement.commissionRate !== null;
   const calcLabel = hasCalc
     ? `(年収${placement.expectedSalary}万円 × ${placement.commissionRate}%)`
+    : null;
+
+  // payment_status バッジ(payment イベントで主に使う)
+  const statusConfig = placement.paymentStatus
+    ? getPaymentStatusConfig(placement.paymentStatus)
     : null;
 
   return (
@@ -262,10 +356,24 @@ function PlacementSummaryRow({ placement }: { placement: PlacementWithAuthor }) 
         <span className={`rounded-full px-2 py-0.5 text-[10px] ${config.className}`}>
           {config.label}
         </span>
-        <span className="text-muted-foreground">入社日 {placement.eventDate}</span>
+        <span className="text-muted-foreground">
+          {eventDateLabel(placement.eventType)} {placement.eventDate}
+        </span>
         <span className="font-medium">{amountLabel}</span>
         {calcLabel && <span className="text-muted-foreground">{calcLabel}</span>}
+        {statusConfig && (
+          <span className={`rounded-full px-2 py-0.5 text-[10px] ${statusConfig.className}`}>
+            {statusConfig.label}
+          </span>
+        )}
       </div>
+      {/* refund/additional は理由を強調表示 */}
+      {placement.reason && (
+        <p className="text-foreground mt-1 whitespace-pre-wrap">
+          <span className="text-muted-foreground">理由: </span>
+          {placement.reason}
+        </p>
+      )}
       {placement.notes && (
         <p className="text-muted-foreground mt-1 whitespace-pre-wrap">{placement.notes}</p>
       )}
@@ -273,6 +381,210 @@ function PlacementSummaryRow({ placement }: { placement: PlacementWithAuthor }) 
         <p className="text-muted-foreground mt-1 text-[10px]">記録: {placement.authorName}</p>
       )}
     </li>
+  );
+}
+
+// ============================================
+// 入金 / 返金 / 追加報酬 の登録フォーム
+//
+// 3種類で UI 形が似ているので 1コンポーネントにまとめ、event_type で分岐。
+// - payment   : 入金額 + 入金日 + payment_status(任意の補足:メモ)
+// - refund    : 返金額 + 返金日 + 理由
+// - additional: 追加額 + 発生日 + 理由
+// ============================================
+function EventCreateForm({
+  referralId,
+  eventType,
+  onCreated,
+  onCancel,
+}: {
+  referralId: string;
+  eventType: "payment" | "refund" | "additional";
+  onCreated: () => void;
+  onCancel: () => void;
+}) {
+  const [eventDate, setEventDate] = useState<string>(todayLocalDate());
+  const [amount, setAmount] = useState<string>("");
+  // payment_status のデフォルトは「入金済」=paid。
+  // 部分入金 partial や、後から確定したい場合は手動切替。
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("paid");
+  const [reason, setReason] = useState<string>("");
+  const [notes, setNotes] = useState<string>("");
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  // タイトル・ラベル・amount placeholder を event_type で出し分け
+  const titleByType: Record<typeof eventType, string> = {
+    payment: "入金を記録",
+    refund: "返金を記録",
+    additional: "追加報酬を記録",
+  };
+  const amountLabelByType: Record<typeof eventType, string> = {
+    payment: "入金額(円)",
+    refund: "返金額(円)",
+    additional: "追加額(円)",
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!eventDate) {
+      setError(`${eventDateLabel(eventType)}を入力してください`);
+      return;
+    }
+    const a = Number(amount);
+    if (!Number.isFinite(a) || a <= 0) {
+      setError(`${amountLabelByType[eventType]}を入力してください`);
+      return;
+    }
+    if ((eventType === "refund" || eventType === "additional") && !reason.trim()) {
+      setError("理由を入力してください");
+      return;
+    }
+
+    const payload: Record<string, unknown> = {
+      referral_id: referralId,
+      event_type: eventType,
+      event_date: eventDate,
+      amount: Math.floor(a),
+      notes: notes || undefined,
+    };
+    if (eventType === "payment") {
+      payload.payment_status = paymentStatus;
+    } else {
+      payload.reason = reason;
+    }
+
+    startTransition(async () => {
+      try {
+        const res = await fetch("/api/agency/placements", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const errData = (await res.json()) as { error?: string; message?: string };
+          throw new Error(errData.message ?? errData.error ?? "登録に失敗しました");
+        }
+        onCreated();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unknown error");
+      }
+    });
+  };
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="border-border bg-muted/30 space-y-3 rounded-md border p-3"
+    >
+      <p className="text-xs font-medium">{titleByType[eventType]}</p>
+
+      {/* 日付 */}
+      <div className="space-y-1.5">
+        <Label htmlFor={`event-date-${eventType}-${referralId}`} className="text-xs">
+          {eventDateLabel(eventType)} <span className="text-red-600">*</span>
+        </Label>
+        <input
+          id={`event-date-${eventType}-${referralId}`}
+          type="date"
+          value={eventDate}
+          onChange={(e) => setEventDate(e.target.value)}
+          disabled={isPending}
+          className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+        />
+      </div>
+
+      {/* 金額 */}
+      <div className="space-y-1.5">
+        <Label htmlFor={`event-amount-${eventType}-${referralId}`} className="text-xs">
+          {amountLabelByType[eventType]} <span className="text-red-600">*</span>
+        </Label>
+        <input
+          id={`event-amount-${eventType}-${referralId}`}
+          type="number"
+          inputMode="numeric"
+          min={0}
+          step={1}
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          disabled={isPending}
+          placeholder={eventType === "payment" ? "例: 1500000" : "例: 100000"}
+          className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+        />
+      </div>
+
+      {/* payment のみステータス、それ以外は理由 */}
+      {eventType === "payment" ? (
+        <div className="space-y-1.5">
+          <Label htmlFor={`event-status-${referralId}`} className="text-xs">
+            ステータス
+          </Label>
+          <select
+            id={`event-status-${referralId}`}
+            value={paymentStatus}
+            onChange={(e) => setPaymentStatus(e.target.value as PaymentStatus)}
+            disabled={isPending}
+            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+          >
+            {paymentStatusConfig.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <Label htmlFor={`event-reason-${eventType}-${referralId}`} className="text-xs">
+            理由 <span className="text-red-600">*</span>
+          </Label>
+          <textarea
+            id={`event-reason-${eventType}-${referralId}`}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            disabled={isPending}
+            rows={2}
+            maxLength={2000}
+            placeholder={eventType === "refund" ? "例: 早期離職による全額返金" : "例: 紹介ボーナス"}
+            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+          />
+        </div>
+      )}
+
+      {/* メモ(任意) */}
+      <div className="space-y-1.5">
+        <Label htmlFor={`event-notes-${eventType}-${referralId}`} className="text-xs">
+          メモ
+        </Label>
+        <textarea
+          id={`event-notes-${eventType}-${referralId}`}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          disabled={isPending}
+          rows={2}
+          maxLength={2000}
+          placeholder="任意"
+          className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+        />
+      </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>エラー: {error}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={isPending}>
+          {isPending ? "登録中..." : "登録"}
+        </Button>
+        <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={onCancel}>
+          キャンセル
+        </Button>
+      </div>
+    </form>
   );
 }
 

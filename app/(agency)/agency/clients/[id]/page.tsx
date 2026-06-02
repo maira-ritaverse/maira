@@ -139,6 +139,7 @@ export default async function ClientDetailPage({ params }: RouteParams) {
         referrals={referrals}
         openJobs={openJobs}
         placements={placements}
+        isAdmin={role.member.role === "admin"}
       />
     </div>
   );
