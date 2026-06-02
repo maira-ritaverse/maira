@@ -73,26 +73,26 @@ alter table public.referral_status_history enable row level security;
 -- 履歴は「追記して残す」性質なので、運用上のメインは SELECT / INSERT。
 -- UPDATE は修正用途(備考の追記など)に同org全員へ許容。
 -- DELETE は誤登録の取り消し用途で admin のみに限定。
+--
+-- ポリシー名は短いプレフィックス(rsh_*)に統一。
+-- Postgres の識別子上限は 63 文字。説明的な長い英文名にすると上限超過で
+-- 末尾が truncate されるため、テーブル略称 + アクションの短名を採用。
 -- ============================================
 
 -- 閲覧:同org全員
-create policy "Members can view referral_status_history in their organization"
-  on public.referral_status_history for select
+create policy "rsh_select" on public.referral_status_history for select
   using (organization_id = public.current_user_organization_id());
 
 -- 追加:同org全員(自動記録・手動記録ともに同org内で行う前提)
-create policy "Members can insert referral_status_history in their organization"
-  on public.referral_status_history for insert
+create policy "rsh_insert" on public.referral_status_history for insert
   with check (organization_id = public.current_user_organization_id());
 
 -- 更新:同org全員(備考の修正等)
-create policy "Members can update referral_status_history in their organization"
-  on public.referral_status_history for update
+create policy "rsh_update" on public.referral_status_history for update
   using (organization_id = public.current_user_organization_id());
 
 -- 削除:管理者のみ(履歴の誤登録取り消し用途)
-create policy "Admins can delete referral_status_history in their organization"
-  on public.referral_status_history for delete
+create policy "rsh_delete" on public.referral_status_history for delete
   using (
     organization_id = public.current_user_organization_id()
     and public.current_user_organization_role() = 'admin'
