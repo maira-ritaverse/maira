@@ -15,9 +15,15 @@ import {
 import {
   clientLinkStatusLabels,
   clientStatusLabels,
-  type ClientRecordWithAssigneeAndDues,
+  type ClientRecordWithReferralBreakdown,
   type ClientStatus,
+  type ReferralBreakdown,
 } from "@/lib/clients/types";
+import {
+  getReferralStatusConfig,
+  referralStatusConfig,
+  type ReferralStatus,
+} from "@/lib/referrals/types";
 import { getDueStatus } from "@/lib/agency-tasks/due-status";
 import { useNow } from "@/lib/agency-tasks/use-now";
 
@@ -26,7 +32,22 @@ type SortDirection = "asc" | "desc";
 type StatusFilter = ClientStatus | "all";
 
 type ClientsTableProps = {
-  clients: ClientRecordWithAssigneeAndDues[];
+  clients: ClientRecordWithReferralBreakdown[];
+};
+
+// 応募状況バッジ用の短ラベル(セル幅を圧迫しないように)。
+// 完全な日本語ラベルは referralStatusConfig 側にあるが、
+// 一覧の小バッジ表示では「書類選考」のような長めの語が並ぶと崩れるため、
+// 一覧用だけのコンパクトラベルをここで持つ。
+// 共通化したくなったら referrals/types に compactLabel として持ち上げる。
+const referralStatusCompactLabel: Record<ReferralStatus, string> = {
+  planned: "予定",
+  recommended: "推薦",
+  screening: "書類",
+  interview: "面接",
+  offer: "内定",
+  joined: "入社",
+  declined: "見送",
 };
 
 /**
@@ -128,7 +149,7 @@ export function ClientsTable({ clients }: ClientsTableProps) {
           onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
           className="border-input bg-background rounded-lg border px-3 py-1.5 text-sm"
         >
-          <option value="all">すべてのステータス</option>
+          <option value="all">すべての対応状況</option>
           {Object.entries(clientStatusLabels).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
@@ -152,8 +173,9 @@ export function ClientsTable({ clients }: ClientsTableProps) {
                 className="cursor-pointer select-none"
                 onClick={() => toggleSort("status")}
               >
-                ステータス{sortArrow("status")}
+                対応状況{sortArrow("status")}
               </TableHead>
+              <TableHead>応募状況</TableHead>
               <TableHead>連携</TableHead>
               <TableHead>担当者</TableHead>
               <TableHead
@@ -167,7 +189,7 @@ export function ClientsTable({ clients }: ClientsTableProps) {
           <TableBody>
             {filteredSorted.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-muted-foreground py-8 text-center">
+                <TableCell colSpan={8} className="text-muted-foreground py-8 text-center">
                   該当するクライアントがいません
                 </TableCell>
               </TableRow>
@@ -204,6 +226,9 @@ export function ClientsTable({ clients }: ClientsTableProps) {
                       </span>
                     </TableCell>
                     <TableCell>
+                      <ReferralBreakdownBadges breakdown={client.referralBreakdown} />
+                    </TableCell>
+                    <TableCell>
                       <span
                         className={`inline-block rounded-full px-2 py-0.5 text-xs whitespace-nowrap ${
                           client.linkStatus === "linked"
@@ -227,6 +252,50 @@ export function ClientsTable({ clients }: ClientsTableProps) {
           </TableBody>
         </Table>
       </div>
+    </div>
+  );
+}
+
+/**
+ * 応募状況バッジ群(列セル)
+ *
+ * referral 段階別の件数を「ある段階だけ」横に並べる(0 件は出さない)。
+ * 並び順は referralStatusConfig の order に従い、本筋(planned→joined)を先に、
+ * declined は末尾 + 薄色(opacity-60)で控えめに表示する。
+ *
+ * 行クリックで詳細遷移するので、バッジ自体はクリック制御を持たない
+ * (見た目だけのインジケータ)。
+ * referral が 0 件のクライアントは「—」を控えめに出すだけにして、
+ * 列が極端に空にならないようにする。
+ */
+function ReferralBreakdownBadges({ breakdown }: { breakdown: ReferralBreakdown }) {
+  if (breakdown.total === 0) {
+    return <span className="text-muted-foreground text-xs">—</span>;
+  }
+
+  // referralStatusConfig は order を持つので、それに従って並べる(declined は 99 で末尾)。
+  // byStatus はキーごとに件数。0 件のキーは持たない契約。
+  const ordered = [...referralStatusConfig].sort((a, b) => a.order - b.order);
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {ordered.map((cfg) => {
+        const count = breakdown.byStatus[cfg.value];
+        if (!count) return null;
+        const compact = referralStatusCompactLabel[cfg.value];
+        const config = getReferralStatusConfig(cfg.value);
+        // declined は注意を引きすぎないよう opacity を下げる(色は status 別配色のまま)。
+        const dimmed = cfg.value === "declined" ? "opacity-60" : "";
+        return (
+          <span
+            key={cfg.value}
+            className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs whitespace-nowrap ${config.className} ${dimmed}`}
+          >
+            <span>{compact}</span>
+            <span className="tabular-nums">{count}</span>
+          </span>
+        );
+      })}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
-import { listClientRecordsWithAssigneeAndDues } from "@/lib/clients/queries";
+import { listClientRecordsWithReferralBreakdown } from "@/lib/clients/queries";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ClientsTable } from "./clients-table";
@@ -30,7 +30,7 @@ export default async function ClientsPage() {
     redirect("/app");
   }
 
-  const clients = await listClientRecordsWithAssigneeAndDues(role.organization.id);
+  const clients = await listClientRecordsWithReferralBreakdown(role.organization.id);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">

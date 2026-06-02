@@ -10,7 +10,10 @@ import type {
   ClientRecord,
   ClientRecordWithAssignee,
   ClientRecordWithAssigneeAndDues,
+  ClientRecordWithReferralBreakdown,
+  ReferralBreakdown,
 } from "./types";
+import type { ReferralStatus } from "@/lib/referrals/types";
 
 type ClientRecordRow = {
   id: string;
@@ -179,6 +182,72 @@ export async function listClientRecordsWithAssigneeAndDues(
     ...c,
     pendingDueAts: duesByClientId.get(c.id) ?? [],
   }));
+}
+
+/**
+ * クライアント一覧 + 担当者 + 期限リスト + 「応募状況(referral 段階別件数)」
+ *
+ * `listClientRecordsWithAssigneeAndDues` の上に「応募状況」を 1 クエリで足す。
+ * クライアント一覧画面で「1 求職者が今 何社受けてて、どの段階か」を一目で
+ * 出すために使う。
+ *
+ * 取り方:
+ *   - 同 organization の referrals を 1 回だけ SELECT(client_record_id, status)
+ *   - JS で client_record_id 別に status 件数を集約
+ *   - 0 件の status はキーごと持たない(描画側で「ある段階だけ」表示するため)
+ *
+ * ⚠️ N+1 にしない(全体で SELECT 1 回追加だけ)。
+ * ⚠️ organization スコープ。RLS で自社のみだが、明示 eq で二重防御。
+ *
+ * 失敗時の挙動:referrals の取得に失敗してもクライアント一覧自体は返す
+ * (応募状況がバッジ無しで表示されるだけで、画面は壊れない)。
+ */
+export async function listClientRecordsWithReferralBreakdown(
+  organizationId: string,
+): Promise<ClientRecordWithReferralBreakdown[]> {
+  const supabase = await createClient();
+
+  // 1) 既存ロジックでクライアント + 担当者 + 期限を取得
+  const clients = await listClientRecordsWithAssigneeAndDues(organizationId);
+
+  // 2) 同 organization の referrals を 1 クエリで取得(必要最小限の 2 カラム)
+  const { data: refRows, error } = await supabase
+    .from("referrals")
+    .select("client_record_id, status")
+    .eq("organization_id", organizationId);
+
+  if (error || !refRows) {
+    // 失敗してもクライアント一覧は返す(応募状況は空で)
+    return clients.map((c) => ({
+      ...c,
+      referralBreakdown: { byStatus: {}, total: 0 },
+    }));
+  }
+
+  // 3) client_record_id ごとに status 別件数を集約
+  //    Map<clientId, Map<status, count>> の形で持って、最後にプレーンオブジェクト化。
+  const breakdownByClient = new Map<string, Map<ReferralStatus, number>>();
+  for (const row of refRows as Array<{ client_record_id: string; status: string }>) {
+    const status = row.status as ReferralStatus;
+    const inner = breakdownByClient.get(row.client_record_id) ?? new Map();
+    inner.set(status, (inner.get(status) ?? 0) + 1);
+    breakdownByClient.set(row.client_record_id, inner);
+  }
+
+  return clients.map((c) => {
+    const inner = breakdownByClient.get(c.id);
+    if (!inner) {
+      return { ...c, referralBreakdown: { byStatus: {}, total: 0 } };
+    }
+    const byStatus: Partial<Record<ReferralStatus, number>> = {};
+    let total = 0;
+    for (const [status, count] of inner.entries()) {
+      byStatus[status] = count;
+      total += count;
+    }
+    const referralBreakdown: ReferralBreakdown = { byStatus, total };
+    return { ...c, referralBreakdown };
+  });
 }
 
 /**

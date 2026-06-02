@@ -66,6 +66,26 @@ export type ClientRecordWithAssigneeAndDues = ClientRecordWithAssignee & {
   pendingDueAts: (string | null)[];
 };
 
+// 応募状況の段階別件数(クライアント一覧の「応募状況」列で使う)。
+// referrals.status の値をキーに、件数を保持。
+// 0 件の status はキーごと持たない(描画側で「ある段階だけ」を出すため)。
+// total は referral 全件(declined 含む)で、応募ゼロ判定に使う。
+//
+// ⚠️ referral 自体の status は将来カスタマイズ予定(referrals.types のコメント参照)。
+// その際にキーが固定 6+1 段階から増減する余地があるので、Partial<Record<>> で持つ。
+import type { ReferralStatus } from "@/lib/referrals/types";
+
+export type ReferralBreakdown = {
+  byStatus: Partial<Record<ReferralStatus, number>>;
+  total: number;
+};
+
+// 一覧用に referralBreakdown(応募状況の集計)を追加した拡張型。
+// 既存の AssigneeAndDues 由来のフィールドはそのまま継承する。
+export type ClientRecordWithReferralBreakdown = ClientRecordWithAssigneeAndDues & {
+  referralBreakdown: ReferralBreakdown;
+};
+
 // クライアント登録リクエスト
 export const createClientRequestSchema = z.object({
   name: z.string().min(1, "氏名を入力してください").max(100),
