@@ -136,3 +136,38 @@ export const updateReferralRequestSchema = z.object({
 });
 
 export type UpdateReferralRequest = z.infer<typeof updateReferralRequestSchema>;
+
+// ============================================
+// 紹介ステータス遷移履歴(referral_status_history)
+//
+// referrals.status の変更を「いつ・何から何へ・誰が」で残す追記型レコード。
+// ラベル表示は上記 referralStatusConfig を再利用するため、
+// from/to の文字列は ReferralStatus 互換として扱う(将来のマスター化に備え
+// DB 側は text のままで check 制約は付けていない)。
+// ============================================
+
+export type ReferralStatusHistory = {
+  id: string;
+  organizationId: string;
+  referralId: string;
+  /** 初回(planned 作成時等)は null 可 */
+  fromStatus: ReferralStatus | null;
+  toStatus: ReferralStatus;
+  /** 変更者。担当者が抜けた履歴では null になり得る */
+  changedByMemberId: string | null;
+  /** 実際に遷移した日時(挿入日時とは別) */
+  changedAt: string;
+  memo: string | null;
+  createdAt: string;
+};
+
+/** 履歴一覧で「推薦 → 書類通過」のように表示するためのヘルパー */
+export function formatReferralStatusTransition(
+  fromStatus: ReferralStatus | null,
+  toStatus: ReferralStatus,
+): string {
+  const toLabel = getReferralStatusConfig(toStatus).label;
+  if (!fromStatus) return toLabel;
+  const fromLabel = getReferralStatusConfig(fromStatus).label;
+  return `${fromLabel} → ${toLabel}`;
+}
