@@ -2,9 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
+import { canExport } from "@/lib/permissions/server";
 import { listClientRecordsWithReferralBreakdown } from "@/lib/clients/queries";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ExportButton } from "@/components/features/agency/export-button";
 import { ClientsTable } from "./clients-table";
 
 /**
@@ -31,6 +33,7 @@ export default async function ClientsPage() {
   }
 
   const clients = await listClientRecordsWithReferralBreakdown(role.organization.id);
+  const showExport = canExport(role);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -39,7 +42,12 @@ export default async function ClientsPage() {
           <h1 className="text-2xl font-bold">クライアント管理</h1>
           <p className="text-muted-foreground mt-1 text-sm">担当する求職者を管理します</p>
         </div>
-        <Button render={<Link href="/agency/clients/new" />}>+ クライアント登録</Button>
+        <div className="flex items-center gap-2">
+          {showExport && (
+            <ExportButton href="/api/agency/export/clients" label="CSV エクスポート" />
+          )}
+          <Button render={<Link href="/agency/clients/new" />}>+ クライアント登録</Button>
+        </div>
       </div>
 
       {clients.length === 0 ? (

@@ -21,7 +21,12 @@ import {
 } from "@/components/ui/table";
 import type { OrganizationMemberListItem } from "@/lib/organizations/members";
 import type { OrganizationRole } from "@/lib/organizations/types";
-import { PERMISSION_KEYS, permissionConfig, type PermissionKey } from "@/lib/permissions/types";
+import {
+  PERMISSION_KEYS,
+  permissionConfig,
+  type MemberPermissionFlags,
+  type PermissionKey,
+} from "@/lib/permissions/types";
 
 type MembersTableProps = {
   members: OrganizationMemberListItem[];
@@ -45,6 +50,7 @@ const roleLabel: Record<OrganizationRole, string> = {
 export function MembersTable({ members, currentMemberId }: MembersTableProps) {
   const router = useRouter();
   const [pendingMemberId, setPendingMemberId] = useState<string | null>(null);
+  const [pendingPermissionKey, setPendingPermissionKey] = useState<PermissionKey | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // 並び順:admin → advisor、同 role 内では参加日(古い順)
@@ -100,6 +106,54 @@ export function MembersTable({ members, currentMemberId }: MembersTableProps) {
     }
   };
 
+  /**
+   * advisor の権限フラグをトグル。
+   * admin の権限はサーバー側で拒否されるので、UI でも開かないこと。
+   */
+  const handleTogglePermission = async (
+    member: OrganizationMemberListItem,
+    permissionKey: PermissionKey,
+  ) => {
+    const newValue = !member.permissions[permissionKey];
+    const displayName = member.displayName ?? member.email ?? "このメンバー";
+    const config = permissionConfig[permissionKey];
+
+    const confirmMessage = newValue
+      ? `${displayName}さんに「${config.label}」権限を付与しますか?`
+      : `${displayName}さんから「${config.label}」権限を取り消しますか?`;
+
+    if (!window.confirm(confirmMessage)) return;
+
+    setPendingMemberId(member.memberId);
+    setPendingPermissionKey(permissionKey);
+    setErrorMessage(null);
+
+    try {
+      const res = await fetch(`/api/agency/members/${member.memberId}/permissions`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ permissionKey, granted: newValue }),
+      });
+
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          message?: string;
+        };
+        const msg = data.message ?? data.error ?? `権限変更に失敗しました(HTTP ${res.status})`;
+        setErrorMessage(msg);
+        return;
+      }
+
+      router.refresh();
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "通信エラーが発生しました");
+    } finally {
+      setPendingMemberId(null);
+      setPendingPermissionKey(null);
+    }
+  };
+
   return (
     <div className="space-y-3">
       {errorMessage && (
@@ -143,7 +197,12 @@ export function MembersTable({ members, currentMemberId }: MembersTableProps) {
                     </TableCell>
                     <TableCell className="text-muted-foreground">{m.email ?? "—"}</TableCell>
                     <TableCell>
-                      <PermissionBadges role={m.role} permissions={m.permissions} />
+                      <PermissionCell
+                        role={m.role}
+                        permissions={m.permissions}
+                        pendingKey={isPending ? pendingPermissionKey : null}
+                        onToggle={(key) => handleTogglePermission(m, key)}
+                      />
                     </TableCell>
                     <TableCell>
                       <RoleDropdown
@@ -164,41 +223,48 @@ export function MembersTable({ members, currentMemberId }: MembersTableProps) {
 }
 
 /**
- * 権限バッジ。
- * admin は全権限を持つ扱いなので、個別バッジではなく「管理者(全権限)」を出す。
- * advisor は granted な権限キーだけバッジで列挙する。
+ * 権限セル。
+ * - admin → 「常に可」表示(トグルなし)。サーバー側でも admin への toggle は弾かれる。
+ * - advisor → 権限キーごとに on/off ボタンを並べる(現状は export のみ)。
+ *   confirm ダイアログ → PATCH → router.refresh()。
  */
-function PermissionBadges({
+function PermissionCell({
   role,
   permissions,
+  pendingKey,
+  onToggle,
 }: {
   role: OrganizationRole;
-  permissions: Record<PermissionKey, boolean>;
+  permissions: MemberPermissionFlags;
+  pendingKey: PermissionKey | null;
+  onToggle: (key: PermissionKey) => void;
 }) {
   if (role === "admin") {
     return (
       <span className="bg-primary/10 text-primary inline-block rounded-full px-2 py-0.5 text-xs">
-        全権限
+        常に可(管理者)
       </span>
     );
   }
 
-  const granted = Object.values(PERMISSION_KEYS).filter((k) => permissions[k]);
-  if (granted.length === 0) {
-    return <span className="text-muted-foreground text-xs">—</span>;
-  }
-
   return (
-    <div className="flex flex-wrap gap-1">
-      {granted.map((k) => (
-        <span
-          key={k}
-          className="bg-muted rounded-full px-2 py-0.5 text-xs whitespace-nowrap"
-          title={permissionConfig[k].description}
-        >
-          {permissionConfig[k].label}
-        </span>
-      ))}
+    <div className="flex flex-wrap gap-1.5">
+      {Object.values(PERMISSION_KEYS).map((k) => {
+        const granted = permissions[k];
+        const isPending = pendingKey === k;
+        return (
+          <Button
+            key={k}
+            variant={granted ? "default" : "outline"}
+            size="xs"
+            disabled={isPending}
+            onClick={() => onToggle(k)}
+            title={permissionConfig[k].description}
+          >
+            {permissionConfig[k].label}:{granted ? "ON" : "OFF"}
+          </Button>
+        );
+      })}
     </div>
   );
 }

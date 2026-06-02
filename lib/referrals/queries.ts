@@ -122,6 +122,59 @@ export async function listReferralsByJob(jobPostingId: string): Promise<Referral
   });
 }
 
+type ReferralWithClientAndJobRow = ReferralRow & {
+  client_records: { name: string; email: string } | { name: string; email: string }[] | null;
+  job_postings:
+    | { company_name: string; position: string }
+    | { company_name: string; position: string }[]
+    | null;
+};
+
+export type ReferralWithClientAndJob = Referral & {
+  clientName: string;
+  clientEmail: string;
+  jobCompanyName: string;
+  jobPosition: string;
+};
+
+/**
+ * 組織全体の紹介を取得(エクスポート用)
+ *
+ * RLS で自社のみだが二重防御で organization_id eq。
+ * クライアントと求人を関連取得して 1 行に展開する。
+ */
+export async function listReferralsByOrganization(
+  organizationId: string,
+): Promise<ReferralWithClientAndJob[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("referrals")
+    .select(
+      `
+      *,
+      client_records ( name, email ),
+      job_postings ( company_name, position )
+    `,
+    )
+    .eq("organization_id", organizationId)
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+
+  return (data as ReferralWithClientAndJobRow[]).map((row) => {
+    const client = pickOne(row.client_records);
+    const job = pickOne(row.job_postings);
+    return {
+      ...rowToReferral(row),
+      clientName: client?.name ?? "(削除されたクライアント)",
+      clientEmail: client?.email ?? "",
+      jobCompanyName: job?.company_name ?? "(削除された求人)",
+      jobPosition: job?.position ?? "",
+    };
+  });
+}
+
 /**
  * 単一の紹介を取得
  */

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
+import { canExport } from "@/lib/permissions/server";
 import {
   getAdvisorPerformance,
   getClientStatusDistribution,
@@ -12,6 +13,7 @@ import {
   resolvePeriod,
   type PeriodPreset,
 } from "@/lib/reports/queries";
+import { ExportButton } from "@/components/features/agency/export-button";
 import { PeriodFilter } from "./period-filter";
 import { StatusDistributionSection } from "./status-distribution-section";
 import { MonthlyDealsSection } from "./monthly-deals-section";
@@ -79,13 +81,23 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
     getPhaseDuration(role.organization.id, period),
   ]);
 
+  const showExport = canExport(role);
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">レポート</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          {role.organization.name} の活動状況をまとめます
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">レポート</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            {role.organization.name} の活動状況をまとめます
+          </p>
+        </div>
+        {showExport && (
+          <div className="flex flex-col items-end gap-2">
+            <ExportButton href="/api/agency/export/placements" label="成約・売上 CSV" />
+            <ExportButton href="/api/agency/export/referrals" label="応募 CSV" />
+          </div>
+        )}
       </div>
 
       <PeriodFilter period={period} />

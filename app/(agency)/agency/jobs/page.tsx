@@ -2,11 +2,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
+import { canExport } from "@/lib/permissions/server";
 import { listJobPostings } from "@/lib/jobs/queries";
 import { jobStatusLabels, formatSalaryRange } from "@/lib/jobs/types";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ExportButton } from "@/components/features/agency/export-button";
 
 /**
  * 求人一覧画面
@@ -28,6 +30,7 @@ export default async function JobsPage() {
   }
 
   const jobs = await listJobPostings(role.organization.id);
+  const showExport = canExport(role);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -38,7 +41,10 @@ export default async function JobsPage() {
             クライアントに紹介する求人を管理します
           </p>
         </div>
-        <Button render={<Link href="/agency/jobs/new" />}>+ 求人登録</Button>
+        <div className="flex items-center gap-2">
+          {showExport && <ExportButton href="/api/agency/export/jobs" label="CSV エクスポート" />}
+          <Button render={<Link href="/agency/jobs/new" />}>+ 求人登録</Button>
+        </div>
       </div>
 
       {jobs.length === 0 ? (

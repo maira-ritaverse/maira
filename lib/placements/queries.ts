@@ -112,3 +112,25 @@ export async function listPlacementsByClient(
     authorName: p.createdByMemberId ? (nameByMemberId.get(p.createdByMemberId) ?? null) : null,
   }));
 }
+
+/**
+ * 組織全体の placements を取得(エクスポート用)
+ *
+ * RLS で自社のみだが二重防御で organization_id eq。
+ * 並び順は event_date 降順 → created_at 降順。
+ * 集計(aggregatePlacements)で referral 単位の純売上を出すために、生イベントを全件返す。
+ */
+export async function listPlacementsByOrganization(organizationId: string): Promise<Placement[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("placements")
+    .select("*")
+    .eq("organization_id", organizationId)
+    .order("event_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+
+  return (data as PlacementRow[]).map(rowToPlacement);
+}
