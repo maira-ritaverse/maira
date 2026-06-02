@@ -7,11 +7,13 @@ import { clientStatusLabels, clientLinkStatusLabels } from "@/lib/clients/types"
 import { listJobPostings } from "@/lib/jobs/queries";
 import { listReferralsByClient } from "@/lib/referrals/queries";
 import { listInteractionsByClient } from "@/lib/interactions/queries";
+import { listTasksByClient, listOrganizationMembers } from "@/lib/agency-tasks/queries";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ClientDetailForm } from "./client-detail-form";
 import { ReferralSection } from "./referral-section";
 import { InteractionsSection } from "./interactions-section";
+import { TasksSection } from "./tasks-section";
 
 /**
  * クライアント詳細画面
@@ -43,11 +45,18 @@ export default async function ClientDetailPage({ params }: RouteParams) {
   }
 
   // 紹介セクション用:このクライアントの紹介一覧と、自社の募集中求人を並行取得
-  // 対応履歴も同時に並行取得して詳細画面の初期表示で渡す
-  const [referrals, allJobs, interactions] = await Promise.all([
+  // 対応履歴・タスク・組織メンバー一覧も同時に並行取得して詳細画面の初期表示で渡す
+  // member.id は getUserRole で取得済み(タスク追加時の担当デフォルトに使う)
+  if (!role.member) {
+    // organization_member なら member は必ずあるはずだが、念のためのガード
+    redirect("/app");
+  }
+  const [referrals, allJobs, interactions, tasks, members] = await Promise.all([
     listReferralsByClient(client.id),
     listJobPostings(role.organization.id),
     listInteractionsByClient(client.id, role.organization.id),
+    listTasksByClient(client.id, role.organization.id),
+    listOrganizationMembers(role.organization.id),
   ]);
   const openJobs = allJobs.filter((j) => j.status === "open");
 
@@ -110,6 +119,13 @@ export default async function ClientDetailPage({ params }: RouteParams) {
       <ClientDetailForm client={client} />
 
       <InteractionsSection clientId={client.id} interactions={interactions} />
+
+      <TasksSection
+        clientId={client.id}
+        tasks={tasks}
+        members={members}
+        currentMemberId={role.member.id}
+      />
 
       <ReferralSection clientId={client.id} referrals={referrals} openJobs={openJobs} />
     </div>
