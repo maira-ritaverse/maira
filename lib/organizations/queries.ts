@@ -1,5 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
+import { emptyPermissionFlags, type PermissionKey } from "@/lib/permissions/types";
+import { PERMISSION_KEYS } from "@/lib/permissions/types";
 import type { UserRole } from "./types";
+
+/**
+ * 権限キーの集合(O(1) 判定用)。
+ * 未知のキーが member_permissions に入っていても無視する。
+ */
+const KNOWN_PERMISSION_KEYS = new Set<string>(Object.values(PERMISSION_KEYS));
 
 /**
  * ユーザーのロール情報を取得する
@@ -8,11 +16,17 @@ import type { UserRole } from "./types";
  * 1. profiles.account_type を取得
  * 2. 'seeker' ならそのまま返す
  * 3. 'organization_member' なら organization_members を join して所属企業も返す
+ * 4. organization_member なら member_permissions も取得して member.permissions に詰める
  *
  * 安全側設計:
  *   account_type が organization_member でも、実際の organization_members レコードが
  *   存在しない場合(招待途中など)は seeker として扱う。
  *   → 「企業メンバーのフリをして全テナント横断のデータが見える」事故を防ぐため。
+ *
+ * 権限について:
+ *   member.permissions には member_permissions の granted=true 分だけ true を立てる。
+ *   admin の特例(常に許可)はここでは適用しない。判定側で
+ *   `role === 'admin' || permissions[key]` のように扱う。
  */
 export async function getUserRole(userId: string): Promise<UserRole> {
   const supabase = await createClient();
@@ -69,6 +83,23 @@ export async function getUserRole(userId: string): Promise<UserRole> {
   const orgRaw = memberRow.organizations;
   const org = Array.isArray(orgRaw) ? orgRaw[0] : orgRaw;
 
+  // member_permissions を取得して granted=true のキーだけ true に。
+  // テーブル未作成や RLS で 0 件のケースもエラーにせず空フラグで返す。
+  const permissions = emptyPermissionFlags();
+  const { data: permRows } = await supabase
+    .from("member_permissions")
+    .select("permission_key, granted")
+    .eq("member_id", memberRow.id);
+
+  if (permRows) {
+    for (const row of permRows) {
+      const key = row.permission_key as string;
+      if (KNOWN_PERMISSION_KEYS.has(key) && row.granted) {
+        permissions[key as PermissionKey] = true;
+      }
+    }
+  }
+
   return {
     accountType: "organization_member",
     organization: org
@@ -86,6 +117,7 @@ export async function getUserRole(userId: string): Promise<UserRole> {
       role: memberRow.role as "admin" | "advisor",
       createdAt: memberRow.created_at,
       updatedAt: memberRow.updated_at,
+      permissions,
     },
   };
 }
