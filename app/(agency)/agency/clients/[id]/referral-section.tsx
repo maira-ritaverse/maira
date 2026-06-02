@@ -17,6 +17,7 @@ import {
   getPlacementEventTypeConfig,
   paymentStatusConfig,
 } from "@/lib/placements/types";
+import { type PlacementAggregate, aggregatePlacements } from "@/lib/placements/aggregate";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -251,6 +252,10 @@ function PlacementBlock({
   // 成約(placement)があるかどうか。なければ追加イベント類は登録不可。
   const hasPlacement = placements.some((p) => p.eventType === "placement");
 
+  // 集計(純売上・入金済み・残額)
+  // 件数は通常少ないが、placements が変わらない限り再計算しないように memo 化
+  const summary = useMemo(() => aggregatePlacements(placements), [placements]);
+
   const close = () => setOpenForm(null);
   const handleCreated = () => {
     close();
@@ -260,6 +265,8 @@ function PlacementBlock({
   return (
     <div className="border-border/60 mt-3 space-y-2 border-t pt-3">
       <h4 className="text-muted-foreground text-xs font-medium">成約</h4>
+
+      {summary.hasEvents && <PlacementSummary summary={summary} />}
 
       {placements.length > 0 ? (
         <ul className="space-y-1.5">
@@ -326,6 +333,61 @@ function PlacementBlock({
           onCancel={close}
         />
       )}
+    </div>
+  );
+}
+
+// ============================================
+// 成約サマリ表示(純売上 / 入金済み / 残額 + 内訳)
+//
+// ⚠️ 金額はすべて整数(円)。toLocaleString で 1500000 → "1,500,000"。
+// 「残額」は符号で意味が変わるので、ラベルと色で示し分ける。
+// ============================================
+function PlacementSummary({ summary }: { summary: PlacementAggregate }) {
+  // 残額の表示:
+  //   > 0  → 未入金(注意色、まだ入金待ち)
+  //   = 0  → 完済(完了色)
+  //   < 0  → 過入金(中立情報色、想定より入っている)
+  const remainderConfig =
+    summary.unpaid > 0
+      ? {
+          label: "未入金",
+          className: "text-amber-700 dark:text-amber-300",
+        }
+      : summary.unpaid < 0
+        ? {
+            label: "過入金",
+            className: "text-sky-700 dark:text-sky-300",
+          }
+        : {
+            label: "完済",
+            className: "text-emerald-700 dark:text-emerald-300",
+          };
+
+  return (
+    <div className="border-border bg-muted/40 space-y-1.5 rounded-md border p-3 text-xs">
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <div>
+          <span className="text-muted-foreground">純売上</span>
+          <span className="ml-1.5 text-base font-semibold">
+            ¥{summary.netRevenue.toLocaleString()}
+          </span>
+        </div>
+        <div>
+          <span className="text-muted-foreground">入金済み</span>
+          <span className="ml-1.5 font-medium">¥{summary.paid.toLocaleString()}</span>
+        </div>
+        <div>
+          <span className="text-muted-foreground">{remainderConfig.label}</span>
+          <span className={`ml-1.5 font-medium ${remainderConfig.className}`}>
+            ¥{Math.abs(summary.unpaid).toLocaleString()}
+          </span>
+        </div>
+      </div>
+      <p className="text-muted-foreground text-[10px]">
+        内訳: 成約 ¥{summary.placementTotal.toLocaleString()} + 追加 ¥
+        {summary.additionalTotal.toLocaleString()} − 返金 ¥{summary.refundTotal.toLocaleString()}
+      </p>
     </div>
   );
 }
