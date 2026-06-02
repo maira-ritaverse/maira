@@ -906,3 +906,153 @@ function emptyRowForSelf(memberId: string, displayName: string | null): AdvisorM
     netRevenue: 0,
   };
 }
+
+// ============================================
+// E:各フェーズの所要日数
+//
+// referral_status_history(changed_at)を referral 単位で時系列に並べ、
+// 隣接する正準区間の所要日数を平均する。
+//
+// 区間(brief 指定):
+//   推薦 → 書類、書類 → 面接、面接 → 内定、内定 → 成約
+//   (planned → recommended は対象外。選考開始からの所要時間に着目)
+//
+// エッジケース(シンプル運用):
+//   - 履歴 0/1 件の referral は対象外(隣接ペアが作れない)
+//   - 段階をスキップした遷移(例: recommended → interview)は対象区間に
+//     完全一致しないのでカウントしない
+//   - 戻った遷移(差し戻し)は正準順序の前進方向のみ計上、逆行は無視
+//   - declined を含む遷移はそもそも正準区間に無いので自然に無視される
+//   - サンプル 0 の区間は averageDays = null(画面で「データなし」表示)。
+//     0 日と書くと「即日通過」と読み間違えるため。
+//
+// 期間フィルタ:
+//   各遷移の「TO 側 changed_at」が period に入るものだけを集計対象とする
+//   (B のような referral 作成日基準ではなく、遷移発生日基準)。
+//   FROM 側(直前イベント)の changed_at は period 外にあってよい。
+//   ⇒ DB では history 全件を org スコープで取り、JS で対象判定する
+//     (beta 規模なら現実的。データが増えたら referral_id 集合で逆引きに変える)
+// ============================================
+
+export type PhaseDurationBucket = {
+  /** "recommended->screening" のような一意キー */
+  key: string;
+  fromStatus: ReferralStatus;
+  toStatus: ReferralStatus;
+  /** 画面表示用ラベル(例:「推薦 → 書類」) */
+  label: string;
+  /** 平均所要日数。サンプル 0 のときは null(画面で「データなし」表示) */
+  averageDays: number | null;
+  /** 平均算出に使った遷移サンプル数。信頼度の目安に使う */
+  sampleCount: number;
+};
+
+export type PhaseDuration = {
+  intervals: PhaseDurationBucket[];
+  period: Period;
+};
+
+// 集計対象の正準隣接区間。順序は表示順とそろえる(上から下に選考が進む流れ)。
+const canonicalPhaseIntervals: { from: ReferralStatus; to: ReferralStatus; label: string }[] = [
+  { from: "recommended", to: "screening", label: "推薦 → 書類" },
+  { from: "screening", to: "interview", label: "書類 → 面接" },
+  { from: "interview", to: "offer", label: "面接 → 内定" },
+  { from: "offer", to: "joined", label: "内定 → 成約" },
+];
+
+/**
+ * 各フェーズの平均所要日数を取得。
+ *
+ * organization スコープ(RLS + 明示の eq で二重防御)。
+ * 履歴がまだ少ない期間では多くの区間が「データなし」になる想定で、
+ * UI 側でその旨を明示する。
+ */
+export async function getPhaseDuration(
+  organizationId: string,
+  period: Period,
+): Promise<PhaseDuration> {
+  const supabase = await createClient();
+
+  // history を referral_id, changed_at の順で取得。
+  // referral_id が同じ行が固まって出るので、走査時にグルーピングしやすい。
+  const { data, error } = await supabase
+    .from("referral_status_history")
+    .select("referral_id, to_status, changed_at")
+    .eq("organization_id", organizationId)
+    .order("referral_id", { ascending: true })
+    .order("changed_at", { ascending: true });
+
+  type HistRow = { referral_id: string; to_status: string; changed_at: string };
+  const rows: HistRow[] = error || !data ? [] : (data as HistRow[]);
+
+  // 期間判定用の境界(TO 側 changed_at がこの範囲なら集計対象)。
+  const startIso = `${period.from}T00:00:00+09:00`;
+  const endExclusiveIso = `${nextJstDay(period.to)}T00:00:00+09:00`;
+
+  // 区間キーごとの日数リストを集める。
+  const daysByKey = new Map<string, number[]>();
+  const intervalKey = (from: ReferralStatus, to: ReferralStatus) => `${from}->${to}`;
+  for (const iv of canonicalPhaseIntervals) {
+    daysByKey.set(intervalKey(iv.from, iv.to), []);
+  }
+  // 隣接ペアが正準区間かどうかの O(1) チェック用 Set。
+  const canonicalKeySet = new Set(daysByKey.keys());
+
+  // referral_id 単位で連続区間として走査(rows は referral_id, changed_at で sort 済み)。
+  let i = 0;
+  while (i < rows.length) {
+    const refId = rows[i].referral_id;
+    let j = i + 1;
+    while (j < rows.length && rows[j].referral_id === refId) j += 1;
+
+    // [i, j) が同じ referral の履歴。隣接ペアで区間を計算。
+    for (let k = i; k + 1 < j; k += 1) {
+      const a = rows[k];
+      const b = rows[k + 1];
+
+      const key = intervalKey(a.to_status as ReferralStatus, b.to_status as ReferralStatus);
+      if (!canonicalKeySet.has(key)) continue; // 飛ばし・逆行・declined 等
+
+      // 期間判定:TO 側の遷移日が period に入るもののみ
+      if (b.changed_at < startIso || b.changed_at >= endExclusiveIso) continue;
+
+      const days = diffDays(a.changed_at, b.changed_at);
+      // 過去日付の遡及記録で稀にマイナスになり得る(順序は保証していない:
+      // 入力時刻順ではなく実際の遷移時刻順なので、データ入力ミスで FROM が
+      // 後だと負値)。負値はノイズとして除外。
+      if (days < 0) continue;
+
+      daysByKey.get(key)?.push(days);
+    }
+
+    i = j;
+  }
+
+  const intervals: PhaseDurationBucket[] = canonicalPhaseIntervals.map((iv) => {
+    const key = intervalKey(iv.from, iv.to);
+    const samples = daysByKey.get(key) ?? [];
+    const sampleCount = samples.length;
+    const averageDays =
+      sampleCount === 0
+        ? null
+        : // 小数 1 桁まで(0.0 / 1.2 / 12.5 のように出す)
+          Math.round((samples.reduce((s, v) => s + v, 0) / sampleCount) * 10) / 10;
+    return {
+      key,
+      fromStatus: iv.from,
+      toStatus: iv.to,
+      label: iv.label,
+      averageDays,
+      sampleCount,
+    };
+  });
+
+  return { intervals, period };
+}
+
+/** ISO 文字列間の差を日数(小数可)で返す。タイムゾーン込みのまま Date 化して差をとる。 */
+function diffDays(fromIso: string, toIso: string): number {
+  const a = new Date(fromIso).getTime();
+  const b = new Date(toIso).getTime();
+  return (b - a) / 86_400_000;
+}

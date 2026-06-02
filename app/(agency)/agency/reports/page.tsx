@@ -5,6 +5,7 @@ import {
   getAdvisorPerformance,
   getClientStatusDistribution,
   getMonthlyDealsRevenue,
+  getPhaseDuration,
   getReferralStatusDistribution,
   getSelectionFunnel,
   resolvePeriod,
@@ -15,6 +16,7 @@ import { StatusDistributionSection } from "./status-distribution-section";
 import { MonthlyDealsSection } from "./monthly-deals-section";
 import { SelectionFunnelSection } from "./selection-funnel-section";
 import { AdvisorPerformanceSection } from "./advisor-performance-section";
+import { PhaseDurationSection } from "./phase-duration-section";
 
 /**
  * エージェント向けレポート画面(土台 + D:ステータス分布)
@@ -57,12 +59,13 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
   };
 
   // 後続レポートの並行取得を見越して Promise.all で固める
-  const [clients, referrals, monthlyDeals, funnel, advisor] = await Promise.all([
+  const [clients, referrals, monthlyDeals, funnel, advisor, phaseDuration] = await Promise.all([
     getClientStatusDistribution(role.organization.id),
     getReferralStatusDistribution(role.organization.id),
     getMonthlyDealsRevenue(role.organization.id, period),
     getSelectionFunnel(role.organization.id, period),
     getAdvisorPerformance(role.organization.id, viewer, period),
+    getPhaseDuration(role.organization.id, period),
   ]);
 
   return (
@@ -81,9 +84,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
         <MonthlyDealsSection data={monthlyDeals} />
         <SelectionFunnelSection data={funnel} />
         <AdvisorPerformanceSection data={advisor} />
-        {/*
-          ここに後で E(所要日数)を Card として並べていく。
-        */}
+        <PhaseDurationSection data={phaseDuration} />
       </div>
     </div>
   );
