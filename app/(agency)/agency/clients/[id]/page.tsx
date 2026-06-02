@@ -8,6 +8,7 @@ import { listJobPostings } from "@/lib/jobs/queries";
 import { listReferralsByClient } from "@/lib/referrals/queries";
 import { listInteractionsByClient } from "@/lib/interactions/queries";
 import { listTasksByClient, listOrganizationMembers } from "@/lib/agency-tasks/queries";
+import { listPlacementsByClient } from "@/lib/placements/queries";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ClientDetailForm } from "./client-detail-form";
@@ -51,12 +52,13 @@ export default async function ClientDetailPage({ params }: RouteParams) {
     // organization_member なら member は必ずあるはずだが、念のためのガード
     redirect("/app");
   }
-  const [referrals, allJobs, interactions, tasks, members] = await Promise.all([
+  const [referrals, allJobs, interactions, tasks, members, placements] = await Promise.all([
     listReferralsByClient(client.id),
     listJobPostings(role.organization.id),
     listInteractionsByClient(client.id, role.organization.id),
     listTasksByClient(client.id, role.organization.id),
     listOrganizationMembers(role.organization.id),
+    listPlacementsByClient(client.id, role.organization.id),
   ]);
   const openJobs = allJobs.filter((j) => j.status === "open");
 
@@ -132,7 +134,12 @@ export default async function ClientDetailPage({ params }: RouteParams) {
         isAdmin={role.member.role === "admin"}
       />
 
-      <ReferralSection clientId={client.id} referrals={referrals} openJobs={openJobs} />
+      <ReferralSection
+        clientId={client.id}
+        referrals={referrals}
+        openJobs={openJobs}
+        placements={placements}
+      />
     </div>
   );
 }

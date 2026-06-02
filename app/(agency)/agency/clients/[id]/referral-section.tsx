@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { JobPosting } from "@/lib/jobs/types";
 import {
@@ -9,6 +9,7 @@ import {
   getReferralStatusConfig,
   referralStatusConfig,
 } from "@/lib/referrals/types";
+import { type PlacementWithAuthor, getPlacementEventTypeConfig } from "@/lib/placements/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -30,10 +31,23 @@ type Props = {
   clientId: string;
   referrals: ReferralWithJob[];
   openJobs: JobPosting[];
+  placements: PlacementWithAuthor[];
 };
 
-export function ReferralSection({ clientId, referrals, openJobs }: Props) {
+export function ReferralSection({ clientId, referrals, openJobs, placements }: Props) {
   const router = useRouter();
+
+  // referralId ごとに placements を分けておく(各 row の表示用)
+  // 件数が増えても線形で済むので useMemo で十分
+  const placementsByReferral = useMemo(() => {
+    const map = new Map<string, PlacementWithAuthor[]>();
+    for (const p of placements) {
+      const arr = map.get(p.referralId);
+      if (arr) arr.push(p);
+      else map.set(p.referralId, [p]);
+    }
+    return map;
+  }, [placements]);
 
   return (
     <Card className="space-y-6 p-6">
@@ -51,7 +65,11 @@ export function ReferralSection({ clientId, referrals, openJobs }: Props) {
         onCreated={() => router.refresh()}
       />
 
-      <ReferralList referrals={referrals} onUpdated={() => router.refresh()} />
+      <ReferralList
+        referrals={referrals}
+        placementsByReferral={placementsByReferral}
+        onUpdated={() => router.refresh()}
+      />
     </Card>
   );
 }
@@ -62,9 +80,11 @@ export function ReferralSection({ clientId, referrals, openJobs }: Props) {
 
 function ReferralList({
   referrals,
+  placementsByReferral,
   onUpdated,
 }: {
   referrals: ReferralWithJob[];
+  placementsByReferral: Map<string, PlacementWithAuthor[]>;
   onUpdated: () => void;
 }) {
   if (referrals.length === 0) {
@@ -80,7 +100,12 @@ function ReferralList({
       <h3 className="text-sm font-medium">紹介中の求人({referrals.length}件)</h3>
       <ul className="space-y-2">
         {referrals.map((r) => (
-          <ReferralRow key={r.id} referral={r} onUpdated={onUpdated} />
+          <ReferralRow
+            key={r.id}
+            referral={r}
+            placements={placementsByReferral.get(r.id) ?? []}
+            onUpdated={onUpdated}
+          />
         ))}
       </ul>
     </div>
@@ -89,9 +114,11 @@ function ReferralList({
 
 function ReferralRow({
   referral,
+  placements,
   onUpdated,
 }: {
   referral: ReferralWithJob;
+  placements: PlacementWithAuthor[];
   onUpdated: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -153,7 +180,359 @@ function ReferralRow({
           <AlertDescription>エラー: {error}</AlertDescription>
         </Alert>
       )}
+
+      <PlacementBlock referralId={referral.id} placements={placements} onChanged={onUpdated} />
     </li>
+  );
+}
+
+// ============================================
+// 成約(placements)ブロック
+//
+// この referral に紐づく placement イベントの一覧 + 「成約を登録」フォーム。
+// このステップでは event_type='placement' のみ扱う。
+// 入金 / 返金 / 追加報酬は次のステップ3で同じ場所に追加する。
+// ============================================
+
+function PlacementBlock({
+  referralId,
+  placements,
+  onChanged,
+}: {
+  referralId: string;
+  placements: PlacementWithAuthor[];
+  onChanged: () => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  // このステップでは表示も placement イベントだけに絞る
+  // (他イベントは次のステップで集計表示する)
+  const placementEvents = placements.filter((p) => p.eventType === "placement");
+
+  return (
+    <div className="border-border/60 mt-3 space-y-2 border-t pt-3">
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="text-muted-foreground text-xs font-medium">成約</h4>
+        {!isOpen && (
+          <Button type="button" variant="outline" size="sm" onClick={() => setIsOpen(true)}>
+            + 成約を登録
+          </Button>
+        )}
+      </div>
+
+      {placementEvents.length > 0 ? (
+        <ul className="space-y-1.5">
+          {placementEvents.map((p) => (
+            <PlacementSummaryRow key={p.id} placement={p} />
+          ))}
+        </ul>
+      ) : (
+        <p className="text-muted-foreground text-xs">まだ成約は登録されていません。</p>
+      )}
+
+      {isOpen && (
+        <PlacementCreateForm
+          referralId={referralId}
+          onCreated={() => {
+            setIsOpen(false);
+            onChanged();
+          }}
+          onCancel={() => setIsOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// 成約1件の表示(入社日、売上額、計算根拠があれば 年収×率)
+function PlacementSummaryRow({ placement }: { placement: PlacementWithAuthor }) {
+  const config = getPlacementEventTypeConfig(placement.eventType);
+  const amountLabel =
+    placement.amount !== null ? `¥${placement.amount.toLocaleString()}` : "(金額未設定)";
+
+  // 計算根拠が両方ある時のみ「年収×率」表記を付ける
+  const hasCalc = placement.expectedSalary !== null && placement.commissionRate !== null;
+  const calcLabel = hasCalc
+    ? `(年収${placement.expectedSalary}万円 × ${placement.commissionRate}%)`
+    : null;
+
+  return (
+    <li className="border-border bg-background rounded-md border px-3 py-2 text-xs">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`rounded-full px-2 py-0.5 text-[10px] ${config.className}`}>
+          {config.label}
+        </span>
+        <span className="text-muted-foreground">入社日 {placement.eventDate}</span>
+        <span className="font-medium">{amountLabel}</span>
+        {calcLabel && <span className="text-muted-foreground">{calcLabel}</span>}
+      </div>
+      {placement.notes && (
+        <p className="text-muted-foreground mt-1 whitespace-pre-wrap">{placement.notes}</p>
+      )}
+      {placement.authorName && (
+        <p className="text-muted-foreground mt-1 text-[10px]">記録: {placement.authorName}</p>
+      )}
+    </li>
+  );
+}
+
+// ============================================
+// 成約登録フォーム(計算 / 直接入力 の2モード)
+// ============================================
+
+type AmountMode = "calc" | "direct";
+
+// YYYY-MM-DD のローカル日付
+// (toISOString() だと UTC ずれで前日になりうるので避ける)
+function todayLocalDate(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function PlacementCreateForm({
+  referralId,
+  onCreated,
+  onCancel,
+}: {
+  referralId: string;
+  onCreated: () => void;
+  onCancel: () => void;
+}) {
+  const [mode, setMode] = useState<AmountMode>("calc");
+  const [eventDate, setEventDate] = useState<string>(todayLocalDate());
+  // 計算モード入力
+  const [salaryManen, setSalaryManen] = useState<string>(""); // 万円
+  const [rate, setRate] = useState<string>(""); // %
+  // 直接入力モード
+  const [directAmount, setDirectAmount] = useState<string>(""); // 円
+  const [notes, setNotes] = useState<string>("");
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  // 計算結果(円)。年収(万円)× 10000 × 率(%)/100 = 万円 × 率 × 100
+  // 例: 500万 × 30% = 500 × 30 × 100 = 1,500,000 円
+  const calculatedAmount = useMemo(() => {
+    if (mode !== "calc") return null;
+    const s = Number(salaryManen);
+    const r = Number(rate);
+    if (!Number.isFinite(s) || !Number.isFinite(r)) return null;
+    if (s <= 0 || r <= 0) return null;
+    return Math.round(s * r * 100);
+  }, [mode, salaryManen, rate]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!eventDate) {
+      setError("入社日を入力してください");
+      return;
+    }
+
+    // モードごとに送信ペイロードを組み立てる
+    let payload: Record<string, unknown>;
+    if (mode === "calc") {
+      const s = Number(salaryManen);
+      const r = Number(rate);
+      if (!Number.isFinite(s) || s <= 0) {
+        setError("想定年収(万円)を入力してください");
+        return;
+      }
+      if (!Number.isFinite(r) || r <= 0) {
+        setError("手数料率(%)を入力してください");
+        return;
+      }
+      if (calculatedAmount === null) {
+        setError("売上額の計算に失敗しました");
+        return;
+      }
+      payload = {
+        referral_id: referralId,
+        event_type: "placement",
+        event_date: eventDate,
+        amount: calculatedAmount,
+        expected_salary: Math.floor(s),
+        commission_rate: r,
+        notes: notes || undefined,
+      };
+    } else {
+      const a = Number(directAmount);
+      if (!Number.isFinite(a) || a <= 0) {
+        setError("売上額(円)を入力してください");
+        return;
+      }
+      payload = {
+        referral_id: referralId,
+        event_type: "placement",
+        event_date: eventDate,
+        amount: Math.floor(a),
+        notes: notes || undefined,
+      };
+    }
+
+    startTransition(async () => {
+      try {
+        const res = await fetch("/api/agency/placements", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const errData = (await res.json()) as { error?: string; message?: string };
+          throw new Error(errData.message ?? errData.error ?? "成約の登録に失敗しました");
+        }
+        onCreated();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unknown error");
+      }
+    });
+  };
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="border-border bg-muted/30 space-y-3 rounded-md border p-3"
+    >
+      {/* 入社日 */}
+      <div className="space-y-1.5">
+        <Label htmlFor={`placement-date-${referralId}`} className="text-xs">
+          入社日 <span className="text-red-600">*</span>
+        </Label>
+        <input
+          id={`placement-date-${referralId}`}
+          type="date"
+          value={eventDate}
+          onChange={(e) => setEventDate(e.target.value)}
+          disabled={isPending}
+          className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+        />
+      </div>
+
+      {/* モード切替 */}
+      <div className="space-y-1.5">
+        <Label className="text-xs">金額の入力方法</Label>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant={mode === "calc" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setMode("calc")}
+            disabled={isPending}
+          >
+            計算する
+          </Button>
+          <Button
+            type="button"
+            variant={mode === "direct" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setMode("direct")}
+            disabled={isPending}
+          >
+            直接入力
+          </Button>
+        </div>
+      </div>
+
+      {mode === "calc" ? (
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1.5">
+              <Label htmlFor={`placement-salary-${referralId}`} className="text-xs">
+                想定年収(万円)
+              </Label>
+              <input
+                id={`placement-salary-${referralId}`}
+                type="number"
+                inputMode="numeric"
+                min={0}
+                step={1}
+                value={salaryManen}
+                onChange={(e) => setSalaryManen(e.target.value)}
+                disabled={isPending}
+                placeholder="例: 500"
+                className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor={`placement-rate-${referralId}`} className="text-xs">
+                手数料率(%)
+              </Label>
+              <input
+                id={`placement-rate-${referralId}`}
+                type="number"
+                inputMode="decimal"
+                min={0}
+                max={100}
+                step={0.01}
+                value={rate}
+                onChange={(e) => setRate(e.target.value)}
+                disabled={isPending}
+                placeholder="例: 30"
+                className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+          <p className="text-xs">
+            <span className="text-muted-foreground">売上額(計算結果):</span>{" "}
+            <span className="font-medium">
+              {calculatedAmount !== null ? `¥${calculatedAmount.toLocaleString()}` : "—"}
+            </span>
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <Label htmlFor={`placement-amount-${referralId}`} className="text-xs">
+            売上額(円) <span className="text-red-600">*</span>
+          </Label>
+          <input
+            id={`placement-amount-${referralId}`}
+            type="number"
+            inputMode="numeric"
+            min={0}
+            step={1}
+            value={directAmount}
+            onChange={(e) => setDirectAmount(e.target.value)}
+            disabled={isPending}
+            placeholder="例: 1500000"
+            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+          />
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        <Label htmlFor={`placement-notes-${referralId}`} className="text-xs">
+          メモ
+        </Label>
+        <textarea
+          id={`placement-notes-${referralId}`}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          disabled={isPending}
+          rows={2}
+          maxLength={2000}
+          placeholder="任意"
+          className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+        />
+      </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>エラー: {error}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={isPending}>
+          {isPending ? "登録中..." : "成約を登録"}
+        </Button>
+        <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={onCancel}>
+          キャンセル
+        </Button>
+      </div>
+    </form>
   );
 }
 
