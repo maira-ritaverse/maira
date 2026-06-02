@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { JobPosting } from "@/lib/jobs/types";
 import {
   type ReferralStatus,
+  type ReferralStatusHistoryWithAuthor,
   type ReferralWithJob,
   getReferralStatusConfig,
   referralStatusConfig,
@@ -40,10 +41,21 @@ type Props = {
   referrals: ReferralWithJob[];
   openJobs: JobPosting[];
   placements: PlacementWithAuthor[];
+  // referral_id でグルーピングされた status 遷移履歴。
+  // page.tsx で listReferralStatusHistoriesByReferralIds から受け取る。
+  // 各値は changed_at 昇順(古い→新しい)。
+  historiesByReferral: Map<string, ReferralStatusHistoryWithAuthor[]>;
   isAdmin: boolean;
 };
 
-export function ReferralSection({ clientId, referrals, openJobs, placements, isAdmin }: Props) {
+export function ReferralSection({
+  clientId,
+  referrals,
+  openJobs,
+  placements,
+  historiesByReferral,
+  isAdmin,
+}: Props) {
   const router = useRouter();
 
   // referralId ごとに placements を分けておく(各 row の表示用)
@@ -77,6 +89,7 @@ export function ReferralSection({ clientId, referrals, openJobs, placements, isA
       <ReferralList
         referrals={referrals}
         placementsByReferral={placementsByReferral}
+        historiesByReferral={historiesByReferral}
         isAdmin={isAdmin}
         onUpdated={() => router.refresh()}
       />
@@ -91,11 +104,13 @@ export function ReferralSection({ clientId, referrals, openJobs, placements, isA
 function ReferralList({
   referrals,
   placementsByReferral,
+  historiesByReferral,
   isAdmin,
   onUpdated,
 }: {
   referrals: ReferralWithJob[];
   placementsByReferral: Map<string, PlacementWithAuthor[]>;
+  historiesByReferral: Map<string, ReferralStatusHistoryWithAuthor[]>;
   isAdmin: boolean;
   onUpdated: () => void;
 }) {
@@ -116,6 +131,7 @@ function ReferralList({
             key={r.id}
             referral={r}
             placements={placementsByReferral.get(r.id) ?? []}
+            histories={historiesByReferral.get(r.id) ?? []}
             isAdmin={isAdmin}
             onUpdated={onUpdated}
           />
@@ -128,11 +144,13 @@ function ReferralList({
 function ReferralRow({
   referral,
   placements,
+  histories,
   isAdmin,
   onUpdated,
 }: {
   referral: ReferralWithJob;
   placements: PlacementWithAuthor[];
+  histories: ReferralStatusHistoryWithAuthor[];
   isAdmin: boolean;
   onUpdated: () => void;
 }) {
@@ -196,6 +214,8 @@ function ReferralRow({
         </Alert>
       )}
 
+      <StatusHistoryBlock histories={histories} />
+
       <PlacementBlock
         referralId={referral.id}
         placements={placements}
@@ -204,6 +224,79 @@ function ReferralRow({
       />
     </li>
   );
+}
+
+// ============================================
+// 選考の足跡(status 遷移履歴)
+//
+// referrals.status が変わった瞬間を referral_status_history に自動記録している
+// (PATCH /api/agency/referrals/[id] 側で実装)。それを時系列で表示する。
+//
+// 表示方針:
+//   - 古い → 新しい の順(タイムラインは上から下に進む読み方)
+//   - 各行は from バッジ → to バッジ + 日時 + 変更者
+//   - 初回履歴(from が null)は「to」だけバッジ表示
+//   - 履歴が無いときも空状態メッセージで「まだ変更履歴がありません」を出す
+//     (status が一度も変わっていない紹介である説明として残す)
+//   - スタイルは PlacementBlock とお揃いで、referral 内のサブブロック扱い
+// ============================================
+function StatusHistoryBlock({ histories }: { histories: ReferralStatusHistoryWithAuthor[] }) {
+  return (
+    <div className="border-border/60 mt-3 space-y-2 border-t pt-3">
+      <h4 className="text-muted-foreground text-xs font-medium">選考の足跡</h4>
+      {histories.length === 0 ? (
+        <p className="text-muted-foreground text-xs">まだ変更履歴がありません。</p>
+      ) : (
+        <ol className="space-y-1.5">
+          {histories.map((h) => (
+            <StatusHistoryRow key={h.id} history={h} />
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+function StatusHistoryRow({ history }: { history: ReferralStatusHistoryWithAuthor }) {
+  // from が null = 初回履歴(現状の実装では作成時の自動記録は無いので、
+  // 手動 insert や将来仕様の余地として残してある)。to だけ表示する。
+  const fromConfig = history.fromStatus ? getReferralStatusConfig(history.fromStatus) : null;
+  const toConfig = getReferralStatusConfig(history.toStatus);
+
+  return (
+    <li className="border-border bg-background rounded-md border px-3 py-2 text-xs">
+      <div className="flex flex-wrap items-center gap-2">
+        {fromConfig && (
+          <>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] ${fromConfig.className}`}>
+              {fromConfig.label}
+            </span>
+            <span className="text-muted-foreground">→</span>
+          </>
+        )}
+        <span className={`rounded-full px-2 py-0.5 text-[10px] ${toConfig.className}`}>
+          {toConfig.label}
+        </span>
+        <time className="text-muted-foreground" dateTime={history.changedAt}>
+          {formatChangedAt(history.changedAt)}
+        </time>
+      </div>
+      {history.changedByName && (
+        <p className="text-muted-foreground mt-1 text-[10px]">変更者: {history.changedByName}</p>
+      )}
+      {history.memo && <p className="text-foreground mt-1 whitespace-pre-wrap">{history.memo}</p>}
+    </li>
+  );
+}
+
+// 履歴行の日時表示。
+// 既存の interactions の formatOccurredAt と揃え、年/月/日 時:分。
+// (interactions と違って「今日なら時刻だけ」は採用しない:
+//  履歴は過去を眺める用途なので、いつでも日付を出すほうが読みやすい。)
+function formatChangedAt(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 // ============================================

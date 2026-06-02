@@ -171,3 +171,12 @@ export function formatReferralStatusTransition(
   const fromLabel = getReferralStatusConfig(fromStatus).label;
   return `${fromLabel} → ${toLabel}`;
 }
+
+/**
+ * 履歴一覧表示用に、変更者の表示名を合流させた拡張型。
+ * client_interactions の ClientInteractionWithAuthor と同じ思想。
+ * 変更者がメンバーから外れた等で名前を取れない場合は null。
+ */
+export type ReferralStatusHistoryWithAuthor = ReferralStatusHistory & {
+  changedByName: string | null;
+};

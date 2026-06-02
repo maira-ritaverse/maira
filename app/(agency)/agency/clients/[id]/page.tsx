@@ -5,7 +5,10 @@ import { getUserRole } from "@/lib/organizations/queries";
 import { getClientRecord } from "@/lib/clients/queries";
 import { clientStatusLabels, clientLinkStatusLabels } from "@/lib/clients/types";
 import { listJobPostings } from "@/lib/jobs/queries";
-import { listReferralsByClient } from "@/lib/referrals/queries";
+import {
+  listReferralsByClient,
+  listReferralStatusHistoriesByReferralIds,
+} from "@/lib/referrals/queries";
 import { listInteractionsByClient } from "@/lib/interactions/queries";
 import { listTasksByClient, listOrganizationMembers } from "@/lib/agency-tasks/queries";
 import { listPlacementsByClient } from "@/lib/placements/queries";
@@ -61,6 +64,14 @@ export default async function ClientDetailPage({ params }: RouteParams) {
     listPlacementsByClient(client.id, role.organization.id),
   ]);
   const openJobs = allJobs.filter((j) => j.status === "open");
+
+  // 紹介の status 遷移履歴(referral_id でグルーピングされた Map)。
+  // 必要な referralIds が referrals 取得結果に依存するので、Promise.all の後に直列で取得。
+  // 履歴は referral_section.tsx 内の各紹介行に「選考の足跡」として表示する。
+  const historiesByReferral = await listReferralStatusHistoriesByReferralIds(
+    referrals.map((r) => r.id),
+    role.organization.id,
+  );
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -139,6 +150,7 @@ export default async function ClientDetailPage({ params }: RouteParams) {
         referrals={referrals}
         openJobs={openJobs}
         placements={placements}
+        historiesByReferral={historiesByReferral}
         isAdmin={role.member.role === "admin"}
       />
     </div>

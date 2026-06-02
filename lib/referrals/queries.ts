@@ -10,7 +10,14 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
-import type { Referral, ReferralStatus, ReferralWithClient, ReferralWithJob } from "./types";
+import type {
+  Referral,
+  ReferralStatus,
+  ReferralStatusHistory,
+  ReferralStatusHistoryWithAuthor,
+  ReferralWithClient,
+  ReferralWithJob,
+} from "./types";
 
 type ReferralRow = {
   id: string;
@@ -130,4 +137,94 @@ export async function getReferral(referralId: string): Promise<Referral | null> 
   if (error || !data) return null;
 
   return rowToReferral(data as ReferralRow);
+}
+
+// ============================================
+// 紹介ステータス遷移履歴(referral_status_history)
+// ============================================
+
+type ReferralStatusHistoryRow = {
+  id: string;
+  organization_id: string;
+  referral_id: string;
+  from_status: string | null;
+  to_status: string;
+  changed_by_member_id: string | null;
+  changed_at: string;
+  memo: string | null;
+  created_at: string;
+};
+
+function rowToReferralStatusHistory(row: ReferralStatusHistoryRow): ReferralStatusHistory {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    referralId: row.referral_id,
+    fromStatus: row.from_status as ReferralStatus | null,
+    toStatus: row.to_status as ReferralStatus,
+    changedByMemberId: row.changed_by_member_id,
+    changedAt: row.changed_at,
+    memo: row.memo,
+    createdAt: row.created_at,
+  };
+}
+
+/**
+ * 複数の紹介の status 遷移履歴を、referral_id でグルーピングして返す。
+ *
+ * クライアント詳細画面で、各紹介に「選考の足跡」を表示するために使う。
+ *   - 各紹介の履歴は changed_at 昇順(古い → 新しい)。
+ *     上から下にタイムラインが進む読み方が自然なため。
+ *   - 変更者の表示名は list_organization_member_display_names(SECURITY DEFINER)
+ *     経由で取得して合流。profiles の RLS を緩めずに済ませる
+ *     既存の interactions / clients と同じ方針。
+ *   - referralIds が空なら DB に問い合わせず空 Map を返す。
+ *
+ * 戻り値:Map<referralId, histories[]>
+ *   履歴が無い referral_id は Map に存在しない(呼び出し元で空配列扱い)。
+ */
+export async function listReferralStatusHistoriesByReferralIds(
+  referralIds: string[],
+  organizationId: string,
+): Promise<Map<string, ReferralStatusHistoryWithAuthor[]>> {
+  const grouped = new Map<string, ReferralStatusHistoryWithAuthor[]>();
+  if (referralIds.length === 0) return grouped;
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("referral_status_history")
+    .select("*")
+    .in("referral_id", referralIds)
+    .order("changed_at", { ascending: true });
+
+  if (error || !data) return grouped;
+
+  const histories = (data as ReferralStatusHistoryRow[]).map(rowToReferralStatusHistory);
+
+  // 変更者の表示名 Map(RLS バイパス関数経由)。
+  // 取得失敗しても履歴自体は返したいので、エラー時は changedByName を null にして続行。
+  const { data: memberRows, error: memberError } = await supabase.rpc(
+    "list_organization_member_display_names",
+    { target_organization_id: organizationId },
+  );
+
+  const nameByMemberId = new Map<string, string | null>();
+  if (!memberError && memberRows) {
+    for (const row of memberRows as Array<{ member_id: string; display_name: string | null }>) {
+      nameByMemberId.set(row.member_id, row.display_name);
+    }
+  }
+
+  for (const h of histories) {
+    const withAuthor: ReferralStatusHistoryWithAuthor = {
+      ...h,
+      changedByName: h.changedByMemberId ? (nameByMemberId.get(h.changedByMemberId) ?? null) : null,
+    };
+    const list = grouped.get(h.referralId);
+    if (list) list.push(withAuthor);
+    else grouped.set(h.referralId, [withAuthor]);
+  }
+
+  return grouped;
 }

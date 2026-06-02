@@ -19,6 +19,7 @@ type Props = {
 const navItems: { href: string; icon: string; label: string }[] = [
   { href: "/agency/clients", icon: "👥", label: "クライアント管理" },
   { href: "/agency/jobs", icon: "💼", label: "求人管理" },
+  { href: "/agency/reports", icon: "📊", label: "レポート" },
   // 将来追加予定:
   // { href: "/agency/matching", icon: "🔗", label: "マッチング" },
 ];
