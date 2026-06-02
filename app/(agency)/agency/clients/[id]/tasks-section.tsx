@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   type AgencyTaskPriority,
@@ -8,6 +8,8 @@ import {
   agencyTaskPriorityConfig,
   getAgencyTaskPriorityConfig,
 } from "@/lib/agency-tasks/types";
+import { type DueStatus, getDueStatus } from "@/lib/agency-tasks/due-status";
+import { useNow } from "@/lib/agency-tasks/use-now";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -36,41 +38,13 @@ import { Label } from "@/components/ui/label";
  *     正しい色が当たる。これで hydration mismatch を回避できる。
  */
 
-// 「期限間近」とみなす残り時間(時間単位)。指示書は 48h 目安。
-const SOON_THRESHOLD_HOURS = 48;
-
-type DueStatus = "completed" | "overdue" | "soon" | "normal" | "none";
-
-/**
- * タスクの期限状態を判定する。
- *
- * @param dueAt   タスクの期限(ISO 文字列 or null)
- * @param now     比較に使う現在時刻(useNow で取得。マウント前は null)
- * @param isDone  完了済みかどうか
- *
- * - isDone: 完了は色を主張させない("completed" = 薄く表示)
- * - now が null(マウント前): "normal" を返し、ハイドレーション後に再評価
- * - 期限なし: "none"(色なし)
- * - now > dueAt: "overdue"
- * - now <= dueAt < now + 48h: "soon"
- * - それより先: "normal"
- */
-function getDueStatus(dueAt: string | null, now: Date | null, isDone: boolean): DueStatus {
-  if (isDone) return "completed";
-  if (!now) return "normal";
-  if (!dueAt) return "none";
-  const due = new Date(dueAt).getTime();
-  const t = now.getTime();
-  if (due < t) return "overdue";
-  const soonCutoff = t + SOON_THRESHOLD_HOURS * 60 * 60 * 1000;
-  if (due < soonCutoff) return "soon";
-  return "normal";
-}
-
 /**
  * 期限状態ごとのスタイル定義。
  * 派手にしすぎないよう、背景は 50/40(薄く)、ボーダーは少し濃く。
  * priority バッジ(既存)と同じトーン(red-100/amber-100 系)で揃える。
+ *
+ * 判定ロジック(getDueStatus)は lib/agency-tasks/due-status.ts に切り出して
+ * クライアント一覧の期限超過バッジと共通化している。
  */
 const dueStatusConfig: Record<
   DueStatus,
@@ -112,42 +86,6 @@ const dueStatusConfig: Record<
     dueTextClass: "",
   },
 };
-
-/**
- * 現在時刻を 5 分ごとに更新する hook。
- * - SSR 時は null(server snapshot)。マウント後に client snapshot で Date を返す
- * - useSyncExternalStore を使う理由:
- *   - SSR の null と マウント直後の Date の差し替えを React が正しく扱える
- *     (hydration mismatch を回避)
- *   - useEffect 内で同期 setState を呼ぶ react-hooks/set-state-in-effect 警告も避けられる
- * - 5 分(300_000ms)ごとに更新。タスク超過の境界を分単位で検知できれば十分
- * - clientNow をモジュールスコープで保持して getSnapshot の参照同一性を担保
- *   (毎回 new Date() を返すと useSyncExternalStore が無限ループ警告を出す)
- */
-let clientNow: Date = new Date();
-
-function subscribeNow(callback: () => void): () => void {
-  const id = setInterval(
-    () => {
-      clientNow = new Date();
-      callback();
-    },
-    5 * 60 * 1000,
-  );
-  return () => clearInterval(id);
-}
-
-function getClientSnapshot(): Date {
-  return clientNow;
-}
-
-function getServerSnapshot(): null {
-  return null;
-}
-
-function useNow(): Date | null {
-  return useSyncExternalStore(subscribeNow, getClientSnapshot, getServerSnapshot);
-}
 
 type OrgMember = { memberId: string; displayName: string | null };
 

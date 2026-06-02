@@ -15,17 +15,39 @@ import {
 import {
   clientLinkStatusLabels,
   clientStatusLabels,
-  type ClientRecordWithAssignee,
+  type ClientRecordWithAssigneeAndDues,
   type ClientStatus,
 } from "@/lib/clients/types";
+import { getDueStatus } from "@/lib/agency-tasks/due-status";
+import { useNow } from "@/lib/agency-tasks/use-now";
 
 type SortColumn = "name" | "status" | "createdAt";
 type SortDirection = "asc" | "desc";
 type StatusFilter = ClientStatus | "all";
 
 type ClientsTableProps = {
-  clients: ClientRecordWithAssignee[];
+  clients: ClientRecordWithAssigneeAndDues[];
 };
+
+/**
+ * 1クライアントの pendingDueAts から、期限超過/間近の件数を集計する。
+ * 判定ロジックは詳細画面の色分けと共通(getDueStatus)。
+ * now=null(マウント前)は両方 0 を返して、初回 SSR と差分が出ないようにする。
+ */
+function countByDueStatus(
+  pendingDueAts: (string | null)[],
+  now: Date | null,
+): { overdue: number; soon: number } {
+  if (!now) return { overdue: 0, soon: 0 };
+  let overdue = 0;
+  let soon = 0;
+  for (const due of pendingDueAts) {
+    const s = getDueStatus(due, now, false);
+    if (s === "overdue") overdue += 1;
+    else if (s === "soon") soon += 1;
+  }
+  return { overdue, soon };
+}
 
 /**
  * クライアント一覧のテーブル表示(クライアントコンポーネント)
@@ -41,6 +63,8 @@ export function ClientsTable({ clients }: ClientsTableProps) {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  // 期限バッジ用の現在時刻(useSyncExternalStore で SSR null → マウント後 Date)
+  const now = useNow();
 
   const filteredSorted = useMemo(() => {
     let result = clients;
@@ -148,39 +172,57 @@ export function ClientsTable({ clients }: ClientsTableProps) {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredSorted.map((client) => (
-                <TableRow
-                  key={client.id}
-                  className="hover:bg-accent cursor-pointer"
-                  onClick={() => router.push(`/agency/clients/${client.id}`)}
-                >
-                  <TableCell className="font-medium">{client.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{client.email}</TableCell>
-                  <TableCell className="text-muted-foreground">{client.phone ?? "—"}</TableCell>
-                  <TableCell>
-                    <span className="bg-muted inline-block rounded-full px-2 py-0.5 text-xs whitespace-nowrap">
-                      {clientStatusLabels[client.status]}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={`inline-block rounded-full px-2 py-0.5 text-xs whitespace-nowrap ${
-                        client.linkStatus === "linked"
-                          ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {clientLinkStatusLabels[client.linkStatus]}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {client.assigneeName ?? "未割当"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground whitespace-nowrap">
-                    {new Date(client.createdAt).toLocaleDateString("ja-JP")}
-                  </TableCell>
-                </TableRow>
-              ))
+              filteredSorted.map((client) => {
+                const { overdue, soon } = countByDueStatus(client.pendingDueAts, now);
+                return (
+                  <TableRow
+                    key={client.id}
+                    className="hover:bg-accent cursor-pointer"
+                    onClick={() => router.push(`/agency/clients/${client.id}`)}
+                  >
+                    <TableCell className="font-medium">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span>{client.name}</span>
+                        {/* 期限超過・間近のバッジ。詳細画面のタスク色分けと同じトーン */}
+                        {overdue > 0 && (
+                          <span className="inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-red-700 dark:bg-red-950 dark:text-red-300">
+                            期限超過 {overdue}件
+                          </span>
+                        )}
+                        {soon > 0 && (
+                          <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                            まもなく {soon}件
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{client.email}</TableCell>
+                    <TableCell className="text-muted-foreground">{client.phone ?? "—"}</TableCell>
+                    <TableCell>
+                      <span className="bg-muted inline-block rounded-full px-2 py-0.5 text-xs whitespace-nowrap">
+                        {clientStatusLabels[client.status]}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={`inline-block rounded-full px-2 py-0.5 text-xs whitespace-nowrap ${
+                          client.linkStatus === "linked"
+                            ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {clientLinkStatusLabels[client.linkStatus]}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {client.assigneeName ?? "未割当"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground whitespace-nowrap">
+                      {new Date(client.createdAt).toLocaleDateString("ja-JP")}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>

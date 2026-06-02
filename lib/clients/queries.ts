@@ -6,7 +6,11 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
-import type { ClientRecord, ClientRecordWithAssignee } from "./types";
+import type {
+  ClientRecord,
+  ClientRecordWithAssignee,
+  ClientRecordWithAssigneeAndDues,
+} from "./types";
 
 type ClientRecordRow = {
   id: string;
@@ -128,6 +132,52 @@ export async function listClientRecordsWithAssignee(
     assigneeName: client.assignedMemberId
       ? (nameByMemberId.get(client.assignedMemberId) ?? null)
       : null,
+  }));
+}
+
+/**
+ * クライアント一覧 + 担当者名 + 「未完了タスクの期限リスト」
+ *
+ * N+1 回避のため、未完了タスクは organization スコープで「1回だけ」
+ * 取得し、JS で client_record_id ごとに集約する。
+ * タスクは 1 クライアントあたり数件想定なので、組織全体でも数百件以内が現実的。
+ *
+ * 期限超過/間近の判定はサーバではせず生の due_at のリストを返す。
+ * 理由:画面表示後しばらく経つと「今」がズレるため、判定はクライアント側で
+ * useNow と組み合わせて行う(期限色分けと同じ方針)。
+ */
+export async function listClientRecordsWithAssigneeAndDues(
+  organizationId: string,
+): Promise<ClientRecordWithAssigneeAndDues[]> {
+  const supabase = await createClient();
+
+  // 1. 既存ロジックでクライアント + 担当者名を取得
+  const clients = await listClientRecordsWithAssignee(organizationId);
+
+  // 2. 同 organization の未完了タスクを1クエリで取得
+  //    select は必要最小限(client_record_id と due_at のみ)
+  const { data: taskRows, error } = await supabase
+    .from("agency_tasks")
+    .select("client_record_id, due_at")
+    .eq("organization_id", organizationId)
+    .eq("status", "pending");
+
+  if (error || !taskRows) {
+    // タスク取得に失敗してもクライアント一覧自体は返す(バッジが出ないだけ)
+    return clients.map((c) => ({ ...c, pendingDueAts: [] }));
+  }
+
+  // 3. client_record_id ごとに due_at を寄せる
+  const duesByClientId = new Map<string, (string | null)[]>();
+  for (const row of taskRows as Array<{ client_record_id: string; due_at: string | null }>) {
+    const arr = duesByClientId.get(row.client_record_id) ?? [];
+    arr.push(row.due_at);
+    duesByClientId.set(row.client_record_id, arr);
+  }
+
+  return clients.map((c) => ({
+    ...c,
+    pendingDueAts: duesByClientId.get(c.id) ?? [],
   }));
 }
 

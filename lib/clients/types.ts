@@ -57,6 +57,15 @@ export type ClientRecordWithAssignee = ClientRecord & {
   assigneeName: string | null;
 };
 
+// クライアント一覧で「期限超過/間近」のバッジを出すために、未完了タスクの
+// 期限(due_at)のリストを付与した型。
+// 件数の判定は表示時点の現在時刻と比較するため、生の due_at のリストを保持し
+// 集計はクライアント側で行う(サーバ固定値だと時間が経つと古くなる)。
+// due_at が null のタスクも一律含む(間近/超過の判定対象外として扱う)。
+export type ClientRecordWithAssigneeAndDues = ClientRecordWithAssignee & {
+  pendingDueAts: (string | null)[];
+};
+
 // クライアント登録リクエスト
 export const createClientRequestSchema = z.object({
   name: z.string().min(1, "氏名を入力してください").max(100),
