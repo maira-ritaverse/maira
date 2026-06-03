@@ -55,7 +55,7 @@ export function ResumeTabs({
       </div>
 
       <div className={tab === "edit" ? "" : "hidden"}>
-        <ResumeForm mode="edit" existing={resume} />
+        <ResumeForm mode="edit" existing={resume} photoSignedUrl={photoSignedUrl} />
       </div>
       <div className={tab === "preview" ? "" : "hidden"}>
         <ResumePreview resume={resume} photoSignedUrl={photoSignedUrl} />

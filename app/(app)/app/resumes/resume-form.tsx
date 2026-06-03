@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { ImagePlusIcon } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -31,7 +32,9 @@ import {
  * (camelCase に変換するレイヤを増やさず、API への送信時にそのまま JSON にできる)
  */
 
-type Props = { mode: "create"; existing?: undefined } | { mode: "edit"; existing: Resume };
+type Props =
+  | { mode: "create"; existing?: undefined; photoSignedUrl?: undefined }
+  | { mode: "edit"; existing: Resume; photoSignedUrl: string | null };
 
 // 学歴・職歴/免許資格の年・月セレクタ用
 const YEAR_OPTIONS = (() => {
@@ -51,6 +54,8 @@ const GENDER_OPTIONS: { value: Gender; label: string }[] = [
 
 export function ResumeForm(props: Props) {
   const { mode, existing } = props;
+  // edit モードのみ写真の署名URLが渡ってくる。create モードは undefined。
+  const photoSignedUrl = mode === "edit" ? props.photoSignedUrl : null;
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -137,7 +142,11 @@ export function ResumeForm(props: Props) {
 
         {/* 写真。新規作成時は resumeId が未確定のため、まず保存してから */}
         {mode === "edit" && (
-          <ResumePhotoField resumeId={existing.id} initialPhotoUrl={existing.photoUrl} />
+          <ResumePhotoField
+            resumeId={existing.id}
+            initialPhotoUrl={existing.photoUrl}
+            initialPhotoSignedUrl={photoSignedUrl}
+          />
         )}
         {mode === "create" && (
           <p className="text-muted-foreground rounded border border-dashed p-3 text-xs">
@@ -613,15 +622,22 @@ function nullableNumber(value: unknown): number | null {
 }
 
 // ============================================
-// 写真アップロード UI
+// 写真アップロード UI(履歴書の写真欄スタイル)
 //
 // 編集モード限定。新規作成時は resumeId が未確定のため出さない。
 //
+// デザイン方針:
+//   - 履歴書の写真欄を模した「縦長 3:4」の大きな枠。
+//     枠全体が <label> でラップされており、スマホでも親指で押しやすい
+//     タップ領域(およそ 144 × 192px)。input は sr-only で隠す。
+//   - 写真なし時:点線枠 + アイコン + 「タップして写真を選ぶ」で意図を明確化。
+//   - 写真あり時:プレビューを 3:4 で表示(履歴書での見え方と同じ)。
+//     下の「変更 / 削除」で操作する。
+//
 // 動作:
-//   - ファイル選択 → クライアント側でサイズ・形式をチェック
-//   - 即時 POST /api/resumes/[id]/photo へ送信(サーバー側で sharp 最適化)
-//   - 成功:プレビュー(ローカル URL)を表示。photo_url は暗号化PIIに保存済み。
-//   - 表示用の署名URLは S3 で実装。S2 時点では「アップロード済み」のみ示す。
+//   - ファイル選択 → クライアント側で形式・サイズチェック → 即時 POST
+//   - サーバー側で sharp 最適化 → Storage 保存 → encrypted_pii に photo_url
+//   - リロード後の既存写真は initialPhotoSignedUrl(60分有効)で表示
 // ============================================
 const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 const PHOTO_ACCEPT = "image/jpeg,image/png";
@@ -629,13 +645,17 @@ const PHOTO_ACCEPT = "image/jpeg,image/png";
 function ResumePhotoField({
   resumeId,
   initialPhotoUrl,
+  initialPhotoSignedUrl,
 }: {
   resumeId: string;
+  // Storage パス(encrypted_pii 由来)。値の有無で「写真があるか」を判定する。
   initialPhotoUrl: string | null;
+  // 表示用の署名URL(60分)。リロード後も既存写真を 3:4 プレビューに出すために必要。
+  initialPhotoSignedUrl: string | null;
 }) {
   const [photoPath, setPhotoPath] = useState<string | null>(initialPhotoUrl);
   // ローカルプレビュー(アップロード直後の表示用)。
-  // S3 で署名URL対応するまでは、再読み込み後は表示できない(パスだけ持つ)。
+  // これがある間は署名URLより優先表示(差し替えが即時反映される)。
   const [localPreview, setLocalPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -647,6 +667,10 @@ function ResumePhotoField({
       if (localPreview) URL.revokeObjectURL(localPreview);
     };
   }, [localPreview]);
+
+  // 表示する画像 src(ローカル優先 → 既存写真の署名URL)。
+  // photoPath が null の場合(削除直後)はサーバー側に写真は存在しないので何も出さない。
+  const displaySrc = localPreview ?? (photoPath ? initialPhotoSignedUrl : null);
 
   const handleSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -724,52 +748,91 @@ function ResumePhotoField({
     }
   };
 
+  const hasPhoto = photoPath !== null;
+
   return (
     <div className="space-y-2">
       <Label>写真</Label>
-      <div className="flex items-start gap-4">
-        {/* プレビュー枠(縦長 3:4) */}
-        <div className="bg-muted/40 flex h-32 w-24 shrink-0 items-center justify-center overflow-hidden rounded border">
-          {localPreview ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={localPreview} alt="プレビュー" className="h-full w-full object-cover" />
-          ) : photoPath ? (
-            <span className="text-muted-foreground text-center text-[10px] leading-tight">
-              アップロード済み
-              <br />
-              (プレビューは
-              <br />
-              次バージョンで)
-            </span>
-          ) : (
-            <span className="text-muted-foreground text-xs">未登録</span>
-          )}
-        </div>
-
-        <div className="space-y-2">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-start sm:gap-4">
+        {/*
+          履歴書の写真欄に倣った 3:4 の大きなタップ領域。
+          <label> が <input type="file"> を sr-only で内包しているため、
+          枠のどこをタップしても OS のファイル選択が開く(スマホでも親指で
+          押しやすい大きさ)。focus-within で input にキーボードフォーカスが
+          入ったとき枠もハイライトされる。
+        */}
+        <label
+          className={`focus-within:ring-ring/40 group relative block aspect-3/4 w-36 overflow-hidden rounded-md transition focus-within:ring-2 focus-within:ring-offset-2 ${
+            hasPhoto
+              ? "border-input bg-muted/30 border"
+              : "border-muted-foreground/30 hover:border-muted-foreground/60 hover:bg-muted/40 border-2 border-dashed"
+          } ${isUploading ? "cursor-wait" : "cursor-pointer"}`}
+          aria-label={hasPhoto ? "写真を変更" : "写真を選ぶ"}
+        >
           <input
             ref={fileInputRef}
             type="file"
             accept={PHOTO_ACCEPT}
             onChange={handleSelect}
             disabled={isUploading}
-            className="text-sm"
+            className="sr-only"
           />
-          <p className="text-muted-foreground text-xs">
+          {displaySrc ? (
+            // 履歴書での見え方と同じ object-cover(3:4 にトリミング)
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={displaySrc} alt="本人写真" className="h-full w-full object-cover" />
+          ) : hasPhoto ? (
+            // photoPath はあるが署名URL発行に失敗したケース(滅多にない)
+            <div className="text-muted-foreground flex h-full w-full flex-col items-center justify-center gap-1 px-2 text-center text-[10px]">
+              <span>写真あり</span>
+              <span>(表示準備中)</span>
+            </div>
+          ) : (
+            <div className="text-muted-foreground flex h-full w-full flex-col items-center justify-center gap-2 px-3 text-center">
+              <ImagePlusIcon className="size-7" aria-hidden />
+              <span className="text-foreground text-xs font-medium">タップして写真を選ぶ</span>
+              <span className="text-[10px] leading-tight">履歴書の写真欄に入ります</span>
+            </div>
+          )}
+
+          {/* 処理中オーバーレイ。タップを視覚的にブロック(disabled は input 側で済) */}
+          {isUploading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-xs">
+              処理中...
+            </div>
+          )}
+        </label>
+
+        <div className="space-y-2 text-xs">
+          <p className="text-muted-foreground">
             JPG / PNG、5MB 以下。サーバーで証明写真サイズ(3:4)に自動最適化されます
           </p>
-          {photoPath && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleDelete}
-              disabled={isUploading}
-            >
-              写真を削除
-            </Button>
+          {hasPhoto && (
+            <div className="flex flex-wrap gap-2">
+              {/*
+                変更:枠タップと同等の動作。視覚的な明示のため別ボタンも用意する。
+                label 内に置くと「削除」と分離しづらいので label の外側に出す。
+              */}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+              >
+                変更
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleDelete}
+                disabled={isUploading}
+              >
+                削除
+              </Button>
+            </div>
           )}
-          {isUploading && <p className="text-muted-foreground text-xs">処理中...</p>}
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
       </div>
