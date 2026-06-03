@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { SignupInput, LoginInput } from "@/lib/validations/auth";
+import { safeNextOr } from "@/lib/auth/safe-next";
 
 /**
  * 新規登録 Server Action
@@ -48,10 +49,16 @@ export async function signup(input: SignupInput) {
 /**
  * ログイン Server Action
  *
- * 成功時はlayoutキャッシュを破棄して /app にリダイレクトする。
+ * 成功時はlayoutキャッシュを破棄して next(既定 /app)にリダイレクトする。
  * 失敗時はエラーメッセージを返す(クライアント側で表示)。
+ *
+ * next の用途:
+ *   招待リンクから /auth/login?next=/invite/[token] に来たユーザーを、
+ *   ログイン成功後に着地ページへ戻すため。検証は safeNextOr に任せ、
+ *   外部 URL や scheme-relative は捨てて /app にフォールバックする
+ *   (open redirect 対策)。
  */
-export async function login(input: LoginInput) {
+export async function login(input: LoginInput, next?: string | null) {
   const supabase = await createClient();
 
   const { error } = await supabase.auth.signInWithPassword({
@@ -64,7 +71,7 @@ export async function login(input: LoginInput) {
   }
 
   revalidatePath("/", "layout");
-  redirect("/app");
+  redirect(safeNextOr(next, "/app"));
 }
 
 /**

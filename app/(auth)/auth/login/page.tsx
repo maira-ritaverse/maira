@@ -15,10 +15,16 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 /**
  * useSearchParams() を使うため、Next.js 15+ では静的レンダリング時に
  * Suspense境界で包む必要がある。ページ本体は内側のコンポーネントに分離する。
+ *
+ * next パラメータ(招待リンクからの導線で使用):
+ *   /auth/login?next=/invite/[token] の形で渡され、ログイン成功後に
+ *   その URL へ戻る。検証は Server Action 側(safeNextOr)で行うため、
+ *   ここでは生の文字列をそのまま渡してよい。
  */
 function LoginForm() {
   const searchParams = useSearchParams();
   const errorParam = searchParams.get("error");
+  const nextParam = searchParams.get("next");
 
   const [isPending, setIsPending] = useState(false);
   const [serverError, setServerError] = useState<string | null>(
@@ -37,7 +43,7 @@ function LoginForm() {
     setIsPending(true);
     setServerError(null);
 
-    const result = await login(data);
+    const result = await login(data, nextParam);
 
     // 成功時はlogin Server Action内でredirectされるため、ここに到達するのはエラー時のみ
     if (result?.error) {

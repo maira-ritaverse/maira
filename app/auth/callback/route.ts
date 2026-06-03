@@ -1,29 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-
-/**
- * next パラメータの安全性チェック。
- * 同一オリジン内のパス(/ から始まる、// で始まらない、プロトコル無し)のみ許可。
- *
- * なぜ厳しめに:
- *   next は招待リンク → サインアップ → callback で /invite/[token] に
- *   戻すために使うが、ここを緩めると open redirect(任意の外部 URL へ飛ばす)に
- *   なってフィッシングに利用されうる。同一オリジン内パスに限定する。
- *
- * 例:
- *   "/invite/abc"           → OK
- *   "/app"                  → OK
- *   "//evil.com/x"          → NG(scheme-relative)
- *   "https://evil.com/x"    → NG
- *   "/auth/login?next=/x"   → OK(クエリ付きでも origin 内)
- */
-function isSafeNextPath(next: string | null): next is string {
-  if (!next) return false;
-  if (!next.startsWith("/")) return false;
-  if (next.startsWith("//")) return false;
-  if (next.includes("\\")) return false;
-  return true;
-}
+import { safeNextOr } from "@/lib/auth/safe-next";
 
 /**
  * Supabaseからのメール確認後のコールバックハンドラ
@@ -42,8 +19,7 @@ function isSafeNextPath(next: string | null): next is string {
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const nextRaw = searchParams.get("next");
-  const next = isSafeNextPath(nextRaw) ? nextRaw : "/app";
+  const next = safeNextOr(searchParams.get("next"), "/app");
 
   if (code) {
     const supabase = await createClient();

@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { safeNextOr } from "@/lib/auth/safe-next";
 
 /**
  * Next.jsのmiddlewareで使用するSupabaseクライアントとセッション更新ヘルパー
@@ -58,12 +59,18 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // /auth配下(callbackを除く):未認証者専用(既ログインなら /app へ)
+  // /auth配下(callbackを除く):未認証者専用(既ログインなら通常 /app へ)
   // callbackはセッション交換中なので除外しないとループする
+  //
+  // 例外:?next= が同一オリジン内パスなら、そちらを優先する。
+  //   招待リンク経由(/auth/login?next=/invite/X)で既にログイン済みの場合に、
+  //   /app に飛ばしてしまうと招待フローから脱落するため、next を尊重して
+  //   そのまま着地ページに送り直す。open redirect は safeNextOr で阻止。
   if (pathname.startsWith("/auth") && !pathname.startsWith("/auth/callback") && user) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/app";
-    return NextResponse.redirect(url);
+    const nextParam = request.nextUrl.searchParams.get("next");
+    const target = safeNextOr(nextParam, "/app");
+    // target はクエリを含む可能性があるため、相対 URL として origin と結合する。
+    return NextResponse.redirect(new URL(target, request.nextUrl.origin));
   }
 
   return supabaseResponse;
