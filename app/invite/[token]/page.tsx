@@ -114,8 +114,11 @@ export default async function InviteLandingPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  // 未ログイン → 登録/ログイン案内(S5b/S5c で導線実装)
+  // 未ログイン → 登録/ログイン案内(S5b で signup 統合済み、S5c でログイン統合予定)
   if (!user) {
+    // ログイン側は S5c で next 対応を入れる予定。S5b 時点では参考リンクとして
+    // 同じ next クエリだけ付けておく(callback 経由でない通常ログインなので、
+    // /auth/login 側で next を読んで遷移するのは S5c の責務)。
     const nextParam = encodeURIComponent(`/invite/${token}`);
     return (
       <CenteredCard>
@@ -138,7 +141,7 @@ export default async function InviteLandingPage({
               ログイン
             </Button>
             <Button
-              render={<Link href={`/auth/signup?next=${nextParam}`} />}
+              render={<Link href={`/auth/signup?invitationToken=${token}`} />}
               variant="outline"
               className="flex-1"
             >

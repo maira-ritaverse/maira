@@ -16,6 +16,13 @@ export const signupSchema = z.object({
     .string()
     .min(1, "表示名を入力してください")
     .max(50, "表示名は50文字以内で入力してください"),
+  /**
+   * 招待トークン(任意)。
+   * 渡された場合、サインアップ → メール確認 → callback で
+   * /invite/[token] に戻すために emailRedirectTo に埋め込む。
+   * email 自体の正当性チェックは callback 後の RPC で行う。
+   */
+  invitationToken: z.string().min(1).max(256).optional(),
 });
 
 export type SignupInput = z.infer<typeof signupSchema>;
