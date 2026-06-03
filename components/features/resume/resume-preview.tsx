@@ -21,6 +21,9 @@ import { genderLabels, type Resume } from "@/lib/resumes/types";
 
 type Props = {
   resume: Resume;
+  // 写真の表示用 URL(private バケットの署名URL)。null の場合はプレースホルダ表示。
+  // resume.photoUrl は Storage パスなので img の src には直接使えない。
+  photoSignedUrl: string | null;
 };
 
 // A4 縦の物理寸法。CSS の mm はそのまま物理 mm を表すので、画面と
@@ -35,7 +38,7 @@ const ROWS_HISTORY_PAGE_1 = 15;
 const ROWS_HISTORY_PAGE_2 = 8;
 const ROWS_LICENSE = 8;
 
-export function ResumePreview({ resume }: Props) {
+export function ResumePreview({ resume, photoSignedUrl }: Props) {
   const allHistory = resume.educationHistory;
   const historyPage1 = allHistory.slice(0, ROWS_HISTORY_PAGE_1);
   const historyPage2 = allHistory.slice(
@@ -57,7 +60,7 @@ export function ResumePreview({ resume }: Props) {
       >
         {/* ===== 1 ページ目 ===== */}
         <Page>
-          <HeaderAndBasicInfo resume={resume} />
+          <HeaderAndBasicInfo resume={resume} photoSignedUrl={photoSignedUrl} />
           <HistoryTable rows={padRows(historyPage1, ROWS_HISTORY_PAGE_1)} showHeader />
           <Footnote>※「性別」欄:記載は任意です。未記載とすることも可能です。</Footnote>
         </Page>
@@ -107,7 +110,13 @@ function Page({ children }: { children: React.ReactNode }) {
 // ここでは flex で 2 カラムに分け、右側を写真セルとして固定幅にする。
 // ====================================================================
 
-function HeaderAndBasicInfo({ resume }: { resume: Resume }) {
+function HeaderAndBasicInfo({
+  resume,
+  photoSignedUrl,
+}: {
+  resume: Resume;
+  photoSignedUrl: string | null;
+}) {
   const age = calcAge(resume.birthDate);
   const genderLabel = resume.gender ? genderLabels[resume.gender] : "";
 
@@ -152,7 +161,7 @@ function HeaderAndBasicInfo({ resume }: { resume: Resume }) {
 
         {/* 右カラム:写真欄(縦長) */}
         <div className="flex w-[120px] shrink-0 items-stretch justify-center border-l border-black">
-          <PhotoBox photoUrl={resume.photoUrl} />
+          <PhotoBox photoUrl={photoSignedUrl} />
         </div>
       </div>
 

@@ -1,5 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { getResume } from "@/lib/resumes/queries";
+import {
+  createResumePhotoSignedUrl,
+  PHOTO_SIGNED_URL_PDF_EXPIRES_SEC,
+} from "@/lib/resumes/photo-signed-url";
 import { buildResumeHtml } from "@/lib/resumes/resume-html";
 import { generatePdfFromHtml } from "@/lib/pdf/generate";
 
@@ -40,7 +44,14 @@ export async function GET(_request: Request, { params }: RouteParams) {
   }
 
   try {
-    const html = buildResumeHtml(resume);
+    // 写真は private バケットなので、PDF 生成直前に短命の署名URLを発行して
+    // HTML に埋め込む。Puppeteer は networkidle0 まで待つため生成中に取得され、
+    // 直後には URL が失効する(漏れても再利用されにくい)。
+    const photoSignedUrl = resume.photoUrl
+      ? await createResumePhotoSignedUrl(resume.photoUrl, PHOTO_SIGNED_URL_PDF_EXPIRES_SEC)
+      : null;
+
+    const html = buildResumeHtml(resume, { photoSignedUrl });
     const pdf = await generatePdfFromHtml(html);
 
     // ファイル名は title + 拡張子。安全のため英数とハイフン以外は除去する。

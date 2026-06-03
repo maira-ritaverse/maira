@@ -20,7 +20,15 @@ import { ResumeForm } from "../resume-form";
  * 編集中の見た目を見たい場合は一度保存してからプレビューに切り替える運用。
  * — フォームの値を Resume に逐次変換するのは複雑かつ Phase 2-A の目的外。
  */
-export function ResumeTabs({ resume }: { resume: Resume }) {
+export function ResumeTabs({
+  resume,
+  photoSignedUrl,
+}: {
+  resume: Resume;
+  // 写真の署名付き URL(private バケットのため img の src に直接 photoUrl は使えない)。
+  // page.tsx(Server Component)で本人のセッション経由で発行された URL を受け取る。
+  photoSignedUrl: string | null;
+}) {
   const [tab, setTab] = useState<"edit" | "preview">("edit");
 
   return (
@@ -50,7 +58,7 @@ export function ResumeTabs({ resume }: { resume: Resume }) {
         <ResumeForm mode="edit" existing={resume} />
       </div>
       <div className={tab === "preview" ? "" : "hidden"}>
-        <ResumePreview resume={resume} />
+        <ResumePreview resume={resume} photoSignedUrl={photoSignedUrl} />
       </div>
     </div>
   );

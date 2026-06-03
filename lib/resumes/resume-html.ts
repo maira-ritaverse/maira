@@ -27,7 +27,16 @@ const ROWS_HISTORY_PAGE_1 = 15;
 const ROWS_HISTORY_PAGE_2 = 8;
 const ROWS_LICENSE = 8;
 
-export function buildResumeHtml(resume: Resume): string {
+/**
+ * 写真の表示は private バケットのため、PDF 生成直前に発行した短命の署名URLを
+ * 受け取り、img の src に埋め込む(resume.photoUrl は Storage パスでしかない)。
+ * null の場合はプレースホルダを表示する。
+ */
+export type BuildResumeHtmlOptions = {
+  photoSignedUrl: string | null;
+};
+
+export function buildResumeHtml(resume: Resume, options: BuildResumeHtmlOptions): string {
   const age = calcAge(resume.birthDate);
   const genderLabel = resume.gender ? genderLabels[resume.gender] : "";
   const birthDateText = formatBirthDate(resume.birthDate, age);
@@ -365,7 +374,7 @@ export function buildResumeHtml(resume: Resume): string {
         </div>
       </div>
       <div class="basic-right">
-        ${renderPhotoBox(resume.photoUrl)}
+        ${renderPhotoBox(options.photoSignedUrl)}
       </div>
     </div>
 
@@ -426,8 +435,9 @@ export function buildResumeHtml(resume: Resume): string {
 
 function renderPhotoBox(photoUrl: string | null): string {
   if (photoUrl) {
-    // 注:photoUrl が外部 URL の場合、Puppeteer の networkidle0 待ちで取得される。
-    // 値はユーザー由来なので必ずエスケープ。
+    // 注:この URL は Supabase の短命署名URL(発行から数分で失効)。
+    // Puppeteer は networkidle0 で待つため、生成中に取得が完了する。
+    // 値は内部生成だが念のためエスケープ(将来パス源が広がった時の防御)。
     return `<div class="photo-box"><img src="${escapeHtml(photoUrl)}" alt="本人写真" class="photo-img"></div>`;
   }
   // 厚労省様式の規定寸法。原本注記をそのまま再現することで本人の貼り間違いを防ぐ。
