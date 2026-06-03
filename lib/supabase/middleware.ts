@@ -42,6 +42,15 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
+  // /invite/[token] は公開ルート:ログイン有無どちらでも素通し。
+  // - 未ログイン:着地ページで「ログイン/登録して下さい」を表示するため
+  // - ログイン済み:同じ着地ページで「受諾する」or「メール不一致でログアウト」を表示するため
+  //   /auth 配下ではないので「ログイン済みは /app に飛ばす」ルールは元々当たらないが、
+  //   将来の正規化(例:/auth/invite に統合)時の事故を防ぐため、明示的に早期 return する。
+  if (pathname.startsWith("/invite/")) {
+    return supabaseResponse;
+  }
+
   // /app配下:認証必須(未ログインなら /auth/login へ)
   if (pathname.startsWith("/app") && !user) {
     const url = request.nextUrl.clone();
