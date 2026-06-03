@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useFieldArray, useForm } from "react-hook-form";
@@ -134,6 +134,16 @@ export function ResumeForm(props: Props) {
             必須はタイトルのみ。他は途中まで入力して保存できます(下書き)
           </p>
         </div>
+
+        {/* 写真。新規作成時は resumeId が未確定のため、まず保存してから */}
+        {mode === "edit" && (
+          <ResumePhotoField resumeId={existing.id} initialPhotoUrl={existing.photoUrl} />
+        )}
+        {mode === "create" && (
+          <p className="text-muted-foreground rounded border border-dashed p-3 text-xs">
+            写真はまず一度保存してから、編集画面でアップロードできます
+          </p>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
           <div className="space-y-2">
@@ -600,4 +610,169 @@ function nullableNumber(value: unknown): number | null {
   if (value === "" || value === null || value === undefined) return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+// ============================================
+// 写真アップロード UI
+//
+// 編集モード限定。新規作成時は resumeId が未確定のため出さない。
+//
+// 動作:
+//   - ファイル選択 → クライアント側でサイズ・形式をチェック
+//   - 即時 POST /api/resumes/[id]/photo へ送信(サーバー側で sharp 最適化)
+//   - 成功:プレビュー(ローカル URL)を表示。photo_url は暗号化PIIに保存済み。
+//   - 表示用の署名URLは S3 で実装。S2 時点では「アップロード済み」のみ示す。
+// ============================================
+const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+const PHOTO_ACCEPT = "image/jpeg,image/png";
+
+function ResumePhotoField({
+  resumeId,
+  initialPhotoUrl,
+}: {
+  resumeId: string;
+  initialPhotoUrl: string | null;
+}) {
+  const [photoPath, setPhotoPath] = useState<string | null>(initialPhotoUrl);
+  // ローカルプレビュー(アップロード直後の表示用)。
+  // S3 で署名URL対応するまでは、再読み込み後は表示できない(パスだけ持つ)。
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // FileReader URL は手動 revoke しないとリークするため、入れ替わり/アンマウント時に開放する。
+  useEffect(() => {
+    return () => {
+      if (localPreview) URL.revokeObjectURL(localPreview);
+    };
+  }, [localPreview]);
+
+  const handleSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setError(null);
+
+    // クライアント側で先にチェック(サーバーまで送らずに即フィードバック)
+    if (!PHOTO_ACCEPT.split(",").includes(file.type)) {
+      setError("対応形式は JPG / PNG のみです");
+      event.target.value = "";
+      return;
+    }
+    if (file.size > PHOTO_MAX_BYTES) {
+      setError(`ファイルサイズは ${PHOTO_MAX_BYTES / 1024 / 1024}MB 以下にしてください`);
+      event.target.value = "";
+      return;
+    }
+
+    // 前のローカル URL を開放してから差し替え
+    if (localPreview) URL.revokeObjectURL(localPreview);
+    const objectUrl = URL.createObjectURL(file);
+    setLocalPreview(objectUrl);
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch(`/api/resumes/${resumeId}/photo`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as {
+          error?: string;
+          message?: string;
+        };
+        throw new Error(data.message ?? data.error ?? "アップロード失敗");
+      }
+      const data = (await response.json()) as { photo_url: string };
+      setPhotoPath(data.photo_url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+      // 失敗時はローカルプレビューも消す
+      URL.revokeObjectURL(objectUrl);
+      setLocalPreview(null);
+    } finally {
+      setIsUploading(false);
+      // 同じファイル名を再選択しても onChange が発火するようリセット
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm("写真を削除しますか?")) return;
+    setError(null);
+    setIsUploading(true);
+    try {
+      const response = await fetch(`/api/resumes/${resumeId}/photo`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as {
+          error?: string;
+          message?: string;
+        };
+        throw new Error(data.message ?? data.error ?? "削除失敗");
+      }
+      setPhotoPath(null);
+      if (localPreview) URL.revokeObjectURL(localPreview);
+      setLocalPreview(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label>写真</Label>
+      <div className="flex items-start gap-4">
+        {/* プレビュー枠(縦長 3:4) */}
+        <div className="bg-muted/40 flex h-32 w-24 shrink-0 items-center justify-center overflow-hidden rounded border">
+          {localPreview ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={localPreview} alt="プレビュー" className="h-full w-full object-cover" />
+          ) : photoPath ? (
+            <span className="text-muted-foreground text-center text-[10px] leading-tight">
+              アップロード済み
+              <br />
+              (プレビューは
+              <br />
+              次バージョンで)
+            </span>
+          ) : (
+            <span className="text-muted-foreground text-xs">未登録</span>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={PHOTO_ACCEPT}
+            onChange={handleSelect}
+            disabled={isUploading}
+            className="text-sm"
+          />
+          <p className="text-muted-foreground text-xs">
+            JPG / PNG、5MB 以下。サーバーで証明写真サイズ(3:4)に自動最適化されます
+          </p>
+          {photoPath && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleDelete}
+              disabled={isUploading}
+            >
+              写真を削除
+            </Button>
+          )}
+          {isUploading && <p className="text-muted-foreground text-xs">処理中...</p>}
+          {error && <p className="text-sm text-red-600">{error}</p>}
+        </div>
+      </div>
+    </div>
+  );
 }

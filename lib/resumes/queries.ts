@@ -100,6 +100,10 @@ export async function createResume(userId: string, input: SaveResumeRequest): Pr
 //
 // 履歴書フォームは常に全項目を送る前提なので、blob を毎回作り直す。
 // 部分更新には対応しない(下書きセマンティクスは UI 側で吸収する)。
+//
+// 例外:photo_url はフォームから送られない(別 API でアップロード)ため、
+// 既存値を読み出して維持する。これをやらないとフォーム保存のたびに
+// 写真が消える。
 // ============================================
 export async function updateResume(
   resumeId: string,
@@ -108,7 +112,12 @@ export async function updateResume(
 ): Promise<void> {
   const supabase = await createClient();
 
-  const encryptedPii = await buildEncryptedPii(input);
+  // 写真パスは別 API(/api/resumes/[id]/photo)で管理しているため、
+  // フォーム保存時に上書きされないよう既存値を carry-over する。
+  const existing = await getResume(resumeId, userId);
+  const encryptedPii = await buildEncryptedPii(input, {
+    photo_url: existing?.photoUrl ?? null,
+  });
 
   const updates = {
     title: input.title,
@@ -125,6 +134,66 @@ export async function updateResume(
 
   if (error) {
     throw new Error(`Failed to update resume: ${error.message}`);
+  }
+}
+
+// ============================================
+// 写真パスだけを更新
+//
+// アップロード/削除 API から呼ぶ。フォーム保存とは独立して、
+// encrypted_pii 内の photo_url だけを差し替える。
+// 他の PII フィールドは既存値を維持する(decrypt → 差し替え → re-encrypt)。
+// ============================================
+export async function updateResumePhotoPath(
+  resumeId: string,
+  userId: string,
+  photoPath: string | null,
+): Promise<void> {
+  const supabase = await createClient();
+
+  const existing = await getResume(resumeId, userId);
+  if (!existing) {
+    throw new Error(`Resume ${resumeId} not found`);
+  }
+
+  // 既存 PII を camelCase の Resume から snake_case の ResumePii に詰め直す。
+  // photo_url だけ差し替え、他は維持する。
+  const pii: ResumePii = {
+    name: existing.name,
+    name_kana: existing.nameKana,
+    birth_date: existing.birthDate,
+    gender: existing.gender,
+    postal_code: existing.postalCode,
+    address: existing.address,
+    address_kana: existing.addressKana,
+    phone: existing.phone,
+    email: existing.email,
+    contact_address: existing.contactAddress,
+    contact_address_kana: existing.contactAddressKana,
+    contact_phone: existing.contactPhone,
+    photo_url: photoPath,
+    education_history: existing.educationHistory,
+    licenses: existing.licenses,
+    motivation_note: existing.motivationNote,
+    personal_requests: existing.personalRequests,
+  };
+
+  const encrypted = await encryptField(serializeResumePii(pii));
+  if (typeof encrypted !== "string" || encrypted.length === 0) {
+    throw new Error("encryptField が photo_url 更新 payload に対して空文字を返しました。");
+  }
+
+  const { error } = await supabase
+    .from("resumes")
+    .update({
+      encrypted_pii: encrypted,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", resumeId)
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error(`Failed to update photo path: ${error.message}`);
   }
 }
 
@@ -234,10 +303,21 @@ async function mapResumeRow(row: ResumeRow): Promise<Resume> {
  *
  * 入力が空に近くても必ず "{...}" の JSON を作るため、encryptField の空文字
  * 素通り挙動には引っかからない。型上の保証として絞っておく。
+ *
+ * carryOver:
+ *   フォームに含まれないが encrypted_pii に保持したいフィールドを上書きする。
+ *   現状は photo_url のみ(別 API でアップロード管理)。
  */
-async function buildEncryptedPii(input: SaveResumeRequest): Promise<string> {
+async function buildEncryptedPii(
+  input: SaveResumeRequest,
+  carryOver?: { photo_url?: string | null },
+): Promise<string> {
   // SaveResumeRequest をそのまま渡せるよう Record<string, unknown> として扱う。
-  const pii = pickResumePii(input as unknown as Record<string, unknown>);
+  const source: Record<string, unknown> = { ...input };
+  if (carryOver?.photo_url !== undefined) {
+    source.photo_url = carryOver.photo_url;
+  }
+  const pii = pickResumePii(source);
   const json = serializeResumePii(pii);
   const encrypted = await encryptField(json);
   if (typeof encrypted !== "string" || encrypted.length === 0) {

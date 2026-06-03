@@ -168,6 +168,125 @@ describe("queries.ts - blob-only 書き込み", () => {
     await createResume("user-1", { ...SAMPLE_INPUT, document_date: "  " });
     expect(state.insertedRow?.document_date).toBeNull();
   });
+
+  // ============================================
+  // photo_url は SaveResumeRequest に含まれない。
+  // フォーム保存(updateResume)時に消えないよう、既存 blob から
+  // carry-over する仕様の検証。S2(写真アップロード)で導入。
+  // ============================================
+  it("updateResume は既存の photo_url を維持する(フォームに含まれない PII を消さない)", async () => {
+    const { encryptField, decryptField } = await import("@/lib/crypto/field-encryption");
+    const { serializeResumePii, pickResumePii, deserializeResumePii } =
+      await import("./pii-fields");
+    const { updateResume } = await import("./queries");
+
+    // 既存行に photo_url を持たせる
+    const existingPii = pickResumePii({
+      name: "既存 太郎",
+      photo_url: "user-1/resume-1/photo.jpg",
+    });
+    const existingEncrypted = await encryptField(serializeResumePii(existingPii));
+
+    state.selectedRow = {
+      id: "resume-1",
+      user_id: "user-1",
+      title: "既存",
+      document_date: null,
+      encrypted_pii: existingEncrypted,
+      created_at: "2026-06-01T00:00:00Z",
+      updated_at: "2026-06-01T00:00:00Z",
+    };
+
+    // SAMPLE_INPUT には photo_url が無い(SaveResumeRequest の仕様)
+    await updateResume("resume-1", "user-1", SAMPLE_INPUT);
+
+    expect(state.updatedValues).not.toBeNull();
+    const decrypted = await decryptField(state.updatedValues?.encrypted_pii as string);
+    const newPii = deserializeResumePii(decrypted as string);
+    // photo_url は既存値を維持
+    expect(newPii.photo_url).toBe("user-1/resume-1/photo.jpg");
+    // 他は SAMPLE_INPUT で上書きされる
+    expect(newPii.name).toBe(SAMPLE_INPUT.name);
+    expect(newPii.email).toBe(SAMPLE_INPUT.email);
+  });
+});
+
+// ============================================
+// 写真パス更新(S2 で導入)
+// ============================================
+describe("queries.ts - updateResumePhotoPath", () => {
+  it("photo_url を差し替え、他の PII フィールドは既存値を維持する", async () => {
+    const { encryptField, decryptField } = await import("@/lib/crypto/field-encryption");
+    const { serializeResumePii, pickResumePii, deserializeResumePii } =
+      await import("./pii-fields");
+    const { updateResumePhotoPath } = await import("./queries");
+
+    const existingPii = pickResumePii({
+      name: "山田",
+      email: "yamada@example.com",
+      photo_url: null,
+      education_history: [{ year: 2020, month: 3, description: "卒業" }],
+    });
+    const existingEncrypted = await encryptField(serializeResumePii(existingPii));
+
+    state.selectedRow = {
+      id: "resume-1",
+      user_id: "user-1",
+      title: "既存",
+      document_date: null,
+      encrypted_pii: existingEncrypted,
+      created_at: "2026-06-01T00:00:00Z",
+      updated_at: "2026-06-01T00:00:00Z",
+    };
+
+    await updateResumePhotoPath("resume-1", "user-1", "user-1/resume-1/photo.jpg");
+
+    expect(state.updatedValues).not.toBeNull();
+    const decrypted = await decryptField(state.updatedValues?.encrypted_pii as string);
+    const pii = deserializeResumePii(decrypted as string);
+    expect(pii.photo_url).toBe("user-1/resume-1/photo.jpg");
+    expect(pii.name).toBe("山田");
+    expect(pii.email).toBe("yamada@example.com");
+    expect(pii.education_history).toEqual([{ year: 2020, month: 3, description: "卒業" }]);
+  });
+
+  it("null を渡すと photo_url を消す(削除フロー)", async () => {
+    const { encryptField, decryptField } = await import("@/lib/crypto/field-encryption");
+    const { serializeResumePii, pickResumePii, deserializeResumePii } =
+      await import("./pii-fields");
+    const { updateResumePhotoPath } = await import("./queries");
+
+    const existingPii = pickResumePii({
+      name: "山田",
+      photo_url: "user-1/resume-1/photo.jpg",
+    });
+    const existingEncrypted = await encryptField(serializeResumePii(existingPii));
+
+    state.selectedRow = {
+      id: "resume-1",
+      user_id: "user-1",
+      title: "既存",
+      document_date: null,
+      encrypted_pii: existingEncrypted,
+      created_at: "2026-06-01T00:00:00Z",
+      updated_at: "2026-06-01T00:00:00Z",
+    };
+
+    await updateResumePhotoPath("resume-1", "user-1", null);
+
+    const decrypted = await decryptField(state.updatedValues?.encrypted_pii as string);
+    const pii = deserializeResumePii(decrypted as string);
+    expect(pii.photo_url).toBeNull();
+    expect(pii.name).toBe("山田");
+  });
+
+  it("存在しない resume には throw する", async () => {
+    const { updateResumePhotoPath } = await import("./queries");
+    state.selectedRow = null;
+    await expect(updateResumePhotoPath("missing", "user-1", "path/x.jpg")).rejects.toThrow(
+      /missing/,
+    );
+  });
 });
 
 // ============================================
