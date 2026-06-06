@@ -29,6 +29,18 @@ export const aptitudeStrengthLabels: Record<AptitudeFactor, string> = {
   stability: "冷静さ・ストレス耐性",
 };
 
+// 因子ごとの表示色。--chart-1〜5(globals.css 定義済み・ダーク/ライト両対応)を
+// 順番固定で割当てる。レーダーチャートのドット/軸ラベルと、強みバッジで共通に
+// 使い、「この色 = この因子」を視覚的に紐付けるための単一のソース。
+// 順番を変えると見え方が変わるので、ここを唯一の真実とする。
+export const aptitudeFactorChartVars: Record<AptitudeFactor, string> = {
+  openness: "var(--chart-1)",
+  conscientiousness: "var(--chart-2)",
+  extraversion: "var(--chart-3)",
+  agreeableness: "var(--chart-4)",
+  stability: "var(--chart-5)",
+};
+
 export const aptitudeQuestions: AptitudeQuestion[] = [
   { id: "ap01", factor: "openness", text: "新しいことや、やったことのない方法に挑戦するのが好き" },
   { id: "ap02", factor: "openness", text: "決まったやり方より、工夫や改善を考えるのが楽しい" },

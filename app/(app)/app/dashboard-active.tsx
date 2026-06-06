@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AptitudeRadar } from "@/components/features/diagnosis/aptitude-radar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { applicationStatusLabels } from "@/lib/applications/types";
+import { applicationStatusBadgeClasses, applicationStatusLabels } from "@/lib/applications/types";
 import { axisTypeLabels } from "@/lib/diagnosis/axis-questions";
 import { DashboardSuggestions } from "./dashboard-suggestions";
 import { generateSuggestions } from "@/lib/dashboard/suggestions";
@@ -27,103 +27,119 @@ export function DashboardActive({ data }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* キャリアサマリー(コンパクト版) */}
-      {data.career.profileData && (
-        <Card className="border-primary/40 bg-primary/5 p-4">
-          <div className="flex items-center justify-between gap-4">
-            <p className="line-clamp-2 flex-1 text-sm">{data.career.profileData.summary}</p>
-            <Button render={<Link href="/app/career" />} variant="outline" size="sm">
-              詳細
-            </Button>
-          </div>
-        </Card>
-      )}
+      {/* 上段:キャリアサマリー + 診断サムネを横並び(lg 以上)。
+          関連情報を近くに置いて視線移動を減らす。モバイルは縦。 */}
+      <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
+        {/* キャリアサマリー(コンパクト版) */}
+        {data.career.profileData && (
+          <Card className="border-primary/40 bg-primary/5 p-4">
+            <div className="flex h-full items-center justify-between gap-4">
+              <p className="line-clamp-3 flex-1 text-sm">{data.career.profileData.summary}</p>
+              <Button render={<Link href="/app/career" />} variant="outline" size="sm">
+                詳細
+              </Button>
+            </div>
+          </Card>
+        )}
 
-      {/* 診断結果コンパクト表示(active は応募中心のため、サムネ的に表示) */}
-      {diagnosis && (
-        <Card className="p-4">
-          <div className="flex items-center gap-4">
-            {/* ラベル省略の小サイズレーダー */}
-            <div className="aspect-square w-24 shrink-0">
-              <AptitudeRadar scores={diagnosis.aptitude.scores} showLabels={false} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-muted-foreground text-xs">あなたの軸</p>
-              <p className="truncate text-sm font-semibold">
-                {axisTypeLabels[diagnosis.axis.primary]}
-              </p>
-              {diagnosis.axis.secondary && (
-                <p className="text-muted-foreground mt-0.5 truncate text-xs">
-                  次いで {axisTypeLabels[diagnosis.axis.secondary]}
+        {/* 診断結果コンパクト表示(active は応募中心のため、サムネ的に表示) */}
+        {diagnosis && (
+          <Card className="p-4">
+            <div className="flex h-full items-center gap-4">
+              {/* ラベル省略の小サイズレーダー */}
+              <div className="aspect-square w-24 shrink-0">
+                <AptitudeRadar scores={diagnosis.aptitude.scores} showLabels={false} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-muted-foreground text-xs">あなたの軸</p>
+                <p className="truncate text-sm font-semibold">
+                  {axisTypeLabels[diagnosis.axis.primary]}
                 </p>
-              )}
+                {diagnosis.axis.secondary && (
+                  <p className="text-muted-foreground mt-0.5 truncate text-xs">
+                    次いで {axisTypeLabels[diagnosis.axis.secondary]}
+                  </p>
+                )}
+              </div>
+              <Button variant="outline" size="sm" render={<Link href="/app/diagnosis/result" />}>
+                詳細
+              </Button>
             </div>
-            <Button variant="outline" size="sm" render={<Link href="/app/diagnosis/result" />}>
-              詳細
-            </Button>
-          </div>
-        </Card>
-      )}
+          </Card>
+        )}
+      </div>
 
       <DashboardSuggestions suggestions={suggestions} maxDisplay={3} />
 
-      {/* 進行中の応募(最大5件) */}
-      <Card className="p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold">進行中の応募</h2>
-          <Button render={<Link href="/app/applications" />} variant="outline" size="sm">
-            すべて見る
-          </Button>
-        </div>
-        {data.applications.inProgress.length === 0 ? (
-          <p className="text-muted-foreground mt-3 text-sm">進行中の応募はありません</p>
-        ) : (
-          <div className="mt-3 space-y-2">
-            {data.applications.inProgress.slice(0, 5).map((app) => (
-              <Link
-                key={app.id}
-                href={`/app/applications/${app.id}`}
-                className="hover:bg-accent block rounded-lg border p-3 transition-colors"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="truncate font-medium">{app.details.company}</p>
-                  <span className="bg-muted rounded-full px-2 py-0.5 text-xs whitespace-nowrap">
-                    {applicationStatusLabels[app.status]}
-                  </span>
-                </div>
-                <p className="text-muted-foreground mt-1 truncate text-xs">
-                  {app.details.position}
-                </p>
-              </Link>
-            ))}
+      {/* 下段:進行中の応募 + 他機能動線を横並び(lg 以上)。
+          応募一覧を左に大きめ(2/3 幅)、動線を右にコンパクトに置く。 */}
+      <div className="grid gap-4 lg:grid-cols-3 lg:items-start">
+        {/* 進行中の応募(最大5件) */}
+        <Card className="p-6 lg:col-span-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold">進行中の応募</h2>
+            <Button render={<Link href="/app/applications" />} variant="outline" size="sm">
+              すべて見る
+            </Button>
           </div>
-        )}
-      </Card>
+          {data.applications.inProgress.length === 0 ? (
+            <p className="text-muted-foreground mt-3 text-sm">進行中の応募はありません</p>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {data.applications.inProgress.slice(0, 5).map((app) => (
+                <Link
+                  key={app.id}
+                  href={`/app/applications/${app.id}`}
+                  className="hover:bg-accent block rounded-lg border p-3 transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate font-medium">{app.details.company}</p>
+                    {/* 状態色付きバッジ:一目で進捗 phase that分かる */}
+                    <span
+                      className={`rounded-full border px-2 py-0.5 text-xs whitespace-nowrap ${applicationStatusBadgeClasses[app.status]}`}
+                    >
+                      {applicationStatusLabels[app.status]}
+                    </span>
+                  </div>
+                  <p className="text-muted-foreground mt-1 truncate text-xs">
+                    {app.details.position}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          )}
+        </Card>
 
-      {/* 他機能への動線 */}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Card className="p-4">
-          <p className="font-medium">📝 書類作成</p>
-          <p className="text-muted-foreground mt-1 text-xs">{data.documents.count}件作成済み</p>
-          <Button
-            render={<Link href="/app/documents" />}
-            variant="outline"
-            size="sm"
-            className="mt-3"
-          >
-            書類を見る
-          </Button>
-        </Card>
-        <Card className="p-4">
-          <p className="font-medium">📋 タスク</p>
-          <p className="text-muted-foreground mt-1 text-xs">
-            {data.tasks.total}件
-            {data.tasks.overdue.length > 0 && ` (期限超過 ${data.tasks.overdue.length})`}
-          </p>
-          <Button render={<Link href="/app/tasks" />} variant="outline" size="sm" className="mt-3">
-            タスクを見る
-          </Button>
-        </Card>
+        {/* 他機能への動線(右側カラム、縦並び) */}
+        <div className="space-y-3">
+          <Card className="p-4">
+            <p className="font-medium">📝 書類作成</p>
+            <p className="text-muted-foreground mt-1 text-xs">{data.documents.count}件作成済み</p>
+            <Button
+              render={<Link href="/app/documents" />}
+              variant="outline"
+              size="sm"
+              className="mt-3"
+            >
+              書類を見る
+            </Button>
+          </Card>
+          <Card className="p-4">
+            <p className="font-medium">📋 タスク</p>
+            <p className="text-muted-foreground mt-1 text-xs">
+              {data.tasks.total}件
+              {data.tasks.overdue.length > 0 && ` (期限超過 ${data.tasks.overdue.length})`}
+            </p>
+            <Button
+              render={<Link href="/app/tasks" />}
+              variant="outline"
+              size="sm"
+              className="mt-3"
+            >
+              タスクを見る
+            </Button>
+          </Card>
+        </div>
       </div>
     </div>
   );

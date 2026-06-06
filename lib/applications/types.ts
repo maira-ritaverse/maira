@@ -39,6 +39,37 @@ export const applicationStatusLabels: Record<ApplicationStatus, string> = {
 };
 
 /**
+ * 応募ステータスの表示色クラス(バッジ・チップ用)。
+ *
+ * 「色 = 状態」を瞬時に伝えるための割り当て。dashboard-suggestions と同じ
+ * border + bg の配色パターンを踏襲し、ダークモードでは色味を保ったまま彩度を
+ * 落とした 950/30 を使う(既存トークンで完結、新規色は追加しない)。
+ *
+ * - considering: 進行前(グレー)
+ * - applied: 行動開始(青、信頼感)
+ * - document_review: 選考中(amber、注意)
+ * - interview: 進行中(紫、深まり)
+ * - offer: ゴール(緑 emerald、達成)
+ * - rejected: 不採用(赤)
+ * - declined / withdrawn: 終了(グレー、薄)
+ */
+export const applicationStatusBadgeClasses: Record<ApplicationStatus, string> = {
+  considering: "border-muted-foreground/20 bg-muted/40 text-muted-foreground",
+  applied:
+    "border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200",
+  document_review:
+    "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
+  interview:
+    "border-purple-200 bg-purple-50 text-purple-900 dark:border-purple-900 dark:bg-purple-950/40 dark:text-purple-200",
+  offer:
+    "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200",
+  rejected:
+    "border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200",
+  declined: "border-muted-foreground/20 bg-muted/30 text-muted-foreground",
+  withdrawn: "border-muted-foreground/20 bg-muted/30 text-muted-foreground",
+};
+
+/**
  * 応募の暗号化対象データ(JSON 構造)
  *
  * 会社名・職種は必須、URL や年収などは任意。

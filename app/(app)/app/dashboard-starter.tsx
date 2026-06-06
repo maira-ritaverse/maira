@@ -23,68 +23,73 @@ export function DashboardStarter({ data }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* キャリア診断カード:レーダー + 軸を visible に */}
-      {diagnosis ? (
-        <Card className="space-y-3 p-6">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-muted-foreground text-xs">あなたの軸</p>
-              <p className="text-base font-semibold">
-                {axisTypeLabels[diagnosis.axis.primary]}
-                {diagnosis.axis.secondary && (
-                  <span className="text-muted-foreground ml-2 text-xs font-normal">
-                    次いで {axisTypeLabels[diagnosis.axis.secondary]}
-                  </span>
-                )}
-              </p>
+      {/* 上段:診断カード + キャリアサマリーを横並び(lg 以上)。
+          モバイルは縦並びにして窮屈にならないように。 */}
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+        {/* キャリア診断カード:レーダー + 軸を visible に */}
+        {diagnosis ? (
+          <Card className="space-y-3 p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-muted-foreground text-xs">あなたの軸</p>
+                <p className="text-base font-semibold">
+                  {axisTypeLabels[diagnosis.axis.primary]}
+                  {diagnosis.axis.secondary && (
+                    <span className="text-muted-foreground ml-2 text-xs font-normal">
+                      次いで {axisTypeLabels[diagnosis.axis.secondary]}
+                    </span>
+                  )}
+                </p>
+              </div>
+              <Button variant="outline" size="sm" render={<Link href="/app/diagnosis/result" />}>
+                診断結果
+              </Button>
             </div>
-            <Button variant="outline" size="sm" render={<Link href="/app/diagnosis/result" />}>
-              診断結果
-            </Button>
-          </div>
-          <div className="flex justify-center">
-            <div className="aspect-square w-full max-w-65">
-              <AptitudeRadar scores={diagnosis.aptitude.scores} />
+            <div className="flex justify-center">
+              <div className="aspect-square w-full max-w-65">
+                <AptitudeRadar scores={diagnosis.aptitude.scores} />
+              </div>
             </div>
-          </div>
-        </Card>
-      ) : (
-        // 未診断ユーザーには軽い誘導を出す(starter 段階は棚卸し済みなので、診断は次の一歩)
-        <Card className="border-primary/30 bg-primary/5 p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium">🧭 キャリア診断を受けてみませんか</p>
-              <p className="text-muted-foreground mt-1 text-xs">
-                5〜7分で、自分の軸と強みが分かります
-              </p>
+          </Card>
+        ) : (
+          // 未診断ユーザーには軽い誘導を出す(starter 段階は棚卸し済みなので、診断は次の一歩)
+          <Card className="border-primary/30 bg-primary/5 p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">🧭 キャリア診断を受けてみませんか</p>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  5〜7分で、自分の軸と強みが分かります
+                </p>
+              </div>
+              <Button size="sm" render={<Link href="/app/diagnosis" />}>
+                診断へ
+              </Button>
             </div>
-            <Button size="sm" render={<Link href="/app/diagnosis" />}>
-              診断へ
-            </Button>
-          </div>
-        </Card>
-      )}
+          </Card>
+        )}
 
-      {/* キャリアサマリー */}
-      {data.career.profileData && (
-        <Card className="border-primary/40 bg-primary/5 p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <p className="text-muted-foreground mb-2 text-xs font-medium">
-                あなたのキャリア(v{data.career.profileVersion})
-              </p>
-              <p className="text-sm leading-relaxed">{data.career.profileData.summary}</p>
-              <p className="text-muted-foreground mt-3 text-xs">
-                強み {data.career.profileData.strengths.length}個 ・ {data.career.conversationCount}
-                件の棚卸し会話
-              </p>
+        {/* キャリアサマリー */}
+        {data.career.profileData && (
+          <Card className="border-primary/40 bg-primary/5 p-6">
+            <div className="flex h-full items-start justify-between gap-4">
+              <div className="flex-1">
+                <p className="text-muted-foreground mb-2 text-xs font-medium">
+                  あなたのキャリア(v{data.career.profileVersion})
+                </p>
+                <p className="text-sm leading-relaxed">{data.career.profileData.summary}</p>
+                <p className="text-muted-foreground mt-3 text-xs">
+                  強み {data.career.profileData.strengths.length}個 ・{" "}
+                  {data.career.conversationCount}
+                  件の棚卸し会話
+                </p>
+              </div>
+              <Button render={<Link href="/app/career" />} variant="outline" size="sm">
+                詳細
+              </Button>
             </div>
-            <Button render={<Link href="/app/career" />} variant="outline" size="sm">
-              詳細
-            </Button>
-          </div>
-        </Card>
-      )}
+          </Card>
+        )}
+      </div>
 
       <DashboardSuggestions suggestions={suggestions} />
 

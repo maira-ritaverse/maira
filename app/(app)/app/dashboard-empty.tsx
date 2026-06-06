@@ -26,7 +26,7 @@ export function DashboardEmpty() {
       {/* 4機能の概要 */}
       <div>
         <h2 className="mb-3 text-lg font-bold">Mairaができること</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Card className="p-5">
             <p className="font-medium">💬 キャリア棚卸し</p>
             <p className="text-muted-foreground mt-2 text-sm">

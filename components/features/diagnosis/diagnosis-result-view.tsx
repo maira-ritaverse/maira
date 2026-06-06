@@ -5,7 +5,10 @@
 // - Server / Client いずれからもレンダリングできるように pure。
 
 import { Card } from "@/components/ui/card";
-import { aptitudeStrengthLabels } from "@/lib/diagnosis/aptitude-questions";
+import {
+  aptitudeFactorChartVars,
+  aptitudeStrengthLabels,
+} from "@/lib/diagnosis/aptitude-questions";
 import { axisTypeLabels } from "@/lib/diagnosis/axis-questions";
 import type { StoredDiagnosis } from "@/lib/career/profile-schema";
 import { AptitudeRadar } from "./aptitude-radar";
@@ -47,14 +50,25 @@ export function DiagnosisResultView({ diagnosis, compact = false }: Props) {
               <p className="text-muted-foreground text-xs">あなたの強み(上位)</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {aptitude.topStrengths.length > 0 ? (
-                  aptitude.topStrengths.map((f) => (
-                    <span
-                      key={f}
-                      className="bg-primary/10 text-primary rounded-full px-3 py-1 text-xs font-medium"
-                    >
-                      {aptitudeStrengthLabels[f]}
-                    </span>
-                  ))
+                  aptitude.topStrengths.map((f) => {
+                    // レーダーのドット/ラベルと同じ chart-N 色を使う。
+                    // ダーク/ライト両対応のため color-mix で背景/枠を薄める(opacity を使うと
+                    // 文字まで薄くなるため不可)。
+                    const c = aptitudeFactorChartVars[f];
+                    return (
+                      <span
+                        key={f}
+                        className="rounded-full border px-3 py-1 text-xs font-medium"
+                        style={{
+                          color: c,
+                          backgroundColor: `color-mix(in oklch, ${c} 12%, transparent)`,
+                          borderColor: `color-mix(in oklch, ${c} 35%, transparent)`,
+                        }}
+                      >
+                        {aptitudeStrengthLabels[f]}
+                      </span>
+                    );
+                  })
                 ) : (
                   <span className="text-muted-foreground text-xs">強みが拮抗しています</span>
                 )}

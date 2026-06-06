@@ -14,7 +14,11 @@
 //   強い因子ほど濃く・大きく表示する(「あなたの強み」を視覚で即把握)。
 //   面と外形線はブランド単色のままで、派手にしすぎない。
 
-import { aptitudeStrengthLabels, type AptitudeFactor } from "@/lib/diagnosis/aptitude-questions";
+import {
+  aptitudeFactorChartVars,
+  aptitudeStrengthLabels,
+  type AptitudeFactor,
+} from "@/lib/diagnosis/aptitude-questions";
 
 const FACTORS: AptitudeFactor[] = [
   "openness",
@@ -96,7 +100,8 @@ export function AptitudeRadar({ scores, size = 280, showLabels = true }: Props) 
         })}
       </g>
 
-      {/* データ多角形(主軸の塗り)。primary 色を Tailwind の text- 経由で当てる。 */}
+      {/* データ多角形(主軸の塗り)。primary 色を Tailwind の text- 経由で当てる。
+          ドット/ラベルは因子ごとの chart-1〜5 で色分けして、強み発見を視覚で促す。 */}
       <g className="text-primary">
         <polygon
           points={dataPolygon}
@@ -109,18 +114,29 @@ export function AptitudeRadar({ scores, size = 280, showLabels = true }: Props) 
         {dataPoints.map((p, i) => {
           // 強い因子ほど大きく・濃く。
           // 半径: 2.5(弱)→ 5.5(強)、不透明度: 0.35(弱)→ 1.0(強)。
-          // currentColor を維持してダーク/ライト両対応、ブランド単色のトーンを崩さない。
+          // 色は因子ごとに固定(chart-1〜5)。バッジ側と同じマップを参照する。
           const r = 2.5 + p.norm * 3;
           const opacity = 0.35 + p.norm * 0.65;
+          const color = aptitudeFactorChartVars[FACTORS[i]];
           return (
-            <circle key={i} cx={p.x} cy={p.y} r={r} fill="currentColor" fillOpacity={opacity} />
+            <circle
+              key={i}
+              cx={p.x}
+              cy={p.y}
+              r={r}
+              fill={color}
+              fillOpacity={opacity}
+              stroke={color}
+              strokeWidth={1}
+            />
           );
         })}
       </g>
 
-      {/* ラベル(強み表現)。中央寄せで配置、各軸の角度に応じて少し外側へ。 */}
+      {/* ラベル(強み表現)。中央寄せで配置、各軸の角度に応じて少し外側へ。
+          因子色(chart-1〜5)で着色し、ドットと同色にして紐付けを明示する。 */}
       {showLabels && (
-        <g className="fill-foreground text-[10px]">
+        <g className="text-[10px] font-medium">
           {FACTORS.map((f, i) => {
             const a = angles[i];
             // ラベル位置:データ最外周より少し外側へ。横位置は角度の cos 符号で揃える。
@@ -131,7 +147,14 @@ export function AptitudeRadar({ scores, size = 280, showLabels = true }: Props) 
             const cos = Math.cos(a);
             const anchor = Math.abs(cos) < 0.2 ? "middle" : cos > 0 ? "start" : "end";
             return (
-              <text key={f} x={x} y={y} textAnchor={anchor} dominantBaseline="middle">
+              <text
+                key={f}
+                x={x}
+                y={y}
+                textAnchor={anchor}
+                dominantBaseline="middle"
+                fill={aptitudeFactorChartVars[f]}
+              >
                 {aptitudeStrengthLabels[f]}
               </text>
             );
