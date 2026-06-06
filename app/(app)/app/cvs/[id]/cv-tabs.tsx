@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { CvPreview } from "@/components/features/cv/cv-preview";
 import type { Cv } from "@/lib/cvs/types";
@@ -16,8 +17,12 @@ import { CvForm } from "../cv-form";
  * - プレビューは保存済みの内容を表示する(編集中フォームの未保存値ではない)
  * - 右側に PDF ダウンロードボタン(履歴書と同じ位置)
  *
- * PDF は <a download> + サーバー側 Content-Disposition で確実にダウンロード扱い。
- * クライアント側で fetch する必要はない(履歴書と同方式)。
+ * PDF ダウンロード方式(履歴書の <a download> から変更):
+ * - fetch で取得 → Blob → URL.createObjectURL でダウンロードを起動
+ * - 失敗時はサーバーが返すテキスト(text/plain)を Alert に表示
+ *   → タイムアウト(504)や生成失敗(500)の文面をユーザーに見せられる
+ * - <a download> だと失敗時にエラー文がそのまま遷移先になり UX が荒れるため、
+ *   fetch 方式に切替えた
  *
  * AI下書きボタンは cv-form 内部に閉じて Phase 4 で追加。
  *
@@ -38,6 +43,28 @@ type Props = {
 
 export function CvTabs({ cv, resumeOptions, linkedResumeName, linkedResumeLicenses }: Props) {
   const [tab, setTab] = useState<"edit" | "preview">("edit");
+  const [pdfPending, setPdfPending] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
+  const handleDownloadPdf = async () => {
+    setPdfPending(true);
+    setPdfError(null);
+    try {
+      const response = await fetch(`/api/cvs/${cv.id}/pdf`);
+      if (!response.ok) {
+        // API は失敗時に text/plain で日本語のエラー文面を返す(504/500 共に)。
+        // fetch の本文をそのままアラート表示する。
+        const message = await response.text();
+        throw new Error(message || "PDF の生成に失敗しました。");
+      }
+      const blob = await response.blob();
+      triggerBlobDownload(blob, buildPdfFilename(cv.title));
+    } catch (err) {
+      setPdfError(err instanceof Error ? err.message : "PDF の生成に失敗しました。");
+    } finally {
+      setPdfPending(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -52,15 +79,23 @@ export function CvTabs({ cv, resumeOptions, linkedResumeName, linkedResumeLicens
         </div>
         {/* PDF ダウンロード:
             プレビュー中の見た目を Puppeteer でそのまま PDF 化する。
-            <a download> + サーバー側 Content-Disposition で確実にダウンロード扱いにする。
+            fetch + Blob でダウンロードする(失敗時のエラー文面を見せられるように)。
             ※ プレビューは「保存済みの内容」を出すので、未保存の編集中値は PDF にも出ない。 */}
-        <a
-          href={`/api/cvs/${cv.id}/pdf`}
-          className="bg-foreground text-background mb-1 inline-flex h-9 items-center rounded-md px-3 text-sm font-medium hover:opacity-90"
+        <Button
+          type="button"
+          onClick={handleDownloadPdf}
+          disabled={pdfPending}
+          className="mb-1 inline-flex h-9 items-center"
         >
-          PDFをダウンロード
-        </a>
+          {pdfPending ? "生成中..." : "PDFをダウンロード"}
+        </Button>
       </div>
+
+      {pdfError && (
+        <Alert variant="destructive">
+          <AlertDescription>{pdfError}</AlertDescription>
+        </Alert>
+      )}
 
       <div className={tab === "edit" ? "" : "hidden"}>
         <CvForm mode="edit" existing={cv} resumeOptions={resumeOptions} />
@@ -100,4 +135,33 @@ function TabButton({
       {children}
     </Button>
   );
+}
+
+// ====================================================================
+// PDF ダウンロード helpers
+//
+// API ルートはサーバー側で title サニタイズ済みの Content-Disposition を返すが、
+// クライアントの a.download は URL 由来のファイル名を見ないため(Blob URL)、
+// クライアント側でも独自にサニタイズして download 属性に渡す必要がある。
+// ====================================================================
+
+function buildPdfFilename(title: string): string {
+  // サーバー側 route.ts と同じサニタイズ規則(英数 + ハイフン + アンダースコア以外を _ に)。
+  const safe = title.replace(/[^\p{L}\p{N}\-_]/gu, "_").slice(0, 60);
+  return `${safe || "職務経歴書"}.pdf`;
+}
+
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    // createObjectURL のリーク防止。click 後すぐ revoke しても問題ない。
+    URL.revokeObjectURL(url);
+  }
 }

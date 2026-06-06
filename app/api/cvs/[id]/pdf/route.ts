@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { buildCvHtml } from "@/lib/cvs/cv-html";
 import { getCvWithLinkedResume } from "@/lib/cvs/queries";
-import { generatePdfFromHtml } from "@/lib/pdf/generate";
+import { generatePdfFromHtml, PdfTimeoutError } from "@/lib/pdf/generate";
 
 /**
  * GET /api/cvs/[id]/pdf
@@ -72,9 +72,23 @@ export async function GET(_request: Request, { params }: RouteParams) {
       },
     });
   } catch (error) {
-    // PDF 生成失敗(Chromium 起動失敗 / フォント取得失敗等)はサーバーログのみに残し、
-    // クライアントには簡潔なメッセージを返す(履歴書と同方式)。
+    // タイムアウトはユーザー側の再試行で直る可能性があるので 504 + 説明文を返す。
+    // クライアント(cv-tabs)で fetch 結果のテキストをそのままアラート表示するため、
+    // text/plain で日本語のメッセージをそのまま渡す。
+    if (error instanceof PdfTimeoutError) {
+      console.error("[cv pdf] timeout:", error.message);
+      return new Response(error.message, {
+        status: 504,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      });
+    }
+
+    // それ以外の失敗(Chromium 起動失敗 / フォント取得失敗 / 想定外例外等)は
+    // 詳細はサーバーログにのみ残し、クライアントには簡潔なメッセージを返す。
     console.error("[cv pdf] failed to generate:", error);
-    return new Response("Failed to generate PDF", { status: 500 });
+    return new Response("PDF の生成に失敗しました。しばらく経って再度お試しください。", {
+      status: 500,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
   }
 }

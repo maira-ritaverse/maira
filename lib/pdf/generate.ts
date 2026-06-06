@@ -27,6 +27,25 @@
 
 const isProduction = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
 
+// setContent の最大待ち時間。デフォルト 30 秒では、Google Fonts の動的サブセット
+// 読込で networkidle が不安定に到達する環境(企業 NW / モバイル等)で頻繁に
+// タイムアウトに引っかかったため、60 秒に拡大して安定マージンを取る。
+const SET_CONTENT_TIMEOUT_MS = 60_000;
+
+/**
+ * PDF 生成専用のタイムアウトエラー。
+ *
+ * Puppeteer 内部の TimeoutError をそのまま投げると上位での識別が難しいため、
+ * setContent 中のタイムアウトをこの型に包んで上位へ伝える。
+ * API ルートでこれを catch して 504 + ユーザー向け文面に変換する。
+ */
+export class PdfTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PdfTimeoutError";
+  }
+}
+
 export async function generatePdfFromHtml(html: string): Promise<Buffer> {
   // unknown で受けるのは puppeteer / puppeteer-core で型が微妙に違うため。
   // ここでは launch / newPage / pdf / close しか触らないので簡略化する。
@@ -64,8 +83,27 @@ export async function generatePdfFromHtml(html: string): Promise<Buffer> {
     const page = await browser.newPage();
 
     // setContent 時に Web フォント(Google Fonts)を取得し終えるまで待つ。
-    // networkidle0 = ネットワーク接続が 500ms 以上ゼロになるまで待機。
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    // 旧:networkidle0(0 接続 + 500ms)→ Google Fonts の display=swap + unicode-range
+    // 由来のサブセット遅延読込で 0 に到達せず、デフォルト 30 秒タイムアウトに
+    // 引っかかる事象が確認された(履歴書 / 職務経歴書 共通の HTML パターン)。
+    // 新:networkidle2(≤2 接続 + 500ms)に緩めて、フォント CSS の小さな接続が
+    // 残っていても通れるようにする。タイムアウトも 60 秒に延長。
+    try {
+      await page.setContent(html, {
+        waitUntil: "networkidle2",
+        timeout: SET_CONTENT_TIMEOUT_MS,
+      });
+    } catch (error) {
+      // Puppeteer の TimeoutError は name === "TimeoutError" / message に "timeout"。
+      // 上位(API ルート)で 504 + ユーザー文面に変換できるよう、独自型に包む。
+      if (isLikelyTimeoutError(error)) {
+        throw new PdfTimeoutError(
+          "PDF 生成のフォント/HTML 読込が時間内に完了しませんでした。" +
+            "ネットワーク接続を確認してから、しばらく経って再度お試しください。",
+        );
+      }
+      throw error;
+    }
 
     // CSS のフォント読み込み完了(document.fonts.ready)を念のため明示的に待つ。
     // これを省くと、ネットワークは静かでもフォント適用が間に合わずに豆腐になる
@@ -93,7 +131,7 @@ export async function generatePdfFromHtml(html: string): Promise<Buffer> {
 // puppeteer / puppeteer-core の Page を直接 import すると、本番では
 // devDependency の puppeteer が型解決できないなど面倒が起きるので最小型で受ける。
 type PuppeteerPage = {
-  setContent: (html: string, options?: { waitUntil?: string }) => Promise<void>;
+  setContent: (html: string, options?: { waitUntil?: string; timeout?: number }) => Promise<void>;
   evaluate: <T>(fn: () => T | Promise<T>) => Promise<T>;
   pdf: (options: {
     format?: string;
@@ -102,3 +140,16 @@ type PuppeteerPage = {
     preferCSSPageSize?: boolean;
   }) => Promise<Buffer | Uint8Array>;
 };
+
+/**
+ * Puppeteer 由来のタイムアウトかどうかを判定する。
+ *
+ * puppeteer / puppeteer-core で TimeoutError クラスは公開されているが、
+ * 動的 import 経由なので instanceof で識別するのが面倒。name と message で
+ * 緩く判定する。
+ */
+function isLikelyTimeoutError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (error.name === "TimeoutError") return true;
+  return /timeout/i.test(error.message);
+}
