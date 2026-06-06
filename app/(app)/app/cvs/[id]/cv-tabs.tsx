@@ -14,10 +14,12 @@ import { CvForm } from "../cv-form";
  * - 両方を常にマウントしておき、CSS の display で表示/非表示を切り替える
  *   → 編集中の未保存値がタブ切替で失われない
  * - プレビューは保存済みの内容を表示する(編集中フォームの未保存値ではない)
+ * - 右側に PDF ダウンロードボタン(履歴書と同じ位置)
  *
- * Phase 2-b では PDF ダウンロードボタンと AI 関連 props は付けない:
- * - PDF は Phase 3 で別途追加
- * - AI下書きボタンは cv-form 内部に閉じて Phase 4 で追加
+ * PDF は <a download> + サーバー側 Content-Disposition で確実にダウンロード扱い。
+ * クライアント側で fetch する必要はない(履歴書と同方式)。
+ *
+ * AI下書きボタンは cv-form 内部に閉じて Phase 4 で追加。
  *
  * 履歴書からの氏名・資格(linkedResume*)は親で listResumes() の結果から
  * cv.licenseResumeId で解決して受け取る(再フェッチなし)。
@@ -39,13 +41,25 @@ export function CvTabs({ cv, resumeOptions, linkedResumeName, linkedResumeLicens
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 border-b">
-        <TabButton active={tab === "edit"} onClick={() => setTab("edit")}>
-          編集
-        </TabButton>
-        <TabButton active={tab === "preview"} onClick={() => setTab("preview")}>
-          プレビュー
-        </TabButton>
+      <div className="flex items-center justify-between gap-2 border-b">
+        <div className="flex gap-2">
+          <TabButton active={tab === "edit"} onClick={() => setTab("edit")}>
+            編集
+          </TabButton>
+          <TabButton active={tab === "preview"} onClick={() => setTab("preview")}>
+            プレビュー
+          </TabButton>
+        </div>
+        {/* PDF ダウンロード:
+            プレビュー中の見た目を Puppeteer でそのまま PDF 化する。
+            <a download> + サーバー側 Content-Disposition で確実にダウンロード扱いにする。
+            ※ プレビューは「保存済みの内容」を出すので、未保存の編集中値は PDF にも出ない。 */}
+        <a
+          href={`/api/cvs/${cv.id}/pdf`}
+          className="bg-foreground text-background mb-1 inline-flex h-9 items-center rounded-md px-3 text-sm font-medium hover:opacity-90"
+        >
+          PDFをダウンロード
+        </a>
       </div>
 
       <div className={tab === "edit" ? "" : "hidden"}>
