@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
+import { getResume } from "@/lib/resumes/queries";
+import type { LicenseItem } from "@/lib/resumes/types";
 import { cvBodySchema, type Cv, type CvBody, type SaveCvRequest } from "./types";
 
 /**
@@ -143,6 +145,55 @@ export async function verifyCvOwner(cvId: string, userId: string): Promise<boole
   const { data } = await supabase.from("cvs").select("user_id").eq("id", cvId).maybeSingle();
 
   return data?.user_id === userId;
+}
+
+// ============================================
+// CV + 履歴書参照解決(PDF / プレビュー用)
+//
+// 設計:
+//   - 履歴書から「氏名」と「資格」を引いてくる解決ロジックを 1 箇所に集約。
+//     PDF API のように「dropdown 用の listResumes が要らない」ケースで使う。
+//   - 詳細ページ([id]/page.tsx)は dropdown 用に listResumes() を既に呼ぶので
+//     その結果を find する形で残してある(再フェッチを避けるため)。
+//     重複しているように見えるが、ユースケースが違うので意図的に分けている。
+//
+// 振る舞い:
+//   - cvId が見つからない or 他人のもの → null(API は 404 にする)
+//   - licenseResumeId が null → name=null / licenses=[] を返す
+//   - licenseResumeId が指す履歴書が削除済み等で getResume が null →
+//     同じく name=null / licenses=[] にフォールバック(プレビュー側で
+//     「履歴書を選択すると〜」の案内文が出る)
+//   - getResume は userId で所有者一致のものしか返さないため、ここでも
+//     防御的二重チェックを兼ねる
+// ============================================
+export type CvWithLinkedResume = {
+  cv: Cv;
+  linkedResumeName: string | null;
+  linkedResumeLicenses: LicenseItem[];
+};
+
+export async function getCvWithLinkedResume(
+  cvId: string,
+  userId: string,
+): Promise<CvWithLinkedResume | null> {
+  const cv = await getCv(cvId, userId);
+  if (!cv) return null;
+
+  if (!cv.licenseResumeId) {
+    return { cv, linkedResumeName: null, linkedResumeLicenses: [] };
+  }
+
+  const linkedResume = await getResume(cv.licenseResumeId, userId);
+  if (!linkedResume) {
+    // 履歴書が削除済み等のエッジケース。CV 本体は残し、案内文に倒す。
+    return { cv, linkedResumeName: null, linkedResumeLicenses: [] };
+  }
+
+  return {
+    cv,
+    linkedResumeName: linkedResume.name,
+    linkedResumeLicenses: linkedResume.licenses,
+  };
 }
 
 // ====================================================================
