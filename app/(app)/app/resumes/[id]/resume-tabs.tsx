@@ -23,11 +23,13 @@ import { ResumeForm } from "../resume-form";
 export function ResumeTabs({
   resume,
   photoSignedUrl,
+  hasCareerProfile,
 }: {
   resume: Resume;
   // 写真の署名付き URL(private バケットのため img の src に直接 photoUrl は使えない)。
   // page.tsx(Server Component)で本人のセッション経由で発行された URL を受け取る。
   photoSignedUrl: string | null;
+  hasCareerProfile: boolean;
 }) {
   const [tab, setTab] = useState<"edit" | "preview">("edit");
 
@@ -55,7 +57,12 @@ export function ResumeTabs({
       </div>
 
       <div className={tab === "edit" ? "" : "hidden"}>
-        <ResumeForm mode="edit" existing={resume} photoSignedUrl={photoSignedUrl} />
+        <ResumeForm
+          mode="edit"
+          existing={resume}
+          photoSignedUrl={photoSignedUrl}
+          hasCareerProfile={hasCareerProfile}
+        />
       </div>
       <div className={tab === "preview" ? "" : "hidden"}>
         <ResumePreview resume={resume} photoSignedUrl={photoSignedUrl} />
