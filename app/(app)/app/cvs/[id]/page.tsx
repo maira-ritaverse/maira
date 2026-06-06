@@ -1,18 +1,22 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { CvPreview } from "@/components/features/cv/cv-preview";
 import { getCv } from "@/lib/cvs/queries";
 import { listResumes } from "@/lib/resumes/queries";
 import { createClient } from "@/lib/supabase/server";
-import { CvForm } from "../cv-form";
+import { CvTabs } from "./cv-tabs";
 
 /**
- * 職務経歴書 詳細画面(編集モード)
+ * 職務経歴書 詳細画面(編集 / プレビュー切替)
  *
- * Phase 2-a:暫定的にプレビューをフォーム下に並べて見た目を確認できるようにする。
- *   - 氏名・資格は履歴書からの参照接続が Phase 2-b 待ちのため、ここでは
- *     name=null / licenses=[] を渡してプレビューが崩れないことを優先する
- *   - 編集/プレビューのタブ切替は Phase 2-b で実装(履歴書 resume-tabs と同型)
+ * Phase 2-b で完成:
+ *   - 編集/プレビューのタブ切替(履歴書 resume-tabs と同型)
+ *   - 履歴書(license_resume_id)から氏名・資格を解決してプレビューに反映
+ *
+ * 履歴書の解決方法:
+ *   - listResumes() で取得した結果(license dropdown 用にどのみち全件読む)から
+ *     cv.licenseResumeId で find するだけ。再フェッチ不要、復号も 1 度で済む。
+ *   - 履歴書未選択 / 参照先が見つからない場合は null / [] を渡し、
+ *     プレビュー側で「履歴書を選択すると〜」の案内文を出す。
  *
  * Phase 3 で PDF、Phase 4 で AI下書きを足す。
  *
@@ -37,6 +41,13 @@ export default async function EditCvPage({ params }: PageProps) {
 
   const resumeOptions = resumes.map((r) => ({ id: r.id, title: r.title }));
 
+  // 履歴書参照解決:listResumes の結果を再利用するだけなので追加コストなし。
+  // 履歴書が削除済みなら on delete set null で licenseResumeId が null になるが、
+  // 念のため find が undefined を返した場合も null/[] にフォールバックする。
+  const linkedResume = cv.licenseResumeId
+    ? (resumes.find((r) => r.id === cv.licenseResumeId) ?? null)
+    : null;
+
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
@@ -48,18 +59,12 @@ export default async function EditCvPage({ params }: PageProps) {
         <h1 className="text-2xl font-bold">{cv.title}</h1>
       </div>
 
-      <CvForm mode="edit" existing={cv} resumeOptions={resumeOptions} />
-
-      {/* Phase 2-a 暫定表示:プレビューをフォーム下に並べる。
-          Phase 2-b で履歴書からの氏名・資格を本接続し、編集/プレビューの
-          タブ切替を導入する(現状はタブ無しで両方常時表示)。 */}
-      <div className="border-t pt-6">
-        <p className="text-muted-foreground mb-4 text-sm">
-          ↓ プレビュー(Phase 2-a 暫定表示。保存後の内容を反映。氏名・資格は Phase 2-b
-          で履歴書から本接続)
-        </p>
-        <CvPreview body={cv.body} name={null} licenses={[]} documentDate={cv.documentDate} />
-      </div>
+      <CvTabs
+        cv={cv}
+        resumeOptions={resumeOptions}
+        linkedResumeName={linkedResume?.name ?? null}
+        linkedResumeLicenses={linkedResume?.licenses ?? []}
+      />
     </div>
   );
 }

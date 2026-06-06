@@ -344,6 +344,13 @@ export function CvForm(props: Props) {
                       />
                     )}
                   />
+                  {/* refine による前後チェックは period_end にエラーを置く設計
+                      (lib/cvs/types.ts の workExperienceSchema.refine)。 */}
+                  {errors.body?.work_experiences?.[index]?.period_end && (
+                    <p className="text-sm text-red-600">
+                      {errors.body.work_experiences[index]?.period_end?.message}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -561,12 +568,19 @@ export function CvForm(props: Props) {
 // ====================================================================
 // PeriodInput:{ year, month } 用の年・月セレクタ
 //
-// 両方選択されたら PeriodPoint、片方でも空なら null。
-// 親(react-hook-form の Controller)に対しては onChange で値を返す。
-// 内部にローカル状態は持たない:value(prop)を真の状態とする。
-// 「年だけ選んで月を未選択」の状態は親に null を返すので一旦選択が消える。
-// Phase 1 ではこの簡素な挙動で進め、Phase 2 のプレビュー実装時に
-// 不便さが出れば UX を改善する(現状は下書き保存可なので致命的ではない)。
+// 設計:
+//   - 親(Controller の value)に対しては「両方揃った時だけ PeriodPoint、
+//     それ以外は null」を返す(zod 型を保つため)
+//   - 「年だけ選んだ」「月だけ選んだ」のような部分入力は内部 state で保持し、
+//     UI 上で消えないようにする(下書き編集中の手触りを改善)
+//
+// 表示優先順:
+//   - 親から確定値(value: PeriodPoint)が来ていればそれを表示
+//   - 来ていなければ(value=null)、内部 state の部分入力を表示
+//
+// 外部リセット(form reset / field array remove+add)で value=null になっても、
+// 同じインスタンスが残れば内部 state は前回の入力を保持する。これはユーザーが
+// セルを編集し直しているケースでは自然な挙動になる(部分入力を再開できる)。
 // ====================================================================
 function PeriodInput({
   value,
@@ -577,10 +591,21 @@ function PeriodInput({
   onChange: (v: PeriodPoint | null) => void;
   disabled?: boolean;
 }) {
-  const yearStr = value?.year != null ? String(value.year) : "";
-  const monthStr = value?.month != null ? String(value.month) : "";
+  // 部分入力の保持。親が PeriodPoint を返している間は使われず、value=null の時だけ
+  // フォールバックとして UI に表示される。
+  const [pendingYear, setPendingYear] = useState<string>(
+    value?.year != null ? String(value.year) : "",
+  );
+  const [pendingMonth, setPendingMonth] = useState<string>(
+    value?.month != null ? String(value.month) : "",
+  );
+
+  const yearStr = value?.year != null ? String(value.year) : pendingYear;
+  const monthStr = value?.month != null ? String(value.month) : pendingMonth;
 
   const emit = (y: string, m: string) => {
+    setPendingYear(y);
+    setPendingMonth(m);
     if (y === "" || m === "") {
       onChange(null);
       return;

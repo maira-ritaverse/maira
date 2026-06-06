@@ -47,19 +47,35 @@ export const employmentTypeLabels: Record<EmploymentType, string> = {
 // industry/position 等は null 許容。
 // job_description/achievements は空文字許可(Phase 4 の AI 下書き前は空のはず)。
 // ============================================
-export const workExperienceSchema = z.object({
-  company_name: z.string().min(1, "会社名は必須です").max(200),
-  industry: z.string().max(100).nullable(),
-  period_start: periodPointSchema.nullable(),
-  // null = 「現在も在籍」を表す
-  period_end: periodPointSchema.nullable(),
-  position: z.string().max(200).nullable(),
-  employment_type: z.enum(employmentTypes).nullable(),
-  // 業務内容(箇条書きでも文章でも可、改行込み)
-  job_description: z.string().max(2000),
-  // 実績・成果(数値があれば数値、なければ定性)
-  achievements: z.string().max(2000),
-});
+export const workExperienceSchema = z
+  .object({
+    company_name: z.string().min(1, "会社名は必須です").max(200),
+    industry: z.string().max(100).nullable(),
+    period_start: periodPointSchema.nullable(),
+    // null = 「現在も在籍」を表す
+    period_end: periodPointSchema.nullable(),
+    position: z.string().max(200).nullable(),
+    employment_type: z.enum(employmentTypes).nullable(),
+    // 業務内容(箇条書きでも文章でも可、改行込み)
+    job_description: z.string().max(2000),
+    // 実績・成果(数値があれば数値、なければ定性)
+    achievements: z.string().max(2000),
+  })
+  // 期間の前後チェック:退社が入社より前なら弾く。
+  // 「在籍中」(period_end=null)や「開始未入力」(period_start=null)はスキップして
+  // 下書きセマンティクスを壊さない。
+  .refine(
+    (data) => {
+      if (!data.period_start || !data.period_end) return true;
+      const startMonths = data.period_start.year * 12 + data.period_start.month;
+      const endMonths = data.period_end.year * 12 + data.period_end.month;
+      return endMonths >= startMonths;
+    },
+    {
+      message: "退社年月は入社年月より後にしてください",
+      path: ["period_end"],
+    },
+  );
 export type WorkExperience = z.infer<typeof workExperienceSchema>;
 
 // ============================================
