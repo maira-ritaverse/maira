@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { careerProfileSchema, type CareerProfile } from "./profile-schema";
+import { careerProfileSchema, type CareerProfile, type StoredDiagnosis } from "./profile-schema";
 
 /**
  * キャリア棚卸し用の会話/メッセージ操作ヘルパー
@@ -206,13 +206,26 @@ function bytesToText(value: unknown): string {
 
 /**
  * career_profile の保存(upsert、1ユーザー1レコード)
+ *
+ * 注意:キャリア棚卸し AI(generate-profile)が呼ぶ経路。AI 出力には diagnosis が
+ * 含まれないため、ここで既存レコードの diagnosis があれば「引き継ぐ」処理を入れる。
+ * そうしないと、診断 → 棚卸しの順で利用したユーザーの診断結果が棚卸し再生成時に
+ * 消えてしまう。
  */
 export async function saveCareerProfile(userId: string, profile: CareerProfile): Promise<void> {
   const supabase = await createClient();
 
+  // 既存レコードの diagnosis を保護するため、まず読み出してマージする。
+  // profile に既に diagnosis が含まれている場合はそちらを優先する(明示上書きを尊重)。
+  const existingProfile = await getCareerProfile(userId);
+  const merged: CareerProfile =
+    !profile.diagnosis && existingProfile?.profile.diagnosis
+      ? { ...profile, diagnosis: existingProfile.profile.diagnosis }
+      : profile;
+
   // JSON文字列 → bytea テキスト入力形式(暗号化なし版)
   // saveMessage と同じ理由で Buffer ではなく \x hex 文字列を渡す。
-  const dataBytea = textToByteaInput(JSON.stringify(profile));
+  const dataBytea = textToByteaInput(JSON.stringify(merged));
   const dummyIv = textToByteaInput("");
 
   // 既存レコードがあるかチェック
@@ -250,6 +263,43 @@ export async function saveCareerProfile(userId: string, profile: CareerProfile):
       throw new Error(`Failed to create career profile: ${error.message}`);
     }
   }
+}
+
+/**
+ * 診断結果のみを career_profile に保存する。
+ *
+ * - 既存レコードがある:profile を読み込み、diagnosis だけ差し替えて再保存。
+ * - 既存レコードが無い:診断より棚卸しを先にやらないユーザー向けに、棚卸し系
+ *   フィールドを空のデフォルトで埋めたうえで保存する。後から棚卸しを行えば、
+ *   saveCareerProfile 経由で棚卸し結果は埋まり、diagnosis は引き継がれる。
+ *
+ * 暗号化境界:career_profiles の encrypted_data に同梱する。saveCareerProfile と
+ * 同じ書き込み経路を使うことで、本格暗号化導入時に一箇所だけ変えれば済むようにする。
+ */
+export async function saveDiagnosisResult(
+  userId: string,
+  diagnosis: StoredDiagnosis,
+): Promise<void> {
+  const existing = await getCareerProfile(userId);
+
+  const merged: CareerProfile = existing
+    ? { ...existing.profile, diagnosis }
+    : {
+        user_facts: {
+          current_role: null,
+          years_of_experience: null,
+          industry: null,
+          company_size: null,
+        },
+        strengths: [],
+        values: [],
+        wants: { industries: [], role_types: [], company_sizes: [] },
+        concerns: [],
+        summary: "",
+        diagnosis,
+      };
+
+  await saveCareerProfile(userId, merged);
 }
 
 /**

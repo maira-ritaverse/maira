@@ -1,22 +1,24 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { getUserRole } from "@/lib/organizations/queries";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { DiagnosisResultView } from "@/components/features/diagnosis/diagnosis-result-view";
 import { getClientRecord } from "@/lib/clients/queries";
-import { clientStatusLabels, clientLinkStatusLabels } from "@/lib/clients/types";
+import { clientLinkStatusLabels, clientStatusLabels } from "@/lib/clients/types";
+import { getDiagnosisForUser } from "@/lib/diagnosis/queries";
+import { listInteractionsByClient } from "@/lib/interactions/queries";
 import { listJobPostings } from "@/lib/jobs/queries";
+import { getUserRole } from "@/lib/organizations/queries";
+import { listPlacementsByClient } from "@/lib/placements/queries";
 import {
   listReferralsByClient,
   listReferralStatusHistoriesByReferralIds,
 } from "@/lib/referrals/queries";
-import { listInteractionsByClient } from "@/lib/interactions/queries";
 import { listTasksByClient, listOrganizationMembers } from "@/lib/agency-tasks/queries";
-import { listPlacementsByClient } from "@/lib/placements/queries";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { createClient } from "@/lib/supabase/server";
 import { ClientDetailForm } from "./client-detail-form";
-import { ReferralSection } from "./referral-section";
 import { InteractionsSection } from "./interactions-section";
+import { ReferralSection } from "./referral-section";
 import { TasksSection } from "./tasks-section";
 
 /**
@@ -48,21 +50,26 @@ export default async function ClientDetailPage({ params }: RouteParams) {
     notFound();
   }
 
-  // 紹介セクション用:このクライアントの紹介一覧と、自社の募集中求人を並行取得
-  // 対応履歴・タスク・組織メンバー一覧も同時に並行取得して詳細画面の初期表示で渡す
-  // member.id は getUserRole で取得済み(タスク追加時の担当デフォルトに使う)
+  // organization_member なら member は必ずあるはずだが、念のためのガード
   if (!role.member) {
-    // organization_member なら member は必ずあるはずだが、念のためのガード
     redirect("/app");
   }
-  const [referrals, allJobs, interactions, tasks, members, placements] = await Promise.all([
-    listReferralsByClient(client.id),
-    listJobPostings(role.organization.id),
-    listInteractionsByClient(client.id, role.organization.id),
-    listTasksByClient(client.id, role.organization.id),
-    listOrganizationMembers(role.organization.id),
-    listPlacementsByClient(client.id, role.organization.id),
-  ]);
+
+  // 紹介セクション・対応履歴・タスク・組織メンバー・成約イベントに加えて、
+  // 診断結果(リンク済みクライアントのみ)も並行取得する。
+  // 診断結果は client.linkStatus === "linked" の場合のみ求職者 user_id を辿って取得。
+  // RLS で linked のみ可だが、コード側でも二重チェックして無駄なクエリを抑える。
+  const linkedUserId = client.linkStatus === "linked" ? client.linkedUserId : null;
+  const [referrals, allJobs, interactions, tasks, members, placements, diagnosis] =
+    await Promise.all([
+      listReferralsByClient(client.id),
+      listJobPostings(role.organization.id),
+      listInteractionsByClient(client.id, role.organization.id),
+      listTasksByClient(client.id, role.organization.id),
+      listOrganizationMembers(role.organization.id),
+      listPlacementsByClient(client.id, role.organization.id),
+      linkedUserId ? getDiagnosisForUser(linkedUserId) : Promise.resolve(null),
+    ]);
   const openJobs = allJobs.filter((j) => j.status === "open");
 
   // 紹介の status 遷移履歴(referral_id でグルーピングされた Map)。
@@ -130,6 +137,27 @@ export default async function ClientDetailPage({ params }: RouteParams) {
       )}
 
       <ClientDetailForm client={client} />
+
+      {/* 診断結果(リンク済みクライアントが診断を受けていれば表示) */}
+      {client.linkStatus === "linked" && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-lg font-bold">キャリア診断結果</h2>
+            <p className="text-muted-foreground text-xs">
+              本人が受けた診断の結果(軸・強み・職種候補)
+            </p>
+          </div>
+          {diagnosis ? (
+            <DiagnosisResultView diagnosis={diagnosis} />
+          ) : (
+            <Card className="p-4">
+              <p className="text-muted-foreground text-sm">
+                このクライアントはまだキャリア診断を受けていません
+              </p>
+            </Card>
+          )}
+        </section>
+      )}
 
       <InteractionsSection
         clientId={client.id}
