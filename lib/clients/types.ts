@@ -38,6 +38,11 @@ export const clientLinkStatusLabels: Record<ClientLinkStatus, string> = {
   revoked: "連携解除",
 };
 
+// 二段階解除の確定経路を表す監査値。
+// agency_approved: エージェントが解除申請を承認して即時 revoked にした(P4)。
+// timeout         : 猶予期限を過ぎ cron で自動 revoked にした(P6、未実装)。
+export type RevokeConfirmedVia = "agency_approved" | "timeout";
+
 export type ClientRecord = {
   id: string;
   organizationId: string;
@@ -50,6 +55,12 @@ export type ClientRecord = {
   linkedUserId: string | null;
   linkedAt: string | null;
   revokedAt: string | null;
+  // 二段階解除(P3〜P6)で使用。revoke_requested 状態のときに非 null。
+  // revoked になると requested_at/deadline は履歴として残し、confirmed_via に
+  // どの経路で revoked になったかが入る(P4 承認 or P6 タイムアウト)。
+  revokeRequestedAt: string | null;
+  revokeDeadline: string | null;
+  revokeConfirmedVia: RevokeConfirmedVia | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string;

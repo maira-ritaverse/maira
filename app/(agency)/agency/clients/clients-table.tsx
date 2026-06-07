@@ -233,7 +233,9 @@ export function ClientsTable({ clients }: ClientsTableProps) {
                         className={`inline-block rounded-full px-2 py-0.5 text-xs whitespace-nowrap ${
                           client.linkStatus === "linked"
                             ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300"
-                            : "bg-muted text-muted-foreground"
+                            : client.linkStatus === "revoke_requested"
+                              ? "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                              : "bg-muted text-muted-foreground"
                         }`}
                       >
                         {clientLinkStatusLabels[client.linkStatus]}

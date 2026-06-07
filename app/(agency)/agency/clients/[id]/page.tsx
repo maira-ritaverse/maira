@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
+  ApproveRevokeButton,
   CancelInvitationButton,
   InviteClientButton,
 } from "@/components/features/agency/link-action-buttons";
@@ -100,7 +101,9 @@ export default async function ClientDetailPage({ params }: RouteParams) {
               className={`rounded-full px-2 py-0.5 text-xs ${
                 client.linkStatus === "linked"
                   ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300"
-                  : "bg-muted text-muted-foreground"
+                  : client.linkStatus === "revoke_requested"
+                    ? "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                    : "bg-muted text-muted-foreground"
               }`}
             >
               {clientLinkStatusLabels[client.linkStatus]}
@@ -137,6 +140,13 @@ export default async function ClientDetailPage({ params }: RouteParams) {
           </p>
         </Card>
       )}
+      {client.linkStatus === "revoke_requested" && (
+        <RevokeRequestedCard
+          clientRecordId={client.id}
+          revokeRequestedAt={client.revokeRequestedAt}
+          revokeDeadline={client.revokeDeadline}
+        />
+      )}
       {client.linkStatus === "revoked" && (
         <Card className="bg-muted/30 space-y-3 p-4">
           <p className="text-sm">
@@ -149,16 +159,20 @@ export default async function ClientDetailPage({ params }: RouteParams) {
 
       <ClientDetailForm client={client} />
 
-      {/* linked のときのみ希望条件・書類閲覧セクションを描画。
+      {/* linked または期限内 revoke_requested のときに希望条件・書類閲覧セクションを描画。
           認可は DB 側(documents は RLS、希望条件は SECURITY DEFINER RPC)で
           二重防御されるが、UI 側でも条件分岐して無駄なクエリを抑える。
-          希望条件 → 書類の順で「人物理解 → 詳細書類」の自然な閲覧導線にする。 */}
-      {client.linkStatus === "linked" && client.linkedUserId && (
-        <>
-          <DisclosableProfileSection clientRecordId={client.id} />
-          <AgencyDocumentsSection linkedUserId={client.linkedUserId} clientRecordId={client.id} />
-        </>
-      )}
+          希望条件 → 書類の順で「人物理解 → 詳細書類」の自然な閲覧導線にする。
+          revoke_requested で期限超過の場合は RLS / RPC が 0 件 / forbidden を返すため、
+          セクション自体は表示されるが中身が「閲覧できる書類はありません」になる
+          (本人 UX から見て、申請後も猶予期間内は引き続き開示する設計の鏡像)。 */}
+      {(client.linkStatus === "linked" || client.linkStatus === "revoke_requested") &&
+        client.linkedUserId && (
+          <>
+            <DisclosableProfileSection clientRecordId={client.id} />
+            <AgencyDocumentsSection linkedUserId={client.linkedUserId} clientRecordId={client.id} />
+          </>
+        )}
 
       <InteractionsSection
         clientId={client.id}
@@ -184,4 +198,69 @@ export default async function ClientDetailPage({ params }: RouteParams) {
       />
     </div>
   );
+}
+
+// ====================================================================
+// revoke_requested ケース用のカード
+//
+// 「申請が届いている」事実 + 申請日時 + 残り日数 + 承認ボタンを表示。
+// 期限超過後の見かけ更新は P6 cron が担うため、それまでは link_status が
+// revoke_requested のまま「期限切れ(あと約 ─1 日)」のように表示されうる。
+// その状態でも承認(後始末としての即時 revoked 確定)は受け付けるため、
+// 承認ボタンは期限状態に関わらず常に出す。
+// ====================================================================
+function RevokeRequestedCard({
+  clientRecordId,
+  revokeRequestedAt,
+  revokeDeadline,
+}: {
+  clientRecordId: string;
+  revokeRequestedAt: string | null;
+  revokeDeadline: string | null;
+}) {
+  const daysLeft = computeDaysLeft(revokeDeadline);
+  return (
+    <Card className="space-y-3 border-orange-200 bg-orange-50/50 p-4 dark:border-orange-900 dark:bg-orange-950/30">
+      <div className="space-y-1">
+        <p className="text-sm font-medium">この求職者から連携解除の申請が届いています。</p>
+        <p className="text-muted-foreground text-xs">
+          申請日時:{formatDateTime(revokeRequestedAt)}
+        </p>
+        <p className="text-muted-foreground text-xs">
+          自動停止予定:{formatDateTime(revokeDeadline)}
+          {daysLeft !== null && (
+            <span className="ml-2">({daysLeft > 0 ? `あと約 ${daysLeft} 日` : "期限切れ"})</span>
+          )}
+        </p>
+      </div>
+      <p className="text-muted-foreground text-xs">
+        承認すると即座に履歴書・職務経歴書・希望条件の閲覧が停止します。
+        承認しなくても、猶予期限の経過で自動的に停止します。
+        停止までの間は引き続き書類を閲覧できます。
+      </p>
+      <ApproveRevokeButton clientRecordId={clientRecordId} />
+    </Card>
+  );
+}
+
+function computeDaysLeft(deadline: string | null): number | null {
+  if (!deadline) return null;
+  const d = new Date(deadline).getTime();
+  if (Number.isNaN(d)) return null;
+  return Math.ceil((d - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
+function formatDateTime(iso: string | null): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString("ja-JP", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "—";
+  }
 }

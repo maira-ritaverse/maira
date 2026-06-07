@@ -27,6 +27,10 @@ type ClientRecordRow = {
   linked_user_id: string | null;
   linked_at: string | null;
   revoked_at: string | null;
+  // 二段階解除(P3〜P6)用の列。P1+P2 マイグレーションで nullable で追加された。
+  revoke_requested_at: string | null;
+  revoke_deadline: string | null;
+  revoke_confirmed_via: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -45,6 +49,10 @@ function rowToClientRecord(row: ClientRecordRow): ClientRecord {
     linkedUserId: row.linked_user_id,
     linkedAt: row.linked_at,
     revokedAt: row.revoked_at,
+    revokeRequestedAt: row.revoke_requested_at,
+    revokeDeadline: row.revoke_deadline,
+    // DB CHECK 制約で値域は 'agency_approved' / 'timeout' に限定済み
+    revokeConfirmedVia: row.revoke_confirmed_via as ClientRecord["revokeConfirmedVia"],
     notes: row.notes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
