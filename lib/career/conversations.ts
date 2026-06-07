@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { decryptField } from "@/lib/crypto/field-encryption";
 import { careerProfileSchema, type CareerProfile, type StoredDiagnosis } from "./profile-schema";
 
 /**
@@ -302,8 +303,88 @@ export async function saveDiagnosisResult(
   await saveCareerProfile(userId, merged);
 }
 
+// ====================================================================
+// hybrid decode ヘルパー
+//
+// 暗号化移行期間中、career_profiles の本文を以下のいずれかから復元する:
+//   - encrypted_data_v2 (text): "v{n}:base64url" 形式の本物の暗号文(Step 2 以降)
+//   - encrypted_data   (bytea): 平文 JSON を bytea でラップしただけの暫定形式(現行)
+//
+// 優先順位は v2 → 旧 bytea。Step 1 時点では v2 列はまだ DB に無いため、
+// 全行が旧 bytea 経路を通る(挙動不変)。
+//
+// 失敗時は getCareerProfile の従来挙動を保つ:握りつぶさず console.error で
+// 明示ログ → null 返却。呼び出し側 17 箇所は既に null を「データ無し」として
+// 扱えるため、UI を crash させずに安全側に倒せる。
+// ====================================================================
+export type CareerProfileBlobRow = {
+  encrypted_data?: unknown;
+  encrypted_data_v2?: string | null;
+};
+
+export async function decodeCareerProfileBlob(
+  row: CareerProfileBlobRow,
+): Promise<CareerProfile | null> {
+  // v2 経路を優先:Step 2 で列追加・Step 3 で書き込み・Step 4 でバックフィル
+  // が完了するに従い、こちらを通る行が増えていく。
+  const v2 = row.encrypted_data_v2;
+  if (typeof v2 === "string" && v2.length > 0) {
+    let jsonString: string;
+    try {
+      const plaintext = await decryptField(v2);
+      // 入力が non-empty string のため、戻りも string のはず。
+      // 型ナローイングを越えてきたら破損データ扱いで安全側に倒す。
+      if (typeof plaintext !== "string" || plaintext.length === 0) {
+        console.error("career_profiles: decryptField returned non-string/empty", {
+          type: typeof plaintext,
+        });
+        return null;
+      }
+      jsonString = plaintext;
+    } catch (e) {
+      // 鍵バージョン不一致 / GCM 認証タグ NG / 改竄など。
+      // 現行の JSON.parse 失敗と同じく明示ログ + null で抜ける。
+      console.error("career_profiles: decrypt failed", e);
+      return null;
+    }
+    return parseAndValidateProfile(jsonString);
+  }
+
+  // 旧 bytea 経路(Step 1 時点では全行ここを通る)
+  const jsonString = bytesToText(row.encrypted_data);
+  return parseAndValidateProfile(jsonString);
+}
+
+/**
+ * JSON 文字列 → CareerProfile への変換とスキーマ検証。
+ * 失敗時は console.error + null(getCareerProfile の従来挙動を維持)。
+ */
+function parseAndValidateProfile(jsonString: string): CareerProfile | null {
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(jsonString);
+  } catch (e) {
+    console.error("career_profiles: stored data is not valid JSON", e);
+    return null;
+  }
+
+  const validated = careerProfileSchema.safeParse(parsedJson);
+  if (!validated.success) {
+    console.error("career_profiles: stored data does not match schema", {
+      issues: validated.error.issues,
+      raw: parsedJson,
+    });
+    return null;
+  }
+
+  return validated.data;
+}
+
 /**
  * career_profile の取得
+ *
+ * Step 1: v2 列はまだ DB に存在しないため select には含めない。
+ * decodeCareerProfileBlob は v2 未定義 → 旧 bytea 経路を通る(挙動不変)。
  */
 export async function getCareerProfile(
   userId: string,
@@ -322,29 +403,11 @@ export async function getCareerProfile(
 
   if (!data) return null;
 
-  // バイト列 → JSON文字列 → オブジェクト
-  const jsonString = bytesToText(data.encrypted_data);
-
-  // 読み出し時にスキーマで検証(stale/破損データで UI を crash させないため防御的に)
-  let parsedJson: unknown;
-  try {
-    parsedJson = JSON.parse(jsonString);
-  } catch (e) {
-    console.error("career_profiles: stored data is not valid JSON", e);
-    return null;
-  }
-
-  const validated = careerProfileSchema.safeParse(parsedJson);
-  if (!validated.success) {
-    console.error("career_profiles: stored data does not match schema", {
-      issues: validated.error.issues,
-      raw: parsedJson,
-    });
-    return null;
-  }
+  const profile = await decodeCareerProfileBlob({ encrypted_data: data.encrypted_data });
+  if (!profile) return null;
 
   return {
-    profile: validated.data,
+    profile,
     version: data.version,
     updatedAt: data.updated_at,
   };
