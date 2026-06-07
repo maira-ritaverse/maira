@@ -30,16 +30,24 @@ export default async function CareerResultPage({ params }: { params: Promise<{ i
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold">キャリア棚卸し結果</h1>
           <p className="text-muted-foreground mt-1 text-sm">
             会話から抽出された、あなたの強みと希望
           </p>
         </div>
-        <Button render={<Link href={`/app/career/${id}`} />} variant="outline" size="sm">
-          会話に戻る
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* 編集導線は profile があるときのみ表示(無いと編集対象がないため) */}
+          {profileData && (
+            <Button render={<Link href="/app/career/edit" />} variant="outline" size="sm">
+              編集
+            </Button>
+          )}
+          <Button render={<Link href={`/app/career/${id}`} />} variant="outline" size="sm">
+            会話に戻る
+          </Button>
+        </div>
       </div>
 
       {profileData ? (

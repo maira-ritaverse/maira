@@ -45,6 +45,9 @@ export default async function CareerListPage() {
                 {profileData.profile.strengths.length}個
               </p>
             </div>
+            <Button render={<Link href="/app/career/edit" />} variant="outline" size="sm">
+              編集
+            </Button>
           </div>
         </Card>
       )}
