@@ -8,7 +8,10 @@
 
 import { z } from "zod";
 
-export type ClientLinkStatus = "unlinked" | "invited" | "linked" | "revoked";
+// 二段階解除:revoke_requested は「本人が解除を申請したが猶予期間内」の状態。
+// 申請期間中は引き続き開示される(書類/希望条件 RLS は時刻条件付き)。
+// 期限超過で開示は自動で止まり、エージェント承認 or cron で revoked に確定する。
+export type ClientLinkStatus = "unlinked" | "invited" | "linked" | "revoke_requested" | "revoked";
 
 export type ClientStatus =
   | "initial_meeting"
@@ -31,6 +34,7 @@ export const clientLinkStatusLabels: Record<ClientLinkStatus, string> = {
   unlinked: "未連携",
   invited: "招待済み",
   linked: "連携済み",
+  revoke_requested: "解除申請中",
   revoked: "連携解除",
 };
 
