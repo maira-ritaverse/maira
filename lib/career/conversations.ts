@@ -357,10 +357,15 @@ function parseAndValidateProfile(jsonString: string): CareerProfile | null {
 
   const validated = careerProfileSchema.safeParse(parsedJson);
   if (!validated.success) {
-    console.error("career_profiles: stored data does not match schema", {
-      issues: validated.error.issues,
-      raw: parsedJson,
-    });
+    // セキュリティ:復号後の career_profile 全文(raw)も Zod issue
+    // オブジェクト本体(received 値や message 内に PII が混入し得る)も
+    // ログに出さない。フィールド位置の特定には path だけで十分。
+    const paths = validated.error.issues.map((i) => i.path);
+    if (paths.length > 0) {
+      console.error("career_profiles: stored data does not match schema", { paths });
+    } else {
+      console.error("career_profiles: stored data does not match schema");
+    }
     return null;
   }
 
