@@ -19,6 +19,7 @@ import {
 import { listTasksByClient, listOrganizationMembers } from "@/lib/agency-tasks/queries";
 import { createClient } from "@/lib/supabase/server";
 import { ClientDetailForm } from "./client-detail-form";
+import { DisclosableProfileSection } from "./disclosable-profile-section";
 import { AgencyDocumentsSection } from "./documents-section";
 import { InteractionsSection } from "./interactions-section";
 import { ReferralSection } from "./referral-section";
@@ -148,11 +149,15 @@ export default async function ClientDetailPage({ params }: RouteParams) {
 
       <ClientDetailForm client={client} />
 
-      {/* linked のときのみ書類閲覧セクションを描画。RLS は二重防御として
-          AgencyDocumentsSection 内の取得経路でも効くが、UI 側でも条件分岐して
-          無駄なクエリを抑える。 */}
+      {/* linked のときのみ希望条件・書類閲覧セクションを描画。
+          認可は DB 側(documents は RLS、希望条件は SECURITY DEFINER RPC)で
+          二重防御されるが、UI 側でも条件分岐して無駄なクエリを抑える。
+          希望条件 → 書類の順で「人物理解 → 詳細書類」の自然な閲覧導線にする。 */}
       {client.linkStatus === "linked" && client.linkedUserId && (
-        <AgencyDocumentsSection linkedUserId={client.linkedUserId} clientRecordId={client.id} />
+        <>
+          <DisclosableProfileSection clientRecordId={client.id} />
+          <AgencyDocumentsSection linkedUserId={client.linkedUserId} clientRecordId={client.id} />
+        </>
       )}
 
       <InteractionsSection
