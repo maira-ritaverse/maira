@@ -24,18 +24,25 @@ type ClientRecordRow = {
   revoked_at: string | null;
   created_at: string;
   updated_at: string;
+  // PostgREST の外部キー埋め込み。organizations(id) への関係に基づき
+  // organization name を join 取得。Phase 4 で追加した organizations の
+  // 限定 SELECT ポリシーで本人が見える行のみ name が返る。
+  organizations: { name: string } | null;
 };
 
 // 本人 UI に必要な列だけを明示。SELECT * すると notes / status などエージェント
 // 都合の列まで返ってきて、ログや将来の見直しのときに「何を本人に渡しているか」が
 // 分かりにくくなる。
+// organizations(name) は PostgREST の埋め込みで join 取得。client_records.organization_id
+// → organizations.id の FK で関係解決される。
 const SELECT_COLUMNS =
-  "id, organization_id, link_status, linked_at, revoked_at, created_at, updated_at";
+  "id, organization_id, link_status, linked_at, revoked_at, created_at, updated_at, organizations(name)";
 
 function rowToConnection(row: ClientRecordRow): Connection {
   return {
     id: row.id,
     organizationId: row.organization_id,
+    organizationName: row.organizations?.name ?? null,
     linkStatus: row.link_status,
     linkedAt: row.linked_at,
     revokedAt: row.revoked_at,
@@ -66,7 +73,9 @@ export async function listConnections(): Promise<ConnectionsByStatus> {
     return { invited: [], linked: [], revoked: [] };
   }
 
-  const rows = data as ClientRecordRow[];
+  // PostgREST の埋め込み結果型は `unknown` 寄りに来るため、明示キャストで
+  // ClientRecordRow に詰める。エラー時の早期 return は上で済んでいる。
+  const rows = data as unknown as ClientRecordRow[];
   const buckets: ConnectionsByStatus = { invited: [], linked: [], revoked: [] };
   for (const row of rows) {
     const conn = rowToConnection(row);

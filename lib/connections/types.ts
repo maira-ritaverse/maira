@@ -17,12 +17,16 @@ import type { ClientLinkStatus } from "@/lib/clients/types";
  *   - assigned_member_id:担当アドバイザーID。display_name の引き出し経路が無く
  *     表示できないため省く
  *
- * organization_id は持たせるが、本 Phase では organizations.name を本人が引ける
- * RLS が無いため UI 表示には使わない(将来用にキー値だけ保持)。
+ * organizationName:
+ *   Phase 4 で organizations に「求職者が当事者の client_records 行に対応する
+ *   organization のみ select 可」ポリシーを追加したため、本人 UI でも組織名を
+ *   引けるようになった。RLS で見えない場合は null になりうるが、当事者の行で
+ *   あれば対応する organization も同じ条件で見える設計。
  */
 export type Connection = {
   id: string;
   organizationId: string;
+  organizationName: string | null;
   linkStatus: ClientLinkStatus;
   linkedAt: string | null;
   revokedAt: string | null;

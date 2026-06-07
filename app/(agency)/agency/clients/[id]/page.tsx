@@ -2,6 +2,10 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  CancelInvitationButton,
+  InviteClientButton,
+} from "@/components/features/agency/link-action-buttons";
 import { getClientRecord } from "@/lib/clients/queries";
 import { clientLinkStatusLabels, clientStatusLabels } from "@/lib/clients/types";
 import { listInteractionsByClient } from "@/lib/interactions/queries";
@@ -15,6 +19,7 @@ import {
 import { listTasksByClient, listOrganizationMembers } from "@/lib/agency-tasks/queries";
 import { createClient } from "@/lib/supabase/server";
 import { ClientDetailForm } from "./client-detail-form";
+import { AgencyDocumentsSection } from "./documents-section";
 import { InteractionsSection } from "./interactions-section";
 import { ReferralSection } from "./referral-section";
 import { TasksSection } from "./tasks-section";
@@ -106,38 +111,49 @@ export default async function ClientDetailPage({ params }: RouteParams) {
         </Button>
       </div>
 
-      {/* 連携状態に応じた案内カード */}
+      {/* 連携状態に応じた案内カードとアクション */}
       {client.linkStatus === "unlinked" && (
-        <Card className="border-muted-foreground/20 bg-muted/30 p-4">
+        <Card className="border-muted-foreground/20 bg-muted/30 space-y-3 p-4">
           <p className="text-sm">
             このクライアントはまだMairaアカウントと連携していません。 求職者が{" "}
-            <span className="font-medium">{client.email}</span> でMairaに登録し、
-            連携を承諾すると、共有された書類などを閲覧できるようになります。
+            <span className="font-medium">{client.email}</span> でMairaに登録した後、
+            「連携を招待する」を押すと招待が届き、求職者が承諾すると共有書類を閲覧できます。
           </p>
+          <InviteClientButton clientRecordId={client.id} />
         </Card>
       )}
       {client.linkStatus === "invited" && (
-        <Card className="bg-muted/30 p-4">
+        <Card className="bg-muted/30 flex items-center justify-between gap-4 p-4">
           <p className="text-sm">連携招待を送信済みです。求職者の承諾を待っています。</p>
+          <CancelInvitationButton clientRecordId={client.id} />
         </Card>
       )}
       {client.linkStatus === "linked" && (
         <Card className="border-green-200 bg-green-50/50 p-4 dark:border-green-900 dark:bg-green-950/30">
           <p className="text-sm">
-            このクライアントはMairaアカウントと連携済みです。
-            求職者が共有を許可した書類を閲覧できます(書類閲覧機能は今後追加予定)。
+            このクライアントはMairaアカウントと連携済みです。下の「共有された書類」セクションから
+            履歴書・職務経歴書を閲覧できます。
           </p>
         </Card>
       )}
       {client.linkStatus === "revoked" && (
-        <Card className="bg-muted/30 p-4">
+        <Card className="bg-muted/30 space-y-3 p-4">
           <p className="text-sm">
             連携が解除されています。求職者が再度承諾するまで共有書類は閲覧できません。
+            再度招待を送ることができます。
           </p>
+          <InviteClientButton clientRecordId={client.id} />
         </Card>
       )}
 
       <ClientDetailForm client={client} />
+
+      {/* linked のときのみ書類閲覧セクションを描画。RLS は二重防御として
+          AgencyDocumentsSection 内の取得経路でも効くが、UI 側でも条件分岐して
+          無駄なクエリを抑える。 */}
+      {client.linkStatus === "linked" && client.linkedUserId && (
+        <AgencyDocumentsSection linkedUserId={client.linkedUserId} clientRecordId={client.id} />
+      )}
 
       <InteractionsSection
         clientId={client.id}

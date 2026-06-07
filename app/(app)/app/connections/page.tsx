@@ -18,12 +18,11 @@ import type { Connection } from "@/lib/connections/types";
  * Server Component の段階で除外している(lib/connections/queries.ts 参照)。
  *
  * 組織名の表示について:
- *   organizations の SELECT RLS は "Members can view their own organization"
- *   のみで、求職者(非組織員)は client_records.organization_id を辿っても
- *   organizations.name を引けない。Phase 3 は DB 変更を行わないため、本ページ
- *   では組織名は表示せず汎用ラベル(「エージェントから」「連携中のエージェント」)
- *   で識別する。組織名表示は後続 Phase で organizations への限定 SELECT RLS を
- *   追加することで解決する想定。
+ *   Phase 4 で organizations に「求職者が当事者の client_records 行に対応する
+ *   organization のみ select 可」ポリシーを追加したため、本ページでも組織名を
+ *   表示できる。listConnections は PostgREST の埋め込みで organizations(name) を
+ *   join し、organizationName が取れたものを優先表示する。RLS で見えない場合や
+ *   組織名未設定の場合は汎用ラベルにフォールバックする。
  */
 export default async function ConnectionsPage() {
   const supabase = await createClient();
@@ -77,7 +76,9 @@ function InvitedSection({ items }: { items: Connection[] }) {
             <Card key={c.id} className="p-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
-                  <p className="text-sm font-medium">エージェントから連携の招待が届いています</p>
+                  <p className="text-sm font-medium">
+                    {agencyLabel(c.organizationName)}から連携の招待が届いています
+                  </p>
                   <p className="text-muted-foreground mt-1 text-xs">
                     招待日時:{formatDateTime(c.updatedAt)}
                   </p>
@@ -120,7 +121,7 @@ function LinkedSection({ items }: { items: Connection[] }) {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 space-y-3">
                   <div>
-                    <p className="text-sm font-medium">連携中のエージェント</p>
+                    <p className="text-sm font-medium">{agencyLabel(c.organizationName)}</p>
                     <p className="text-muted-foreground mt-1 text-xs">
                       連携日時:{formatDateTime(c.linkedAt)}
                     </p>
@@ -158,7 +159,9 @@ function RevokedSection({ items }: { items: Connection[] }) {
       <div className="space-y-2">
         {items.map((c) => (
           <Card key={c.id} className="bg-muted/30 p-3">
-            <p className="text-muted-foreground text-xs">解除日時:{formatDateTime(c.revokedAt)}</p>
+            <p className="text-muted-foreground text-xs">
+              {agencyLabel(c.organizationName)} — 解除日時:{formatDateTime(c.revokedAt)}
+            </p>
           </Card>
         ))}
       </div>
@@ -169,6 +172,16 @@ function RevokedSection({ items }: { items: Connection[] }) {
 // ====================================================================
 // 表示ヘルパー
 // ====================================================================
+/**
+ * 組織名がある場合はそれを、ない場合(RLS で見えない or 名前未設定)は汎用ラベルに
+ * フォールバックする表示ヘルパー。
+ * - 招待元/連携先の判別に使う:Phase 4 で RLS が通れば「○○エージェント」表示。
+ */
+function agencyLabel(name: string | null): string {
+  if (name && name.trim().length > 0) return name;
+  return "連携中のエージェント";
+}
+
 function formatDateTime(iso: string | null): string {
   if (!iso) return "—";
   try {
