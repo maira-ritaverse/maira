@@ -39,9 +39,17 @@ type Props = {
   linkedResumeName: string | null;
   // 同上、資格一覧(履歴書未選択 or 履歴書が空なら [])
   linkedResumeLicenses: LicenseItem[];
+  // career_profile が存在するか。CvForm の AI ボタン有効化判定に使う(Phase 4-c〜)
+  hasCareerProfile: boolean;
 };
 
-export function CvTabs({ cv, resumeOptions, linkedResumeName, linkedResumeLicenses }: Props) {
+export function CvTabs({
+  cv,
+  resumeOptions,
+  linkedResumeName,
+  linkedResumeLicenses,
+  hasCareerProfile,
+}: Props) {
   const [tab, setTab] = useState<"edit" | "preview">("edit");
   const [pdfPending, setPdfPending] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -98,7 +106,12 @@ export function CvTabs({ cv, resumeOptions, linkedResumeName, linkedResumeLicens
       )}
 
       <div className={tab === "edit" ? "" : "hidden"}>
-        <CvForm mode="edit" existing={cv} resumeOptions={resumeOptions} />
+        <CvForm
+          mode="edit"
+          existing={cv}
+          resumeOptions={resumeOptions}
+          hasCareerProfile={hasCareerProfile}
+        />
       </div>
       <div className={tab === "preview" ? "" : "hidden"}>
         <CvPreview

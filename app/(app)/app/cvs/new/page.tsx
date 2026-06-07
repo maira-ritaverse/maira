@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { getCareerProfile } from "@/lib/career/conversations";
 import { listResumes } from "@/lib/resumes/queries";
 import { createClient } from "@/lib/supabase/server";
 import { CvForm } from "../cv-form";
@@ -21,8 +22,13 @@ export default async function NewCvPage() {
 
   if (!user) redirect("/auth/login");
 
-  const resumes = await listResumes(user.id);
+  // career_profile も並列で読む(AI ボタン有効化判定に使う、Phase 4-c〜)。
+  const [resumes, careerProfile] = await Promise.all([
+    listResumes(user.id),
+    getCareerProfile(user.id),
+  ]);
   const resumeOptions = resumes.map((r) => ({ id: r.id, title: r.title }));
+  const hasCareerProfile = careerProfile !== null;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -35,7 +41,7 @@ export default async function NewCvPage() {
         <h1 className="text-2xl font-bold">新しい職務経歴書を作成</h1>
       </div>
 
-      <CvForm mode="create" resumeOptions={resumeOptions} />
+      <CvForm mode="create" resumeOptions={resumeOptions} hasCareerProfile={hasCareerProfile} />
     </div>
   );
 }

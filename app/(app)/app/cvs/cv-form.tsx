@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { Controller, useFieldArray, useForm } from "react-hook-form";
+import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Trash2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { AIActionButton } from "@/components/features/cv/ai-action-button";
 import {
   employmentTypeLabels,
   employmentTypes,
@@ -23,6 +24,8 @@ import {
   type Cv,
   type PeriodPoint,
   type SaveCvRequest,
+  type Skill,
+  type WorkExperience,
 } from "@/lib/cvs/types";
 
 /**
@@ -36,11 +39,20 @@ import {
  * - mode="edit" のみ「削除」ボタンを表示(window.confirm の二段ガード)
  *
  * Phase 1 では AI下書き / プレビュー / PDF は無し。Phase 2 以降で追加。
+ *
+ * Phase 4-c でスキル候補生成、4-d で全項目に AI 下書きボタンを追加:
+ * - 職務要約 / 自己PR / 各職歴(行ごと)/ スキル候補 の 4 種類のボタン
+ * - 共通ボタン:components/features/cv/ai-action-button.tsx
+ * - 連打防止:draftingField を 1 つの union state で管理(同時実行は 1 件まで)
+ * - hasCareerProfile が false なら全ボタン無効化 + 棚卸し導線
+ * - 会社名未入力の職歴行はボタン無効化(API 側でも弾くが、UX のため client でも判定)
+ * - 既存入力がある項目で生成する時は window.confirm で上書き確認
+ * - エラー表示はフォーム上部の draftError Alert に集約
  */
 
 type ResumeOption = { id: string; title: string };
 
-type Props =
+type Props = (
   | {
       mode: "create";
       existing?: undefined;
@@ -50,7 +62,44 @@ type Props =
       mode: "edit";
       existing: Cv;
       resumeOptions: ResumeOption[];
-    };
+    }
+) & {
+  // このユーザーの career_profile が存在するか。AI ボタンを有効化するかの判定。
+  // 4-c 時点ではスキル候補生成のみで使うが、4-d で全 AI ボタンが共通して使う。
+  hasCareerProfile: boolean;
+};
+
+/**
+ * 現在生成中の AI 下書きフィールドを表す union(Phase 4-d、連打防止)。
+ *
+ * - "summary" / "self_pr" / "skills": トップレベルの単一フィールド
+ * - { type: "work_experience"; index }: 各職歴(行ごと)
+ * - null: 何も動いていない
+ *
+ * draftingField が非 null の間、他のすべての AI ボタンは無効化される。
+ */
+type DraftingField =
+  | "summary"
+  | "self_pr"
+  | { type: "work_experience"; index: number }
+  | "skills"
+  | null;
+
+/**
+ * draftingField が「特定のフィールド」と一致するか判定するヘルパー。
+ *
+ * 文字列フィールド("summary" 等)と work_experience({type, index})の両方に対応。
+ */
+function isFieldDrafting(current: DraftingField, target: Exclude<DraftingField, null>): boolean {
+  if (current === null) return false;
+  if (typeof current === "string" && typeof target === "string") {
+    return current === target;
+  }
+  if (typeof current === "object" && typeof target === "object") {
+    return current.type === target.type && current.index === target.index;
+  }
+  return false;
+}
 
 // 年・月選択(履歴書と同じ範囲)
 const YEAR_OPTIONS = (() => {
@@ -62,7 +111,7 @@ const YEAR_OPTIONS = (() => {
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
 
 export function CvForm(props: Props) {
-  const { mode, resumeOptions } = props;
+  const { mode, resumeOptions, hasCareerProfile } = props;
   const existing = mode === "edit" ? props.existing : undefined;
 
   const router = useRouter();
@@ -71,10 +120,23 @@ export function CvForm(props: Props) {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // AI 下書き / 候補生成 用 state(Phase 4-d で統一)
+  // - draftingField: 現在生成中のフィールド。null = 何も動いていない
+  //   "summary" / "self_pr" / { type: "work_experience", index } / "skills"
+  //   いずれか 1 つに限定することで連打防止(同時に複数の AI 生成は走らせない)。
+  // - draftError: API エラーの文言(no_career_profile / 通信エラー等を共通表示)
+  // - skillCandidates / selectedSkillCandidates: スキル候補パネル用(Phase 4-c)
+  const [draftingField, setDraftingField] = useState<DraftingField>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [skillCandidates, setSkillCandidates] = useState<Skill[] | null>(null);
+  const [selectedSkillCandidates, setSelectedSkillCandidates] = useState<Set<number>>(new Set());
+
   const {
     register,
     control,
     handleSubmit,
+    getValues,
+    setValue,
     formState: { errors },
   } = useForm<SaveCvRequest>({
     resolver: zodResolver(saveCvRequestSchema),
@@ -90,6 +152,258 @@ export function CvForm(props: Props) {
     control,
     name: "body.skills",
   });
+
+  // 各職歴行の company_name を購読(会社名未入力なら AI ボタンを disabled にするため)。
+  // useWatch は購読対象の path 変更時のみ再レンダーを起こすので、
+  // 他フィールド(title 等)の編集では再レンダーされない。
+  // 全行を一括で watch することで、行追加・削除にも追従する。
+  const workExperiencesWatch = useWatch({
+    control,
+    name: "body.work_experiences",
+  });
+
+  const isAnyDrafting = draftingField !== null;
+
+  /**
+   * AI エラーレスポンスを共通の文言に変換する(Phase 4-d で共通化)。
+   *
+   * no_career_profile のとき:棚卸しへの導線を示す文言
+   * その他:API が返したメッセージ、無ければ汎用文言
+   */
+  const messageFromErrorResponse = (json: {
+    message?: string;
+    error?: string;
+    code?: string;
+  }): string => {
+    if (json.code === "no_career_profile") {
+      return "先にキャリア棚卸しを完了してください。棚卸し結果を元に AI が下書きを作成します。";
+    }
+    return json.message ?? json.error ?? "AI 生成に失敗しました";
+  };
+
+  /**
+   * 職務要約の AI 下書きを生成して setValue する(Phase 4-d)。
+   * 既存入力があれば確認(履歴書 draft と同じパターン)。
+   */
+  const handleGenerateSummary = async () => {
+    const current = (getValues("body.summary") ?? "").trim();
+    if (current.length > 0) {
+      const ok = window.confirm(
+        "「職務要約」には既に入力があります。AIの下書きで上書きしてもよろしいですか?\n\n(現在の入力は失われます)",
+      );
+      if (!ok) return;
+    }
+    setDraftError(null);
+    setDraftingField("summary");
+    try {
+      const response = await fetch("/api/cvs/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ field: "summary" }),
+      });
+      const json = (await response.json()) as {
+        content?: string;
+        message?: string;
+        error?: string;
+        code?: string;
+      };
+      if (!response.ok) {
+        setDraftError(messageFromErrorResponse(json));
+        return;
+      }
+      if (json.content) {
+        setValue("body.summary", json.content, { shouldDirty: true });
+      }
+    } catch (err) {
+      setDraftError(err instanceof Error ? err.message : "通信エラーが発生しました");
+    } finally {
+      setDraftingField(null);
+    }
+  };
+
+  /**
+   * 自己PR の AI 下書きを生成して setValue する(Phase 4-d)。
+   */
+  const handleGenerateSelfPr = async () => {
+    const current = (getValues("body.self_pr") ?? "").trim();
+    if (current.length > 0) {
+      const ok = window.confirm(
+        "「自己PR」には既に入力があります。AIの下書きで上書きしてもよろしいですか?\n\n(現在の入力は失われます)",
+      );
+      if (!ok) return;
+    }
+    setDraftError(null);
+    setDraftingField("self_pr");
+    try {
+      const response = await fetch("/api/cvs/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ field: "self_pr" }),
+      });
+      const json = (await response.json()) as {
+        content?: string;
+        message?: string;
+        error?: string;
+        code?: string;
+      };
+      if (!response.ok) {
+        setDraftError(messageFromErrorResponse(json));
+        return;
+      }
+      if (json.content) {
+        setValue("body.self_pr", json.content, { shouldDirty: true });
+      }
+    } catch (err) {
+      setDraftError(err instanceof Error ? err.message : "通信エラーが発生しました");
+    } finally {
+      setDraftingField(null);
+    }
+  };
+
+  /**
+   * 特定の職歴行の業務内容・実績を AI 生成して setValue する(Phase 4-d)。
+   *
+   * - 会社名が空なら何もしない(クライアント側ガード。API でも 400 を返す)
+   * - 既存入力(job_description or achievements)があれば確認
+   * - レスポンスの content は { job_description, achievements } の構造化データ。
+   *   API は index を echo するが、クライアントは closure の index を使う
+   *   (生成中に行を並べ替えるレースを避ける、resume-form と同じ方針)
+   */
+  const handleGenerateWorkExperience = async (index: number) => {
+    const we = getValues(`body.work_experiences.${index}`) as WorkExperience | undefined;
+    if (!we) return;
+    if (!we.company_name?.trim()) {
+      setDraftError("会社名を入力してから AI 下書きを生成してください");
+      return;
+    }
+    const hasExisting =
+      (we.job_description ?? "").trim().length > 0 || (we.achievements ?? "").trim().length > 0;
+    if (hasExisting) {
+      const ok = window.confirm(
+        `「職歴 ${index + 1}」の業務内容・実績には既に入力があります。AIの下書きで上書きしてもよろしいですか?\n\n(現在の入力は失われます)`,
+      );
+      if (!ok) return;
+    }
+    setDraftError(null);
+    setDraftingField({ type: "work_experience", index });
+    try {
+      const response = await fetch("/api/cvs/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          field: "work_experience",
+          workExperience: we,
+          index,
+        }),
+      });
+      const json = (await response.json()) as {
+        content?: { job_description?: string; achievements?: string };
+        message?: string;
+        error?: string;
+        code?: string;
+      };
+      if (!response.ok) {
+        setDraftError(messageFromErrorResponse(json));
+        return;
+      }
+      if (json.content) {
+        setValue(
+          `body.work_experiences.${index}.job_description`,
+          json.content.job_description ?? "",
+          { shouldDirty: true },
+        );
+        setValue(`body.work_experiences.${index}.achievements`, json.content.achievements ?? "", {
+          shouldDirty: true,
+        });
+      }
+    } catch (err) {
+      setDraftError(err instanceof Error ? err.message : "通信エラーが発生しました");
+    } finally {
+      setDraftingField(null);
+    }
+  };
+
+  /**
+   * スキル候補を API から取得する(Phase 4-c → 4-d で draftingField に乗せ替え)。
+   *
+   * 取得後はパネルを開いた状態にする(skillCandidates が配列なら表示)。
+   * 連打防止は draftingField === "skills" の間、他ボタンを disabled にすることで実現。
+   * エラーは draftError(共通)に詰めて、フォーム上部の Alert で表示する。
+   */
+  const handleFetchSkillCandidates = async () => {
+    setDraftError(null);
+    setDraftingField("skills");
+    try {
+      const response = await fetch("/api/cvs/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ field: "skills" }),
+      });
+
+      const json = (await response.json()) as {
+        candidates?: Skill[];
+        message?: string;
+        error?: string;
+        code?: string;
+      };
+
+      if (!response.ok) {
+        setDraftError(messageFromErrorResponse(json));
+        return;
+      }
+
+      // 候補が空でもパネルは開く(「候補が見つかりませんでした」の案内のため)
+      setSkillCandidates(json.candidates ?? []);
+      // 取得し直したら選択状態はリセット(以前のチェックは残さない)
+      setSelectedSkillCandidates(new Set());
+    } catch (err) {
+      setDraftError(err instanceof Error ? err.message : "通信エラーが発生しました");
+    } finally {
+      setDraftingField(null);
+    }
+  };
+
+  /**
+   * 選んだ候補を skills(useFieldArray)に追加する。
+   *
+   * 既に同名スキルがフォームに存在する場合は、重複登録を避けるためスキップする
+   * (大文字小文字・前後空白を無視して比較)。
+   * 追加後はパネルを閉じる(skillCandidates=null、selected=空)。
+   */
+  const handleAddSelectedSkillCandidates = () => {
+    if (!skillCandidates) return;
+
+    // 既存スキルの正規化名 Set(O(N) でルックアップしたいので Set に詰める)。
+    // getValues で最新値を取る(register でユーザーが手入力した直後でも反映される)。
+    const existingNames = new Set(
+      (getValues("body.skills") ?? []).map((s) => normalizeSkillName(s.name)),
+    );
+
+    skillCandidates.forEach((candidate, idx) => {
+      if (!selectedSkillCandidates.has(idx)) return;
+      if (existingNames.has(normalizeSkillName(candidate.name))) return;
+      skillsArray.append({
+        category: candidate.category,
+        name: candidate.name,
+        level: candidate.level,
+        description: candidate.description,
+      });
+      // 連続追加で同じ AI 候補内の重複も避ける
+      existingNames.add(normalizeSkillName(candidate.name));
+    });
+
+    setSkillCandidates(null);
+    setSelectedSkillCandidates(new Set());
+  };
+
+  const toggleSkillCandidate = (idx: number) => {
+    setSelectedSkillCandidates((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  };
 
   const onSubmit = (data: SaveCvRequest) => {
     startTransition(async () => {
@@ -159,6 +473,19 @@ export function CvForm(props: Props) {
         <Alert>
           <AlertDescription>{saveMessage}</AlertDescription>
         </Alert>
+      )}
+      {draftError && (
+        <Alert variant="destructive">
+          <AlertDescription>AI生成エラー: {draftError}</AlertDescription>
+        </Alert>
+      )}
+      {/* AI 下書き使用時の注意喚起(履歴書フォームと同じトーン)。
+          career_profile が無いとどのみち全 AI ボタンが無効化されるので、
+          有効化されているときだけ案内文を出してフォーム上部の情報量を抑える。 */}
+      {hasCareerProfile && (
+        <p className="text-muted-foreground text-xs">
+          ✨マーク付きボタンの下書きは AI が生成します。内容は必ずご自身で確認・編集してください。
+        </p>
       )}
 
       {/* ============================================ */}
@@ -234,15 +561,25 @@ export function CvForm(props: Props) {
       {/* セクション2:職務要約                         */}
       {/* ============================================ */}
       <Card className="space-y-4 p-6">
-        <div>
-          <h2 className="text-lg font-semibold">職務要約</h2>
-          <p className="text-muted-foreground mt-1 text-xs">
-            これまでのキャリアを 150〜250 字程度で簡潔に(Phase 4 で AI 下書きに対応予定)
-          </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">職務要約</h2>
+            <p className="text-muted-foreground mt-1 text-xs">
+              これまでのキャリアを 150〜250 字程度で簡潔に
+            </p>
+          </div>
+          <AIActionButton
+            label="AIで下書き"
+            isDrafting={isFieldDrafting(draftingField, "summary")}
+            disabled={isPending || (isAnyDrafting && !isFieldDrafting(draftingField, "summary"))}
+            hasCareerProfile={hasCareerProfile}
+            onClick={handleGenerateSummary}
+            ariaLabel="職務要約のAI下書きを生成"
+          />
         </div>
         <Textarea
           {...register("body.summary")}
-          disabled={isPending}
+          disabled={isPending || isFieldDrafting(draftingField, "summary")}
           rows={5}
           placeholder="例:SaaS 企業で 5 年間、ユーザー視点の機能設計を担当..."
         />
@@ -258,8 +595,8 @@ export function CvForm(props: Props) {
         <div>
           <h2 className="text-lg font-semibold">職務経歴(新しい順)</h2>
           <p className="text-muted-foreground mt-1 text-xs">
-            会社名・期間・役職は事実なのでご自身で入力してください。業務内容・実績は Phase 4 で AI
-            下書きに対応予定です(AI に事実は作らせません)
+            会社名・期間・役職は事実なのでご自身で入力してください。業務内容・実績は各職歴の「✨AIで下書き」から生成できます(AI
+            に事実は作らせません)
           </p>
         </div>
 
@@ -270,144 +607,168 @@ export function CvForm(props: Props) {
         )}
 
         <div className="space-y-4">
-          {workExperiencesArray.fields.map((field, index) => (
-            <div key={field.id} className="space-y-3 rounded-md border p-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">職歴 {index + 1}</p>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => workExperiencesArray.remove(index)}
-                  disabled={isPending}
-                  aria-label={`職歴 ${index + 1} を削除`}
-                >
-                  削除
-                </Button>
-              </div>
+          {workExperiencesArray.fields.map((field, index) => {
+            // 会社名未入力ならこの行の AI ボタンを無効化(API でも弾くが、UX 親切のため client でも判定)。
+            // workExperiencesWatch は useWatch でリアクティブに、行内編集に追従する。
+            const companyName = workExperiencesWatch?.[index]?.company_name ?? "";
+            const hasCompanyName = companyName.trim().length > 0;
+            const thisRowTarget = { type: "work_experience" as const, index };
+            const isThisRowDrafting = isFieldDrafting(draftingField, thisRowTarget);
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label htmlFor={`we-${index}-company`}>
-                    会社名 <span className="text-red-600">*</span>
-                  </Label>
-                  <Input
-                    id={`we-${index}-company`}
-                    {...register(`body.work_experiences.${index}.company_name`)}
-                    disabled={isPending}
-                    placeholder="例:株式会社○○"
-                  />
-                  {errors.body?.work_experiences?.[index]?.company_name && (
-                    <p className="text-sm text-red-600">
-                      {errors.body.work_experiences[index]?.company_name?.message}
-                    </p>
-                  )}
+            return (
+              <div key={field.id} className="space-y-3 rounded-md border p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium">職歴 {index + 1}</p>
+                  <div className="flex items-center gap-2">
+                    <AIActionButton
+                      label="AIで下書き"
+                      isDrafting={isThisRowDrafting}
+                      disabled={isPending || (isAnyDrafting && !isThisRowDrafting)}
+                      hasCareerProfile={hasCareerProfile}
+                      disabledHint={
+                        hasCareerProfile && !hasCompanyName
+                          ? "会社名を入力すると利用できます"
+                          : undefined
+                      }
+                      onClick={() => handleGenerateWorkExperience(index)}
+                      ariaLabel={`職歴 ${index + 1} の業務内容・実績をAIで下書き`}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => workExperiencesArray.remove(index)}
+                      disabled={isPending}
+                      aria-label={`職歴 ${index + 1} を削除`}
+                    >
+                      削除
+                    </Button>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor={`we-${index}-industry`}>業界</Label>
-                  <Input
-                    id={`we-${index}-industry`}
-                    {...register(`body.work_experiences.${index}.industry`, {
-                      setValueAs: emptyToNullString,
-                    })}
-                    disabled={isPending}
-                    placeholder="例:SaaS、人材"
-                  />
-                </div>
-              </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label>入社年月</Label>
-                  <Controller
-                    control={control}
-                    name={`body.work_experiences.${index}.period_start`}
-                    render={({ field: f }) => (
-                      <PeriodInput
-                        value={f.value ?? null}
-                        onChange={f.onChange}
-                        disabled={isPending}
-                      />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label htmlFor={`we-${index}-company`}>
+                      会社名 <span className="text-red-600">*</span>
+                    </Label>
+                    <Input
+                      id={`we-${index}-company`}
+                      {...register(`body.work_experiences.${index}.company_name`)}
+                      disabled={isPending}
+                      placeholder="例:株式会社○○"
+                    />
+                    {errors.body?.work_experiences?.[index]?.company_name && (
+                      <p className="text-sm text-red-600">
+                        {errors.body.work_experiences[index]?.company_name?.message}
+                      </p>
                     )}
-                  />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor={`we-${index}-industry`}>業界</Label>
+                    <Input
+                      id={`we-${index}-industry`}
+                      {...register(`body.work_experiences.${index}.industry`, {
+                        setValueAs: emptyToNullString,
+                      })}
+                      disabled={isPending}
+                      placeholder="例:SaaS、人材"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <Label>退社年月(在籍中は空欄)</Label>
-                  <Controller
-                    control={control}
-                    name={`body.work_experiences.${index}.period_end`}
-                    render={({ field: f }) => (
-                      <PeriodInput
-                        value={f.value ?? null}
-                        onChange={f.onChange}
-                        disabled={isPending}
-                      />
-                    )}
-                  />
-                  {/* refine による前後チェックは period_end にエラーを置く設計
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label>入社年月</Label>
+                    <Controller
+                      control={control}
+                      name={`body.work_experiences.${index}.period_start`}
+                      render={({ field: f }) => (
+                        <PeriodInput
+                          value={f.value ?? null}
+                          onChange={f.onChange}
+                          disabled={isPending}
+                        />
+                      )}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>退社年月(在籍中は空欄)</Label>
+                    <Controller
+                      control={control}
+                      name={`body.work_experiences.${index}.period_end`}
+                      render={({ field: f }) => (
+                        <PeriodInput
+                          value={f.value ?? null}
+                          onChange={f.onChange}
+                          disabled={isPending}
+                        />
+                      )}
+                    />
+                    {/* refine による前後チェックは period_end にエラーを置く設計
                       (lib/cvs/types.ts の workExperienceSchema.refine)。 */}
-                  {errors.body?.work_experiences?.[index]?.period_end && (
-                    <p className="text-sm text-red-600">
-                      {errors.body.work_experiences[index]?.period_end?.message}
-                    </p>
-                  )}
+                    {errors.body?.work_experiences?.[index]?.period_end && (
+                      <p className="text-sm text-red-600">
+                        {errors.body.work_experiences[index]?.period_end?.message}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label htmlFor={`we-${index}-position`}>役職</Label>
+                    <Input
+                      id={`we-${index}-position`}
+                      {...register(`body.work_experiences.${index}.position`, {
+                        setValueAs: emptyToNullString,
+                      })}
+                      disabled={isPending}
+                      placeholder="例:プロダクトマネージャー"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor={`we-${index}-employment`}>雇用形態</Label>
+                    <select
+                      id={`we-${index}-employment`}
+                      {...register(`body.work_experiences.${index}.employment_type`, {
+                        setValueAs: emptyToNullString,
+                      })}
+                      disabled={isPending}
+                      className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+                    >
+                      <option value="">— 選択しない —</option>
+                      {employmentTypes.map((t) => (
+                        <option key={t} value={t}>
+                          {employmentTypeLabels[t]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
                 <div className="space-y-1">
-                  <Label htmlFor={`we-${index}-position`}>役職</Label>
-                  <Input
-                    id={`we-${index}-position`}
-                    {...register(`body.work_experiences.${index}.position`, {
-                      setValueAs: emptyToNullString,
-                    })}
-                    disabled={isPending}
-                    placeholder="例:プロダクトマネージャー"
+                  <Label htmlFor={`we-${index}-description`}>業務内容</Label>
+                  <Textarea
+                    id={`we-${index}-description`}
+                    {...register(`body.work_experiences.${index}.job_description`)}
+                    disabled={isPending || isThisRowDrafting}
+                    rows={4}
+                    placeholder="担当した業務を箇条書きまたは文章で(右上の「AIで下書き」でも生成できます)"
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor={`we-${index}-employment`}>雇用形態</Label>
-                  <select
-                    id={`we-${index}-employment`}
-                    {...register(`body.work_experiences.${index}.employment_type`, {
-                      setValueAs: emptyToNullString,
-                    })}
-                    disabled={isPending}
-                    className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-                  >
-                    <option value="">— 選択しない —</option>
-                    {employmentTypes.map((t) => (
-                      <option key={t} value={t}>
-                        {employmentTypeLabels[t]}
-                      </option>
-                    ))}
-                  </select>
+                  <Label htmlFor={`we-${index}-achievements`}>実績・成果</Label>
+                  <Textarea
+                    id={`we-${index}-achievements`}
+                    {...register(`body.work_experiences.${index}.achievements`)}
+                    disabled={isPending || isThisRowDrafting}
+                    rows={3}
+                    placeholder="数値があれば数値で(○○% 改善 等)、なければ定性的に"
+                  />
                 </div>
               </div>
-
-              <div className="space-y-1">
-                <Label htmlFor={`we-${index}-description`}>業務内容</Label>
-                <Textarea
-                  id={`we-${index}-description`}
-                  {...register(`body.work_experiences.${index}.job_description`)}
-                  disabled={isPending}
-                  rows={4}
-                  placeholder="担当した業務を箇条書きまたは文章で(Phase 4 で AI 下書きに対応予定)"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor={`we-${index}-achievements`}>実績・成果</Label>
-                <Textarea
-                  id={`we-${index}-achievements`}
-                  {...register(`body.work_experiences.${index}.achievements`)}
-                  disabled={isPending}
-                  rows={3}
-                  placeholder="数値があれば数値で(○○% 改善 等)、なければ定性的に(Phase 4 で AI 下書きに対応予定)"
-                />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <Button
@@ -425,12 +786,42 @@ export function CvForm(props: Props) {
       {/* セクション4:スキル                           */}
       {/* ============================================ */}
       <Card className="space-y-4 p-6">
-        <div>
-          <h2 className="text-lg font-semibold">スキル</h2>
-          <p className="text-muted-foreground mt-1 text-xs">
-            言語・フレームワーク・ツール・ソフトスキル・ドメイン知識など
-          </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">スキル</h2>
+            <p className="text-muted-foreground mt-1 text-xs">
+              言語・フレームワーク・ツール・ソフトスキル・ドメイン知識など
+            </p>
+          </div>
+          {/* スキル候補生成ボタン(Phase 4-c、4-d で共通 AIActionButton に寄せ替え)。
+              候補は AI が抽出 → ユーザーがチェックで採択 → skills に追加する。
+              ラベルだけ「AIでスキル候補を提案」に変えて、他項目のボタンと挙動を揃える。 */}
+          <AIActionButton
+            label="AIでスキル候補を提案"
+            isDrafting={isFieldDrafting(draftingField, "skills")}
+            disabled={isPending || (isAnyDrafting && !isFieldDrafting(draftingField, "skills"))}
+            hasCareerProfile={hasCareerProfile}
+            onClick={handleFetchSkillCandidates}
+            ariaLabel="棚卸し結果からAIでスキル候補を提案"
+          />
         </div>
+
+        {/* スキル候補パネル(取得済み時のみ表示) */}
+        {skillCandidates && (
+          <SkillCandidatesPanel
+            candidates={skillCandidates}
+            selected={selectedSkillCandidates}
+            existingSkillNames={
+              new Set((getValues("body.skills") ?? []).map((s) => normalizeSkillName(s.name)))
+            }
+            onToggle={toggleSkillCandidate}
+            onAdd={handleAddSelectedSkillCandidates}
+            onClose={() => {
+              setSkillCandidates(null);
+              setSelectedSkillCandidates(new Set());
+            }}
+          />
+        )}
 
         {skillsArray.fields.length === 0 && (
           <p className="text-muted-foreground text-sm">
@@ -517,15 +908,25 @@ export function CvForm(props: Props) {
       {/* セクション5:自己PR                           */}
       {/* ============================================ */}
       <Card className="space-y-4 p-6">
-        <div>
-          <h2 className="text-lg font-semibold">自己PR</h2>
-          <p className="text-muted-foreground mt-1 text-xs">
-            強み・働き方の方針・今後のキャリア展望など(Phase 4 で AI 下書きに対応予定)
-          </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">自己PR</h2>
+            <p className="text-muted-foreground mt-1 text-xs">
+              強み・働き方の方針・今後のキャリア展望など
+            </p>
+          </div>
+          <AIActionButton
+            label="AIで下書き"
+            isDrafting={isFieldDrafting(draftingField, "self_pr")}
+            disabled={isPending || (isAnyDrafting && !isFieldDrafting(draftingField, "self_pr"))}
+            hasCareerProfile={hasCareerProfile}
+            onClick={handleGenerateSelfPr}
+            ariaLabel="自己PRのAI下書きを生成"
+          />
         </div>
         <Textarea
           {...register("body.self_pr")}
-          disabled={isPending}
+          disabled={isPending || isFieldDrafting(draftingField, "self_pr")}
           rows={6}
           placeholder="例:ユーザー視点での課題抽出を強みとしてきました..."
         />
@@ -708,4 +1109,123 @@ function buildEmptySkill() {
 function emptyToNullString(v: unknown): string | null {
   if (typeof v !== "string") return v as string | null;
   return v === "" ? null : v;
+}
+
+/**
+ * スキル名の重複検出用に正規化する。
+ *
+ * 「TypeScript」と「typescript」「 typescript 」が同じスキルとして扱われるよう、
+ * trim + lowercase で比較する。完全一致では無いものは別スキルとして許す
+ * (例:「React」と「React Native」)。
+ */
+function normalizeSkillName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+// ====================================================================
+// スキル候補パネル(Phase 4-c)
+//
+// 取得した候補をチェックボックスで採択 → 「追加」で skills に append。
+// 既に同名スキルが存在する候補はチェック不可にし、ラベルで明示する
+// (重複追加を未然に防ぐ)。空配列の時は「候補が見つかりませんでした」を出す。
+// ====================================================================
+
+function SkillCandidatesPanel({
+  candidates,
+  selected,
+  existingSkillNames,
+  onToggle,
+  onAdd,
+  onClose,
+}: {
+  candidates: Skill[];
+  selected: Set<number>;
+  existingSkillNames: Set<string>;
+  onToggle: (idx: number) => void;
+  onAdd: () => void;
+  onClose: () => void;
+}) {
+  // 「追加可能な候補が 0 件」だと追加ボタンを無効化したいので、選択中の有効件数を数える。
+  const selectableSelectedCount = Array.from(selected).filter((idx) => {
+    const c = candidates[idx];
+    return c ? !existingSkillNames.has(normalizeSkillName(c.name)) : false;
+  }).length;
+
+  return (
+    <div className="bg-muted/30 space-y-3 rounded-md border p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium">AI が提案したスキル候補</p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            棚卸し結果から抽出した候補です。持っているスキルにチェックして「追加」を押すと、
+            下のスキル一覧に追加されます。
+          </p>
+        </div>
+        <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="候補を閉じる">
+          閉じる
+        </Button>
+      </div>
+
+      {candidates.length === 0 ? (
+        <p className="text-muted-foreground py-2 text-sm">
+          棚卸し結果から具体的なスキル名が見つかりませんでした。手動で追加してください。
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {candidates.map((c, idx) => {
+            const isDuplicate = existingSkillNames.has(normalizeSkillName(c.name));
+            const isChecked = selected.has(idx);
+            return (
+              <li
+                key={`${c.name}-${idx}`}
+                className={`flex items-start gap-3 rounded-md border bg-white p-3 ${
+                  isDuplicate ? "opacity-60" : ""
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  id={`skill-candidate-${idx}`}
+                  checked={isChecked && !isDuplicate}
+                  disabled={isDuplicate}
+                  onChange={() => onToggle(idx)}
+                  className="mt-1"
+                  aria-label={`${c.name} を採択`}
+                />
+                <label
+                  htmlFor={`skill-candidate-${idx}`}
+                  className={`flex-1 ${isDuplicate ? "cursor-not-allowed" : "cursor-pointer"}`}
+                >
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <span className="text-sm font-medium">{c.name}</span>
+                    <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs">
+                      {skillCategoryLabels[c.category]}
+                    </span>
+                    {c.level && (
+                      <span className="text-muted-foreground text-xs">
+                        ({skillLevelLabels[c.level]})
+                      </span>
+                    )}
+                    {isDuplicate && (
+                      <span className="text-xs text-amber-700">
+                        既に追加済みのため選択できません
+                      </span>
+                    )}
+                  </div>
+                  {c.description && (
+                    <p className="text-muted-foreground mt-1 text-xs">{c.description}</p>
+                  )}
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <div className="flex justify-end gap-2">
+        <Button type="button" size="sm" onClick={onAdd} disabled={selectableSelectedCount === 0}>
+          選んだものを追加{selectableSelectedCount > 0 ? `(${selectableSelectedCount}件)` : ""}
+        </Button>
+      </div>
+    </div>
+  );
 }

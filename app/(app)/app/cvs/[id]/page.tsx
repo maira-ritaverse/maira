@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { getCareerProfile } from "@/lib/career/conversations";
 import { getCv } from "@/lib/cvs/queries";
 import { listResumes } from "@/lib/resumes/queries";
 import { createClient } from "@/lib/supabase/server";
@@ -36,10 +37,17 @@ export default async function EditCvPage({ params }: PageProps) {
 
   if (!user) redirect("/auth/login");
 
-  const [cv, resumes] = await Promise.all([getCv(id, user.id), listResumes(user.id)]);
+  // career_profile も並列で読む(AI ボタン有効化判定に使う、Phase 4-c〜)。
+  // 履歴書 [id]/page.tsx と同型の取り回し。
+  const [cv, resumes, careerProfile] = await Promise.all([
+    getCv(id, user.id),
+    listResumes(user.id),
+    getCareerProfile(user.id),
+  ]);
   if (!cv) notFound();
 
   const resumeOptions = resumes.map((r) => ({ id: r.id, title: r.title }));
+  const hasCareerProfile = careerProfile !== null;
 
   // 履歴書参照解決:listResumes の結果を再利用するだけなので追加コストなし。
   // 履歴書が削除済みなら on delete set null で licenseResumeId が null になるが、
@@ -64,6 +72,7 @@ export default async function EditCvPage({ params }: PageProps) {
         resumeOptions={resumeOptions}
         linkedResumeName={linkedResume?.name ?? null}
         linkedResumeLicenses={linkedResume?.licenses ?? []}
+        hasCareerProfile={hasCareerProfile}
       />
     </div>
   );
