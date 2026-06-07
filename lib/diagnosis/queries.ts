@@ -9,8 +9,14 @@
 // - そのうえで、コード側では client.linkStatus === "linked" の二重チェックを行い、
 //   かつ返却するのは StoredDiagnosis(診断部分のみ)に絞る。
 //   career_profile の棚卸し本体(summary 等)をエージェント側にうっかり露出させないため。
+//
+// Step 5 改修:復号を lib/career/conversations.ts の decodeCareerProfileBlob に
+// 一本化(本人経路と同じ復号パイプラインを通す = DRY)。v2 を優先しつつ未バック
+// フィル行は旧 bytea にフォールバック。アプリ層の「diagnosis のみ抽出」は温存し、
+// career_profile の他フィールドはこの関数の戻り値には含めない。
 
-import { careerProfileSchema, type StoredDiagnosis } from "@/lib/career/profile-schema";
+import { decodeCareerProfileBlob } from "@/lib/career/conversations";
+import type { StoredDiagnosis } from "@/lib/career/profile-schema";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -22,43 +28,23 @@ import { createClient } from "@/lib/supabase/server";
 export async function getDiagnosisForUser(userId: string): Promise<StoredDiagnosis | null> {
   const supabase = await createClient();
 
+  // 移行期間中は両列取得。decodeCareerProfileBlob 内で v2 → 旧 bytea の順に
+  // フォールバック復号する。Step 6 で旧列が DROP されたら v2 のみに絞る。
   const { data, error } = await supabase
     .from("career_profiles")
-    .select("encrypted_data")
+    .select("encrypted_data, encrypted_data_v2")
     .eq("user_id", userId)
     .maybeSingle();
 
   if (error || !data) return null;
 
-  // bytea → JSON文字列。lib/career/conversations.ts の bytesToText と同じロジック。
-  // ここで重複するのは、conversations.ts の bytesToText が export されておらず、
-  // また将来本格暗号化を入れる時にこの関数も同じく書き換える方が安全なため。
-  const value = data.encrypted_data;
-  let jsonString = "";
-  if (typeof value === "string") {
-    if (value.startsWith("\\x")) {
-      jsonString = Buffer.from(value.slice(2), "hex").toString("utf-8");
-    } else {
-      jsonString = Buffer.from(value, "base64").toString("utf-8");
-    }
-  } else if (value instanceof Uint8Array) {
-    jsonString = Buffer.from(value).toString("utf-8");
-  } else {
-    return null;
-  }
-
-  let parsedJson: unknown;
-  try {
-    parsedJson = JSON.parse(jsonString);
-  } catch {
-    return null;
-  }
-
-  // career_profileSchema で検証(stale/破損データで UI を crash させないため)。
-  const validated = careerProfileSchema.safeParse(parsedJson);
-  if (!validated.success) return null;
+  const profile = await decodeCareerProfileBlob({
+    encrypted_data: data.encrypted_data,
+    encrypted_data_v2: data.encrypted_data_v2,
+  });
+  if (!profile) return null;
 
   // 重要:エージェント呼び出し経路では、diagnosis 以外を返さない。
   // RLS は行を返すが、本関数は明示的に diagnosis のみを抽出する(深掘り防御)。
-  return validated.data.diagnosis ?? null;
+  return profile.diagnosis ?? null;
 }

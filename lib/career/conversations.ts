@@ -391,8 +391,10 @@ function parseAndValidateProfile(jsonString: string): CareerProfile | null {
 /**
  * career_profile の取得
  *
- * Step 1: v2 列はまだ DB に存在しないため select には含めない。
- * decodeCareerProfileBlob は v2 未定義 → 旧 bytea 経路を通る(挙動不変)。
+ * Step 5: SELECT に encrypted_data_v2 を追加し、読み出しの正を v2 に切替。
+ * decodeCareerProfileBlob は v2 非null/非空 → decryptField 経路を通り、
+ * v2 が NULL の行(Step 4 バックフィル前の未移行行があれば)は旧 bytea 経路に
+ * 安全網フォールバック。Step 6 で旧列を DROP するまで両経路を維持する。
  */
 export async function getCareerProfile(
   userId: string,
@@ -401,7 +403,7 @@ export async function getCareerProfile(
 
   const { data, error } = await supabase
     .from("career_profiles")
-    .select("encrypted_data, version, updated_at")
+    .select("encrypted_data, encrypted_data_v2, version, updated_at")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -411,7 +413,10 @@ export async function getCareerProfile(
 
   if (!data) return null;
 
-  const profile = await decodeCareerProfileBlob({ encrypted_data: data.encrypted_data });
+  const profile = await decodeCareerProfileBlob({
+    encrypted_data: data.encrypted_data,
+    encrypted_data_v2: data.encrypted_data_v2,
+  });
   if (!profile) return null;
 
   return {
