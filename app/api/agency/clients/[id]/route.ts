@@ -55,7 +55,26 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   if (d.email !== undefined) updateData.email = d.email;
   if (d.phone !== undefined) updateData.phone = d.phone || null;
   if (d.status !== undefined) updateData.status = d.status;
-  if (d.assigned_member_id !== undefined) updateData.assigned_member_id = d.assigned_member_id;
+  if (d.assigned_member_id !== undefined) {
+    // 担当を変える場合は、その member.id が自組織のメンバーか検証する
+    // (他組織の member.id を担当に書き込めるとデータ整合性が壊れるため)。
+    // null は「担当解除」なので検証スキップ。agency_tasks PATCH と同型。
+    if (d.assigned_member_id !== null) {
+      const { data: memberRow } = await supabase
+        .from("organization_members")
+        .select("organization_id")
+        .eq("id", d.assigned_member_id)
+        .maybeSingle();
+
+      if (!memberRow || memberRow.organization_id !== role.organization.id) {
+        return NextResponse.json(
+          { error: "Assignee not found in your organization" },
+          { status: 404 },
+        );
+      }
+    }
+    updateData.assigned_member_id = d.assigned_member_id;
+  }
   if (d.notes !== undefined) updateData.notes = d.notes || null;
 
   if (Object.keys(updateData).length === 0) {
