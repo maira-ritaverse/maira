@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "backfill:resume-pii": "tsx --env-file=.env.local scripts/backfill-resume-pii.ts",
+    "backfill:career-profile": "tsx --env-file=.env.local scripts/backfill-career-profile.ts",
     "prepare": "husky"
   },
   "dependencies": {
