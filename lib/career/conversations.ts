@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { decryptField } from "@/lib/crypto/field-encryption";
+import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
 import { careerProfileSchema, type CareerProfile, type StoredDiagnosis } from "./profile-schema";
 
 /**
@@ -224,10 +224,16 @@ export async function saveCareerProfile(userId: string, profile: CareerProfile):
       ? { ...profile, diagnosis: existingProfile.profile.diagnosis }
       : profile;
 
-  // JSON文字列 → bytea テキスト入力形式(暗号化なし版)
-  // saveMessage と同じ理由で Buffer ではなく \x hex 文字列を渡す。
-  const dataBytea = textToByteaInput(JSON.stringify(merged));
+  // Step 3: dual-write。同じ merged JSON を 2 経路で書く。
+  //   - 旧列(暫定平文 bytea):安全網として Step 6 まで残す。読み出しの正は
+  //     現状こちら(Step 5 で v2 に切替予定)。encryption_iv の NOT NULL を
+  //     満たすためダミー bytea を入れる(Step 6 で encryption_iv 列ごと DROP)。
+  //   - 新列(本暗号化):AES-256-GCM の "v{n}:base64url" 形式暗号文。
+  //     資料復元の整合性のため、必ず同一の merged JSON を入れる。
+  const jsonString = JSON.stringify(merged);
+  const dataBytea = textToByteaInput(jsonString);
   const dummyIv = textToByteaInput("");
+  const encryptedV2 = await encryptField(jsonString);
 
   // 既存レコードがあるかチェック
   const { data: existing } = await supabase
@@ -243,6 +249,7 @@ export async function saveCareerProfile(userId: string, profile: CareerProfile):
       .update({
         encrypted_data: dataBytea,
         encryption_iv: dummyIv,
+        encrypted_data_v2: encryptedV2,
         version: existing.version + 1,
         updated_at: new Date().toISOString(),
       })
@@ -257,6 +264,7 @@ export async function saveCareerProfile(userId: string, profile: CareerProfile):
       user_id: userId,
       encrypted_data: dataBytea,
       encryption_iv: dummyIv,
+      encrypted_data_v2: encryptedV2,
       version: 1,
     });
 
