@@ -60,3 +60,35 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Failed to update career profile" }, { status: 500 });
   }
 }
+
+/**
+ * career_profile の削除(Phase C)
+ *
+ * - 認証ユーザー自身の career_profiles 行のみを削除。クライアントから user_id は受け取らない。
+ * - RLS(20260607000001_add_career_profile_delete_policy.sql)で auth.uid() = user_id に限定。
+ *   API と DB の二重で本人限定を担保。
+ * - 1ユーザー1レコードなので削除は最大 1 行。
+ * - 削除すると diagnosis(同じ行内 encrypted_data の JSON)も同時に消える。
+ *   この影響は UI 側の警告ダイアログでユーザーに明示する。
+ * - 既に行が無い場合も 200 を返す(冪等)。ユーザーから見て「結果が無い」状態は
+ *   削除済みと同じであり、エラーにする意味がない。
+ */
+export async function DELETE() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { error } = await supabase.from("career_profiles").delete().eq("user_id", user.id);
+
+  if (error) {
+    console.error("Career profile delete error:", error);
+    return NextResponse.json({ error: "Failed to delete career profile" }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}

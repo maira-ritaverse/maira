@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { CareerDeleteButton } from "@/components/features/career-delete-button";
 import { CareerProfileDisplay } from "@/components/features/career-profile-display";
 import { CareerRediagnoseButton } from "@/components/features/career-rediagnose-button";
 import { Button } from "@/components/ui/button";
@@ -39,14 +40,16 @@ export default async function CareerResultPage({ params }: { params: Promise<{ i
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {/* 編集 / 再診断 ともに profile があるときのみ表示。
-              無い場合は「結果がまだ無い」ので操作対象が無く意味がない。 */}
+          {/* 編集 / 再診断 / 削除 ともに profile があるときのみ表示。
+              無い場合は「結果がまだ無い」ので操作対象が無く意味がない。
+              削除はここ(結果ページ)に集約し、一覧カードには出さない(誤操作防止)。 */}
           {profileData && (
             <>
               <Button render={<Link href="/app/career/edit" />} variant="outline" size="sm">
                 編集
               </Button>
               <CareerRediagnoseButton />
+              <CareerDeleteButton />
             </>
           )}
           <Button render={<Link href={`/app/career/${id}`} />} variant="outline" size="sm">
