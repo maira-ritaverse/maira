@@ -17,19 +17,27 @@ import type { ClientLinkStatus } from "@/lib/clients/types";
  *   - assigned_member_id:担当アドバイザーID。display_name の引き出し経路が無く
  *     表示できないため省く
  *
- * organizationName:
- *   Phase 4 で organizations に「求職者が当事者の client_records 行に対応する
- *   organization のみ select 可」ポリシーを追加したため、本人 UI でも組織名を
- *   引けるようになった。RLS で見えない場合は null になりうるが、当事者の行で
- *   あれば対応する organization も同じ条件で見える設計。
+ * organizationName / graceDays:
+ *   Phase 4 で organizations に本人 select 用ポリシーを追加したため、本人 UI でも
+ *   組織名を引ける。P3 で「申請時の猶予期間(N 日)」をダイアログに出すために、
+ *   organizations.revoke_grace_days もここに引いて Connection に詰める。RLS で
+ *   見えない場合は null になりうるが、当事者の行であれば対応する organization も
+ *   同じ条件で見える設計。
+ *
+ * revokeRequestedAt / revokeDeadline:
+ *   P3 で「解除申請中」セクションを描画するために必要。linked / revoked 状態では
+ *   両方 null。revoke_requested 状態では DB 側の申請 RPC で打刻されているはず。
  */
 export type Connection = {
   id: string;
   organizationId: string;
   organizationName: string | null;
+  graceDays: number | null;
   linkStatus: ClientLinkStatus;
   linkedAt: string | null;
   revokedAt: string | null;
+  revokeRequestedAt: string | null;
+  revokeDeadline: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -37,12 +45,16 @@ export type Connection = {
 /**
  * 連携を状態別にグルーピングしたコレクション。
  *
- * UI(/app/connections)で「招待中 / 連携中 / 解除済み」のセクションを出すために、
- * サーバー側で 3 つに分けて返す。unlinked は本人から見える経路が無いため
- * 含まれない(Phase 2 RLS は invited と linked の本人 select のみ許可)。
+ * UI(/app/connections)で「招待中 / 連携中 / 解除申請中 / 解除済み」のセクションを
+ * 出すために、サーバー側でバケットに分けて返す。unlinked は本人から見える経路が
+ * 無いため含まれない。
+ *
+ * revokeRequested は P3 で追加。本人申請中の連携で、申請後も deadline までは
+ * エージェントへの開示が継続する(時刻条件付き RLS / RPC で担保)。
  */
 export type ConnectionsByStatus = {
   invited: Connection[];
   linked: Connection[];
+  revokeRequested: Connection[];
   revoked: Connection[];
 };

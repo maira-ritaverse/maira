@@ -148,10 +148,25 @@ export function RejectConnectionButton({ clientRecordId }: { clientRecordId: str
 }
 
 // ====================================================================
-// 連携解除(linked → revoked)
-// 解除後の影響(エージェントから情報が見えなくなる)を明示。
+// 連携解除の申請(linked → revoke_requested)
+//
+// P3 で挙動が「即時解除」→「申請」に変わった。
+// ダイアログでは「即時には止まらない/必ずいつかは止まる」の両方を明示する:
+//   - 申請後も猶予期間内は引き続き開示される(突然遮断しない=エージェント側の
+//     業務が中途半端な状態で切れる事故を防ぐ)
+//   - エージェントの承認、または猶予期間の経過で必ず止まる(撤回権の安全弁)
+//
+// graceDays は organizations.revoke_grace_days を本人側から引いたもの
+// (lib/connections/queries.ts 参照)。RLS で取れない/未設定なら null になり
+// 「組織が設定した猶予期間」とのフォールバック文言に倒す。
 // ====================================================================
-export function RevokeConnectionButton({ clientRecordId }: { clientRecordId: string }) {
+export function RevokeConnectionButton({
+  clientRecordId,
+  graceDays,
+}: {
+  clientRecordId: string;
+  graceDays: number | null;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -170,20 +185,34 @@ export function RevokeConnectionButton({ clientRecordId }: { clientRecordId: str
     });
   };
 
+  const graceLabel = graceDays != null ? `最大 ${graceDays} 日` : "組織が設定した猶予期間";
+
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger render={<Button variant="outline" size="sm" />}>
-        連携を解除する
+        解除を申請する
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>連携を解除しますか?</AlertDialogTitle>
+          <AlertDialogTitle>連携の解除を申請しますか?</AlertDialogTitle>
           <AlertDialogDescription>
-            解除すると、このエージェントはあなたの履歴書・職務経歴書・希望条件・プロフィールを
-            閲覧できなくなります。連携前に戻したい場合に使ってください。
-            再度承認するには、エージェント側から招待を送り直してもらう必要があります。
+            このエージェントに「連携を解除してください」と申請します。申請は即時には反映されず、
+            エージェントの承認、または猶予期間({graceLabel})の経過で必ず停止します。
           </AlertDialogDescription>
         </AlertDialogHeader>
+        <div className="text-muted-foreground space-y-2 text-xs">
+          <p>
+            <strong className="text-foreground">申請後も、停止までの間は</strong>
+            、履歴書・職務経歴書・希望条件は引き続きエージェントに開示されます。
+            選考が進行中の場合に「承認前に突然見えなくなる」事故を避けるためです。
+          </p>
+          <p>
+            <strong className="text-foreground">停止後</strong>
+            、エージェントからは履歴書・職務経歴書・希望条件・プロフィールが閲覧できなくなります。
+            再連携するには、エージェント側から招待を送り直してもらう必要があります。
+          </p>
+          <p>申請の取り下げは現在できません。慎重にご判断ください。</p>
+        </div>
         {error && (
           <p className="text-sm text-red-600" role="alert">
             {error}
@@ -192,7 +221,7 @@ export function RevokeConnectionButton({ clientRecordId }: { clientRecordId: str
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isPending}>キャンセル</AlertDialogCancel>
           <AlertDialogAction variant="destructive" onClick={handleConfirm} disabled={isPending}>
-            {isPending ? "解除中..." : "連携を解除する"}
+            {isPending ? "申請中..." : "解除を申請する"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

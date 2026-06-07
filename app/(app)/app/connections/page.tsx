@@ -31,14 +31,14 @@ export default async function ConnectionsPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login");
 
-  const { invited, linked, revoked } = await listConnections();
+  const { invited, linked, revokeRequested, revoked } = await listConnections();
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold">エージェントとの連携</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          エージェントから届いた招待の承認・拒否、連携中の状態確認、連携の解除ができます。
+          エージェントから届いた招待の承認・拒否、連携中の状態確認、連携の解除申請ができます。
         </p>
       </div>
 
@@ -51,6 +51,7 @@ export default async function ConnectionsPage() {
 
       <InvitedSection items={invited} />
       <LinkedSection items={linked} />
+      <RevokeRequestedSection items={revokeRequested} />
       <RevokedSection items={revoked} />
     </div>
   );
@@ -132,13 +133,71 @@ function LinkedSection({ items }: { items: Connection[] }) {
                   </div>
                 </div>
                 <div className="shrink-0">
-                  <RevokeConnectionButton clientRecordId={c.id} />
+                  <RevokeConnectionButton clientRecordId={c.id} graceDays={c.graceDays} />
                 </div>
               </div>
             </Card>
           ))}
         </div>
       )}
+    </section>
+  );
+}
+
+// ====================================================================
+// 解除申請中(revoke_requested)
+//
+// P3 で追加。本人が解除を申請したが、承認 or 猶予期限経過までは「申請中」として
+// 別セクションで見せる。
+// - アクションボタンなし(取り下げは方針未確定のためスコープ外)
+// - revoke_deadline までの残り日数を表示。期限超過後も link_status は
+//   revoke_requested のまま見えるので、残り日数は「期限切れ」になる
+//   (RLS / RPC 側で開示は既に止まっているため UX 上の問題はない)
+// - 残り日数の計算はクライアント時刻ベース(Server Component で計算しても
+//   ページレンダリング時点で固まり「今」とずれるため、ブラウザ時刻で都度算出)。
+//   ※ Hydration mismatch を避けるため、初期描画では deadline の絶対日時のみ
+//      表示し、残り日数の動的計算はクライアント側で見られる範囲に止めるか、
+//      Server Component で「申請日 → 期限日」を絶対値で出す方が安全。
+//   実装は後者を採用:絶対日時で表示、残り日数は近似(Server Component 時点)で。
+// ====================================================================
+function RevokeRequestedSection({ items }: { items: Connection[] }) {
+  if (items.length === 0) return null;
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-lg font-bold">解除を申請中</h2>
+        <span className="text-muted-foreground text-xs">{items.length}件</span>
+      </div>
+      <div className="space-y-3">
+        {items.map((c) => {
+          const daysLeft = computeDaysLeft(c.revokeDeadline);
+          return (
+            <Card
+              key={c.id}
+              className="border-orange-200 bg-orange-50/40 p-4 dark:border-orange-900 dark:bg-orange-950/20"
+            >
+              <div className="space-y-2">
+                <p className="text-sm font-medium">{agencyLabel(c.organizationName)}</p>
+                <p className="text-muted-foreground text-xs">
+                  申請日時:{formatDateTime(c.revokeRequestedAt)}
+                </p>
+                <p className="text-muted-foreground text-xs">
+                  停止予定:{formatDateTime(c.revokeDeadline)}
+                  {daysLeft !== null && (
+                    <span className="ml-2">
+                      ({daysLeft > 0 ? `あと約 ${daysLeft} 日` : "期限切れ"})
+                    </span>
+                  )}
+                </p>
+                <p className="text-muted-foreground border-t pt-2 text-xs">
+                  エージェントの承認、または猶予期限の経過で開示が停止します。
+                  停止までの間は、引き続き履歴書・職務経歴書・希望条件が開示されます。
+                </p>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -180,6 +239,19 @@ function RevokedSection({ items }: { items: Connection[] }) {
 function agencyLabel(name: string | null): string {
   if (name && name.trim().length > 0) return name;
   return "連携中のエージェント";
+}
+
+/**
+ * 残り日数の概算(Server Component 描画時点での今と比較)。
+ * 表示はあくまで目安。実際の遮断は revoke_deadline と now() の比較で行われ、
+ * このページの数値とのズレ(リクエスト時刻 vs 開示判定時刻)は許容する。
+ */
+function computeDaysLeft(deadline: string | null): number | null {
+  if (!deadline) return null;
+  const d = new Date(deadline).getTime();
+  if (Number.isNaN(d)) return null;
+  const diffMs = d - Date.now();
+  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 }
 
 function formatDateTime(iso: string | null): string {
