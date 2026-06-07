@@ -1,16 +1,11 @@
 # career_profile バックフィル / 検証レポート(Step 4)
 
-- 実行モード: `both`
-- 開始: 2026-06-07T05:25:40.265Z
-- 終了: 2026-06-07T05:25:41.172Z
+- 実行モード: `verify`
+- 開始: 2026-06-07T05:59:27.388Z
+- 終了: 2026-06-07T05:59:28.317Z
 - 対象: `public.career_profiles`
 - 接続先 host: `pfebbpgcufintmulhydg.supabase.co` (maira-dev のみ許可)
 - PII の生値は一切含めない(件数 / フィールド名 / 差分種別のみ)
-
-## バックフィル結果
-
-- スキャン対象(encrypted_data_v2 IS NULL の行): 0 件
-- 暗号化して書き込んだ行: 0 件
 
 ## 検証結果(全行対象)
 

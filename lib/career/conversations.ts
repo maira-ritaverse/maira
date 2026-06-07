@@ -202,7 +202,12 @@ function bytesToText(value: unknown): string {
 // ====================================================================
 // career_profiles の CRUD ヘルパー
 // 1ユーザー1レコードの想定。version は更新ごとにインクリメントする。
-// 暗号化は未実装(Week 3で本実装、ここも encrypted_data に本物の暗号文を入れる)。
+//
+// Step 6 完了後の暗号化境界:
+//   - 単一列 encrypted_data (text) に AES-256-GCM の "v{n}:base64url" 形式
+//     暗号文を格納する。旧 bytea カラムと encryption_iv は DROP 済み。
+//   - 書き込み:encryptField(JSON.stringify(merged))
+//   - 読み出し:decryptField → JSON.parse → careerProfileSchema 検証
 // ====================================================================
 
 /**
@@ -224,16 +229,9 @@ export async function saveCareerProfile(userId: string, profile: CareerProfile):
       ? { ...profile, diagnosis: existingProfile.profile.diagnosis }
       : profile;
 
-  // Step 3: dual-write。同じ merged JSON を 2 経路で書く。
-  //   - 旧列(暫定平文 bytea):安全網として Step 6 まで残す。読み出しの正は
-  //     現状こちら(Step 5 で v2 に切替予定)。encryption_iv の NOT NULL を
-  //     満たすためダミー bytea を入れる(Step 6 で encryption_iv 列ごと DROP)。
-  //   - 新列(本暗号化):AES-256-GCM の "v{n}:base64url" 形式暗号文。
-  //     資料復元の整合性のため、必ず同一の merged JSON を入れる。
-  const jsonString = JSON.stringify(merged);
-  const dataBytea = textToByteaInput(jsonString);
-  const dummyIv = textToByteaInput("");
-  const encryptedV2 = await encryptField(jsonString);
+  // Step 6:単一経路の暗号化書き込み。merged JSON を AES-256-GCM で暗号化し、
+  // encrypted_data (text) に "v{n}:base64url" 形式で格納する。
+  const ciphertext = await encryptField(JSON.stringify(merged));
 
   // 既存レコードがあるかチェック
   const { data: existing } = await supabase
@@ -247,9 +245,7 @@ export async function saveCareerProfile(userId: string, profile: CareerProfile):
     const { error } = await supabase
       .from("career_profiles")
       .update({
-        encrypted_data: dataBytea,
-        encryption_iv: dummyIv,
-        encrypted_data_v2: encryptedV2,
+        encrypted_data: ciphertext,
         version: existing.version + 1,
         updated_at: new Date().toISOString(),
       })
@@ -262,9 +258,7 @@ export async function saveCareerProfile(userId: string, profile: CareerProfile):
     // 新規作成
     const { error } = await supabase.from("career_profiles").insert({
       user_id: userId,
-      encrypted_data: dataBytea,
-      encryption_iv: dummyIv,
-      encrypted_data_v2: encryptedV2,
+      encrypted_data: ciphertext,
       version: 1,
     });
 
@@ -312,54 +306,39 @@ export async function saveDiagnosisResult(
 }
 
 // ====================================================================
-// hybrid decode ヘルパー
+// career_profile 復号ヘルパー(本人経路 / エージェント経路で共有)
 //
-// 暗号化移行期間中、career_profiles の本文を以下のいずれかから復元する:
-//   - encrypted_data_v2 (text): "v{n}:base64url" 形式の本物の暗号文(Step 2 以降)
-//   - encrypted_data   (bytea): 平文 JSON を bytea でラップしただけの暫定形式(現行)
+// Step 6 完了後:
+//   - encrypted_data (text) は AES-256-GCM の "v{n}:base64url" 暗号文のみ
+//   - 旧 bytea 経路 / dual-write / フォールバック分岐は撤去済み
+//   - 経路は decryptField → JSON.parse → careerProfileSchema 検証 の単一経路
 //
-// 優先順位は v2 → 旧 bytea。Step 1 時点では v2 列はまだ DB に無いため、
-// 全行が旧 bytea 経路を通る(挙動不変)。
-//
-// 失敗時は getCareerProfile の従来挙動を保つ:握りつぶさず console.error で
-// 明示ログ → null 返却。呼び出し側 17 箇所は既に null を「データ無し」として
-// 扱えるため、UI を crash させずに安全側に倒せる。
+// 失敗時は明示ログ + null(getCareerProfile の従来挙動を維持)。
+// 呼び出し側 17 箇所は null を「データ無し」として扱えるため、UI を crash
+// させずに安全側に倒せる。
 // ====================================================================
-export type CareerProfileBlobRow = {
-  encrypted_data?: unknown;
-  encrypted_data_v2?: string | null;
-};
-
 export async function decodeCareerProfileBlob(
-  row: CareerProfileBlobRow,
+  encryptedData: string | null,
 ): Promise<CareerProfile | null> {
-  // v2 経路を優先:Step 2 で列追加・Step 3 で書き込み・Step 4 でバックフィル
-  // が完了するに従い、こちらを通る行が増えていく。
-  const v2 = row.encrypted_data_v2;
-  if (typeof v2 === "string" && v2.length > 0) {
-    let jsonString: string;
-    try {
-      const plaintext = await decryptField(v2);
-      // 入力が non-empty string のため、戻りも string のはず。
-      // 型ナローイングを越えてきたら破損データ扱いで安全側に倒す。
-      if (typeof plaintext !== "string" || plaintext.length === 0) {
-        console.error("career_profiles: decryptField returned non-string/empty", {
-          type: typeof plaintext,
-        });
-        return null;
-      }
-      jsonString = plaintext;
-    } catch (e) {
-      // 鍵バージョン不一致 / GCM 認証タグ NG / 改竄など。
-      // 現行の JSON.parse 失敗と同じく明示ログ + null で抜ける。
-      console.error("career_profiles: decrypt failed", e);
-      return null;
-    }
-    return parseAndValidateProfile(jsonString);
+  if (typeof encryptedData !== "string" || encryptedData.length === 0) {
+    return null;
   }
 
-  // 旧 bytea 経路(Step 1 時点では全行ここを通る)
-  const jsonString = bytesToText(row.encrypted_data);
+  let jsonString: string;
+  try {
+    const plaintext = await decryptField(encryptedData);
+    if (typeof plaintext !== "string" || plaintext.length === 0) {
+      console.error("career_profiles: decryptField returned non-string/empty", {
+        type: typeof plaintext,
+      });
+      return null;
+    }
+    jsonString = plaintext;
+  } catch (e) {
+    // 鍵バージョン不一致 / GCM 認証タグ NG / 改竄など。
+    console.error("career_profiles: decrypt failed", e);
+    return null;
+  }
   return parseAndValidateProfile(jsonString);
 }
 
@@ -391,10 +370,8 @@ function parseAndValidateProfile(jsonString: string): CareerProfile | null {
 /**
  * career_profile の取得
  *
- * Step 5: SELECT に encrypted_data_v2 を追加し、読み出しの正を v2 に切替。
- * decodeCareerProfileBlob は v2 非null/非空 → decryptField 経路を通り、
- * v2 が NULL の行(Step 4 バックフィル前の未移行行があれば)は旧 bytea 経路に
- * 安全網フォールバック。Step 6 で旧列を DROP するまで両経路を維持する。
+ * Step 6 完了後:単一列 encrypted_data (text, 暗号文) を SELECT し、
+ * decodeCareerProfileBlob で復号 → schema 検証 → 戻す。
  */
 export async function getCareerProfile(
   userId: string,
@@ -403,7 +380,7 @@ export async function getCareerProfile(
 
   const { data, error } = await supabase
     .from("career_profiles")
-    .select("encrypted_data, encrypted_data_v2, version, updated_at")
+    .select("encrypted_data, version, updated_at")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -413,10 +390,7 @@ export async function getCareerProfile(
 
   if (!data) return null;
 
-  const profile = await decodeCareerProfileBlob({
-    encrypted_data: data.encrypted_data,
-    encrypted_data_v2: data.encrypted_data_v2,
-  });
+  const profile = await decodeCareerProfileBlob(data.encrypted_data);
   if (!profile) return null;
 
   return {
