@@ -1,0 +1,37 @@
+-- ============================================
+-- 開示フロー Phase 1:エージェント向け career_profile 閲覧ポリシーを撤去
+--
+-- 背景:
+--   20260601000003_agency_view_linked_client_career_profile.sql で追加した
+--   "Org members can view linked client career profile" は、リンク済み
+--   クライアントの career_profiles 行を「行レベルで丸ごと」エージェントに
+--   開放していた。当時のコメントにも「UI/コード側で diagnosis 部分のみ描画
+--   することで運用上の二重防御」と書かれており、RLS は防御の一段目になって
+--   いなかった。
+--
+-- 新方針(開示フロー):
+--   career_profile 本体(strengths / values / concerns / summary / diagnosis)は
+--   求職者の内面的自己分析であり、エージェントには非開示とする。
+--   開示は後続 Phase で:
+--     - 書類(resumes / cvs)を linked クライアント向け SELECT ポリシーで開示
+--     - career_profile の wants(希望条件)/ user_facts(現職/経験年数/業界)
+--       のみを限定フィールド抽出関数経由で開示
+--   とする。career_profile 全体を RLS で許可する経路はこれで閉じる。
+--
+-- セキュリティ設計:
+--   - DROP POLICY なので追加の権限変更はない。
+--   - 本人の SELECT/INSERT/UPDATE/DELETE 既存ポリシーは無変更
+--     (20260518000003_setup_rls.sql / 20260607000001_add_career_profile_delete_policy.sql)。
+--   - service_role は RLS をバイパスするので影響なし。
+--   - エージェント側コードからの呼び出し(lib/diagnosis/queries.ts の
+--     getDiagnosisForUser と、それを呼ぶ app/(agency)/agency/clients/[id]/page.tsx
+--     の診断結果セクション)は同コミットで削除する。アプリ側と RLS を同期させる。
+--
+-- 影響:
+--   - エージェントのクライアント詳細画面から「キャリア診断結果」セクションが消える。
+--   - 求職者本人側の診断結果画面(/app/diagnosis/result)は無変更で動く。
+--   - DROP POLICY IF EXISTS なので、適用先にポリシーが無くてもエラーにならない。
+-- ============================================
+
+drop policy if exists "Org members can view linked client career profile"
+  on public.career_profiles;

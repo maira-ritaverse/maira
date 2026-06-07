@@ -2,10 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { DiagnosisResultView } from "@/components/features/diagnosis/diagnosis-result-view";
 import { getClientRecord } from "@/lib/clients/queries";
 import { clientLinkStatusLabels, clientStatusLabels } from "@/lib/clients/types";
-import { getDiagnosisForUser } from "@/lib/diagnosis/queries";
 import { listInteractionsByClient } from "@/lib/interactions/queries";
 import { listJobPostings } from "@/lib/jobs/queries";
 import { getUserRole } from "@/lib/organizations/queries";
@@ -55,21 +53,24 @@ export default async function ClientDetailPage({ params }: RouteParams) {
     redirect("/app");
   }
 
-  // 紹介セクション・対応履歴・タスク・組織メンバー・成約イベントに加えて、
-  // 診断結果(リンク済みクライアントのみ)も並行取得する。
-  // 診断結果は client.linkStatus === "linked" の場合のみ求職者 user_id を辿って取得。
-  // RLS で linked のみ可だが、コード側でも二重チェックして無駄なクエリを抑える。
-  const linkedUserId = client.linkStatus === "linked" ? client.linkedUserId : null;
-  const [referrals, allJobs, interactions, tasks, members, placements, diagnosis] =
-    await Promise.all([
-      listReferralsByClient(client.id),
-      listJobPostings(role.organization.id),
-      listInteractionsByClient(client.id, role.organization.id),
-      listTasksByClient(client.id, role.organization.id),
-      listOrganizationMembers(role.organization.id),
-      listPlacementsByClient(client.id, role.organization.id),
-      linkedUserId ? getDiagnosisForUser(linkedUserId) : Promise.resolve(null),
-    ]);
+  // 紹介セクション・対応履歴・タスク・組織メンバー・成約イベントを並行取得する。
+  //
+  // 開示フロー Phase 1:
+  //   旧実装ではここで linked クライアントの career_profile から診断結果を
+  //   復号して取得し、画面下部に表示していたが、新方針では career_profile
+  //   (diagnosis を含む内面的自己分析)はエージェント非開示としたため取得しない。
+  //   同コミットで RLS ポリシー
+  //   "Org members can view linked client career profile" も撤去している。
+  //   開示する書類(resumes/cvs)や希望条件(career_profile.wants / user_facts)は
+  //   後続 Phase で別経路で開く。
+  const [referrals, allJobs, interactions, tasks, members, placements] = await Promise.all([
+    listReferralsByClient(client.id),
+    listJobPostings(role.organization.id),
+    listInteractionsByClient(client.id, role.organization.id),
+    listTasksByClient(client.id, role.organization.id),
+    listOrganizationMembers(role.organization.id),
+    listPlacementsByClient(client.id, role.organization.id),
+  ]);
   const openJobs = allJobs.filter((j) => j.status === "open");
 
   // 紹介の status 遷移履歴(referral_id でグルーピングされた Map)。
@@ -137,27 +138,6 @@ export default async function ClientDetailPage({ params }: RouteParams) {
       )}
 
       <ClientDetailForm client={client} />
-
-      {/* 診断結果(リンク済みクライアントが診断を受けていれば表示) */}
-      {client.linkStatus === "linked" && (
-        <section className="space-y-3">
-          <div>
-            <h2 className="text-lg font-bold">キャリア診断結果</h2>
-            <p className="text-muted-foreground text-xs">
-              本人が受けた診断の結果(軸・強み・職種候補)
-            </p>
-          </div>
-          {diagnosis ? (
-            <DiagnosisResultView diagnosis={diagnosis} />
-          ) : (
-            <Card className="p-4">
-              <p className="text-muted-foreground text-sm">
-                このクライアントはまだキャリア診断を受けていません
-              </p>
-            </Card>
-          )}
-        </section>
-      )}
 
       <InteractionsSection
         clientId={client.id}
