@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { CareerRediagnoseButton } from "@/components/features/career-rediagnose-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -34,8 +35,8 @@ export default async function CareerListPage() {
 
       {profileData && (
         <Card className="border-primary/40 bg-primary/5 p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
               <p className="text-muted-foreground mb-2 text-xs font-medium">
                 現在の棚卸し結果(v{profileData.version})
               </p>
@@ -45,16 +46,24 @@ export default async function CareerListPage() {
                 {profileData.profile.strengths.length}個
               </p>
             </div>
-            <Button render={<Link href="/app/career/edit" />} variant="outline" size="sm">
-              編集
-            </Button>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Button render={<Link href="/app/career/edit" />} variant="outline" size="sm">
+                編集
+              </Button>
+              <CareerRediagnoseButton />
+            </div>
           </div>
         </Card>
       )}
 
-      <div className="flex justify-end">
-        <Button render={<Link href="/app/career/new" />}>新しく棚卸しを始める</Button>
-      </div>
+      {/* profile 未生成の初回ユーザー向けの導線。
+          profile ありの場合は再診断ボタン(警告ダイアログつき)を上のカードに集約し、
+          ここに同等のリンクを残すと「警告なしの再診断」抜け道になるため非表示にする。 */}
+      {!profileData && (
+        <div className="flex justify-end">
+          <Button render={<Link href="/app/career/new" />}>新しく棚卸しを始める</Button>
+        </div>
+      )}
 
       {conversations.length === 0 ? (
         <EmptyState

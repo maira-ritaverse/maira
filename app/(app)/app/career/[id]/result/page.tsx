@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CareerProfileDisplay } from "@/components/features/career-profile-display";
+import { CareerRediagnoseButton } from "@/components/features/career-rediagnose-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { getCareerProfile, verifyConversationOwner } from "@/lib/career/conversations";
@@ -37,12 +38,16 @@ export default async function CareerResultPage({ params }: { params: Promise<{ i
             会話から抽出された、あなたの強みと希望
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {/* 編集導線は profile があるときのみ表示(無いと編集対象がないため) */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* 編集 / 再診断 ともに profile があるときのみ表示。
+              無い場合は「結果がまだ無い」ので操作対象が無く意味がない。 */}
           {profileData && (
-            <Button render={<Link href="/app/career/edit" />} variant="outline" size="sm">
-              編集
-            </Button>
+            <>
+              <Button render={<Link href="/app/career/edit" />} variant="outline" size="sm">
+                編集
+              </Button>
+              <CareerRediagnoseButton />
+            </>
           )}
           <Button render={<Link href={`/app/career/${id}`} />} variant="outline" size="sm">
             会話に戻る
