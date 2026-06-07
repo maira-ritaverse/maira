@@ -7,7 +7,7 @@ const navItems = [
   // キャリア診断は棚卸しの「方向決め」役。棚卸しの前に置いて自然な導線にする。
   { href: "/app/diagnosis", label: "キャリア診断", icon: "🧭" },
   { href: "/app/career", label: "キャリア棚卸し", icon: "💬" },
-  { href: "/app/documents", label: "書類作成", icon: "📝" },
+  { href: "/app/documents", label: "志望動機・自己PR", icon: "📝" },
   { href: "/app/resumes", label: "履歴書", icon: "📄" },
   { href: "/app/cvs", label: "職務経歴書", icon: "📑" },
   { href: "/app/applications", label: "応募管理", icon: "📋" },

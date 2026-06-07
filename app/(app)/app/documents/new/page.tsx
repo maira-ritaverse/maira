@@ -36,7 +36,7 @@ export default async function NewDocumentPage() {
         <div>
           <h1 className="text-2xl font-bold">書類タイプを選ぶ</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            作成したい書類のタイプを選択してください
+            志望動機または自己PRを選択してください
           </p>
         </div>
         <Button render={<Link href="/app/documents" />} variant="outline" size="sm">

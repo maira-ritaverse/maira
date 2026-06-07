@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getCareerProfile } from "@/lib/career/conversations";
 import { listDocumentConversations } from "@/lib/documents/conversations";
-import { documentTypeLabels, type DocumentType } from "@/lib/documents/types";
+import { getDocumentTypeLabel } from "@/lib/documents/types";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -34,9 +34,9 @@ export default async function DocumentsListPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">書類作成</h1>
+        <h1 className="text-2xl font-bold">志望動機・自己PR</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          履歴書・職務経歴書・志望動機・自己PRをAIが生成します
+          求人別の志望動機と自己PRをAIが生成します(履歴書は「履歴書」、職務経歴書は「職務経歴書」タブへ)
         </p>
       </div>
 
@@ -73,12 +73,13 @@ export default async function DocumentsListPage() {
         <div className="space-y-3">
           {documents.map((doc) => {
             // metadata は jsonb なので型は unknown。明示的にキャストする。
+            // document_type は旧 'resume' / 'cv' を含む過去レコードが残り得るため
+            // string で受け、getDocumentTypeLabel でフォールバックする。
             const metadata = (doc.metadata ?? {}) as {
-              document_type?: DocumentType;
+              document_type?: string;
               job_info_preview?: string;
             };
-            const docType = metadata.document_type;
-            const typeLabel = docType ? documentTypeLabels[docType] : "書類";
+            const typeLabel = getDocumentTypeLabel(metadata.document_type);
 
             return (
               <Card key={doc.id} className="p-4">

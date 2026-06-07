@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { getMessages } from "@/lib/career/conversations";
 import { getDocumentConversation, verifyDocumentConversation } from "@/lib/documents/conversations";
-import { documentTypeLabels, type DocumentType } from "@/lib/documents/types";
+import { getDocumentTypeLabel } from "@/lib/documents/types";
 import { createClient } from "@/lib/supabase/server";
 import { DocumentContent } from "./document-content";
 
@@ -35,13 +35,13 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
 
   if (!conversation) notFound();
 
+  // 旧 'resume' / 'cv' を含む過去レコードのため string 受けでフォールバックする
   const metadata = (conversation.metadata ?? {}) as {
-    document_type?: DocumentType;
+    document_type?: string;
     job_info_preview?: string;
   };
 
-  const documentType = metadata.document_type;
-  const typeLabel = documentType ? documentTypeLabels[documentType] : "書類";
+  const typeLabel = getDocumentTypeLabel(metadata.document_type);
 
   // assistant メッセージが書類本文(再生成時に複数になり得るので最新を使用)
   const assistantMessages = messages.filter((m) => m.role === "assistant");
