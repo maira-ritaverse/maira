@@ -84,3 +84,84 @@ export async function logout() {
   revalidatePath("/", "layout");
   redirect("/auth/login");
 }
+
+/**
+ * パスワード再設定リクエスト Server Action
+ *
+ * メールを忘れた / パスワードを忘れたユーザー向けの「リセットメール送信」アクション。
+ *
+ * redirectTo の組み立ては signup() の emailRedirectTo と同型:
+ *   ${SITE_URL}/auth/callback?next=/auth/reset-password
+ * → メール内リンクをクリック → Supabase が /auth/callback?code=xxx に飛ばす
+ * → callback が code をセッションに交換 → next で /auth/reset-password に着地
+ * → セッションが立った状態で updateUser({ password }) を呼べる。
+ *
+ * 【enumeration 対策・重要】
+ *   未登録メールに対する挙動を「成功」と区別させないため、
+ *   resetPasswordForEmail がエラーを返しても呼び出し側には常に { success: true } を返す。
+ *   - 区別できると「このメールはこのサービスに登録済みか?」が当てられてしまう。
+ *   - 内部的なエラーは console.error にエラーの種類だけ記録(メールアドレス値は出さない)。
+ *   - レート制限など真の障害はサーバーログ側で監視する想定。
+ */
+export async function requestPasswordReset(email: string) {
+  const supabase = await createClient();
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const redirectTo = `${siteUrl}/auth/callback?next=${encodeURIComponent("/auth/reset-password")}`;
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo,
+  });
+
+  if (error) {
+    // メール本文・アドレスは出さない。エラー種別のメタ情報だけ。
+    console.error("[requestPasswordReset] resetPasswordForEmail failed", {
+      name: error.name,
+      status: error.status,
+    });
+  }
+
+  // enumeration 対策のため、成否に関わらず success を返す。
+  return { success: true as const };
+}
+
+/**
+ * パスワード更新 Server Action(リセットフロー専用)
+ *
+ * リセットメールのリンクから callback 経由でセッションが立った状態で呼ばれる前提。
+ * settings/password の「ログイン中の変更」と違い、現パスワードでの再認証は不要。
+ * (ユーザーは現パスワードを忘れている)
+ *
+ * セッションが無い場合(リンク失効・直接アクセス等)は明示的にエラーを返し、
+ * UI 側で再リクエスト導線を提示する。
+ */
+export async function updatePassword(newPassword: string) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return {
+      error: "セッションが無効です。リンクをもう一度開いてください。",
+    };
+  }
+
+  const { error } = await supabase.auth.updateUser({
+    password: newPassword,
+  });
+
+  if (error) {
+    // 内部スキーマ名・SDK 文言をそのまま見せず、汎用文言にする。
+    console.error("[updatePassword] updateUser failed", {
+      name: error.name,
+      status: error.status,
+    });
+    return {
+      error: "パスワードの更新に失敗しました。お手数ですが再度お試しください。",
+    };
+  }
+
+  return { success: true as const };
+}

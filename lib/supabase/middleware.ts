@@ -52,6 +52,17 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse;
   }
 
+  // /auth/reset-password は公開ルート扱い:
+  //   リセットメール → callback で ?code= 交換 → ここに「ログイン済み」状態で着地する。
+  //   下の「/auth 配下 + ログイン済み → /app」ルールに引っかかると新パスワードを
+  //   入力できなくなるため、明示的に早期 return する。
+  //   逆に「未ログイン」で直接アクセスされたケースはセッションが立っておらず、
+  //   ページ側で updatePassword を呼ぶと「セッションが無効」エラーが返るので、
+  //   フォーム側で再リクエスト導線を出す方針(ここでリダイレクトはしない)。
+  if (pathname.startsWith("/auth/reset-password")) {
+    return supabaseResponse;
+  }
+
   // /app配下:認証必須(未ログインなら /auth/login へ)
   if (pathname.startsWith("/app") && !user) {
     const url = request.nextUrl.clone();

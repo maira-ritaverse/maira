@@ -81,6 +81,15 @@ function LoginForm() {
       <Button type="submit" className="w-full" disabled={isPending}>
         {isPending ? "ログイン中..." : "ログイン"}
       </Button>
+
+      <p className="text-center text-sm">
+        <Link
+          href="/auth/forgot-password"
+          className="text-muted-foreground hover:text-foreground underline"
+        >
+          パスワードをお忘れですか?
+        </Link>
+      </p>
     </form>
   );
 }
