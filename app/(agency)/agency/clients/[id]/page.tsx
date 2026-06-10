@@ -10,6 +10,7 @@ import {
 } from "@/components/features/agency/link-action-buttons";
 import { getClientRecord } from "@/lib/clients/queries";
 import { clientLinkStatusLabels, clientStatusLabels } from "@/lib/clients/types";
+import { recordClientViewed } from "@/lib/clients/view-tracking";
 import { listInteractionsByClient } from "@/lib/interactions/queries";
 import { listJobPostings } from "@/lib/jobs/queries";
 import { getUserRole } from "@/lib/organizations/queries";
@@ -71,6 +72,11 @@ export default async function ClientDetailPage({ params }: RouteParams) {
   //   "Org members can view linked client career profile" も撤去している。
   //   開示する書類(resumes/cvs)や希望条件(career_profile.wants / user_facts)は
   //   後続 Phase で別経路で開く。
+  // 新着バッジ用の閲覧記録 upsert を並列に乗せる。
+  // organizationId は必ず認可確認に通った client.organizationId を使う(role.organization.id と
+  // 一致確認済み)。RLS は organization_id = current_user_organization_id() を要求するため、
+  // ここでズレた値を渡すと RLS で弾かれて「ずっと新着のまま」になる。
+  // 失敗時はビューワー内で握って警告ログのみ(致命にしない)。
   const [referrals, allJobs, interactions, tasks, members, placements] = await Promise.all([
     listReferralsByClient(client.id),
     listJobPostings(role.organization.id),
@@ -78,6 +84,11 @@ export default async function ClientDetailPage({ params }: RouteParams) {
     listTasksByClient(client.id, role.organization.id),
     listOrganizationMembers(role.organization.id),
     listPlacementsByClient(client.id, role.organization.id),
+    recordClientViewed({
+      userId: user.id,
+      clientRecordId: client.id,
+      organizationId: client.organizationId,
+    }),
   ]);
   const openJobs = allJobs.filter((j) => j.status === "open");
 

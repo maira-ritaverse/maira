@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { canExport } from "@/lib/permissions/server";
-import { listClientRecordsWithReferralBreakdown } from "@/lib/clients/queries";
+import { listClientRecordsWithUpdateBadge } from "@/lib/clients/queries";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ExportButton } from "@/components/features/agency/export-button";
@@ -32,7 +32,9 @@ export default async function ClientsPage() {
     redirect("/app");
   }
 
-  const clients = await listClientRecordsWithReferralBreakdown(role.organization.id);
+  // 新着・更新バッジ用の判定を含めて取得(本人データ最新更新 vs 自分の最終閲覧)。
+  // viewerUserId = 自分(認証済みメンバー)。判定対象は linked または期限内 revoke_requested。
+  const clients = await listClientRecordsWithUpdateBadge(role.organization.id, user.id);
   const showExport = canExport(role);
 
   return (
