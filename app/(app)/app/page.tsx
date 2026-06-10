@@ -5,7 +5,7 @@ import { isOnboardingCompleted } from "@/lib/onboarding/queries";
 import { DashboardEmpty } from "./dashboard-empty";
 import { DashboardStarter } from "./dashboard-starter";
 import { DashboardActive } from "./dashboard-active";
-import { OnboardingTour } from "@/components/features/onboarding/onboarding-tour";
+import { OnboardingTourMount } from "@/components/features/onboarding/onboarding-tour-mount";
 
 /**
  * ダッシュボード(認証後の入口)。
@@ -16,9 +16,15 @@ import { OnboardingTour } from "@/components/features/onboarding/onboarding-tour
  * ここでも明示的に取得する(防御的)。
  *
  * 併せて、オンボーディングツアーの完了状態も取得し、未完了なら
- * ツアーを自動起動する(OnboardingTour に autoStart で渡す)。
+ * ツアーを自動起動する(OnboardingTourMount に autoStart で渡す)。
+ * 再表示ボタンからは /app?replay=tour で遷移してくるため、searchParams を
+ * 読んで replay フラグも渡す。
  */
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ replay?: string }>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -30,10 +36,13 @@ export default async function DashboardPage() {
 
   // ダッシュボードデータと onboarded_at 判定を並行取得。
   // それぞれ独立した SELECT なので待ち時間を圧縮する。
-  const [data, onboardingDone] = await Promise.all([
+  const [data, onboardingDone, sp] = await Promise.all([
     getDashboardData(user.id),
     isOnboardingCompleted(user.id),
+    searchParams,
   ]);
+
+  const replay = sp.replay === "tour";
 
   return (
     <div className="mx-auto max-w-6xl space-y-6" data-tour="dashboard-content">
@@ -50,8 +59,8 @@ export default async function DashboardPage() {
       {data.status === "starter" && <DashboardStarter data={data} />}
       {data.status === "active" && <DashboardActive data={data} />}
 
-      {/* オンボーディングツアー(未完了の時のみ自動起動) */}
-      <OnboardingTour autoStart={!onboardingDone} />
+      {/* オンボーディングツアー(未完了の時の自動起動 + 再表示クエリでの強制起動) */}
+      <OnboardingTourMount autoStart={!onboardingDone} replay={replay} />
     </div>
   );
 }

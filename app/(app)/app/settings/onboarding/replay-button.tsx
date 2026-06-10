@@ -1,36 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { OnboardingTour } from "@/components/features/onboarding/onboarding-tour";
 
 /**
  * オンボーディングツアーを再起動するボタン
  *
- * forceStart 経由でツアーを起動する。
- * autoStart=false を渡しているため、再表示完了で onboarded_at は変更されない
- * (= 初回完了の記録を保持する)。
+ * ツアーのステップにはダッシュボード本体(/app の data-tour="dashboard-content")や
+ * サイドバー各項目を target にしているステップが含まれるため、設定ページ上で起動すると
+ * 一部 target が存在せず、react-joyride が黙ってスキップしてしまう。
+ * これを避けるため、再表示時は /app?replay=tour に遷移し、ダッシュボード側で
+ * クエリを検知してツアーを起動する設計にしている(OnboardingTourMount 参照)。
  *
- * ツアー終了時(onClose)に forceStart を false に戻すことで、再度ボタンが押せる状態にする。
+ * onboarded_at は autoStart=false 側で扱われるため、再表示で記録は変更されない。
  */
 export function OnboardingReplayButton() {
-  const [forceStart, setForceStart] = useState(false);
-
-  const handleStart = () => {
-    setForceStart(true);
-  };
-
-  const handleClose = () => {
-    setForceStart(false);
-  };
-
-  return (
-    <>
-      <Button onClick={handleStart} disabled={forceStart}>
-        {forceStart ? "ツアー実行中..." : "🎓 ツアーを再表示する"}
-      </Button>
-
-      {forceStart && <OnboardingTour autoStart={false} forceStart={true} onClose={handleClose} />}
-    </>
-  );
+  return <Button render={<Link href="/app?replay=tour" />}>🎓 ツアーを再表示する</Button>;
 }
