@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ClientSummaryCard } from "@/components/features/agency/client-summary-card";
 import {
   ApproveRevokeButton,
   CancelInvitationButton,
@@ -156,6 +157,8 @@ export default async function ClientDetailPage({ params }: RouteParams) {
           <InviteClientButton clientRecordId={client.id} />
         </Card>
       )}
+
+      <ClientSummaryCard clientId={client.id} />
 
       <ClientDetailForm client={client} />
 
