@@ -1,4 +1,3 @@
-import Link from "next/link";
 import {
   ArrowUpRight,
   BarChart3,
@@ -7,6 +6,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
+import Link from "next/link";
 
 import { ContactForm } from "@/components/features/marketing/contact-form";
 
@@ -176,25 +176,38 @@ function Hero() {
       <div className="mx-auto grid max-w-6xl gap-16 px-6 pt-20 pb-28 sm:pt-28 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10 lg:px-10 lg:pt-32 lg:pb-40">
         <div className="relative z-10 flex flex-col justify-center">
           <p className="lp-eyebrow">AI Native Recruitment CRM</p>
-          <h1 className="lp-serif-ja mt-7 text-[2.4rem] leading-[1.35] font-medium text-[color:var(--lp-ink)] sm:text-[3rem] sm:leading-[1.32] lg:text-[3.5rem]">
-            <span className="block">候補者と</span>
-            <span className="block">
-              <span className="relative inline-block">
-                つながる
-                <span
-                  aria-hidden
-                  className="absolute right-0 -bottom-1 left-0 h-[6px] bg-[color:var(--lp-fuji-soft)]/40"
-                />
-              </span>
-              、AIネイティブな
+          {/*
+            見出しの改行ルール:
+            - 文節を分断しないよう、読点(、)の直後でだけ強制改行する。
+            - 「候補者とつながる、」/「AIネイティブな採用CRM。」の二行構成。
+            - スマホは文字幅が足りないので二行目が自然に折り返す前提。
+              <wbr> で「AIネイティブな」と「採用CRM。」の境を改行候補にしておく。
+          */}
+          <h1 className="lp-serif-ja mt-7 text-[1.85rem] leading-[1.55] font-medium text-[color:var(--lp-ink)] sm:text-[2.4rem] sm:leading-[1.45] lg:text-[2.9rem] lg:leading-[1.4]">
+            候補者と
+            <span className="relative inline-block">
+              つながる
+              <span
+                aria-hidden
+                className="absolute right-0 -bottom-1 left-0 h-[6px] bg-[color:var(--lp-fuji-soft)]/40"
+              />
             </span>
-            <span className="block">採用CRM。</span>
+            、
+            <br />
+            AIネイティブな
+            <wbr />
+            採用CRM。
           </h1>
+          {/*
+            スマホ幅では三行マニフェスト調の <br /> が裏目に出て更に折り返しが
+            重なる。sm 以上だけ強制改行を効かせ、モバイルは一段落として自然に
+            流す方が読みやすい。
+          */}
           <p className="mt-10 max-w-lg text-[0.97rem] text-[color:var(--lp-ink-soft)]">
             候補者の状況をAIが要約し、次の一手を示す。
-            <br />
+            <br className="hidden sm:inline" />
             求職者の動きは、リアルタイムで届く。
-            <br />
+            <br className="hidden sm:inline" />
             中小転職エージェントのための、新しい採用管理。
           </p>
           <div className="mt-12 flex flex-wrap items-center gap-4">
@@ -674,7 +687,7 @@ function Contact() {
             <div className="flex items-center gap-3">
               <span className="lp-serif-en tracking-[0.3em] uppercase">From</span>
               <span className="h-px flex-1 bg-[color:var(--lp-line)]" />
-              <span>株式会社リタバース</span>
+              <span>株式会社Revorise</span>
             </div>
           </div>
         </div>
@@ -704,10 +717,7 @@ function Footer() {
             <br />
             中小転職エージェントのための採用管理。
           </p>
-          <p className="mt-8 text-[0.75rem] text-white/55">
-            株式会社リタバース
-            <span className="lp-serif-en ml-2 tracking-[0.25em]">RITAVERSE</span>
-          </p>
+          <p className="mt-8 text-[0.75rem] text-white/55">株式会社Revorise</p>
         </div>
         <div>
           <p className="lp-serif-en text-[0.65rem] tracking-[0.3em] text-white/55 uppercase">
@@ -761,8 +771,7 @@ function Footer() {
       </div>
       <div className="border-t border-white/10">
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-3 px-6 py-6 text-[0.75rem] text-white/55 sm:flex-row sm:items-center lg:px-10">
-          <p>© 2026 RITAVERSE Inc. All rights reserved.</p>
-          <p className="lp-serif-en tracking-[0.25em] uppercase">Made in Tokyo</p>
+          <p>© 2026 Revorise Inc. All rights reserved.</p>
         </div>
       </div>
     </footer>
