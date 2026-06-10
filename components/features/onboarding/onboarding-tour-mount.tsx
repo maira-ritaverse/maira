@@ -19,9 +19,9 @@ type Props = {
  * - 再表示完了/スキップ時には URL の ?replay=tour を取り除き(router.replace)、
  *   再読込で再度起動してしまわないようにする。
  *
- * 「再表示は必ずダッシュボード上で起こす」ことで、ステップ2の dashboard-content や
- * サイドバー各項目など、target が揃った状態でツアーが流れる(設定ページ上だと
- * dashboard-content が無いためステップ2が黙ってスキップされていた)。
+ * 「再表示は必ずダッシュボード上で起こす」ことで、ツアーが「ダッシュボードを起点に
+ * 各機能を紹介する」流れと一致するようにしている(設定ページから直接起動すると、
+ * ステップ2以降の文脈が崩れるため)。
  */
 export function OnboardingTourMount({ autoStart, replay }: Props) {
   const router = useRouter();

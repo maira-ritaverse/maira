@@ -6,11 +6,10 @@ import { Button } from "@/components/ui/button";
 /**
  * オンボーディングツアーを再起動するボタン
  *
- * ツアーのステップにはダッシュボード本体(/app の data-tour="dashboard-content")や
- * サイドバー各項目を target にしているステップが含まれるため、設定ページ上で起動すると
- * 一部 target が存在せず、react-joyride が黙ってスキップしてしまう。
- * これを避けるため、再表示時は /app?replay=tour に遷移し、ダッシュボード側で
- * クエリを検知してツアーを起動する設計にしている(OnboardingTourMount 参照)。
+ * ツアーは「ダッシュボードを起点に主要機能を紹介する」流れになっているため、
+ * 設定ページ上ではなく、必ずダッシュボードに遷移してから起動する。
+ * 再表示時は /app?replay=tour に遷移し、ダッシュボード側でクエリを検知して
+ * ツアーを起動する設計にしている(OnboardingTourMount 参照)。
  *
  * onboarded_at は autoStart=false 側で扱われるため、再表示で記録は変更されない。
  */

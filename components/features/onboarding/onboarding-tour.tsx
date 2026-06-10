@@ -57,10 +57,15 @@ export function OnboardingTour({ autoStart, forceStart = false, onClose }: Props
         </div>
       ),
     },
-    // ステップ2:ダッシュボード本体
+    // ステップ2:ダッシュボード(画面中央表示)
+    // 元は dashboard-content を target にして placement: "top" を指定していたが、
+    // 対象 div がページ高さほぼ全域に及ぶため、tooltip がビューポート外に押し出され
+    // スクロールしないと「次へ」ボタンが見えない状態だった。
+    // ダッシュボード自体は背景にそのまま見えているので、ステップ1と同様に
+    // body + center で説明文だけを表示する形に変更している。
     {
-      target: '[data-tour="dashboard-content"]',
-      placement: "top",
+      target: "body",
+      placement: "center",
       title: "ここがダッシュボードです",
       content: (
         <div className="space-y-2">
