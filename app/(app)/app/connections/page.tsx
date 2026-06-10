@@ -29,7 +29,7 @@ export default async function ConnectionsPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/login");
+  if (!user) redirect("/login");
 
   const { invited, linked, revokeRequested, revoked } = await listConnections();
 

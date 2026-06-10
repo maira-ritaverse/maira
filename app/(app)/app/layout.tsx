@@ -22,7 +22,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/auth/login");
+    redirect("/login");
   }
 
   // ヘッダー表示用 display_name と、サイドナビ「エージェント連携」のバッジ用

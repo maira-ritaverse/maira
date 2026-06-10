@@ -76,7 +76,7 @@ export function SignupForm({ invitation }: Props) {
     }
 
     if (result.success) {
-      router.push("/auth/verify-email");
+      router.push("/verify-email");
     }
   };
 
@@ -164,7 +164,7 @@ export function SignupForm({ invitation }: Props) {
         <p className="text-muted-foreground text-center text-sm">
           既にアカウントをお持ちですか?{" "}
           <Link
-            href={invitation ? `/auth/login?next=/invite/${invitation.token}` : "/auth/login"}
+            href={invitation ? `/login?next=/invite/${invitation.token}` : "/login"}
             className="text-foreground font-medium underline"
           >
             ログイン

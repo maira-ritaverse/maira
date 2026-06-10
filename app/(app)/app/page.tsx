@@ -31,7 +31,7 @@ export default async function DashboardPage({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/auth/login");
+    redirect("/login");
   }
 
   // ダッシュボードデータと onboarded_at 判定を並行取得。

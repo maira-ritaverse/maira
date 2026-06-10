@@ -16,7 +16,7 @@ export default async function NewApplicationPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/auth/login");
+  if (!user) redirect("/login");
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">

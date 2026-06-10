@@ -19,7 +19,7 @@ export default async function CareerListPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/auth/login");
+  if (!user) redirect("/login");
 
   const conversations = await listCareerConversations(user.id);
   const profileData = await getCareerProfile(user.id);

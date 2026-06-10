@@ -22,7 +22,7 @@ export default function VerifyEmailPage() {
           </ul>
         </div>
 
-        <Button variant="outline" className="w-full" render={<Link href="/auth/login" />}>
+        <Button variant="outline" className="w-full" render={<Link href="/login" />}>
           ログイン画面に戻る
         </Button>
       </div>

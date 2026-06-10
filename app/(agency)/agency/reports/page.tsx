@@ -42,7 +42,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/auth/login");
+  if (!user) redirect("/login");
 
   const role = await getUserRole(user.id);
   if (role.accountType !== "organization_member" || !role.organization || !role.member) {

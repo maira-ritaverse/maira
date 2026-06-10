@@ -19,7 +19,7 @@ export default async function DiagnosisResultPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/auth/login");
+  if (!user) redirect("/login");
 
   const profileData = await getCareerProfile(user.id);
   const diagnosis = profileData?.profile.diagnosis;

@@ -23,7 +23,7 @@ export default async function TasksPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/auth/login");
+    redirect("/login");
   }
 
   const [tasks, applications] = await Promise.all([

@@ -23,7 +23,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/auth/login");
+  if (!user) redirect("/login");
 
   const isValid = await verifyDocumentConversation(id, user.id);
   if (!isValid) notFound();

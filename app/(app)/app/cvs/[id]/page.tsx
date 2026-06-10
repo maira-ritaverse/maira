@@ -35,7 +35,7 @@ export default async function EditCvPage({ params }: PageProps) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/auth/login");
+  if (!user) redirect("/login");
 
   // career_profile も並列で読む(AI ボタン有効化判定に使う、Phase 4-c〜)。
   // 履歴書 [id]/page.tsx と同型の取り回し。

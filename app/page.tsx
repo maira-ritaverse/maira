@@ -12,8 +12,8 @@ export default function HomePage() {
         </div>
 
         <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-          <Button render={<Link href="/auth/signup" />}>新規登録</Button>
-          <Button variant="outline" render={<Link href="/auth/login" />}>
+          <Button render={<Link href="/signup" />}>新規登録</Button>
+          <Button variant="outline" render={<Link href="/login" />}>
             ログイン
           </Button>
         </div>

@@ -21,7 +21,7 @@ export default async function DocumentsListPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/auth/login");
+  if (!user) redirect("/login");
 
   // 一覧と棚卸し結果有無は独立して取得できるので並列化
   const [documents, profileData] = await Promise.all([

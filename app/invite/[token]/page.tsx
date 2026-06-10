@@ -118,7 +118,7 @@ export default async function InviteLandingPage({
   if (!user) {
     // ログイン側は S5c で next 対応を入れる予定。S5b 時点では参考リンクとして
     // 同じ next クエリだけ付けておく(callback 経由でない通常ログインなので、
-    // /auth/login 側で next を読んで遷移するのは S5c の責務)。
+    // /login 側で next を読んで遷移するのは S5c の責務)。
     const nextParam = encodeURIComponent(`/invite/${token}`);
     return (
       <CenteredCard>
@@ -137,11 +137,11 @@ export default async function InviteLandingPage({
             </AlertDescription>
           </Alert>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button render={<Link href={`/auth/login?next=${nextParam}`} />} className="flex-1">
+            <Button render={<Link href={`/login?next=${nextParam}`} />} className="flex-1">
               ログイン
             </Button>
             <Button
-              render={<Link href={`/auth/signup?invitationToken=${token}`} />}
+              render={<Link href={`/signup?invitationToken=${token}`} />}
               variant="outline"
               className="flex-1"
             >

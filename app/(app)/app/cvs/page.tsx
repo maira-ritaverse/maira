@@ -21,7 +21,7 @@ export default async function CvsListPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/auth/login");
+  if (!user) redirect("/login");
 
   const cvs = await listCvs(user.id);
 

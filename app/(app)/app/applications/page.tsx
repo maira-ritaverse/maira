@@ -30,7 +30,7 @@ export default async function ApplicationsListPage({ searchParams }: Props) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/auth/login");
+  if (!user) redirect("/login");
 
   const statusFilter =
     params.status && (applicationStatuses as readonly string[]).includes(params.status)

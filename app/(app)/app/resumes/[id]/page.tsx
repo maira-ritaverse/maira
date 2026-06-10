@@ -30,7 +30,7 @@ export default async function EditResumePage({ params }: PageProps) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/auth/login");
+  if (!user) redirect("/login");
 
   const [resume, careerProfile] = await Promise.all([
     getResume(id, user.id),

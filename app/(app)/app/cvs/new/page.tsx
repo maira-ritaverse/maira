@@ -20,7 +20,7 @@ export default async function NewCvPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/auth/login");
+  if (!user) redirect("/login");
 
   // career_profile も並列で読む(AI ボタン有効化判定に使う、Phase 4-c〜)。
   const [resumes, careerProfile] = await Promise.all([

@@ -36,7 +36,7 @@ export default async function ApplicationDetailPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/auth/login");
+  if (!user) redirect("/login");
 
   const [application, tasks, profileData] = await Promise.all([
     getApplication(id, user.id),

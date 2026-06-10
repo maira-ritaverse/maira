@@ -3,8 +3,8 @@
  *
  * 用途:
  *   - /auth/callback?next=...(メール確認後の戻り先)
- *   - /auth/login?next=...(ログイン後の戻り先)
- *   - /auth/signup?invitationToken=... 経由の戻り先など
+ *   - /login?next=...(ログイン後の戻り先)
+ *   - /signup?invitationToken=... 経由の戻り先など
  *
  * 同一オリジン内のパス(/ から始まる、// で始まらない、バックスラッシュ無し)
  * のみ許可。緩めると open redirect(任意の外部 URL に飛ばす)になって
@@ -13,7 +13,7 @@
  * 例:
  *   "/invite/abc"           → true
  *   "/app"                  → true
- *   "/auth/login?x=1"       → true(クエリ付きでも origin 内)
+ *   "/login?x=1"       → true(クエリ付きでも origin 内)
  *   "//evil.com/x"          → false(scheme-relative)
  *   "https://evil.com/x"    → false(絶対 URL)
  *   "javascript:alert(1)"   → false(scheme-relative ではないが / で始まらない)

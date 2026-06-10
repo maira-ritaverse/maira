@@ -9,7 +9,7 @@ import { UserMenu } from "@/components/features/user-menu";
  *
  * 求職者向け /app とは完全に分離した別ルートグループ。
  * ロールガード:
- *   - 未ログイン → /auth/login
+ *   - 未ログイン → /login
  *   - account_type が organization_member 以外、または
  *     organization_members レコードが無い場合 → /app に戻す
  *     (「企業メンバーのフリで他テナントのデータが見える」事故を防ぐため、
@@ -22,7 +22,7 @@ export default async function AgencyLayout({ children }: { children: React.React
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/auth/login");
+    redirect("/login");
   }
 
   const role = await getUserRole(user.id);

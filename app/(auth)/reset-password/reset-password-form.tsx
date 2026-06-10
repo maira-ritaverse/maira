@@ -17,7 +17,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
  * - 平文 PW は成功時に reset() で完全クリア(DOM に残さない)
  * - autoComplete="new-password" を明示
  * - セッション無効(リンク失効・直接アクセス)の場合は専用 UI で
- *   /auth/forgot-password への再リクエスト導線を出す
+ *   /forgot-password への再リクエスト導線を出す
  */
 export function ResetPasswordForm() {
   const [isPending, startTransition] = useTransition();
@@ -74,7 +74,7 @@ export function ResetPasswordForm() {
                 リンクの有効期限が切れているか無効です。お手数ですが再度パスワード再設定をやり直してください。
               </AlertDescription>
             </Alert>
-            <Button className="w-full" render={<Link href="/auth/forgot-password" />}>
+            <Button className="w-full" render={<Link href="/forgot-password" />}>
               パスワード再設定をやり直す
             </Button>
           </div>
@@ -85,7 +85,7 @@ export function ResetPasswordForm() {
                 ✓ パスワードを変更しました。新しいパスワードでログインしてください。
               </AlertDescription>
             </Alert>
-            <Button className="w-full" render={<Link href="/auth/login" />}>
+            <Button className="w-full" render={<Link href="/login" />}>
               ログインへ
             </Button>
           </div>

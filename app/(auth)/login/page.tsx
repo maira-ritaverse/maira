@@ -17,7 +17,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
  * Suspense境界で包む必要がある。ページ本体は内側のコンポーネントに分離する。
  *
  * next パラメータ(招待リンクからの導線で使用):
- *   /auth/login?next=/invite/[token] の形で渡され、ログイン成功後に
+ *   /login?next=/invite/[token] の形で渡され、ログイン成功後に
  *   その URL へ戻る。検証は Server Action 側(safeNextOr)で行うため、
  *   ここでは生の文字列をそのまま渡してよい。
  */
@@ -84,7 +84,7 @@ function LoginForm() {
 
       <p className="text-center text-sm">
         <Link
-          href="/auth/forgot-password"
+          href="/forgot-password"
           className="text-muted-foreground hover:text-foreground underline"
         >
           パスワードをお忘れですか?
@@ -112,7 +112,7 @@ export default function LoginPage() {
 
         <p className="text-muted-foreground text-center text-sm">
           アカウントをお持ちでないですか?{" "}
-          <Link href="/auth/signup" className="text-foreground font-medium underline">
+          <Link href="/signup" className="text-foreground font-medium underline">
             新規登録
           </Link>
         </p>

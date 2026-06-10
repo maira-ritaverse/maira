@@ -19,7 +19,7 @@ export default async function NewResumePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/auth/login");
+  if (!user) redirect("/login");
 
   const careerProfile = await getCareerProfile(user.id);
   const hasCareerProfile = careerProfile !== null;

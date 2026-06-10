@@ -23,7 +23,7 @@ export default async function CareerResultPage({ params }: { params: Promise<{ i
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/auth/login");
+  if (!user) redirect("/login");
 
   const isOwner = await verifyConversationOwner(id, user.id);
   if (!isOwner) notFound();

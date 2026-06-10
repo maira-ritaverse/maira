@@ -16,7 +16,7 @@ export default async function DiagnosisTakePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/auth/login");
+  if (!user) redirect("/login");
 
   return <DiagnosisTake />;
 }

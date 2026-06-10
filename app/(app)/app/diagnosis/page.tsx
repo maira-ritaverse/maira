@@ -24,7 +24,7 @@ export default async function DiagnosisIntroPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/auth/login");
+  if (!user) redirect("/login");
 
   const totalQuestions = axisQuestions.length + aptitudeQuestions.length;
 

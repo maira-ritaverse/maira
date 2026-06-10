@@ -89,7 +89,7 @@ export function ForgotPasswordForm() {
         )}
 
         <p className="text-muted-foreground text-center text-sm">
-          <Link href="/auth/login" className="text-foreground font-medium underline">
+          <Link href="/login" className="text-foreground font-medium underline">
             ログインに戻る
           </Link>
         </p>

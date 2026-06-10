@@ -14,7 +14,7 @@ export default async function NewCareerPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/auth/login");
+  if (!user) redirect("/login");
 
   const conversationId = await createCareerConversation(user.id);
 

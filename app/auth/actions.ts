@@ -53,7 +53,7 @@ export async function signup(input: SignupInput) {
  * 失敗時はエラーメッセージを返す(クライアント側で表示)。
  *
  * next の用途:
- *   招待リンクから /auth/login?next=/invite/[token] に来たユーザーを、
+ *   招待リンクから /login?next=/invite/[token] に来たユーザーを、
  *   ログイン成功後に着地ページへ戻すため。検証は safeNextOr に任せ、
  *   外部 URL や scheme-relative は捨てて /app にフォールバックする
  *   (open redirect 対策)。
@@ -82,7 +82,7 @@ export async function logout() {
   await supabase.auth.signOut();
 
   revalidatePath("/", "layout");
-  redirect("/auth/login");
+  redirect("/login");
 }
 
 /**
@@ -91,9 +91,9 @@ export async function logout() {
  * メールを忘れた / パスワードを忘れたユーザー向けの「リセットメール送信」アクション。
  *
  * redirectTo の組み立ては signup() の emailRedirectTo と同型:
- *   ${SITE_URL}/auth/callback?next=/auth/reset-password
+ *   ${SITE_URL}/auth/callback?next=/reset-password
  * → メール内リンクをクリック → Supabase が /auth/callback?code=xxx に飛ばす
- * → callback が code をセッションに交換 → next で /auth/reset-password に着地
+ * → callback が code をセッションに交換 → next で /reset-password に着地
  * → セッションが立った状態で updateUser({ password }) を呼べる。
  *
  * 【enumeration 対策・重要】
@@ -107,7 +107,7 @@ export async function requestPasswordReset(email: string) {
   const supabase = await createClient();
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  const redirectTo = `${siteUrl}/auth/callback?next=${encodeURIComponent("/auth/reset-password")}`;
+  const redirectTo = `${siteUrl}/auth/callback?next=${encodeURIComponent("/reset-password")}`;
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo,
