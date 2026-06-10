@@ -22,7 +22,7 @@ type Props = {
 };
 
 /**
- * Maira オンボーディングツアー(8ステップ)
+ * Maira オンボーディングツアー(10ステップ)
  *
  * 初回ログイン時または「ツアーを再表示」から起動する。
  * 各ステップは画面上の特定要素を target にして強調表示する。
@@ -41,7 +41,7 @@ type Props = {
 export function OnboardingTour({ autoStart, forceStart = false, onClose }: Props) {
   const [run, setRun] = useState(false);
 
-  // 8ステップのツアー内容。target は data-tour 属性で参照する。
+  // 10ステップのツアー内容。target は data-tour 属性で参照する。
   // 画面中央表示(モーダル風)にしたいステップは target: "body" + placement: "center"。
   // 順序は現行サイドバーの推奨フロー(診断 → 棚卸し → 書類作成)に合わせる。
   const steps: Step[] = [
@@ -111,21 +111,47 @@ export function OnboardingTour({ autoStart, forceStart = false, onClose }: Props
         </div>
       ),
     },
-    // ステップ6:書類作成(旧ステップ5から文言修正。履歴書/職務経歴書は別メニューに分かれている現状に合わせる)
+    // ステップ6:志望動機・自己PR(サイドバー表記に合わせる。
+    // 履歴書・職務経歴書は後続ステップで個別に紹介するため、ここでは触れない)
     {
       target: '[data-tour="nav-documents"]',
       placement: "right",
-      title: "書類作成",
+      title: "志望動機・自己PR",
       content: (
         <div className="space-y-2">
           <p>棚卸し結果から、志望動機・自己PRを自動生成できます。</p>
+        </div>
+      ),
+    },
+    // ステップ7:履歴書
+    {
+      target: '[data-tour="nav-resumes"]',
+      placement: "right",
+      title: "履歴書",
+      content: (
+        <div className="space-y-2">
+          <p>厚労省推奨様式に沿った履歴書を作成・管理できます。</p>
           <p className="text-muted-foreground text-sm">
-            履歴書・職務経歴書は専用メニューから作成できます。
+            プロフィール情報を再利用するので、何度も同じ項目を入力する必要はありません。
           </p>
         </div>
       ),
     },
-    // ステップ7:ユーザーメニュー
+    // ステップ8:職務経歴書
+    {
+      target: '[data-tour="nav-cvs"]',
+      placement: "right",
+      title: "職務経歴書",
+      content: (
+        <div className="space-y-2">
+          <p>JIS様式想定の職務経歴書を作成・管理できます。</p>
+          <p className="text-muted-foreground text-sm">
+            棚卸しで整理した経験を元に、応募先ごとの最適化もしやすくなります。
+          </p>
+        </div>
+      ),
+    },
+    // ステップ9:ユーザーメニュー
     {
       target: '[data-tour="user-menu"]',
       placement: "bottom",
@@ -136,7 +162,7 @@ export function OnboardingTour({ autoStart, forceStart = false, onClose }: Props
         </div>
       ),
     },
-    // ステップ8:完了(画面中央)
+    // ステップ10:完了(画面中央)
     {
       target: "body",
       placement: "center",

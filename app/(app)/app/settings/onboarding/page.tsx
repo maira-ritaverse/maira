@@ -45,7 +45,7 @@ export default async function OnboardingSettingsPage() {
           <div>
             <p className="font-medium">使い方ツアー</p>
             <p className="text-muted-foreground mt-1 text-sm">
-              Mairaの主な機能と、最初に何をすべきかを案内する7ステップのツアーです。
+              Mairaの主な機能と、最初に何をすべきかを案内する10ステップのツアーです。
               いつでも再表示できます。
             </p>
             <p className="text-muted-foreground mt-2 text-xs">

@@ -22,6 +22,8 @@ function getTourAttr(href: string): string | undefined {
   if (href === "/app/diagnosis") return "nav-diagnosis";
   if (href === "/app/career") return "nav-career";
   if (href === "/app/documents") return "nav-documents";
+  if (href === "/app/resumes") return "nav-resumes";
+  if (href === "/app/cvs") return "nav-cvs";
   return undefined;
 }
 
