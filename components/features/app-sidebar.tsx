@@ -19,6 +19,7 @@ const navItems = [
 // オンボーディングツアーで個別ハイライトしたいナビ項目に data-tour 属性を割り当てるための対応表。
 // 該当しない項目は undefined を返し、属性そのものが付かないようにする。
 function getTourAttr(href: string): string | undefined {
+  if (href === "/app/diagnosis") return "nav-diagnosis";
   if (href === "/app/career") return "nav-career";
   if (href === "/app/documents") return "nav-documents";
   return undefined;

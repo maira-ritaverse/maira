@@ -22,7 +22,7 @@ type Props = {
 };
 
 /**
- * Maira オンボーディングツアー(7ステップ)
+ * Maira オンボーディングツアー(8ステップ)
  *
  * 初回ログイン時または「ツアーを再表示」から起動する。
  * 各ステップは画面上の特定要素を target にして強調表示する。
@@ -35,12 +35,15 @@ type Props = {
  * - showProgress / buttons / primaryColor / zIndex は options 配下
  * - スキップボタンは options.buttons に "skip" を含めることで表示
  * - locale は SharedProps なので Joyride props のトップレベル
+ * - showProgress 有効時の primary ボタンラベルは locale.next ではなく
+ *   locale.nextWithProgress を使うため、日本語化は両方設定が必要。
  */
 export function OnboardingTour({ autoStart, forceStart = false, onClose }: Props) {
   const [run, setRun] = useState(false);
 
-  // 7ステップのツアー内容。target は data-tour 属性で参照する。
+  // 8ステップのツアー内容。target は data-tour 属性で参照する。
   // 画面中央表示(モーダル風)にしたいステップは target: "body" + placement: "center"。
+  // 順序は現行サイドバーの推奨フロー(診断 → 棚卸し → 書類作成)に合わせる。
   const steps: Step[] = [
     // ステップ1:ようこそ(画面中央)
     {
@@ -68,7 +71,7 @@ export function OnboardingTour({ autoStart, forceStart = false, onClose }: Props
         </div>
       ),
     },
-    // ステップ3:サイドバー全体
+    // ステップ3:サイドバー全体(現行ナビ構成に合わせて例示を更新)
     {
       target: '[data-tour="sidebar"]',
       placement: "right",
@@ -76,37 +79,53 @@ export function OnboardingTour({ autoStart, forceStart = false, onClose }: Props
       content: (
         <div className="space-y-2">
           <p>主要機能はここからアクセスできます。</p>
-          <p className="text-muted-foreground text-sm">キャリア棚卸し / 書類作成 / 応募管理 など</p>
-        </div>
-      ),
-    },
-    // ステップ4:キャリア棚卸しリンク
-    {
-      target: '[data-tour="nav-career"]',
-      placement: "right",
-      title: "まずはキャリア棚卸しから",
-      content: (
-        <div className="space-y-2">
-          <p>Mairaと5-10分話すだけで、あなたの強み・価値観・希望が自動的に整理されます。</p>
           <p className="text-muted-foreground text-sm">
-            ここで作った情報は、書類作成や応募相談に自動で活用されます
+            キャリア診断 / キャリア棚卸し / 書類作成 / 応募管理 など
           </p>
         </div>
       ),
     },
-    // ステップ5:書類作成リンク
+    // ステップ4:キャリア診断(新規)。サイドバー順序に合わせて棚卸しの前に置く。
     {
-      target: '[data-tour="nav-documents"]',
+      target: '[data-tour="nav-diagnosis"]',
       placement: "right",
-      title: "書類作成・応募管理も",
+      title: "まずはキャリア診断から",
       content: (
         <div className="space-y-2">
-          <p>棚卸し結果から、履歴書・職務経歴書・志望動機・自己PRを自動生成できます。</p>
-          <p>応募管理画面では、各応募についてMairaに相談することもできます。</p>
+          <p>
+            あなたの強みや向いている方向を、まず診断で把握します。数分の質問に答えると、適性が5つの軸で可視化されます。
+          </p>
         </div>
       ),
     },
-    // ステップ6:ユーザーメニュー
+    // ステップ5:キャリア棚卸し(旧ステップ4から移動・文言更新)
+    {
+      target: '[data-tour="nav-career"]',
+      placement: "right",
+      title: "次にキャリア棚卸し",
+      content: (
+        <div className="space-y-2">
+          <p>
+            Mairaと5-10分話すだけで、あなたの強み・価値観・希望が整理されます。診断結果も踏まえて深掘りし、ここで作った情報は書類作成や応募相談に自動で活用されます。
+          </p>
+        </div>
+      ),
+    },
+    // ステップ6:書類作成(旧ステップ5から文言修正。履歴書/職務経歴書は別メニューに分かれている現状に合わせる)
+    {
+      target: '[data-tour="nav-documents"]',
+      placement: "right",
+      title: "書類作成",
+      content: (
+        <div className="space-y-2">
+          <p>棚卸し結果から、志望動機・自己PRを自動生成できます。</p>
+          <p className="text-muted-foreground text-sm">
+            履歴書・職務経歴書は専用メニューから作成できます。
+          </p>
+        </div>
+      ),
+    },
+    // ステップ7:ユーザーメニュー
     {
       target: '[data-tour="user-menu"]',
       placement: "bottom",
@@ -117,14 +136,14 @@ export function OnboardingTour({ autoStart, forceStart = false, onClose }: Props
         </div>
       ),
     },
-    // ステップ7:完了(画面中央)
+    // ステップ8:完了(画面中央)
     {
       target: "body",
       placement: "center",
       title: "準備完了です",
       content: (
         <div className="space-y-2">
-          <p>ツアーは以上です。まずはキャリア棚卸しから始めてみましょう。</p>
+          <p>ツアーは以上です。まずはキャリア診断から始めてみましょう。</p>
           <p className="text-muted-foreground text-sm">
             分からないことがあれば、設定からこのツアーを再表示できます。
           </p>
@@ -176,6 +195,9 @@ export function OnboardingTour({ autoStart, forceStart = false, onClose }: Props
         close: "閉じる",
         last: "完了",
         next: "次へ",
+        // showProgress 有効時の primary ボタンは next ではなく nextWithProgress を参照する。
+        // 未設定だと英語デフォルト "Next ({current} of {total})" にフォールバックしてしまう。
+        nextWithProgress: "次へ ({current} / {total})",
         skip: "スキップ",
       }}
       options={{
