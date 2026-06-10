@@ -1,13 +1,12 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
-import { Button } from "@/components/ui/button";
+import { LandingPage } from "@/components/features/marketing/landing-page";
 
 /**
  * トップページ
  *
- * - 未ログイン:そのままページ内容を表示(将来 LP に差し替え予定)
+ * - 未ログイン:エージェント向けのランディングページを表示
  * - ログイン済み:account_type に応じてダッシュボードへリダイレクト
  *     - organization_member(かつ member レコードあり) → /agency
  *     - それ以外(seeker、または不完全な organization_member) → /app
@@ -36,22 +35,5 @@ export default async function HomePage() {
     redirect(isAgencyMember ? "/agency" : "/app");
   }
 
-  return (
-    <main className="bg-background flex min-h-screen flex-col items-center justify-center p-8">
-      <div className="max-w-2xl space-y-8 text-center">
-        <div>
-          <h1 className="mb-4 text-5xl font-bold tracking-tight">Maira</h1>
-          <p className="text-muted-foreground mb-2 text-xl">あなただけのAI転職エージェント</p>
-          <p className="text-muted-foreground text-sm">Coming Soon</p>
-        </div>
-
-        <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-          <Button render={<Link href="/signup" />}>新規登録</Button>
-          <Button variant="outline" render={<Link href="/login" />}>
-            ログイン
-          </Button>
-        </div>
-      </div>
-    </main>
-  );
+  return <LandingPage />;
 }
