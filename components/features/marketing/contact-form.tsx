@@ -1,19 +1,19 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
+import { ArrowUpRight, CheckCircle2 } from "lucide-react";
 import * as React from "react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowUpRight, CheckCircle2 } from "lucide-react";
 import { z } from "zod";
 
 /**
  * エージェント向けLPの問い合わせフォーム。
  *
- * - 送信処理(Resend 連携)は別タスクで実装する。
- *   ここでは UI とバリデーション(react-hook-form + zod)までを整える。
- * - 送信ハンドラは現状スタブで、API リクエストの代わりに 600ms 待って成功扱いにする。
- *   API 接続時は onSubmit 内の Promise を fetch("/api/contact", …) に差し替えれば足りる。
+ * - 送信は /api/contact に POST し、サーバー側で Resend 経由で運営宛て通知メールを送る。
+ *   本文は再度 zod でバリデートされる(クライアントの検証だけは信頼しないため)。
+ * - 送信中はボタンを無効化し、二重送信を防ぐ。
+ * - 失敗時はエラー詳細を出さず、汎用メッセージのみ表示する(内部情報を漏らさない)。
  * - スタイルは LP の世界観(藍基調 + 藤色アクセント)に揃える。
  *   業務UI(shadcn)とは別レイヤーなので、shadcn コンポーネントは使わず素のフィールドで構成。
  */
@@ -54,16 +54,28 @@ export function ContactForm() {
     defaultValues: { company: "", name: "", email: "", message: "" },
   });
 
-  const onSubmit = async (_values: ContactFormValues) => {
+  const onSubmit = async (values: ContactFormValues) => {
+    // 送信中に再度 submit されるのを防ぐ。
+    if (status === "sending") return;
+
     setStatus("sending");
     try {
-      // 送信処理(Resend 連携)は別タスクで実装する。
-      // 今は UI とバリデーション検証用のスタブとして、600ms 待って成功扱いにする。
-      // API 接続時はこの Promise を fetch("/api/contact", …) に差し替える。
-      await new Promise((resolve) => setTimeout(resolve, 600));
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(values),
+      });
+
+      if (!res.ok) {
+        // エラー内容は汎用表示のみ。サーバー側の詳細を画面に出さない方針。
+        setStatus("error");
+        return;
+      }
+
       setStatus("sent");
       reset();
     } catch (error) {
+      // ネットワーク断などの例外。詳細はコンソールにとどめ、UI には汎用メッセージのみ。
       console.error("[marketing/contact] submit error:", error);
       setStatus("error");
     }
@@ -106,7 +118,7 @@ export function ContactForm() {
         id="contact-company"
         label="会社名"
         required
-        placeholder="株式会社○○"
+        placeholder="株式会社〇〇"
         autoComplete="organization"
         error={errors.company?.message}
         {...register("company")}
