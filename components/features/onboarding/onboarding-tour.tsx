@@ -201,7 +201,11 @@ export function OnboardingTour({ autoStart, forceStart = false, onClose }: Props
         skip: "スキップ",
       }}
       options={{
-        primaryColor: "hsl(var(--primary))",
+        // shadcn v4 / Tailwind v4 では --primary が oklch(...) のため、
+        // hsl(var(--primary)) と書くと hsl(oklch(...)) になり CSS が破棄される。
+        // 結果、buttonPrimary が白背景に白文字となり「次へ」ボタンが見えなくなるので、
+        // var(--primary) を直接渡して oklch 値をそのまま使う。
+        primaryColor: "var(--primary)",
         zIndex: 10000,
         showProgress: true,
         buttons: ["skip", "back", "primary"],
