@@ -11,9 +11,11 @@ import type {
   ClientRecordWithAssignee,
   ClientRecordWithAssigneeAndDues,
   ClientRecordWithReferralBreakdown,
+  ClientRecordWithUpdateBadge,
   ReferralBreakdown,
 } from "./types";
 import type { ReferralStatus } from "@/lib/referrals/types";
+import { computeHasUnreadUpdate, maxIsoTimestamp } from "./update-badge";
 
 type ClientRecordRow = {
   id: string;
@@ -255,6 +257,133 @@ export async function listClientRecordsWithReferralBreakdown(
     }
     const referralBreakdown: ReferralBreakdown = { byStatus, total };
     return { ...c, referralBreakdown };
+  });
+}
+
+/**
+ * クライアント一覧 + 担当者 + 期限 + 応募状況 + 「新着・更新バッジ」フラグ
+ *
+ * `listClientRecordsWithReferralBreakdown` の上に「メンバー個人が前回見た時刻 vs
+ * 本人データ最新更新時刻」の比較結果を足す。一覧画面のバッジ表示専用。
+ *
+ * 開示範囲の方針:
+ *   linked または期限内 revoke_requested の自組織クライアントのみ判定対象。
+ *   それ以外(unlinked/invited/revoked、期限超過 revoke_requested)は
+ *   hasUnreadUpdate=false / latestUpdatedAt=null に倒す
+ *   (本人データを見られない状態でバッジを出しても意味がない)。
+ *
+ * クエリ本数(クライアント件数に依存しない固定本数):
+ *   - 既存: listClientRecordsWithReferralBreakdown(中で client_records / 担当者名 /
+ *           agency_tasks / referrals の 4 本)
+ *   - 追加: resumes(1) + cvs(1) + career_profile RPC(1) + client_view_states(1)
+ *   合計 8 本固定。N+1 は発生しない(全て IN(...) で 1 回ずつ)。
+ *
+ * 失敗時の挙動:
+ *   いずれかの追加クエリが落ちてもクライアント一覧自体は返す
+ *   (バッジが出ないだけで画面は壊れない)。既存の N+1 回避関数群と同じ方針。
+ */
+export async function listClientRecordsWithUpdateBadge(
+  organizationId: string,
+  viewerUserId: string,
+): Promise<ClientRecordWithUpdateBadge[]> {
+  const supabase = await createClient();
+
+  // 1) 既存ラッパでクライアント取得(N+1 回避組み立て済み)
+  const clients = await listClientRecordsWithReferralBreakdown(organizationId);
+
+  // 2) 開示範囲(linked または期限内 revoke_requested)の対象を絞る。
+  //    範囲は resumes/cvs の RLS(20260607000011)と career_profile RPC の認可と
+  //    完全に揃える。範囲外のクライアントは判定スキップする(バッジ常に false)。
+  const nowMs = Date.now();
+  const isDisclosable = (c: ClientRecordWithReferralBreakdown): boolean => {
+    if (!c.linkedUserId) return false;
+    if (c.linkStatus === "linked") return true;
+    if (c.linkStatus === "revoke_requested" && c.revokeDeadline) {
+      return new Date(c.revokeDeadline).getTime() > nowMs;
+    }
+    return false;
+  };
+
+  const disclosable = clients.filter(isDisclosable);
+
+  // 早期 return:開示対象が無ければ追加クエリ 4 本を投げる必要なし。
+  if (disclosable.length === 0) {
+    return clients.map((c) => ({ ...c, hasUnreadUpdate: false, latestUpdatedAt: null }));
+  }
+
+  const linkedUserIds = disclosable
+    .map((c) => c.linkedUserId)
+    .filter((v): v is string => v !== null);
+  const disclosableClientIds = disclosable.map((c) => c.id);
+
+  // 3) 追加クエリ 4 本を並列実行(クライアント件数に依存しない固定本数)。
+  //    resumes / cvs は Phase 6 RLS(linked または期限内 revoke_requested の
+  //    自組織)で SELECT が通る。career_profile は RPC 経由(同じ認可範囲)。
+  //    client_view_states は自分の閲覧記録のみ(user_id = auth.uid())。
+  const [resumeRes, cvRes, profileRes, viewStateRes] = await Promise.all([
+    supabase.from("resumes").select("user_id, updated_at").in("user_id", linkedUserIds),
+    supabase.from("cvs").select("user_id, updated_at").in("user_id", linkedUserIds),
+    supabase.rpc("list_linked_clients_career_profile_updated_at", {
+      p_client_record_ids: disclosableClientIds,
+    }),
+    supabase
+      .from("client_view_states")
+      .select("client_record_id, last_viewed_at")
+      .eq("user_id", viewerUserId)
+      .in("client_record_id", disclosableClientIds),
+  ]);
+
+  // 4) 集約 Map を作る。
+  //    resume / cv は同じ「本人(user_id)」軸なので、両方を 1 つの max Map に畳む。
+  //    career_profile は RPC の戻りが client_record_id 軸なので別 Map。
+  //    閲覧状態も client_record_id 軸。
+  const docMaxByUserId = new Map<string, string>();
+  const recordUserUpdate = (userId: string, updatedAt: string | null | undefined) => {
+    if (!updatedAt) return;
+    const cur = docMaxByUserId.get(userId);
+    if (!cur || updatedAt > cur) docMaxByUserId.set(userId, updatedAt);
+  };
+  if (!resumeRes.error && resumeRes.data) {
+    for (const r of resumeRes.data as Array<{ user_id: string; updated_at: string }>) {
+      recordUserUpdate(r.user_id, r.updated_at);
+    }
+  }
+  if (!cvRes.error && cvRes.data) {
+    for (const r of cvRes.data as Array<{ user_id: string; updated_at: string }>) {
+      recordUserUpdate(r.user_id, r.updated_at);
+    }
+  }
+
+  const profileMaxByClientId = new Map<string, string>();
+  if (!profileRes.error && profileRes.data) {
+    for (const r of profileRes.data as Array<{ client_record_id: string; updated_at: string }>) {
+      profileMaxByClientId.set(r.client_record_id, r.updated_at);
+    }
+  }
+
+  const lastViewedByClientId = new Map<string, string>();
+  if (!viewStateRes.error && viewStateRes.data) {
+    for (const r of viewStateRes.data as Array<{
+      client_record_id: string;
+      last_viewed_at: string;
+    }>) {
+      lastViewedByClientId.set(r.client_record_id, r.last_viewed_at);
+    }
+  }
+
+  // 5) 各クライアントに hasUnreadUpdate / latestUpdatedAt を付与。
+  //    判定は computeHasUnreadUpdate(純粋関数)に委譲する。
+  return clients.map((c) => {
+    if (!isDisclosable(c) || !c.linkedUserId) {
+      return { ...c, hasUnreadUpdate: false, latestUpdatedAt: null };
+    }
+    const latestUpdatedAt = maxIsoTimestamp([
+      docMaxByUserId.get(c.linkedUserId),
+      profileMaxByClientId.get(c.id),
+    ]);
+    const lastViewedAt = lastViewedByClientId.get(c.id) ?? null;
+    const hasUnreadUpdate = computeHasUnreadUpdate(latestUpdatedAt, lastViewedAt);
+    return { ...c, hasUnreadUpdate, latestUpdatedAt };
   });
 }
 

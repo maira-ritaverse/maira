@@ -15,7 +15,7 @@ import {
 import {
   clientLinkStatusLabels,
   clientStatusLabels,
-  type ClientRecordWithReferralBreakdown,
+  type ClientRecordWithUpdateBadge,
   type ClientStatus,
   type ReferralBreakdown,
 } from "@/lib/clients/types";
@@ -32,7 +32,7 @@ type SortDirection = "asc" | "desc";
 type StatusFilter = ClientStatus | "all";
 
 type ClientsTableProps = {
-  clients: ClientRecordWithReferralBreakdown[];
+  clients: ClientRecordWithUpdateBadge[];
 };
 
 // 応募状況バッジ用の短ラベル(セル幅を圧迫しないように)。
@@ -214,6 +214,15 @@ export function ClientsTable({ clients }: ClientsTableProps) {
                         {soon > 0 && (
                           <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-amber-700 dark:bg-amber-950 dark:text-amber-300">
                             まもなく {soon}件
+                          </span>
+                        )}
+                        {/* 本人データ(career_profile/resume/cv)の更新を、自分が前回見て
+                            以降に見ていない場合に出す。詳細を開いた次回ロードで消える。
+                            色はタスク超過(赤)・間近(黄)と被らない青系にして、原因の違い
+                            (エージェント都合 vs 求職者由来)を視覚的に区別する。 */}
+                        {client.hasUnreadUpdate && (
+                          <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                            更新あり
                           </span>
                         )}
                       </div>

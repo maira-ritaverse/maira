@@ -101,6 +101,21 @@ export type ClientRecordWithReferralBreakdown = ClientRecordWithAssigneeAndDues 
   referralBreakdown: ReferralBreakdown;
 };
 
+// 新着・更新バッジ(案B:メンバー個人単位)用の拡張型。
+// 既存の ReferralBreakdown 由来のフィールドはそのまま継承する。
+//
+// hasUnreadUpdate:
+//   本人データ(career_profile / resumes / cvs)の最新更新時刻が
+//   自分(閲覧メンバー)の最終閲覧時刻より新しい場合 true。
+//   開示範囲外(unlinked/invited、または期限超過 revoke_requested)は常に false。
+// latestUpdatedAt:
+//   本人データの最新更新時刻(3 種の max)。本人データが無ければ null。
+//   一覧でバッジ表示時のツールチップや並び替えに使う余地を残す。
+export type ClientRecordWithUpdateBadge = ClientRecordWithReferralBreakdown & {
+  hasUnreadUpdate: boolean;
+  latestUpdatedAt: string | null;
+};
+
 // クライアント登録リクエスト
 export const createClientRequestSchema = z.object({
   name: z.string().min(1, "氏名を入力してください").max(100),
