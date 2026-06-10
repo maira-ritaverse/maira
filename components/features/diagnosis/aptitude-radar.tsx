@@ -46,6 +46,17 @@ export function AptitudeRadar({ scores, size = 280, showLabels = true }: Props) 
   const cy = size / 2;
   const radius = (size - padding * 2) / 2;
 
+  // viewBox はラベル分の余白を加味して内部座標系より広く取る。
+  // チャート本体の座標(cx/cy/radius)は変えず、見える領域だけ上下左右に拡張する。
+  // 長いラベル(例「コミュニケーション力・行動力」)が SVG 境界クリップで切れないようにするための措置。
+  // ラベル無しモード(ダッシュボード active)は元の viewBox に戻し、本体を最大限に見せる。
+  const viewBoxMarginX = showLabels ? 60 : 0;
+  const viewBoxMarginY = showLabels ? 40 : 0;
+  const viewBoxX = -viewBoxMarginX;
+  const viewBoxY = -viewBoxMarginY;
+  const viewBoxW = size + viewBoxMarginX * 2;
+  const viewBoxH = size + viewBoxMarginY * 2;
+
   // 5 軸を上から時計回りに配置(0番目を真上にするため -90° スタート)。
   const angles = FACTORS.map((_, i) => -Math.PI / 2 + (i * 2 * Math.PI) / FACTORS.length);
 
@@ -72,7 +83,7 @@ export function AptitudeRadar({ scores, size = 280, showLabels = true }: Props) 
 
   return (
     <svg
-      viewBox={`0 0 ${size} ${size}`}
+      viewBox={`${viewBoxX} ${viewBoxY} ${viewBoxW} ${viewBoxH}`}
       width="100%"
       height="100%"
       role="img"
@@ -134,7 +145,9 @@ export function AptitudeRadar({ scores, size = 280, showLabels = true }: Props) 
       </g>
 
       {/* ラベル(強み表現)。中央寄せで配置、各軸の角度に応じて少し外側へ。
-          因子色(chart-1〜5)で着色し、ドットと同色にして紐付けを明示する。 */}
+          因子色(chart-1〜5)で着色し、ドットと同色にして紐付けを明示する。
+          「・」を含む長いラベルは 2 行に折り返してラベル幅を圧縮する
+          (例「コミュニケーション力・行動力」→ 1行目「コミュニケーション力」 / 2行目「行動力」)。 */}
       {showLabels && (
         <g className="text-[10px] font-medium">
           {FACTORS.map((f, i) => {
@@ -146,16 +159,37 @@ export function AptitudeRadar({ scores, size = 280, showLabels = true }: Props) 
             // テキストアンカー:左半分なら end、右半分なら start、上下は middle。
             const cos = Math.cos(a);
             const anchor = Math.abs(cos) < 0.2 ? "middle" : cos > 0 ? "start" : "end";
+
+            const label = aptitudeStrengthLabels[f];
+            const color = aptitudeFactorChartVars[f];
+            // 「・」を含むラベルは 2 行に折り返す。1 行目を少し上、2 行目を少し下に
+            // 配置して、ラベルの縦中心が (x, y) に来るようにする。
+            const sepIdx = label.indexOf("・");
+            if (sepIdx >= 0) {
+              const line1 = label.slice(0, sepIdx);
+              const line2 = label.slice(sepIdx + 1);
+              return (
+                <text
+                  key={f}
+                  x={x}
+                  y={y}
+                  textAnchor={anchor}
+                  dominantBaseline="middle"
+                  fill={color}
+                >
+                  <tspan x={x} dy="-0.55em">
+                    {line1}
+                  </tspan>
+                  <tspan x={x} dy="1.1em">
+                    {line2}
+                  </tspan>
+                </text>
+              );
+            }
+
             return (
-              <text
-                key={f}
-                x={x}
-                y={y}
-                textAnchor={anchor}
-                dominantBaseline="middle"
-                fill={aptitudeFactorChartVars[f]}
-              >
-                {aptitudeStrengthLabels[f]}
+              <text key={f} x={x} y={y} textAnchor={anchor} dominantBaseline="middle" fill={color}>
+                {label}
               </text>
             );
           })}
