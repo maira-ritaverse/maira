@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { AgencySidebar } from "@/components/features/agency/agency-sidebar";
+import { NotificationBell } from "@/components/features/notifications/notification-bell";
 import { UserMenu } from "@/components/features/user-menu";
 
 /**
@@ -41,7 +42,8 @@ export default async function AgencyLayout({ children }: { children: React.React
     <div className="bg-background flex min-h-screen">
       <AgencySidebar organizationName={role.organization.name} memberRole={role.member.role} />
       <div className="flex flex-1 flex-col">
-        <header className="flex h-14 items-center justify-end border-b px-4">
+        <header className="flex h-14 items-center justify-end gap-2 border-b px-4">
+          <NotificationBell />
           <UserMenu email={user.email ?? ""} displayName={profile?.display_name ?? null} />
         </header>
         <main className="flex-1 overflow-auto p-6">{children}</main>
