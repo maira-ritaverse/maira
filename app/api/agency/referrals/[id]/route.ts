@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { fireInAppNotification } from "@/lib/notifications/in-app";
 import { getUserRole } from "@/lib/organizations/queries";
-import { updateReferralRequestSchema } from "@/lib/referrals/types";
+import { getReferralStatusConfig, updateReferralRequestSchema } from "@/lib/referrals/types";
+import type { ReferralStatus } from "@/lib/referrals/types";
 
 /**
  * PATCH /api/agency/referrals/[id]
@@ -66,12 +68,14 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   // 履歴記録のために更新前 status を取得する。
   // ついでに organization_id をここで読み直し、履歴の organization_id にもこれを使う
   // (current_user_organization_id() と一致するが、二重防御の意味で referral 側を採用)。
+  // 通知発火に必要な client_record_id も同時に取得する(別 select を増やさない)。
   // status を更新しない場合(notes だけの更新)はそもそも履歴記録不要なので select もスキップ。
   let previousStatus: string | null = null;
+  let referralClientRecordId: string | null = null;
   if (d.status !== undefined) {
     const { data: current, error: fetchError } = await supabase
       .from("referrals")
-      .select("status, organization_id")
+      .select("status, organization_id, client_record_id")
       .eq("id", id)
       .eq("organization_id", orgId)
       .maybeSingle();
@@ -86,6 +90,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Referral not found" }, { status: 404 });
     }
     previousStatus = current.status as string;
+    referralClientRecordId = current.client_record_id as string;
   }
 
   const { error } = await supabase
@@ -123,6 +128,58 @@ export async function PATCH(request: Request, { params }: RouteParams) {
         to: d.status,
         message: historyError.message,
       });
+    }
+
+    // 通知発火(同組織の別メンバー向け、本人は除外)。
+    // referral 更新本体は既に成功している。通知の失敗は呼び出し側に影響させない
+    // (try/catch で全体を握りつぶす)。理由:
+    //   - 通知は副次的なシグナル。referrals.update が成功したのに 5xx を返すと
+    //     クライアントが「失敗」と誤判定して二重操作の原因になる。
+    //   - service_role を使うので RLS ではなくアプリ層で受信者を絞り込む責任がある。
+    //     ここでは organization_id でメンバー全員を引き、本人を後段で除外。
+    if (referralClientRecordId) {
+      try {
+        // クライアント名と変更者の display_name を取得(求職者の内面情報は触らない)
+        const [{ data: clientRow }, { data: actorProfile }] = await Promise.all([
+          supabase
+            .from("client_records")
+            .select("id, name")
+            .eq("id", referralClientRecordId)
+            .maybeSingle(),
+          supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
+        ]);
+
+        if (clientRow) {
+          const fromLabel = previousStatus
+            ? getReferralStatusConfig(previousStatus as ReferralStatus).label
+            : null;
+          const toLabel = getReferralStatusConfig(d.status).label;
+          const title = fromLabel
+            ? `${fromLabel} → ${toLabel}: ${clientRow.name}さん`
+            : `${toLabel}: ${clientRow.name}さん`;
+
+          await fireInAppNotification({
+            organizationId: orgId,
+            excludeUserId: user.id,
+            payload: {
+              kind: "referral_status_change",
+              title,
+              href: `/agency/clients/${clientRow.id}`,
+              referralId: id,
+              clientRecordId: clientRow.id,
+              clientName: clientRow.name,
+              fromStatus: previousStatus,
+              toStatus: d.status,
+              actorDisplayName: actorProfile?.display_name ?? null,
+            },
+          });
+        }
+      } catch (notifyErr) {
+        console.error("[notifications] firing failed (referral update succeeded)", {
+          referralId: id,
+          message: notifyErr instanceof Error ? notifyErr.message : String(notifyErr),
+        });
+      }
     }
   }
 
