@@ -46,6 +46,14 @@ export function JobForm() {
       required_skills: "",
       preferred_skills: "",
       status: "open",
+      work_change_scope: "",
+      location_change_scope: "",
+      smoking_prevention_measure: "",
+      probation_period: "",
+      work_hours: "",
+      break_time: "",
+      holidays: "",
+      application_qualifications: "",
     },
   });
 
@@ -223,6 +231,104 @@ export function JobForm() {
               </option>
             ))}
           </select>
+        </div>
+
+        {/* 法定明示事項(編集画面と同じ見た目で揃える)
+            任意入力なので、登録時にスキップしても OK と分かるよう枠で区別する。 */}
+        <div className="space-y-3 rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-4">
+          <p className="text-sm font-semibold text-slate-700">法定明示事項(2024年改正労基法対応)</p>
+          <p className="text-muted-foreground text-xs">
+            すべて任意入力。後から編集画面で追加することもできます。
+          </p>
+
+          <div className="space-y-2">
+            <Label htmlFor="work_change_scope">業務内容(変更の範囲)</Label>
+            <textarea
+              id="work_change_scope"
+              {...register("work_change_scope")}
+              disabled={isPending}
+              rows={2}
+              placeholder="例:入社後に異動の可能性がある業務範囲"
+              className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="location_change_scope">就業場所(変更の範囲)</Label>
+            <textarea
+              id="location_change_scope"
+              {...register("location_change_scope")}
+              disabled={isPending}
+              rows={2}
+              placeholder="例:本社、東日本支社、リモートあり"
+              className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="smoking_prevention_measure">受動喫煙防止措置</Label>
+            <Input
+              id="smoking_prevention_measure"
+              {...register("smoking_prevention_measure")}
+              disabled={isPending}
+              placeholder="例:屋内禁煙"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="probation_period">試用期間</Label>
+            <Input
+              id="probation_period"
+              {...register("probation_period")}
+              disabled={isPending}
+              placeholder="例:3か月(待遇に変更なし)"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="work_hours">勤務時間</Label>
+              <Input
+                id="work_hours"
+                {...register("work_hours")}
+                disabled={isPending}
+                placeholder="例:9:00-18:00"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="break_time">休憩時間</Label>
+              <Input
+                id="break_time"
+                {...register("break_time")}
+                disabled={isPending}
+                placeholder="例:60分"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="holidays">休日休暇</Label>
+            <textarea
+              id="holidays"
+              {...register("holidays")}
+              disabled={isPending}
+              rows={2}
+              placeholder="例:完全週休2日、土日祝、GW、夏季、年末年始"
+              className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="application_qualifications">応募資格</Label>
+            <textarea
+              id="application_qualifications"
+              {...register("application_qualifications")}
+              disabled={isPending}
+              rows={3}
+              placeholder="例:Webアプリ開発経験3年以上、TypeScript 実務歴 など"
+              className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+            />
+          </div>
         </div>
 
         <Button type="submit" disabled={isPending} className="w-full">
