@@ -9,6 +9,7 @@ import {
   type UpdateClientRequest,
   type ClientRecord,
   clientStatusLabels,
+  clientCloseReasonLabels,
 } from "@/lib/clients/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,8 @@ export function ClientDetailForm({ client }: Props) {
       phone: client.phone ?? "",
       status: client.status,
       notes: client.notes ?? "",
+      close_reason: client.closeReason,
+      email_distribution_enabled: client.emailDistributionEnabled,
     },
   });
 
@@ -142,6 +145,46 @@ export function ClientDetailForm({ client }: Props) {
             className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
           />
           {errors.notes && <p className="text-sm text-red-600">{errors.notes.message}</p>}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="close_reason">クローズ理由</Label>
+          <select
+            id="close_reason"
+            {...register("close_reason", {
+              // <select> の "" を null に変換(z.nullable() スキーマと合わせるため)
+              setValueAs: (v) => (v === "" ? null : v),
+            })}
+            disabled={isPending}
+            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+          >
+            <option value="">(未設定)</option>
+            {Object.entries(clientCloseReasonLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <p className="text-muted-foreground text-xs">
+            失注分析・KPI 集計に使われます。成約や辞退の理由をカテゴリで残してください。
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="email_distribution_enabled" className="flex items-center gap-2">
+            <input
+              id="email_distribution_enabled"
+              type="checkbox"
+              {...register("email_distribution_enabled")}
+              disabled={isPending}
+              className="size-4"
+            />
+            <span>MA 自動配信を許可する</span>
+          </Label>
+          <p className="text-muted-foreground text-xs">
+            チェックを外すと、この求職者はマーケティングオートメーション(MA)による
+            自動配信の対象から除外されます(手動メールや「テスト送信」は影響を受けません)。
+          </p>
         </div>
 
         <Button type="submit" disabled={isPending} className="w-full">

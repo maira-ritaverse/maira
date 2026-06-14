@@ -43,6 +43,27 @@ export const clientLinkStatusLabels: Record<ClientLinkStatus, string> = {
 // timeout         : 猶予期限を過ぎ cron で自動 revoked にした(P6、未実装)。
 export type RevokeConfirmedVia = "agency_approved" | "timeout";
 
+// クローズ理由のカテゴリ(失注分析・KPI 集計用)。
+// マイグレーション 20260615000005 で client_records.close_reason に CHECK 制約付きで導入。
+export type ClientCloseReason =
+  | "declined" // 他社サービス選択(競合に取られた)
+  | "self_arranged" // 自己応募・自力で決定
+  | "other_agency" // 他社エージェント経由で決定
+  | "unresponsive" // 連絡途絶
+  | "ineligible" // 条件不一致(マッチング不能)
+  | "completed" // 自社経由で転職完了(成約)
+  | "other"; // その他
+
+export const clientCloseReasonLabels: Record<ClientCloseReason, string> = {
+  declined: "他社サービス選択",
+  self_arranged: "自己応募・自力で決定",
+  other_agency: "他社エージェント経由",
+  unresponsive: "連絡途絶",
+  ineligible: "条件不一致",
+  completed: "自社経由で成約",
+  other: "その他",
+};
+
 export type ClientRecord = {
   id: string;
   organizationId: string;
@@ -62,6 +83,11 @@ export type ClientRecord = {
   revokeDeadline: string | null;
   revokeConfirmedVia: RevokeConfirmedVia | null;
   notes: string | null;
+  // 失注分析用。null = まだクローズ理由が未確定。
+  closeReason: ClientCloseReason | null;
+  // MA 自動配信の抑制フラグ。false なら ma-send-campaign 側で除外される。
+  // DB の default は true なので、明示的に false を選ばない限り配信対象。
+  emailDistributionEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -139,6 +165,21 @@ export const updateClientRequestSchema = z.object({
     .optional(),
   assigned_member_id: z.string().uuid().nullable().optional(),
   notes: z.string().max(2000).optional().or(z.literal("")),
+  // 失注分析用。""(空文字)→ null 扱い(UI のセレクトで「未設定」を選んだケース)。
+  close_reason: z
+    .enum([
+      "declined",
+      "self_arranged",
+      "other_agency",
+      "unresponsive",
+      "ineligible",
+      "completed",
+      "other",
+    ])
+    .nullable()
+    .optional(),
+  // MA 配信抑制フラグ。false で MA から除外。
+  email_distribution_enabled: z.boolean().optional(),
 });
 
 export type UpdateClientRequest = z.infer<typeof updateClientRequestSchema>;

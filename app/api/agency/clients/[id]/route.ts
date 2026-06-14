@@ -76,6 +76,12 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     updateData.assigned_member_id = d.assigned_member_id;
   }
   if (d.notes !== undefined) updateData.notes = d.notes || null;
+  // close_reason: undefined = 触らない、null = 「未設定」、文字列 = 値を設定
+  // null も明示的に「リセット」として送れるよう、undefined チェックだけにする(falsy 判定にしない)
+  if (d.close_reason !== undefined) updateData.close_reason = d.close_reason;
+  if (d.email_distribution_enabled !== undefined) {
+    updateData.email_distribution_enabled = d.email_distribution_enabled;
+  }
 
   if (Object.keys(updateData).length === 0) {
     return NextResponse.json({ success: true });

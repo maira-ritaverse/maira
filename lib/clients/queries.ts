@@ -34,6 +34,10 @@ type ClientRecordRow = {
   revoke_deadline: string | null;
   revoke_confirmed_via: string | null;
   notes: string | null;
+  // マイグレーション 20260615000005 で追加された列。
+  // 既存レコードは ALTER 直後は null(close_reason) / true(default、email_distribution_enabled)。
+  close_reason: string | null;
+  email_distribution_enabled: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -56,6 +60,9 @@ function rowToClientRecord(row: ClientRecordRow): ClientRecord {
     // DB CHECK 制約で値域は 'agency_approved' / 'timeout' に限定済み
     revokeConfirmedVia: row.revoke_confirmed_via as ClientRecord["revokeConfirmedVia"],
     notes: row.notes,
+    // CHECK 制約で値域は 7 種類 + null に限定済み
+    closeReason: row.close_reason as ClientRecord["closeReason"],
+    emailDistributionEnabled: row.email_distribution_enabled,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
