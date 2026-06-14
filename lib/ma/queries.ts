@@ -378,9 +378,20 @@ export async function getScenarioSendStats(
   }
   if (!data) return [];
 
-  // scenario_id ごとに sent/failed/skipped を 0 初期化してカウント
+  return aggregateSendLogStats(data);
+}
+
+/**
+ * ma_send_logs の (scenario_id, status) 行列を scenario_id ごとの件数に集計する純粋関数。
+ *
+ * テストしやすいよう DB アクセスから分離した。`getScenarioSendStats` から呼ばれる。
+ * unknown な status はカウントせず無視する(列の値域が広がっても落ちない)。
+ */
+export function aggregateSendLogStats(
+  rows: { scenario_id: string; status: string }[],
+): ScenarioSendStats[] {
   const acc = new Map<string, ScenarioSendStats>();
-  for (const row of data) {
+  for (const row of rows) {
     let s = acc.get(row.scenario_id);
     if (!s) {
       s = { scenarioId: row.scenario_id, sent: 0, failed: 0, skipped: 0 };

@@ -177,6 +177,7 @@ export function ClientsTable({ clients }: ClientsTableProps) {
               </TableHead>
               <TableHead>応募状況</TableHead>
               <TableHead>連携</TableHead>
+              <TableHead>MA配信</TableHead>
               <TableHead>担当者</TableHead>
               <TableHead
                 className="cursor-pointer select-none"
@@ -189,7 +190,7 @@ export function ClientsTable({ clients }: ClientsTableProps) {
           <TableBody>
             {filteredSorted.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-muted-foreground py-8 text-center">
+                <TableCell colSpan={9} className="text-muted-foreground py-8 text-center">
                   該当するクライアントがいません
                 </TableCell>
               </TableRow>
@@ -249,6 +250,20 @@ export function ClientsTable({ clients }: ClientsTableProps) {
                       >
                         {clientLinkStatusLabels[client.linkStatus]}
                       </span>
+                    </TableCell>
+                    {/* MA 配信抑制フラグの表示。許可=緑、停止=グレーで一目で区別する。
+                        実装的にはこの列は E (20260615000005) 以降のレコードでのみ
+                        意味のある値が入る(default true)。 */}
+                    <TableCell>
+                      {client.emailDistributionEnabled ? (
+                        <span className="inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-xs whitespace-nowrap text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                          許可
+                        </span>
+                      ) : (
+                        <span className="bg-muted text-muted-foreground inline-block rounded-full px-2 py-0.5 text-xs whitespace-nowrap">
+                          停止
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {client.assigneeName ?? "未割当"}

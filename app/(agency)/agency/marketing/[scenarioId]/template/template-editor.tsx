@@ -11,6 +11,39 @@ import { Textarea } from "@/components/ui/textarea";
 import { TEMPLATE_VARIABLES, type TemplateVariable, type TemplateView } from "@/lib/ma/types";
 
 /**
+ * プレビュー用のサンプル値。
+ * cron 側の実送信時は client_records / organization_members / referrals から
+ * 引いた値で置換されるが、ここでは UI 確認のため一律のダミーデータを使う。
+ *
+ * cron 側 `supabase/functions/ma-send-campaign/template-expander.ts` と
+ * **同じキー集合**を持つようにすること(キー漏れがあると静かに置換されない)。
+ */
+const PREVIEW_SAMPLE: Record<string, string> = {
+  candidate_name: "山田 太郎",
+  candidate_last_name: "山田",
+  candidate_first_name: "太郎",
+  candidate_email: "taro@example.com",
+  agent_name: "大川 亮介",
+  agent_last_name: "大川",
+  agent_first_name: "亮介",
+  organization_name: "株式会社サンプルエージェント",
+  company_name: "テスト株式会社",
+  job_title: "バックエンドエンジニア",
+  interview_date: "2026/06/20",
+};
+
+/**
+ * テンプレ文字列内の {{key}} をサンプル値で置換する(プレビュー専用)。
+ * 既知キーのみ置換、未知キーは {{xxx}} のまま残して運用ミスを目立たせる。
+ */
+function expandWithSample(template: string): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (match, rawKey: string) => {
+    const v = PREVIEW_SAMPLE[rawKey];
+    return v !== undefined ? v : match;
+  });
+}
+
+/**
  * テンプレート編集 UI(クライアント側)
  *
  * EMPRO の「Eメールテンプレート編集」を参考にした 2 カラムレイアウト。
@@ -40,6 +73,9 @@ export function TemplateEditor({ template, isAdmin }: Props) {
   const [saving, startSave] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  // プレビューの表示モード:raw(変数を {{ }} のまま)/ expanded(サンプル値で置換)。
+  // 初期値は expanded(送信時の見た目を即確認できる方が業務的に有用)。
+  const [previewMode, setPreviewMode] = useState<"raw" | "expanded">("expanded");
 
   // 変数をクリックしたときに本文側 textarea のカーソル位置に挿入するため、ref を持つ。
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
@@ -182,18 +218,52 @@ export function TemplateEditor({ template, isAdmin }: Props) {
           </Card>
 
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base">プレビュー</CardTitle>
+              {/* モード切替:Raw(編集中の生テキスト)/ 展開後(サンプル値) */}
+              <div className="bg-muted flex rounded-md text-xs">
+                <button
+                  type="button"
+                  onClick={() => setPreviewMode("expanded")}
+                  className={`rounded-md px-2 py-1 ${
+                    previewMode === "expanded" ? "bg-background shadow-sm" : "text-muted-foreground"
+                  }`}
+                >
+                  展開後(サンプル)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewMode("raw")}
+                  className={`rounded-md px-2 py-1 ${
+                    previewMode === "raw" ? "bg-background shadow-sm" : "text-muted-foreground"
+                  }`}
+                >
+                  Raw
+                </button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="text-muted-foreground text-xs">
-                変数は <code className="font-mono">{`{{...}}`}</code>{" "}
-                のまま表示されます。送信時に実値で展開されます。
+                {previewMode === "expanded" ? (
+                  <>
+                    サンプル値(候補者「山田 太郎」、組織「株式会社サンプルエージェント」等)で{" "}
+                    <code className="font-mono">{`{{...}}`}</code>{" "}
+                    を置換した状態。実送信時は対象求職者の実値で展開されます。
+                  </>
+                ) : (
+                  <>
+                    変数は <code className="font-mono">{`{{...}}`}</code>{" "}
+                    のまま表示されます。送信時に実値で展開されます。
+                  </>
+                )}
               </div>
               <div className="bg-muted rounded-md border p-4 text-sm">
-                <p className="mb-2 font-semibold">{subject || "(件名未入力)"}</p>
+                <p className="mb-2 font-semibold">
+                  {(previewMode === "expanded" ? expandWithSample(subject) : subject) ||
+                    "(件名未入力)"}
+                </p>
                 <pre className="font-sans break-words whitespace-pre-wrap">
-                  {body || "(本文未入力)"}
+                  {(previewMode === "expanded" ? expandWithSample(body) : body) || "(本文未入力)"}
                 </pre>
               </div>
             </CardContent>
