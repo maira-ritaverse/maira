@@ -11,6 +11,11 @@ import {
   type MAFeature,
   type ScenarioView,
 } from "@/lib/ma/types";
+import {
+  aggregateOverallSendStats,
+  calculateDeliveryRate,
+  type ScenarioSendStatsMap,
+} from "@/lib/ma/kpi";
 import { ConsentModal } from "./consent-modal";
 import { TestSendModal } from "./test-send-modal";
 
@@ -30,15 +35,7 @@ import { TestSendModal } from "./test-send-modal";
  *
  * Phase C-2(送信処理)と Phase C-3(テンプレ編集)は次タスク。
  */
-/**
- * 直近 30 日のシナリオ別送信実績(scenario_id → {sent, failed, skipped})。
- * 親(page.tsx)で getScenarioSendStats を呼んで形成し、ここに props で渡す。
- * 値が無いシナリオは「0 件」として表示する。
- */
-export type ScenarioSendStatsMap = Record<
-  string,
-  { sent: number; failed: number; skipped: number }
->;
+// ScenarioSendStatsMap は lib/ma/kpi に集約(全体 KPI 計算と型を共有)。
 
 export type MarketingScreenProps = {
   scenarios: ScenarioView[];
@@ -73,21 +70,9 @@ export function MarketingScreen({
 
   // 配信中シナリオ数(activation.isActive)
   const activeScenarioCount = candidateEmailScenarios.filter((s) => s.activation?.isActive).length;
-  // 直近 30 日の全シナリオ合算実績(Object.values で全エントリの和を計算)
-  const overallSendStats = Object.values(sendStatsByScenarioId).reduce(
-    (acc, s) => ({
-      sent: acc.sent + s.sent,
-      failed: acc.failed + s.failed,
-      skipped: acc.skipped + s.skipped,
-    }),
-    { sent: 0, failed: 0, skipped: 0 },
-  );
-  // 配信率:成功 / (成功 + 失敗)。分母 0 なら null(「データなし」として表示)。
-  // skipped は「対象なし」「未設定」を含むので分母に入れない設計。
-  const deliveryRate = (() => {
-    const attempted = overallSendStats.sent + overallSendStats.failed;
-    return attempted === 0 ? null : Math.round((overallSendStats.sent / attempted) * 100);
-  })();
+  // 直近 30 日の全シナリオ合算実績 + 配信率(skipped を分母に入れない契約)は lib/ma/kpi 側で集約・テスト済み。
+  const overallSendStats = aggregateOverallSendStats(sendStatsByScenarioId);
+  const deliveryRate = calculateDeliveryRate(overallSendStats);
 
   async function handleRevoke() {
     if (!window.confirm("マーケティング機能の利用を停止します。よろしいですか?")) return;
