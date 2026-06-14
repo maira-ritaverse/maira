@@ -5,7 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { ConsentStatus, MAFeature, ScenarioView } from "@/lib/ma/types";
+import {
+  isScenarioImplemented,
+  type ConsentStatus,
+  type MAFeature,
+  type ScenarioView,
+} from "@/lib/ma/types";
 import { ConsentModal } from "./consent-modal";
 
 /**
@@ -149,8 +154,14 @@ function ScenarioCard({ view, disabled }: ScenarioCardProps) {
   const days = view.effectiveTriggerDays;
   const daysLabel = days < 0 ? `${Math.abs(days)}日前` : `${days}日後`;
 
+  // 送信側(Edge Function)で判定ロジックが実装されているかどうか。
+  // 未実装シナリオは ON にしても送られないため、UI で明示的に無効化する。
+  const implemented = isScenarioImplemented(view.preset.key);
+  // 「未実装」と「親 disabled(未同意/non-admin)」のいずれかで操作不可
+  const cardDisabled = disabled || !implemented;
+
   function handleToggle() {
-    if (disabled) return;
+    if (cardDisabled) return;
     startTransition(async () => {
       setError(null);
       try {
@@ -176,13 +187,29 @@ function ScenarioCard({ view, disabled }: ScenarioCardProps) {
   return (
     <Card>
       <CardHeader className="space-y-1">
-        <CardTitle className="text-base">{view.preset.name}</CardTitle>
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-base">{view.preset.name}</CardTitle>
+          {!implemented && (
+            <span
+              className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600"
+              title="送信ロジックが未実装のため、現在は配信できません"
+            >
+              準備中
+            </span>
+          )}
+        </div>
         <p className="text-muted-foreground text-xs">
           起点: {view.preset.triggerEvent} → {daysLabel}
         </p>
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
         <p className="text-muted-foreground">{view.preset.description}</p>
+        {!implemented && (
+          <p className="text-muted-foreground rounded border border-dashed border-slate-300 bg-slate-50 px-2 py-1.5 text-xs">
+            このシナリオは送信ロジックが未実装です。必要なデータ(面談・希望条件
+            等)の整備後に有効化できるようになります。
+          </p>
+        )}
         <div className="flex items-center justify-between pt-1">
           <span
             className={`text-xs font-medium ${
@@ -194,7 +221,7 @@ function ScenarioCard({ view, disabled }: ScenarioCardProps) {
           <div className="flex items-center gap-2">
             {/* テンプレート編集は有効化(scenario行が存在する)後のみ可能。
                 未有効化時は scenario_id が存在しないためリンクを出さない。 */}
-            {view.activation && (
+            {view.activation && implemented && (
               <Button
                 size="sm"
                 variant="ghost"
@@ -211,7 +238,7 @@ function ScenarioCard({ view, disabled }: ScenarioCardProps) {
               size="sm"
               variant={isActive ? "outline" : "default"}
               onClick={handleToggle}
-              disabled={disabled || pending}
+              disabled={cardDisabled || pending}
             >
               {pending ? "更新中..." : isActive ? "停止する" : "配信開始"}
             </Button>

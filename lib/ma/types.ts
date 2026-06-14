@@ -259,3 +259,67 @@ export const upsertTemplateSchema = z.object({
   body: z.string().min(1, "本文を入力してください").max(50000, "本文は50000文字以内"),
 });
 export type UpsertTemplateRequest = z.infer<typeof upsertTemplateSchema>;
+
+// ============================================
+// 実送信(Phase C-3)
+// ============================================
+
+/**
+ * 「Edge Function 側で判定ロジックが実装済み」のシナリオキー
+ *
+ * 現状の Maira の DB スキーマ(client_records / client_interactions のみ)で
+ * 動作するシナリオに限定する。残りは将来テーブル追加(interviews / job_wants
+ * / candidate_birthdays)後に有効化する。
+ *
+ * UI 側でこの集合に含まれないシナリオは「未対応」バッジを出し、
+ * 有効化ボタンを disable する(無意味なテンプレ編集を防ぐため)。
+ */
+export const IMPLEMENTED_SCENARIO_KEYS = [
+  "register_meeting_promotion", // client_records 作成 N 日後、interactions が 0 件
+  "dormant_outreach", // 最終 interaction から N 日経過
+] as const;
+
+export type ImplementedScenarioKey = (typeof IMPLEMENTED_SCENARIO_KEYS)[number];
+
+/**
+ * シナリオキーが実装済みかどうかの判定ヘルパー。
+ * UI でも Edge Function でも使う想定。
+ */
+export function isScenarioImplemented(key: string): key is ImplementedScenarioKey {
+  return (IMPLEMENTED_SCENARIO_KEYS as readonly string[]).includes(key);
+}
+
+/**
+ * ma_send_logs 1 行の型(画面表示・JSON シリアライズ用)
+ *
+ * 件名・本文は復号後の平文を入れる前提。RLS で同 org メンバーは閲覧可能。
+ * 監査ログとして UI 表示する場合は復号して見せる(送信履歴画面、未実装)。
+ */
+export type SendLog = {
+  id: string;
+  organizationId: string;
+  scenarioId: string;
+  recipientClientRecordId: string | null;
+  recipientEmail: string;
+  subject: string; // 復号後
+  body: string; // 復号後
+  sentAt: string;
+  status: "sent" | "failed" | "skipped";
+  errorMessage: string | null;
+  resendMessageId: string | null;
+};
+
+/**
+ * 送信ログ書き込み時の入力(Edge Function から service_role で書き込む)
+ */
+export type RecordSendLogInput = {
+  organizationId: string;
+  scenarioId: string;
+  recipientClientRecordId: string | null;
+  recipientEmail: string;
+  subject: string; // 平文(関数内で暗号化)
+  body: string; // 平文(関数内で暗号化)
+  status: "sent" | "failed" | "skipped";
+  errorMessage?: string | null;
+  resendMessageId?: string | null;
+};

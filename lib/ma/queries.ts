@@ -15,6 +15,7 @@ import type {
   ConsentLogEntry,
   ConsentStatus,
   MAFeature,
+  RecordSendLogInput,
   ScenarioActivation,
   ScenarioPreset,
   ScenarioView,
@@ -403,6 +404,49 @@ export async function upsertTemplate(params: {
 
   if (error) {
     throw new Error(`テンプレート保存に失敗しました: ${error.message}`);
+  }
+}
+
+// ============================================
+// 送信ログ(Edge Function から service_role で書き込む想定)
+// ============================================
+
+/**
+ * 送信ログを 1 行追加する。
+ *
+ * このヘルパーは Web アプリ側からも(将来「テスト送信」ボタン用)、
+ * Deno Edge Function 側からも使えるよう、暗号化と insert の両方をここで完結させる。
+ * ただし RLS の都合で:
+ *   - Edge Function 側は service_role キーで bypass
+ *   - Web アプリ側から呼ぶ場合は「テスト送信 API ルート」で admin 認可した上で
+ *     service_role クライアントを別途用意する必要がある(MVP では Edge Function 経由のみ)
+ *
+ * encryptField は呼び出しごとに IV を新規生成するため、同じ平文でも別の暗号文になる。
+ */
+export async function recordSendLog(input: RecordSendLogInput): Promise<void> {
+  const supabase = await createClient();
+
+  const [encryptedSubject, encryptedBody] = await Promise.all([
+    encryptField(input.subject),
+    encryptField(input.body),
+  ]);
+
+  const { error } = await supabase.from("ma_send_logs").insert({
+    organization_id: input.organizationId,
+    scenario_id: input.scenarioId,
+    recipient_client_record_id: input.recipientClientRecordId,
+    recipient_email: input.recipientEmail,
+    encrypted_subject: encryptedSubject,
+    encrypted_body: encryptedBody,
+    status: input.status,
+    error_message: input.errorMessage ?? null,
+    resend_message_id: input.resendMessageId ?? null,
+  });
+
+  if (error) {
+    // 送信ログの保存失敗はクリティカルだが、呼び出し側のメール送信処理自体は
+    // 既に成功している可能性がある。メッセージにそれを示唆して throw する。
+    throw new Error(`送信ログの保存に失敗しました: ${error.message}`);
   }
 }
 
