@@ -1,0 +1,45 @@
+# Dependabot 設定。
+#
+# 目的:セキュリティ脆弱性のあるパッケージの自動 PR を受け取る。
+# 通常の依存更新は noise になりすぎるので、当面は security のみ反応させたい
+# ところだが、Dependabot v2 は「security-only」モードを開く方法が無い。
+# 代わりに schedule.interval を月 1 に、open-pull-requests-limit を 5 に絞って
+# 通知頻度を抑える。
+#
+# Maira は Next.js + pnpm + GitHub Actions のスタックなので、3 種を監視:
+#   1. npm(package.json):本体の依存。アプリ側でリスクが大きい AI SDK / Stripe /
+#      Supabase 系の脆弱性は即時 PR で気付ける。
+#   2. github-actions(.github/workflows):actions/checkout 等の supply chain。
+#   3. (pip / docker は未使用なので不要)
+#
+# major バージョン更新は雑なので無視。security 系は ignore しない(major でも当たる)。
+
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    # major 更新は人間判断必要なので Dependabot に上げさせない(security は別経路で来る)。
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    # PR タイトルに種類を出して目視で分かるように。
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+    labels:
+      - "dependencies"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(ci)"
+      include: scope
+    labels:
+      - "ci"
+      - "dependencies"
