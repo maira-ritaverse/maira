@@ -8,7 +8,7 @@ import {
   CancelInvitationButton,
   InviteClientButton,
 } from "@/components/features/agency/link-action-buttons";
-import { getClientRecord } from "@/lib/clients/queries";
+import { getClientRecordWithDecrypted } from "@/lib/clients/queries";
 import { clientLinkStatusLabels, clientStatusLabels } from "@/lib/clients/types";
 import { recordClientViewed } from "@/lib/clients/view-tracking";
 import { listInteractionsByClient } from "@/lib/interactions/queries";
@@ -52,7 +52,9 @@ export default async function ClientDetailPage({ params }: RouteParams) {
     redirect("/app");
   }
 
-  const client = await getClientRecord(id);
+  // 詳細画面では暗号化フィールド(推薦コメント等)も復号した拡張型を取る。
+  // 一覧クエリで使うと N+1 になるため、ここだけで使う。
+  const client = await getClientRecordWithDecrypted(id);
   if (!client || client.organizationId !== role.organization.id) {
     notFound();
   }

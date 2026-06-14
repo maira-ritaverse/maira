@@ -88,8 +88,24 @@ export type ClientRecord = {
   // MA 自動配信の抑制フラグ。false なら ma-send-campaign 側で除外される。
   // DB の default は true なので、明示的に false を選ばない限り配信対象。
   emailDistributionEnabled: boolean;
+  // 平文。リクナビ / ビズリーチ等の出典。集計用なので一覧クエリにも含める。
+  entrySite: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+/**
+ * 詳細画面用の拡張型(暗号化フィールドを復号して載せたもの)。
+ *
+ * 一覧クエリでは N+1 復号を避けるためにこれらを取得しない。
+ * 詳細クエリ(`getClientRecordWithDecrypted`)だけがこの型を返す。
+ *
+ * null は「未入力」を意味する(暗号化された値が空文字でも `null` で保存する方針)。
+ */
+export type ClientRecordWithDecrypted = ClientRecord & {
+  recommendationComment: string | null;
+  otherAgencyStatus: string | null;
+  contactMethodPreference: string | null;
 };
 
 // クライアント一覧表示用に担当アドバイザーの表示名を付与した型
@@ -180,6 +196,13 @@ export const updateClientRequestSchema = z.object({
     .optional(),
   // MA 配信抑制フラグ。false で MA から除外。
   email_distribution_enabled: z.boolean().optional(),
+  // EMPRO 観察項目。サーバー側で暗号化して保存(API ルートで encryptField)。
+  // 空文字は null として保存(暗号化された "" は不要)。
+  recommendation_comment: z.string().max(5000).optional().or(z.literal("")),
+  other_agency_status: z.string().max(2000).optional().or(z.literal("")),
+  contact_method_preference: z.string().max(1000).optional().or(z.literal("")),
+  // 平文。エントリーサイトの出典(リクナビ / ビズリーチ等)
+  entry_site: z.string().max(100).optional().or(z.literal("")),
 });
 
 export type UpdateClientRequest = z.infer<typeof updateClientRequestSchema>;

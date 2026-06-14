@@ -6,10 +6,12 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
+import { decryptField } from "@/lib/crypto/field-encryption";
 import type {
   ClientRecord,
   ClientRecordWithAssignee,
   ClientRecordWithAssigneeAndDues,
+  ClientRecordWithDecrypted,
   ClientRecordWithReferralBreakdown,
   ClientRecordWithUpdateBadge,
   ReferralBreakdown,
@@ -38,6 +40,12 @@ type ClientRecordRow = {
   // 既存レコードは ALTER 直後は null(close_reason) / true(default、email_distribution_enabled)。
   close_reason: string | null;
   email_distribution_enabled: boolean;
+  entry_site: string | null;
+  // 暗号化された生データ。rowToClientRecord では復号しない(一覧で N+1 を避けるため)。
+  // 詳細クエリで select したい場合のみ詰める。
+  encrypted_recommendation_comment: string | null;
+  encrypted_other_agency_status: string | null;
+  encrypted_contact_method_preference: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -63,6 +71,7 @@ function rowToClientRecord(row: ClientRecordRow): ClientRecord {
     // CHECK 制約で値域は 7 種類 + null に限定済み
     closeReason: row.close_reason as ClientRecord["closeReason"],
     emailDistributionEnabled: row.email_distribution_enabled,
+    entrySite: row.entry_site,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -101,6 +110,43 @@ export async function getClientRecord(clientId: string): Promise<ClientRecord | 
   if (error || !data) return null;
 
   return rowToClientRecord(data as ClientRecordRow);
+}
+
+/**
+ * 詳細画面用に、暗号化フィールドを復号した拡張型で 1 件を返す。
+ *
+ * 一覧クエリで使うと N 件分の復号が走るためコストが高い。詳細表示・編集用に限定する。
+ * 復号エラー(鍵不一致等)は throw して呼び出し側で 500 にする方針。
+ */
+export async function getClientRecordWithDecrypted(
+  clientId: string,
+): Promise<ClientRecordWithDecrypted | null> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("client_records")
+    .select("*")
+    .eq("id", clientId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  const row = data as ClientRecordRow;
+  const base = rowToClientRecord(row);
+  // 復号は並列(各フィールドは独立)。null 入力は null のまま返る契約。
+  const [recommendationComment, otherAgencyStatus, contactMethodPreference] = await Promise.all([
+    decryptField(row.encrypted_recommendation_comment),
+    decryptField(row.encrypted_other_agency_status),
+    decryptField(row.encrypted_contact_method_preference),
+  ]);
+  return {
+    ...base,
+    // decryptField のオーバーロードで undefined も返り得るが、ClientRecordWithDecrypted は
+    // null 表現で揃えたいので明示的に正規化する。
+    recommendationComment: recommendationComment ?? null,
+    otherAgencyStatus: otherAgencyStatus ?? null,
+    contactMethodPreference: contactMethodPreference ?? null,
+  };
 }
 
 /**

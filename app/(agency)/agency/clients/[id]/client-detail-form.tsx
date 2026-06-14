@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   updateClientRequestSchema,
   type UpdateClientRequest,
-  type ClientRecord,
+  type ClientRecordWithDecrypted,
   clientStatusLabels,
   clientCloseReasonLabels,
 } from "@/lib/clients/types";
@@ -27,7 +27,7 @@ import { Label } from "@/components/ui/label";
  * (API スキーマには既に assigned_member_id が含まれている)。
  */
 
-type Props = { client: ClientRecord };
+type Props = { client: ClientRecordWithDecrypted };
 
 export function ClientDetailForm({ client }: Props) {
   const router = useRouter();
@@ -49,6 +49,10 @@ export function ClientDetailForm({ client }: Props) {
       notes: client.notes ?? "",
       close_reason: client.closeReason,
       email_distribution_enabled: client.emailDistributionEnabled,
+      entry_site: client.entrySite ?? "",
+      recommendation_comment: client.recommendationComment ?? "",
+      other_agency_status: client.otherAgencyStatus ?? "",
+      contact_method_preference: client.contactMethodPreference ?? "",
     },
   });
 
@@ -185,6 +189,78 @@ export function ClientDetailForm({ client }: Props) {
             チェックを外すと、この求職者はマーケティングオートメーション(MA)による
             自動配信の対象から除外されます(手動メールや「テスト送信」は影響を受けません)。
           </p>
+        </div>
+
+        {/* エージェント業務メタ情報。暗号化フィールドは「個人情報・社外秘」前提でラベルを付ける。
+            空文字 → null で保存される(API ルート側で正規化)。 */}
+        <div className="space-y-3 rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-4">
+          <p className="text-sm font-semibold text-slate-700">
+            エージェント業務メモ(社外秘・暗号化保存)
+          </p>
+          <p className="text-muted-foreground text-xs">
+            推薦コメント・他社利用状況・連絡方法希望は AES-256-GCM で暗号化されて保存されます。
+            <br />
+            DB 直接閲覧では復号できず、Maira の管理画面からのみ可読です。
+          </p>
+
+          <div className="space-y-2">
+            <Label htmlFor="recommendation_comment">推薦コメント</Label>
+            <textarea
+              id="recommendation_comment"
+              {...register("recommendation_comment")}
+              disabled={isPending}
+              rows={4}
+              placeholder="企業向けの推薦文(求人提案時に同梱したい内容)"
+              className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+            />
+            {errors.recommendation_comment && (
+              <p className="text-sm text-red-600">{errors.recommendation_comment.message}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="other_agency_status">他社エージェント利用状況</Label>
+            <textarea
+              id="other_agency_status"
+              {...register("other_agency_status")}
+              disabled={isPending}
+              rows={3}
+              placeholder="例:A社・B社で並行支援中、Cで応募1件選考中 など"
+              className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+            />
+            {errors.other_agency_status && (
+              <p className="text-sm text-red-600">{errors.other_agency_status.message}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="contact_method_preference">連絡方法希望</Label>
+            <textarea
+              id="contact_method_preference"
+              {...register("contact_method_preference")}
+              disabled={isPending}
+              rows={2}
+              placeholder="例:平日夜間のみ LINE、休日は不可 など"
+              className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+            />
+            {errors.contact_method_preference && (
+              <p className="text-sm text-red-600">{errors.contact_method_preference.message}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="entry_site">エントリーサイト</Label>
+          <Input
+            id="entry_site"
+            {...register("entry_site")}
+            disabled={isPending}
+            placeholder="例:リクナビ、ビズリーチ、自社サイト"
+          />
+          <p className="text-muted-foreground text-xs">
+            集計・チャネル分析用。出典の媒体名をシンプルに記入してください。
+          </p>
+          {errors.entry_site && <p className="text-sm text-red-600">{errors.entry_site.message}</p>}
         </div>
 
         <Button type="submit" disabled={isPending} className="w-full">

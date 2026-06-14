@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { encryptField } from "@/lib/crypto/field-encryption";
 import { getUserRole } from "@/lib/organizations/queries";
 import { updateClientRequestSchema } from "@/lib/clients/types";
 
@@ -81,6 +82,39 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   if (d.close_reason !== undefined) updateData.close_reason = d.close_reason;
   if (d.email_distribution_enabled !== undefined) {
     updateData.email_distribution_enabled = d.email_distribution_enabled;
+  }
+  // 平文。空文字は null に倒す(集計時の "" を排除)。
+  if (d.entry_site !== undefined) updateData.entry_site = d.entry_site || null;
+
+  // 暗号化フィールドの保存:
+  //   - 空文字なら null を保存(暗号化された空文字は無意味)
+  //   - 非空なら encryptField で AES-256-GCM 暗号化
+  // encryptField は並列実行可。
+  if (
+    d.recommendation_comment !== undefined ||
+    d.other_agency_status !== undefined ||
+    d.contact_method_preference !== undefined
+  ) {
+    const [encRec, encOther, encPref] = await Promise.all([
+      d.recommendation_comment === undefined
+        ? Promise.resolve(undefined)
+        : d.recommendation_comment === ""
+          ? Promise.resolve<string | null>(null)
+          : encryptField(d.recommendation_comment),
+      d.other_agency_status === undefined
+        ? Promise.resolve(undefined)
+        : d.other_agency_status === ""
+          ? Promise.resolve<string | null>(null)
+          : encryptField(d.other_agency_status),
+      d.contact_method_preference === undefined
+        ? Promise.resolve(undefined)
+        : d.contact_method_preference === ""
+          ? Promise.resolve<string | null>(null)
+          : encryptField(d.contact_method_preference),
+    ]);
+    if (encRec !== undefined) updateData.encrypted_recommendation_comment = encRec;
+    if (encOther !== undefined) updateData.encrypted_other_agency_status = encOther;
+    if (encPref !== undefined) updateData.encrypted_contact_method_preference = encPref;
   }
 
   if (Object.keys(updateData).length === 0) {
