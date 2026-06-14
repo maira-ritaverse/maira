@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { name, email, phone, status, notes } = parsed.data;
+  const { name, email, phone, status, notes, entry_site, email_distribution_enabled } = parsed.data;
 
   const { data, error } = await supabase
     .from("client_records")
@@ -55,6 +55,9 @@ export async function POST(request: Request) {
       status,
       notes: notes || null,
       link_status: "unlinked",
+      // 新規登録時から入力可能な 2 列。
+      entry_site: entry_site || null,
+      email_distribution_enabled,
     })
     .select("id")
     .single();

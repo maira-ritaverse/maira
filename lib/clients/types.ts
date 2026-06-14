@@ -167,6 +167,11 @@ export const createClientRequestSchema = z.object({
     .enum(["initial_meeting", "job_matching", "in_screening", "offer", "completed", "declined"])
     .default("initial_meeting"),
   notes: z.string().max(2000).optional().or(z.literal("")),
+  // 登録時から入力可能にする 2 つ(他の新規列は編集画面で追加してもらう)。
+  // entry_site:出典の集計に使うため新規登録時の入力が望ましい。
+  // email_distribution_enabled:DB の default は true。明示 false を選びたいときだけ送る。
+  entry_site: z.string().max(100).optional().or(z.literal("")),
+  email_distribution_enabled: z.boolean().default(true),
 });
 
 export type CreateClientRequest = z.infer<typeof createClientRequestSchema>;

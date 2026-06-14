@@ -44,6 +44,8 @@ export function ClientForm() {
       phone: "",
       status: "initial_meeting",
       notes: "",
+      entry_site: "",
+      email_distribution_enabled: true,
     },
   });
 
@@ -140,6 +142,36 @@ export function ClientForm() {
             className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
           />
           {errors.notes && <p className="text-sm text-red-600">{errors.notes.message}</p>}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="entry_site">エントリーサイト</Label>
+          <Input
+            id="entry_site"
+            {...register("entry_site")}
+            disabled={isPending}
+            placeholder="例:リクナビ、ビズリーチ、自社サイト"
+          />
+          <p className="text-muted-foreground text-xs">
+            集計・チャネル分析用。後から編集画面で追加することもできます。
+          </p>
+          {errors.entry_site && <p className="text-sm text-red-600">{errors.entry_site.message}</p>}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="email_distribution_enabled" className="flex items-center gap-2">
+            <input
+              id="email_distribution_enabled"
+              type="checkbox"
+              {...register("email_distribution_enabled")}
+              disabled={isPending}
+              className="size-4"
+            />
+            <span>MA 自動配信を許可する</span>
+          </Label>
+          <p className="text-muted-foreground text-xs">
+            初期値は「許可」。配信を望まない求職者の場合はチェックを外してください。
+          </p>
         </div>
 
         <Button type="submit" disabled={isPending} className="w-full">
