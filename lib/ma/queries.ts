@@ -298,6 +298,11 @@ export async function listSendLogs(
     status?: SendLog["status"];
     limit?: number;
     /**
+     * 0 始まりのオフセット。ページネーションで使う。page=2(2 ページ目)なら offset=limit。
+     * Supabase の range() は inclusive end を要求するため offset+limit-1 を渡す。
+     */
+    offset?: number;
+    /**
      * ISO 8601 タイムスタンプ。`sent_at >= dateFrom` で絞り込み。
      * UI からは「YYYY-MM-DD」を 00:00:00.000Z 補完して渡す想定。
      */
@@ -309,6 +314,8 @@ export async function listSendLogs(
   },
 ): Promise<SendLog[]> {
   const supabase = await createClient();
+  const limit = opts?.limit ?? 100;
+  const offset = opts?.offset ?? 0;
 
   let query = supabase
     .from("ma_send_logs")
@@ -317,7 +324,8 @@ export async function listSendLogs(
     )
     .eq("organization_id", organizationId)
     .order("sent_at", { ascending: false })
-    .limit(opts?.limit ?? 100);
+    // range(start, end) は両端 inclusive(PostgREST 仕様)
+    .range(offset, offset + limit - 1);
 
   if (opts?.scenarioId) query = query.eq("scenario_id", opts.scenarioId);
   if (opts?.status) query = query.eq("status", opts.status);
@@ -354,6 +362,43 @@ export async function listSendLogs(
     }),
   );
   return decrypted;
+}
+
+// ============================================
+// シナリオ別 最終送信日時(カード表示用)
+// ============================================
+
+/**
+ * シナリオごとの「最後に sent された日時」を集計して返す。
+ *
+ * カードに「最終配信:YYYY/MM/DD」を表示する用途。
+ * sent_at 降順で取得して、各 scenario_id について最初に出てきた行が最新になる。
+ *
+ * RLS により自組織分のみ対象。`status='sent'` の行だけを見るので、
+ * skipped / failed は無視(「実際に届いた最後の日付」を知りたいため)。
+ */
+export async function getScenarioLastSentAt(
+  organizationId: string,
+): Promise<Record<string, string>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("ma_send_logs")
+    .select("scenario_id, sent_at")
+    .eq("organization_id", organizationId)
+    .eq("status", "sent")
+    .order("sent_at", { ascending: false });
+
+  if (error) {
+    throw new Error(`最終送信日時の取得に失敗しました: ${error.message}`);
+  }
+
+  const acc: Record<string, string> = {};
+  for (const row of data ?? []) {
+    // 既に登録済みなら無視(最初に出てきた = 最新)
+    if (!acc[row.scenario_id]) acc[row.scenario_id] = row.sent_at;
+  }
+  return acc;
 }
 
 // ============================================

@@ -20,7 +20,13 @@ import { LogsTable } from "./logs-table";
 export default async function MarketingLogsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ scenario?: string; status?: string; from?: string; to?: string }>;
+  searchParams: Promise<{
+    scenario?: string;
+    status?: string;
+    from?: string;
+    to?: string;
+    page?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const supabase = await createClient();
@@ -47,17 +53,31 @@ export default async function MarketingLogsPage({
   const dateFrom = sp.from && dateRegex.test(sp.from) ? `${sp.from}T00:00:00.000Z` : undefined;
   const dateTo = sp.to && dateRegex.test(sp.to) ? `${sp.to}T23:59:59.999Z` : undefined;
 
+  // ページ番号:1 始まり、不正値は 1 に倒す。
+  // 「次ページがあるか」を判定するため limit+1 件を取得し、ハミ出した最後の 1 件は表示しない。
+  const PAGE_SIZE = 100;
+  const pageNum = (() => {
+    const n = Number(sp.page);
+    return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
+  })();
+  const offset = (pageNum - 1) * PAGE_SIZE;
+
   // シナリオ名解決のためにビューも取る(scenario_id → preset.name の Map をテーブル側に渡す)
-  const [logs, scenarios] = await Promise.all([
+  const [logsPlusOne, scenarios] = await Promise.all([
     listSendLogs(role.organization.id, {
       scenarioId: scenarioFilter,
       status: statusFilter,
       dateFrom,
       dateTo,
-      limit: 100,
+      limit: PAGE_SIZE + 1,
+      offset,
     }),
     listScenarioViews(role.organization.id),
   ]);
+
+  // PAGE_SIZE+1 件取れたら「次ページあり」。最後の 1 件は表示用配列からは除外。
+  const hasNextPage = logsPlusOne.length > PAGE_SIZE;
+  const logs = hasNextPage ? logsPlusOne.slice(0, PAGE_SIZE) : logsPlusOne;
 
   const scenarioNameById = new Map<string, string>();
   for (const v of scenarios) {
@@ -97,6 +117,8 @@ export default async function MarketingLogsPage({
         currentStatus={statusFilter}
         currentFrom={sp.from && dateRegex.test(sp.from) ? sp.from : undefined}
         currentTo={sp.to && dateRegex.test(sp.to) ? sp.to : undefined}
+        currentPage={pageNum}
+        hasNextPage={hasNextPage}
       />
     </div>
   );

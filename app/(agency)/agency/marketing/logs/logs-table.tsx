@@ -32,6 +32,9 @@ export type LogsTableProps = {
   // YYYY-MM-DD 形式の日付フィルタ。サーバー側で時刻補完して使う(00:00 〜 23:59:59)。
   currentFrom?: string;
   currentTo?: string;
+  // 1 始まりのページ番号と、次ページがあるかどうか(サーバー側で limit+1 を取って判定済み)。
+  currentPage: number;
+  hasNextPage: boolean;
 };
 
 const STATUS_LABELS: Record<SendLog["status"], string> = {
@@ -54,6 +57,8 @@ export function LogsTable({
   currentStatus,
   currentFrom,
   currentTo,
+  currentPage,
+  hasNextPage,
 }: LogsTableProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -63,6 +68,15 @@ export function LogsTable({
     const params = new URLSearchParams(searchParams.toString());
     if (value) params.set(key, value);
     else params.delete(key);
+    // フィルタ変更時はページを 1 にリセット(2 ページ目で絞り込み変えて結果が空、を防ぐ)
+    params.delete("page");
+    router.push(`/agency/marketing/logs?${params.toString()}`);
+  }
+
+  function goToPage(page: number) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (page <= 1) params.delete("page");
+    else params.set("page", String(page));
     router.push(`/agency/marketing/logs?${params.toString()}`);
   }
 
@@ -131,7 +145,9 @@ export function LogsTable({
             フィルタ解除
           </Button>
         )}
-        <span className="text-muted-foreground ml-auto text-xs">{logs.length} 件 / 最大 100</span>
+        <span className="text-muted-foreground ml-auto text-xs">
+          {logs.length} 件 / ページ {currentPage}
+        </span>
         {/* CSV エクスポート:現在の filter を引き継いだ URL でダウンロード。
             復号は API ルート側で実施(キーは Web セッションを使うため Cookie 必須)。 */}
         <Button
@@ -235,6 +251,31 @@ export function LogsTable({
               })}
             </TableBody>
           </Table>
+        </div>
+      )}
+
+      {/* ページネーション。
+          前ページボタンは currentPage>1 のときだけ表示、次ページは hasNextPage で判定。
+          ボタン両方とも出ないケース(1 ページのみで完結)は枠ごと出さない。 */}
+      {(currentPage > 1 || hasNextPage) && (
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => goToPage(currentPage - 1)}
+            disabled={currentPage <= 1}
+          >
+            ← 前のページ
+          </Button>
+          <span className="text-muted-foreground text-xs">ページ {currentPage}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => goToPage(currentPage + 1)}
+            disabled={!hasNextPage}
+          >
+            次のページ →
+          </Button>
         </div>
       )}
     </div>

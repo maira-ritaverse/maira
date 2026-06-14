@@ -1,7 +1,12 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
-import { getActiveConsent, getScenarioSendStats, listScenarioViews } from "@/lib/ma/queries";
+import {
+  getActiveConsent,
+  getScenarioLastSentAt,
+  getScenarioSendStats,
+  listScenarioViews,
+} from "@/lib/ma/queries";
 import { CURRENT_EMAIL_MA_CONSENT_VERSION } from "@/lib/ma/types";
 import { MarketingScreen } from "./scenario-list";
 
@@ -36,10 +41,11 @@ export default async function MarketingPage() {
   }
 
   // 並列に取得して TTFB を短くする(全て自組織分のみ、依存関係なし)
-  const [scenarios, consent, sendStats] = await Promise.all([
+  const [scenarios, consent, sendStats, lastSentAtByScenarioId] = await Promise.all([
     listScenarioViews(role.organization.id),
     getActiveConsent(role.organization.id, "email_ma"),
     getScenarioSendStats(role.organization.id, 30),
+    getScenarioLastSentAt(role.organization.id),
   ]);
 
   // クライアント側で scenario_id → stats の O(1) lookup ができるよう Record にする。
@@ -79,6 +85,7 @@ export default async function MarketingPage() {
         consentVersion={CURRENT_EMAIL_MA_CONSENT_VERSION}
         isAdmin={role.member.role === "admin"}
         sendStatsByScenarioId={sendStatsByScenarioId}
+        lastSentAtByScenarioId={lastSentAtByScenarioId}
       />
     </div>
   );

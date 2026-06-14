@@ -46,6 +46,11 @@ export type MarketingScreenProps = {
   consentVersion: string;
   isAdmin: boolean;
   sendStatsByScenarioId: ScenarioSendStatsMap;
+  /**
+   * scenario_id → 最後に送信成功した ISO タイムスタンプ。
+   * 値が無いシナリオは「未配信」として扱う。
+   */
+  lastSentAtByScenarioId: Record<string, string>;
 };
 
 export function MarketingScreen({
@@ -54,6 +59,7 @@ export function MarketingScreen({
   consentVersion,
   isAdmin,
   sendStatsByScenarioId,
+  lastSentAtByScenarioId,
 }: MarketingScreenProps) {
   const router = useRouter();
   const [showConsent, setShowConsent] = useState(false);
@@ -145,6 +151,7 @@ export function MarketingScreen({
               view={view}
               disabled={!consent.isActive || !isAdmin}
               stats={view.activation ? sendStatsByScenarioId[view.activation.id] : undefined}
+              lastSentAt={view.activation ? lastSentAtByScenarioId[view.activation.id] : undefined}
             />
           ))}
         </div>
@@ -168,9 +175,14 @@ type ScenarioCardProps = {
    * undefined と「0/0/0」は意味が異なる:undefined = まだ動いていない、0 = 動いたが何も送られなかった。
    */
   stats?: { sent: number; failed: number; skipped: number };
+  /**
+   * このシナリオで最後に sent された ISO タイムスタンプ。
+   * undefined なら未配信(まだ 1 通も送られていない)。
+   */
+  lastSentAt?: string;
 };
 
-function ScenarioCard({ view, disabled, stats }: ScenarioCardProps) {
+function ScenarioCard({ view, disabled, stats, lastSentAt }: ScenarioCardProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -333,6 +345,19 @@ function ScenarioCard({ view, disabled, stats }: ScenarioCardProps) {
               {" / "}
               <span className="text-slate-500">- {stats.skipped}</span>
             </span>
+          </div>
+        )}
+        {/* 最終配信日。lastSentAt=undefined はまだ配信されていない(または activation 未作成)。 */}
+        {view.activation && (
+          <div className="text-muted-foreground text-[10px]">
+            最終配信:{" "}
+            {lastSentAt
+              ? new Date(lastSentAt).toLocaleDateString("ja-JP", {
+                  year: "numeric",
+                  month: "2-digit",
+                  day: "2-digit",
+                })
+              : "未配信"}
           </div>
         )}
         <div className="flex items-center justify-between pt-1">
