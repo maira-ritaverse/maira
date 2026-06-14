@@ -2,6 +2,7 @@
 
 import { PolarAngleAxis, RadialBar, RadialBarChart, ResponsiveContainer } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { colorForPlacementRate } from "@/lib/reports/placement-rate-colors";
 import type { PlacementRate } from "@/lib/reports/queries";
 
 type Props = {
@@ -59,7 +60,7 @@ function Gauge({
 }) {
   // 100% を超える値は理論上発生しないが、表示クランプで保険を掛ける。
   const clamped = Math.max(0, Math.min(100, rate));
-  const color = colorFor(clamped);
+  const color = colorForPlacementRate(clamped);
 
   // recharts はオブジェクト配列を要求するので 1 要素配列にして渡す。
   const chartData = [{ name: "rate", value: clamped, fill: color }];
@@ -119,12 +120,5 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-/**
- * 成約率の色分け。spec 通り、0-30% / 31-60% / 61-100% の 3 段階。
- * dark mode でも視認性が落ちないよう、コントラストの強い Tailwind 標準色を採用。
- */
-function colorFor(rate: number): string {
-  if (rate <= 30) return "#ef4444"; // red-500
-  if (rate <= 60) return "#f59e0b"; // amber-500
-  return "#10b981"; // emerald-500
-}
+// 成約率の色しきい値は lib/reports/placement-rate-colors.ts に集約。
+// テストも同ファイルで境界値(30/31/60/61)を固定済み。
