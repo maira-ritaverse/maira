@@ -66,3 +66,49 @@ export function parseLogPage(raw: string | null | undefined): number {
   if (!Number.isFinite(n) || n < 1) return 1;
   return Math.floor(n);
 }
+
+/**
+ * フィルタ更新(scenario / status / from / to / page)を 1 箇所で扱う URL ビルダ。
+ *
+ * 既存の URL から URLSearchParams を作り、updates をマージして path?query 形式で返す。
+ * 値が空文字なら delete、それ以外なら set。
+ *
+ * "filter" 系の更新(page 以外)が含まれていたら、page=1 に自動リセットする。
+ * フィルタを変えたまま 2 ページ目に居座って「空ページが出る」のを防ぐためで、
+ * 利用側で都度 delete を書かなくて済むようにここに集約する。
+ *
+ * 戻り値は `path?query` の相対パス。クエリが空なら `?` も付けない。
+ */
+export type LogsUrlUpdates = Partial<{
+  scenario: string;
+  status: string;
+  from: string;
+  to: string;
+  page: string;
+}>;
+
+const FILTER_KEYS = ["scenario", "status", "from", "to"] as const;
+
+export function buildLogsUrl(path: string, current: string, updates: LogsUrlUpdates): string {
+  const params = new URLSearchParams(current);
+
+  // updates の各キーを反映。空文字は削除扱い(クエリから消す)。
+  for (const [key, value] of Object.entries(updates)) {
+    if (value === "" || value === undefined) {
+      params.delete(key);
+    } else {
+      params.set(key, value);
+    }
+  }
+
+  // フィルタ系の更新があったら page を 1 にリセット(削除して default 扱い)。
+  // 「page だけ更新したいケース」は除外:この場合は明示的に保持する。
+  const hasFilterUpdate = FILTER_KEYS.some((k) => k in updates);
+  if (hasFilterUpdate) params.delete("page");
+
+  // page=1 は default なのでクエリから消す(URL を短く・共有しやすく保つ)
+  if (params.get("page") === "1") params.delete("page");
+
+  const query = params.toString();
+  return query ? `${path}?${query}` : path;
+}

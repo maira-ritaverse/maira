@@ -12,7 +12,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { buildLogsUrl } from "@/lib/ma/logs-filters";
 import type { SendLog } from "@/lib/ma/types";
+
+const LOGS_PATH = "/agency/marketing/logs";
 
 /**
  * 送信履歴テーブル(クライアント)
@@ -64,20 +67,14 @@ export function LogsTable({
   const searchParams = useSearchParams();
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  // フィルタ・ページ遷移の URL 組み立ては lib/ma/logs-filters の buildLogsUrl に集約。
+  // page リセット・default page 省略・空文字での delete は純関数側で吸収される。
   function updateFilter(key: "scenario" | "status" | "from" | "to", value: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (value) params.set(key, value);
-    else params.delete(key);
-    // フィルタ変更時はページを 1 にリセット(2 ページ目で絞り込み変えて結果が空、を防ぐ)
-    params.delete("page");
-    router.push(`/agency/marketing/logs?${params.toString()}`);
+    router.push(buildLogsUrl(LOGS_PATH, searchParams.toString(), { [key]: value }));
   }
 
   function goToPage(page: number) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (page <= 1) params.delete("page");
-    else params.set("page", String(page));
-    router.push(`/agency/marketing/logs?${params.toString()}`);
+    router.push(buildLogsUrl(LOGS_PATH, searchParams.toString(), { page: String(page) }));
   }
 
   return (

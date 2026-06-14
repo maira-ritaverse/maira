@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseLogStatus, parseLogDateRange, parseLogPage } from "./logs-filters";
+import { buildLogsUrl, parseLogDateRange, parseLogPage, parseLogStatus } from "./logs-filters";
 
 /**
  * URL クエリ解釈の境界テスト。
@@ -131,5 +131,63 @@ describe("parseLogPage", () => {
     expect(parseLogPage("NaN")).toBe(1);
     expect(parseLogPage("Infinity")).toBe(1);
     expect(parseLogPage("' OR 1=1")).toBe(1);
+  });
+});
+
+describe("buildLogsUrl", () => {
+  const path = "/agency/marketing/logs";
+
+  it("空の current + 空の updates なら path のみ(? も付けない)", () => {
+    expect(buildLogsUrl(path, "", {})).toBe(path);
+  });
+
+  it("status を新規セットすると ?status=sent になる", () => {
+    expect(buildLogsUrl(path, "", { status: "sent" })).toBe(`${path}?status=sent`);
+  });
+
+  it("status を空文字で渡すと URL からキーを削除する", () => {
+    expect(buildLogsUrl(path, "status=failed", { status: "" })).toBe(path);
+  });
+
+  it("既存クエリは保持されつつ updates だけマージされる", () => {
+    expect(buildLogsUrl(path, "scenario=abc", { status: "sent" })).toBe(
+      `${path}?scenario=abc&status=sent`,
+    );
+  });
+
+  it("フィルタ更新時は page を自動でリセット(2 ページ目で絞り込みを変えた → page=1 に戻す)", () => {
+    expect(buildLogsUrl(path, "page=3", { status: "sent" })).toBe(`${path}?status=sent`);
+  });
+
+  it("from / to / scenario の更新でも page リセットされる", () => {
+    expect(buildLogsUrl(path, "page=2", { from: "2026-06-01" })).toBe(`${path}?from=2026-06-01`);
+    expect(buildLogsUrl(path, "page=2", { to: "2026-06-30" })).toBe(`${path}?to=2026-06-30`);
+    expect(buildLogsUrl(path, "page=2", { scenario: "abc" })).toBe(`${path}?scenario=abc`);
+  });
+
+  it("page だけの更新ならフィルタは保持、page は更新される", () => {
+    expect(buildLogsUrl(path, "status=sent&page=1", { page: "2" })).toBe(
+      `${path}?status=sent&page=2`,
+    );
+  });
+
+  it("page=1 は default なので URL から消す(共有しやすく短く)", () => {
+    expect(buildLogsUrl(path, "status=sent&page=3", { page: "1" })).toBe(`${path}?status=sent`);
+  });
+
+  it("既存に同じ key があれば置き換える(重複追加しない)", () => {
+    expect(buildLogsUrl(path, "status=sent", { status: "failed" })).toBe(`${path}?status=failed`);
+  });
+
+  it("複数 updates をまとめて反映できる(scenario + status を同時に)", () => {
+    const url = buildLogsUrl(path, "page=5", { scenario: "abc", status: "sent" });
+    // URLSearchParams の順序は insert 順
+    expect(url).toBe(`${path}?scenario=abc&status=sent`);
+  });
+
+  it("path にハッシュ等の特殊文字が含まれていてもそのまま使う", () => {
+    expect(buildLogsUrl("/agency/marketing/logs#top", "", { status: "sent" })).toBe(
+      "/agency/marketing/logs#top?status=sent",
+    );
   });
 });
