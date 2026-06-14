@@ -6,6 +6,7 @@ import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import { createJobRequestSchema, type CreateJobRequest, jobStatusLabels } from "@/lib/jobs/types";
+import { LabourProgressBadge } from "@/components/features/agency/labour-progress-badge";
 
 // zod スキーマで status に .default() を付けているため、入力型(default 前)と
 // 出力型(default 適用後)が一致しない。useForm の入出力ジェネリクスを分けないと
@@ -32,6 +33,7 @@ export function JobForm() {
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
   } = useForm<CreateJobFormInput, unknown, CreateJobRequest>({
     resolver: zodResolver(createJobRequestSchema),
@@ -236,7 +238,12 @@ export function JobForm() {
         {/* 法定明示事項(編集画面と同じ見た目で揃える)
             任意入力なので、登録時にスキップしても OK と分かるよう枠で区別する。 */}
         <div className="space-y-3 rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-4">
-          <p className="text-sm font-semibold text-slate-700">法定明示事項(2024年改正労基法対応)</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-slate-700">
+              法定明示事項(2024年改正労基法対応)
+            </p>
+            <LabourProgressBadge control={control} />
+          </div>
           <p className="text-muted-foreground text-xs">
             すべて任意入力。後から編集画面で追加することもできます。
           </p>

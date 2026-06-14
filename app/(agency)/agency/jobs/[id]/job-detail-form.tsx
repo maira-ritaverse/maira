@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { useForm, useWatch, type Control, type SubmitHandler } from "react-hook-form";
+import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import {
@@ -10,8 +10,8 @@ import {
   type UpdateJobRequest,
   type JobPosting,
   jobStatusLabels,
-  LABOUR_FIELDS_TOTAL,
 } from "@/lib/jobs/types";
+import { LabourProgressBadge } from "@/components/features/agency/labour-progress-badge";
 
 // salary_min / salary_max は z.preprocess で input 型が unknown になるため、
 // useForm の入出力ジェネリクスを分けないと defaultValues / resolver の型整合が取れない。
@@ -334,44 +334,5 @@ export function JobDetailForm({ job }: Props) {
   );
 }
 
-/**
- * 法定 8 列の入力進捗をリアルタイム表示するバッジ。
- *
- * useWatch で監視している入力値を集計し、`countLabourFieldsFilled` と同じ
- * 「null / 空文字 / 空白のみは未入力」のロジックを適用する。
- * フォーム内で再レンダリングを最小化するため、独立コンポーネントに切り出している。
- */
-function LabourProgressBadge({ control }: { control: Control<UpdateJobFormInput> }) {
-  // 8 列をまとめて監視する。useWatch の name 配列指定で 1 度に取得。
-  const values = useWatch({
-    control,
-    name: [
-      "work_change_scope",
-      "location_change_scope",
-      "smoking_prevention_measure",
-      "probation_period",
-      "work_hours",
-      "break_time",
-      "holidays",
-      "application_qualifications",
-    ],
-  });
-  const filled = (values ?? []).filter(
-    (v: unknown) => typeof v === "string" && v.trim() !== "",
-  ).length;
-  const total = LABOUR_FIELDS_TOTAL;
-  const colorClass =
-    filled === total
-      ? "bg-green-100 text-green-700"
-      : filled === 0
-        ? "bg-red-100 text-red-700"
-        : "bg-yellow-100 text-yellow-700";
-  return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-xs whitespace-nowrap ${colorClass}`}
-      title="未入力の項目があると一覧にも警告が出ます"
-    >
-      {filled}/{total} 入力済み
-    </span>
-  );
-}
+// LabourProgressBadge は components/features/agency/labour-progress-badge.tsx に
+// 共通化(編集 / 新規登録の両方で再利用)。

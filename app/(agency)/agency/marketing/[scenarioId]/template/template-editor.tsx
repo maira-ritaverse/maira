@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -136,6 +136,21 @@ export function TemplateEditor({ template, isAdmin }: Props) {
   const dirty = subject !== (template.subject ?? "") || body !== (template.body ?? "");
   const canSave = isAdmin && dirty && subject.trim().length > 0 && body.trim().length > 0;
 
+  // 未保存変更があるときにブラウザ離脱(タブ閉じ / リロード)を確認する。
+  // beforeunload はモダンブラウザでは独自メッセージを表示できないため
+  // event.preventDefault() + returnValue を立てるだけで OK。
+  // 保存成功後に dirty が false になればこのリスナーは何もしない。
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // 古いブラウザ互換のため returnValue にも代入(現在のブラウザは無視するが害はない)
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
   return (
     <>
       {/* ヘッダー */}
@@ -262,7 +277,7 @@ export function TemplateEditor({ template, isAdmin }: Props) {
                   {(previewMode === "expanded" ? expandWithSample(subject) : subject) ||
                     "(件名未入力)"}
                 </p>
-                <pre className="font-sans break-words whitespace-pre-wrap">
+                <pre className="font-sans wrap-break-word whitespace-pre-wrap">
                   {(previewMode === "expanded" ? expandWithSample(body) : body) || "(本文未入力)"}
                 </pre>
               </div>
