@@ -297,6 +297,15 @@ export async function listSendLogs(
     scenarioId?: string;
     status?: SendLog["status"];
     limit?: number;
+    /**
+     * ISO 8601 タイムスタンプ。`sent_at >= dateFrom` で絞り込み。
+     * UI からは「YYYY-MM-DD」を 00:00:00.000Z 補完して渡す想定。
+     */
+    dateFrom?: string;
+    /**
+     * `sent_at <= dateTo` で絞り込み。「YYYY-MM-DD」を 23:59:59.999Z 補完。
+     */
+    dateTo?: string;
   },
 ): Promise<SendLog[]> {
   const supabase = await createClient();
@@ -312,6 +321,8 @@ export async function listSendLogs(
 
   if (opts?.scenarioId) query = query.eq("scenario_id", opts.scenarioId);
   if (opts?.status) query = query.eq("status", opts.status);
+  if (opts?.dateFrom) query = query.gte("sent_at", opts.dateFrom);
+  if (opts?.dateTo) query = query.lte("sent_at", opts.dateTo);
 
   const { data, error } = await query;
   if (error) {

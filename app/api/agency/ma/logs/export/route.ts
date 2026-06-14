@@ -45,9 +45,22 @@ export async function GET(request: Request) {
       ? statusRaw
       : undefined;
 
+  // 日付フィルタ(UI と同じ仕様)。YYYY-MM-DD のみ受け付け、時刻補完して使う。
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  const fromRaw = url.searchParams.get("from") ?? "";
+  const toRaw = url.searchParams.get("to") ?? "";
+  const dateFrom = dateRegex.test(fromRaw) ? `${fromRaw}T00:00:00.000Z` : undefined;
+  const dateTo = dateRegex.test(toRaw) ? `${toRaw}T23:59:59.999Z` : undefined;
+
   try {
     const [logs, scenarios] = await Promise.all([
-      listSendLogs(role.organization.id, { scenarioId, status, limit: MAX_ROWS }),
+      listSendLogs(role.organization.id, {
+        scenarioId,
+        status,
+        dateFrom,
+        dateTo,
+        limit: MAX_ROWS,
+      }),
       listScenarioViews(role.organization.id),
     ]);
 

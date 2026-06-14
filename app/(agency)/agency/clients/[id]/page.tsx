@@ -171,6 +171,21 @@ export default async function ClientDetailPage({ params }: RouteParams) {
         </Card>
       )}
 
+      {/* 他社エージェント利用中のアラート。値が入っているときだけ表示。
+          内容(復号後の文字列)は詳細フォームの「業務メモ」セクションで確認可能。
+          ここでは「目立つ位置に告知」する役割に徹する。 */}
+      {client.otherAgencyStatus && client.otherAgencyStatus.trim() !== "" && (
+        <Card className="border-purple-200 bg-purple-50/50 p-4 dark:border-purple-900 dark:bg-purple-950/30">
+          <p className="text-sm font-semibold text-purple-900 dark:text-purple-200">
+            ⚠ 他社エージェント利用中
+          </p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            この求職者は他社エージェントも併用中です。記録されている内容は下部の「業務メモ」
+            セクションで確認できます。重複連絡・タイミング配慮に気をつけてください。
+          </p>
+        </Card>
+      )}
+
       <ClientSummaryCard clientId={client.id} />
 
       <ClientDetailForm client={client} />

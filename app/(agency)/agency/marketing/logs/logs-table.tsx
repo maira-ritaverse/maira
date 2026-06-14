@@ -29,6 +29,9 @@ export type LogsTableProps = {
   filterOptions: { id: string; name: string }[];
   currentScenarioId?: string;
   currentStatus?: "sent" | "failed" | "skipped";
+  // YYYY-MM-DD 形式の日付フィルタ。サーバー側で時刻補完して使う(00:00 〜 23:59:59)。
+  currentFrom?: string;
+  currentTo?: string;
 };
 
 const STATUS_LABELS: Record<SendLog["status"], string> = {
@@ -49,12 +52,14 @@ export function LogsTable({
   filterOptions,
   currentScenarioId,
   currentStatus,
+  currentFrom,
+  currentTo,
 }: LogsTableProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  function updateFilter(key: "scenario" | "status", value: string) {
+  function updateFilter(key: "scenario" | "status" | "from" | "to", value: string) {
     const params = new URLSearchParams(searchParams.toString());
     if (value) params.set(key, value);
     else params.delete(key);
@@ -99,7 +104,29 @@ export function LogsTable({
             <option value="skipped">スキップ</option>
           </select>
         </div>
-        {(currentScenarioId || currentStatus) && (
+        {/* 日付範囲フィルタ。YYYY-MM-DD を URL クエリに直接入れる(サーバー側で時刻補完)。
+            「from のみ」「to のみ」も許容(片方だけ指定して以降/以前を絞れる)。 */}
+        <div className="flex items-center gap-2">
+          <label htmlFor="dateFrom" className="text-sm font-medium">
+            期間:
+          </label>
+          <input
+            id="dateFrom"
+            type="date"
+            value={currentFrom ?? ""}
+            onChange={(e) => updateFilter("from", e.target.value)}
+            className="rounded border px-2 py-1 text-sm"
+          />
+          <span className="text-muted-foreground text-xs">〜</span>
+          <input
+            id="dateTo"
+            type="date"
+            value={currentTo ?? ""}
+            onChange={(e) => updateFilter("to", e.target.value)}
+            className="rounded border px-2 py-1 text-sm"
+          />
+        </div>
+        {(currentScenarioId || currentStatus || currentFrom || currentTo) && (
           <Button variant="ghost" size="sm" onClick={() => router.push("/agency/marketing/logs")}>
             フィルタ解除
           </Button>
@@ -114,6 +141,8 @@ export function LogsTable({
             const qs = new URLSearchParams();
             if (currentScenarioId) qs.set("scenario", currentScenarioId);
             if (currentStatus) qs.set("status", currentStatus);
+            if (currentFrom) qs.set("from", currentFrom);
+            if (currentTo) qs.set("to", currentTo);
             const query = qs.toString();
             window.location.href = `/api/agency/ma/logs/export${query ? `?${query}` : ""}`;
           }}

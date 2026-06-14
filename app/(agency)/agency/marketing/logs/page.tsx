@@ -20,7 +20,7 @@ import { LogsTable } from "./logs-table";
 export default async function MarketingLogsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ scenario?: string; status?: string }>;
+  searchParams: Promise<{ scenario?: string; status?: string; from?: string; to?: string }>;
 }) {
   const sp = await searchParams;
   const supabase = await createClient();
@@ -41,11 +41,19 @@ export default async function MarketingLogsPage({
       : undefined;
   const scenarioFilter = sp.scenario && sp.scenario.length > 0 ? sp.scenario : undefined;
 
+  // 日付フィルタ:YYYY-MM-DD 形式のみ受け付ける(URL を直接打たれても安全に倒す)。
+  // from は 00:00、to は 23:59:59.999 で時刻補完して、その日全体を含むようにする。
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  const dateFrom = sp.from && dateRegex.test(sp.from) ? `${sp.from}T00:00:00.000Z` : undefined;
+  const dateTo = sp.to && dateRegex.test(sp.to) ? `${sp.to}T23:59:59.999Z` : undefined;
+
   // シナリオ名解決のためにビューも取る(scenario_id → preset.name の Map をテーブル側に渡す)
   const [logs, scenarios] = await Promise.all([
     listSendLogs(role.organization.id, {
       scenarioId: scenarioFilter,
       status: statusFilter,
+      dateFrom,
+      dateTo,
       limit: 100,
     }),
     listScenarioViews(role.organization.id),
@@ -87,6 +95,8 @@ export default async function MarketingLogsPage({
         filterOptions={filterOptions}
         currentScenarioId={scenarioFilter}
         currentStatus={statusFilter}
+        currentFrom={sp.from && dateRegex.test(sp.from) ? sp.from : undefined}
+        currentTo={sp.to && dateRegex.test(sp.to) ? sp.to : undefined}
       />
     </div>
   );
