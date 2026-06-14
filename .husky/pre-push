@@ -1,0 +1,29 @@
+#!/usr/bin/env sh
+# Pre-push hook:push 前に型チェックとテストをローカルで走らせる。
+#
+# 目的:
+#   - CI(.github/workflows/ci.yml)で落ちる前に、push 前にローカルで気付く
+#   - PR を出してから「テスト落ちてます」とコメントされる無駄ループを防ぐ
+#
+# 含めるもの:
+#   - pnpm type-check(~数秒、TS 全体)
+#   - pnpm test(vitest run、800+ テストで ~1.5 秒)
+#
+# 含めないもの:
+#   - pnpm lint:pre-commit で lint-staged 経由で eslint --fix が走り済み
+#   - pnpm build:時間がかかりすぎる(Vercel に任せる)
+#
+# 緊急時:--no-verify でスキップ可能(git push --no-verify)。
+#   ただし PR に出した後 CI で同じものが走るので、ローカルで通らない状態を
+#   隠して push しても結局気付かれる。スキップは「いま手元の TS で別件を直す
+#   途中で安全なバックアップ push」のような限定用途に。
+
+set -e
+
+echo "→ pre-push: type-check..."
+pnpm type-check
+
+echo "→ pre-push: test..."
+pnpm test
+
+echo "✓ pre-push: passed"
