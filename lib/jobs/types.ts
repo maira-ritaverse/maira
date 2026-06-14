@@ -107,6 +107,30 @@ export const updateJobRequestSchema = z.object({
 export type UpdateJobRequest = z.infer<typeof updateJobRequestSchema>;
 
 /**
+ * 法定明示事項(マイグレーション 20260615000004 で追加された 8 列)の入力完了数を数える。
+ *
+ * 求人カードや一覧で「N/8 入力済み」のように進捗を可視化する用途。
+ * 空白のみ(`"   "`)も「未入力」として扱うのが業務的に自然(意図的な空白入力を弾く)。
+ *
+ * テストしやすい純粋関数として export。
+ */
+export const LABOUR_FIELDS_TOTAL = 8 as const;
+
+export function countLabourFieldsFilled(job: JobPosting): number {
+  const fields: (string | null)[] = [
+    job.workChangeScope,
+    job.locationChangeScope,
+    job.smokingPreventionMeasure,
+    job.probationPeriod,
+    job.workHours,
+    job.breakTime,
+    job.holidays,
+    job.applicationQualifications,
+  ];
+  return fields.filter((v) => v !== null && v.trim() !== "").length;
+}
+
+/**
  * 年収レンジを画面表示用の文字列に整形する
  * - 両方あり: "500〜700万円"
  * - 下限のみ: "500万円〜"

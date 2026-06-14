@@ -4,7 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { canExport } from "@/lib/permissions/server";
 import { listJobPostings } from "@/lib/jobs/queries";
-import { jobStatusLabels, formatSalaryRange } from "@/lib/jobs/types";
+import {
+  jobStatusLabels,
+  formatSalaryRange,
+  countLabourFieldsFilled,
+  LABOUR_FIELDS_TOTAL,
+} from "@/lib/jobs/types";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -72,6 +77,9 @@ export default async function JobsPage() {
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  {/* 法定明示事項(2024年改正労基法対応 8 列)の入力進捗。
+                      全て埋まったら緑、1 つ以上残ってたら黄、ゼロは赤。 */}
+                  <LabourBadge filled={countLabourFieldsFilled(job)} />
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs ${
                       job.status === "open"
@@ -90,5 +98,27 @@ export default async function JobsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * 法定明示事項(8 列)の入力進捗バッジ。
+ * 0 件 = 赤、1〜7 件 = 黄、8 件全部 = 緑。一覧で「入力漏れ求人」を視覚的に見つけやすくする。
+ */
+function LabourBadge({ filled }: { filled: number }) {
+  const total = LABOUR_FIELDS_TOTAL;
+  const colorClass =
+    filled === total
+      ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300"
+      : filled === 0
+        ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
+        : "bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300";
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-xs whitespace-nowrap ${colorClass}`}
+      title="法定明示事項(2024年改正労基法対応 8 項目)の入力進捗"
+    >
+      法定 {filled}/{total}
+    </span>
   );
 }

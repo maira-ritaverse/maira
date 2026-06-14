@@ -105,6 +105,22 @@ export function LogsTable({
           </Button>
         )}
         <span className="text-muted-foreground ml-auto text-xs">{logs.length} 件 / 最大 100</span>
+        {/* CSV エクスポート:現在の filter を引き継いだ URL でダウンロード。
+            復号は API ルート側で実施(キーは Web セッションを使うため Cookie 必須)。 */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            const qs = new URLSearchParams();
+            if (currentScenarioId) qs.set("scenario", currentScenarioId);
+            if (currentStatus) qs.set("status", currentStatus);
+            const query = qs.toString();
+            window.location.href = `/api/agency/ma/logs/export${query ? `?${query}` : ""}`;
+          }}
+          disabled={logs.length === 0}
+        >
+          CSV ダウンロード
+        </Button>
       </div>
 
       {/* テーブル */}
