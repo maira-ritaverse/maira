@@ -64,6 +64,79 @@ export const clientCloseReasonLabels: Record<ClientCloseReason, string> = {
   other: "その他",
 };
 
+// ────────────────────────────────────────────
+// EMPRO 準拠の名簿拡張用 enum + Labels(マイグレーション 20260615100001)
+// ────────────────────────────────────────────
+
+export type ClientGender = "male" | "female" | "other" | "prefer_not_to_say";
+export const clientGenderLabels: Record<ClientGender, string> = {
+  male: "男性",
+  female: "女性",
+  other: "その他",
+  prefer_not_to_say: "回答しない",
+};
+
+export type ClientMaritalStatus = "single" | "married" | "prefer_not_to_say";
+export const clientMaritalStatusLabels: Record<ClientMaritalStatus, string> = {
+  single: "未婚",
+  married: "既婚",
+  prefer_not_to_say: "回答しない",
+};
+
+export type ClientEmploymentType =
+  | "full_time"
+  | "contract"
+  | "temporary"
+  | "part_time"
+  | "business_outsource"
+  | "self_employed"
+  | "unemployed"
+  | "student"
+  | "other";
+export const clientEmploymentTypeLabels: Record<ClientEmploymentType, string> = {
+  full_time: "正社員",
+  contract: "契約社員",
+  temporary: "派遣社員",
+  part_time: "アルバイト・パート",
+  business_outsource: "業務委託",
+  self_employed: "自営業・フリーランス",
+  unemployed: "離職中",
+  student: "学生",
+  other: "その他",
+};
+
+export type ClientFinalEducation =
+  | "high_school"
+  | "vocational"
+  | "junior_college"
+  | "university"
+  | "graduate"
+  | "doctorate"
+  | "other";
+export const clientFinalEducationLabels: Record<ClientFinalEducation, string> = {
+  high_school: "高卒",
+  vocational: "専門学校卒",
+  junior_college: "短大卒",
+  university: "大学卒",
+  graduate: "大学院修了(修士)",
+  doctorate: "大学院修了(博士)",
+  other: "その他",
+};
+
+export type ClientJobChangeTiming =
+  | "immediate"
+  | "within_3months"
+  | "within_6months"
+  | "within_1year"
+  | "undecided";
+export const clientJobChangeTimingLabels: Record<ClientJobChangeTiming, string> = {
+  immediate: "すぐにでも",
+  within_3months: "3ヶ月以内",
+  within_6months: "半年以内",
+  within_1year: "1年以内",
+  undecided: "未定",
+};
+
 export type ClientRecord = {
   id: string;
   organizationId: string;
@@ -94,6 +167,43 @@ export type ClientRecord = {
   // 一覧で「⚠ 他社利用中」バッジを出すために使う。
   // 復号は N+1 になるので、暗号文の null 判定だけで「存在のみ」を導出する設計。
   hasOtherAgencyStatus: boolean;
+
+  // ────────────────────────────────────────────
+  // EMPRO 準拠の名簿拡張(マイグレーション 20260615100001)
+  // ────────────────────────────────────────────
+  // 基本属性(平文)
+  nameKana: string | null;
+  birthDate: string | null; // YYYY-MM-DD
+  gender: ClientGender | null;
+  nationality: string | null;
+  maritalStatus: ClientMaritalStatus | null;
+  // 住所(都道府県・郵便番号までは平文。詳細は city/street/building、平文だが
+  // 一覧では非表示の方針。CLAUDE.md 暗号化対象リストには明示載っていないため
+  // 既存 phone と同等の平文扱い)
+  postalCode: string | null;
+  prefecture: string | null;
+  city: string | null;
+  street: string | null;
+  building: string | null;
+  // 副連絡先(平文、既存 phone / email と同等)
+  phone2: string | null;
+  email2: string | null;
+  // 現職情報(集計可能な enum / 数値 / タグ配列は平文)
+  currentEmploymentType: ClientEmploymentType | null;
+  currentAnnualIncome: number | null; // 万円
+  finalEducation: ClientFinalEducation | null;
+  experienceIndustries: string[]; // 経験業種(タグ、空配列で「未入力」)
+  experienceOccupations: string[]; // 経験職種(タグ)
+  // 希望条件(マッチング絞り込みのため平文)
+  desiredIndustries: string[];
+  desiredOccupations: string[];
+  desiredLocations: string[];
+  desiredAnnualIncome: number | null; // 万円
+  jobChangeTiming: ClientJobChangeTiming | null;
+  // 運用キー日付(集計の起点として平文)
+  intakeDate: string | null; // YYYY-MM-DD
+  firstMeetingDate: string | null; // YYYY-MM-DD
+
   createdAt: string;
   updatedAt: string;
 };
@@ -110,6 +220,13 @@ export type ClientRecordWithDecrypted = ClientRecord & {
   recommendationComment: string | null;
   otherAgencyStatus: string | null;
   contactMethodPreference: string | null;
+  // EMPRO 拡張の暗号化対象(自由記述で個人特定リスクが高い項目 / 内部メモ系)
+  educationDetail: string | null; // 学歴詳細
+  skills: string | null; // 保有資格・スキル
+  jobChangeReason: string | null; // 転職理由
+  desiredConditions: string | null; // 希望条件詳細
+  meetingNotes: string | null; // 面談所感(内部メモ)
+  statusMemo: string | null; // ステータスメモ(内部メモ)
 };
 
 // クライアント一覧表示用に担当アドバイザーの表示名を付与した型
@@ -162,6 +279,66 @@ export type ClientRecordWithUpdateBadge = ClientRecordWithReferralBreakdown & {
   latestUpdatedAt: string | null;
 };
 
+// ────────────────────────────────────────────
+// zod 共通ピース(EMPRO 拡張で使い回す enum / 数値範囲)
+// ────────────────────────────────────────────
+
+const genderEnum = z.enum(["male", "female", "other", "prefer_not_to_say"]);
+const maritalStatusEnum = z.enum(["single", "married", "prefer_not_to_say"]);
+const employmentTypeEnum = z.enum([
+  "full_time",
+  "contract",
+  "temporary",
+  "part_time",
+  "business_outsource",
+  "self_employed",
+  "unemployed",
+  "student",
+  "other",
+]);
+const finalEducationEnum = z.enum([
+  "high_school",
+  "vocational",
+  "junior_college",
+  "university",
+  "graduate",
+  "doctorate",
+  "other",
+]);
+const jobChangeTimingEnum = z.enum([
+  "immediate",
+  "within_3months",
+  "within_6months",
+  "within_1year",
+  "undecided",
+]);
+
+// 年収の preprocessor:<input type="number"> の空文字を null に正規化。
+// 0〜10 万円(万円単位)を超えると DB 制約に当たるため zod でも上限ガード。
+const annualIncomeField = z.preprocess((val) => {
+  if (val === "" || val === null || val === undefined) return null;
+  if (typeof val === "string") {
+    const n = Number(val);
+    return Number.isNaN(n) ? val : n;
+  }
+  return val;
+}, z.number().int().min(0).max(100000).nullable());
+
+// 日付フィールド:YYYY-MM-DD or 空文字 or null を許容。
+const dateField = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .nullable()
+  .optional()
+  .or(z.literal(""));
+
+// タグ配列:string[](各要素 1〜100 文字、配列は最大 20 件)。
+// 空配列を「未入力」として扱う。null/undefined は空配列に正規化。
+const tagArrayField = z.preprocess(
+  (val) => (val === null || val === undefined ? [] : val),
+  z.array(z.string().min(1).max(100)).max(20),
+);
+
 // クライアント登録リクエスト
 export const createClientRequestSchema = z.object({
   name: z.string().min(1, "氏名を入力してください").max(100),
@@ -176,6 +353,12 @@ export const createClientRequestSchema = z.object({
   // email_distribution_enabled:DB の default は true。明示 false を選びたいときだけ送る。
   entry_site: z.string().max(100).optional().or(z.literal("")),
   email_distribution_enabled: z.boolean().default(true),
+
+  // EMPRO 拡張のうち、登録時から入れたい最低限の項目だけ受ける。
+  // name_kana・受付年月日は集計の起点になりやすいので登録時推奨。
+  // 残りの拡張(現職・希望条件・面談)は新規登録時は無入力で、編集画面で埋める運用。
+  name_kana: z.string().max(100).optional().or(z.literal("")),
+  intake_date: dateField,
 });
 
 export type CreateClientRequest = z.infer<typeof createClientRequestSchema>;
@@ -212,6 +395,50 @@ export const updateClientRequestSchema = z.object({
   contact_method_preference: z.string().max(1000).optional().or(z.literal("")),
   // 平文。エントリーサイトの出典(リクナビ / ビズリーチ等)
   entry_site: z.string().max(100).optional().or(z.literal("")),
+
+  // ────────────────────────────────────────────
+  // EMPRO 準拠の名簿拡張(平文。マイグレーション 20260615100001)
+  // ────────────────────────────────────────────
+  // 基本属性
+  name_kana: z.string().max(100).optional().or(z.literal("")),
+  birth_date: dateField,
+  gender: genderEnum.nullable().optional().or(z.literal("")),
+  nationality: z.string().max(100).optional().or(z.literal("")),
+  marital_status: maritalStatusEnum.nullable().optional().or(z.literal("")),
+  // 住所
+  postal_code: z.string().max(10).optional().or(z.literal("")),
+  prefecture: z.string().max(20).optional().or(z.literal("")),
+  city: z.string().max(100).optional().or(z.literal("")),
+  street: z.string().max(200).optional().or(z.literal("")),
+  building: z.string().max(200).optional().or(z.literal("")),
+  // 副連絡先
+  phone2: z.string().max(20).optional().or(z.literal("")),
+  email2: z.string().email().optional().or(z.literal("")),
+  // 現職情報
+  current_employment_type: employmentTypeEnum.nullable().optional().or(z.literal("")),
+  current_annual_income: annualIncomeField.optional(),
+  final_education: finalEducationEnum.nullable().optional().or(z.literal("")),
+  experience_industries: tagArrayField.optional(),
+  experience_occupations: tagArrayField.optional(),
+  // 希望条件
+  desired_industries: tagArrayField.optional(),
+  desired_occupations: tagArrayField.optional(),
+  desired_locations: tagArrayField.optional(),
+  desired_annual_income: annualIncomeField.optional(),
+  job_change_timing: jobChangeTimingEnum.nullable().optional().or(z.literal("")),
+  // 運用キー日付
+  intake_date: dateField,
+  first_meeting_date: dateField,
+
+  // ────────────────────────────────────────────
+  // EMPRO 準拠の暗号化対象(自由記述、API ルートで encryptField)
+  // ────────────────────────────────────────────
+  education_detail: z.string().max(2000).optional().or(z.literal("")),
+  skills: z.string().max(5000).optional().or(z.literal("")),
+  job_change_reason: z.string().max(2000).optional().or(z.literal("")),
+  desired_conditions: z.string().max(5000).optional().or(z.literal("")),
+  meeting_notes: z.string().max(5000).optional().or(z.literal("")),
+  status_memo: z.string().max(2000).optional().or(z.literal("")),
 });
 
 export type UpdateClientRequest = z.infer<typeof updateClientRequestSchema>;

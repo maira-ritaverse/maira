@@ -47,6 +47,40 @@ type ClientRecordRow = {
   encrypted_recommendation_comment: string | null;
   encrypted_other_agency_status: string | null;
   encrypted_contact_method_preference: string | null;
+  // ────────────────────────────────────────────
+  // EMPRO 拡張(マイグレーション 20260615100001)
+  // ────────────────────────────────────────────
+  name_kana: string | null;
+  birth_date: string | null;
+  gender: string | null;
+  nationality: string | null;
+  marital_status: string | null;
+  postal_code: string | null;
+  prefecture: string | null;
+  city: string | null;
+  street: string | null;
+  building: string | null;
+  phone2: string | null;
+  email2: string | null;
+  current_employment_type: string | null;
+  current_annual_income: number | null;
+  final_education: string | null;
+  encrypted_education_detail: string | null;
+  experience_industries: string[] | null;
+  experience_occupations: string[] | null;
+  encrypted_skills: string | null;
+  desired_industries: string[] | null;
+  desired_occupations: string[] | null;
+  desired_locations: string[] | null;
+  desired_annual_income: number | null;
+  job_change_timing: string | null;
+  encrypted_job_change_reason: string | null;
+  encrypted_desired_conditions: string | null;
+  intake_date: string | null;
+  first_meeting_date: string | null;
+  encrypted_meeting_notes: string | null;
+  encrypted_status_memo: string | null;
+
   created_at: string;
   updated_at: string;
 };
@@ -77,6 +111,33 @@ function rowToClientRecord(row: ClientRecordRow): ClientRecord {
     // 復号はしない(N+1 を避けるため、一覧用クエリでも安全に使える)。
     hasOtherAgencyStatus:
       row.encrypted_other_agency_status !== null && row.encrypted_other_agency_status !== "",
+    // EMPRO 拡張(平文。一覧で使うため復号は不要、そのまま透過)。
+    // DB enum を ClientRecord 上の type union に narrow。CHECK 制約で値域は担保済み。
+    nameKana: row.name_kana,
+    birthDate: row.birth_date,
+    gender: row.gender as ClientRecord["gender"],
+    nationality: row.nationality,
+    maritalStatus: row.marital_status as ClientRecord["maritalStatus"],
+    postalCode: row.postal_code,
+    prefecture: row.prefecture,
+    city: row.city,
+    street: row.street,
+    building: row.building,
+    phone2: row.phone2,
+    email2: row.email2,
+    currentEmploymentType: row.current_employment_type as ClientRecord["currentEmploymentType"],
+    currentAnnualIncome: row.current_annual_income,
+    finalEducation: row.final_education as ClientRecord["finalEducation"],
+    // text[] は null も「未入力」も意味するが、UI 側は常に配列で扱いたいので [] に統一。
+    experienceIndustries: row.experience_industries ?? [],
+    experienceOccupations: row.experience_occupations ?? [],
+    desiredIndustries: row.desired_industries ?? [],
+    desiredOccupations: row.desired_occupations ?? [],
+    desiredLocations: row.desired_locations ?? [],
+    desiredAnnualIncome: row.desired_annual_income,
+    jobChangeTiming: row.job_change_timing as ClientRecord["jobChangeTiming"],
+    intakeDate: row.intake_date,
+    firstMeetingDate: row.first_meeting_date,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -215,10 +276,28 @@ export async function getClientRecordWithDecrypted(
   const row = data as ClientRecordRow;
   const base = rowToClientRecord(row);
   // 復号は並列(各フィールドは独立)。null 入力は null のまま返る契約。
-  const [recommendationComment, otherAgencyStatus, contactMethodPreference] = await Promise.all([
+  // 既存 3 + EMPRO 拡張 6 = 9 並列。WebCrypto は CPU バウンドなので並列化の意味は薄いが、
+  // I/O としては 1 ラウンドにまとまる(Promise.all は同期的に await キューに入る)。
+  const [
+    recommendationComment,
+    otherAgencyStatus,
+    contactMethodPreference,
+    educationDetail,
+    skills,
+    jobChangeReason,
+    desiredConditions,
+    meetingNotes,
+    statusMemo,
+  ] = await Promise.all([
     decryptField(row.encrypted_recommendation_comment),
     decryptField(row.encrypted_other_agency_status),
     decryptField(row.encrypted_contact_method_preference),
+    decryptField(row.encrypted_education_detail),
+    decryptField(row.encrypted_skills),
+    decryptField(row.encrypted_job_change_reason),
+    decryptField(row.encrypted_desired_conditions),
+    decryptField(row.encrypted_meeting_notes),
+    decryptField(row.encrypted_status_memo),
   ]);
   return {
     ...base,
@@ -227,6 +306,12 @@ export async function getClientRecordWithDecrypted(
     recommendationComment: recommendationComment ?? null,
     otherAgencyStatus: otherAgencyStatus ?? null,
     contactMethodPreference: contactMethodPreference ?? null,
+    educationDetail: educationDetail ?? null,
+    skills: skills ?? null,
+    jobChangeReason: jobChangeReason ?? null,
+    desiredConditions: desiredConditions ?? null,
+    meetingNotes: meetingNotes ?? null,
+    statusMemo: statusMemo ?? null,
   };
 }
 

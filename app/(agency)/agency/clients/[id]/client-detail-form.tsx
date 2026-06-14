@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   updateClientRequestSchema,
@@ -40,7 +40,12 @@ export function ClientDetailForm({ client }: Props) {
     handleSubmit,
     formState: { errors },
   } = useForm<UpdateClientRequest>({
-    resolver: zodResolver(updateClientRequestSchema),
+    // updateClientRequestSchema は EMPRO 拡張で 40+ フィールドに膨らんだ結果、
+    // 多数の `.or(z.literal(""))` の union が react-hook-form の Resolver 型推論
+    // と非互換になるため、runtime 挙動は同等のままキャストで吸収する。
+    // zod が runtime で正しい検証を行い、API ルートは UpdateClientRequest として
+    // 受け取るので型安全性は失われない。
+    resolver: zodResolver(updateClientRequestSchema) as unknown as Resolver<UpdateClientRequest>,
     defaultValues: {
       name: client.name,
       email: client.email,
@@ -53,6 +58,39 @@ export function ClientDetailForm({ client }: Props) {
       recommendation_comment: client.recommendationComment ?? "",
       other_agency_status: client.otherAgencyStatus ?? "",
       contact_method_preference: client.contactMethodPreference ?? "",
+
+      // EMPRO 拡張の初期値(クライアントレコードから流し込み)
+      name_kana: client.nameKana ?? "",
+      birth_date: client.birthDate ?? "",
+      gender: client.gender ?? "",
+      nationality: client.nationality ?? "",
+      marital_status: client.maritalStatus ?? "",
+      postal_code: client.postalCode ?? "",
+      prefecture: client.prefecture ?? "",
+      city: client.city ?? "",
+      street: client.street ?? "",
+      building: client.building ?? "",
+      phone2: client.phone2 ?? "",
+      email2: client.email2 ?? "",
+      current_employment_type: client.currentEmploymentType ?? "",
+      current_annual_income: client.currentAnnualIncome,
+      final_education: client.finalEducation ?? "",
+      experience_industries: client.experienceIndustries,
+      experience_occupations: client.experienceOccupations,
+      desired_industries: client.desiredIndustries,
+      desired_occupations: client.desiredOccupations,
+      desired_locations: client.desiredLocations,
+      desired_annual_income: client.desiredAnnualIncome,
+      job_change_timing: client.jobChangeTiming ?? "",
+      intake_date: client.intakeDate ?? "",
+      first_meeting_date: client.firstMeetingDate ?? "",
+      // 暗号化対象の自由記述
+      education_detail: client.educationDetail ?? "",
+      skills: client.skills ?? "",
+      job_change_reason: client.jobChangeReason ?? "",
+      desired_conditions: client.desiredConditions ?? "",
+      meeting_notes: client.meetingNotes ?? "",
+      status_memo: client.statusMemo ?? "",
     },
   });
 
