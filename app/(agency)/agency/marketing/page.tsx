@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
-import { getActiveConsent, listScenarioViews } from "@/lib/ma/queries";
+import { getActiveConsent, getScenarioSendStats, listScenarioViews } from "@/lib/ma/queries";
 import { CURRENT_EMAIL_MA_CONSENT_VERSION } from "@/lib/ma/types";
 import { MarketingScreen } from "./scenario-list";
 
@@ -35,11 +35,18 @@ export default async function MarketingPage() {
     redirect("/app");
   }
 
-  // 並列に取得して TTFB を短くする(両方とも自組織分のみ、依存関係なし)
-  const [scenarios, consent] = await Promise.all([
+  // 並列に取得して TTFB を短くする(全て自組織分のみ、依存関係なし)
+  const [scenarios, consent, sendStats] = await Promise.all([
     listScenarioViews(role.organization.id),
     getActiveConsent(role.organization.id, "email_ma"),
+    getScenarioSendStats(role.organization.id, 30),
   ]);
+
+  // クライアント側で scenario_id → stats の O(1) lookup ができるよう Record にする。
+  // 値が無い scenario_id は「表示しない」ではなく「0/0/0 として表示」を期待する。
+  const sendStatsByScenarioId = Object.fromEntries(
+    sendStats.map((s) => [s.scenarioId, { sent: s.sent, failed: s.failed, skipped: s.skipped }]),
+  );
 
   // Resend 設定診断:Vercel 環境変数の有無だけ見る。
   // 値そのものは絶対にクライアントに渡さない(キー漏洩防止)。
@@ -71,6 +78,7 @@ export default async function MarketingPage() {
         consent={consent}
         consentVersion={CURRENT_EMAIL_MA_CONSENT_VERSION}
         isAdmin={role.member.role === "admin"}
+        sendStatsByScenarioId={sendStatsByScenarioId}
       />
     </div>
   );

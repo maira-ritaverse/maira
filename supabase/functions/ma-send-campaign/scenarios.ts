@@ -36,6 +36,7 @@ export type CandidateRow = {
  * register_meeting_promotion:
  *   client_records.created_at <= now() - INTERVAL '{days} days'
  *   AND status NOT IN ('completed', 'declined')   -- 既にクローズ済みは除外
+ *   AND email_distribution_enabled = true         -- 配信抑制フラグを尊重
  *   AND まだ一度も client_interactions が記録されていない
  *   AND まだこのシナリオで送信済みでない
  */
@@ -46,10 +47,12 @@ export async function findRegisterMeetingPromotionCandidates(
   const cutoff = new Date(Date.now() - params.days * 86400 * 1000).toISOString();
 
   // 1) created_at が cutoff より古い + ステータスがクローズ済みでない求職者
+  //    かつ email_distribution_enabled = true(求職者が配信停止フラグを立てていない)
   const { data: clients, error: cErr } = await supabase
     .from("client_records")
     .select("id, name, email, assigned_member_id, status, created_at")
     .eq("organization_id", params.organizationId)
+    .eq("email_distribution_enabled", true)
     .lte("created_at", cutoff)
     .not("status", "in", "(completed,declined)");
   if (cErr) throw new Error(`client_records 取得失敗: ${cErr.message}`);
@@ -115,10 +118,12 @@ export async function findDormantOutreachCandidates(
   );
 
   // 2) この組織の active な client_records を全件
+  //    かつ email_distribution_enabled = true(配信停止フラグ尊重)
   const { data: clients, error: cErr } = await supabase
     .from("client_records")
     .select("id, name, email, assigned_member_id, status")
     .eq("organization_id", params.organizationId)
+    .eq("email_distribution_enabled", true)
     .not("status", "in", "(completed,declined)");
   if (cErr) throw new Error(`client_records 取得失敗: ${cErr.message}`);
   if (!clients || clients.length === 0) return [];

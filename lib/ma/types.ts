@@ -323,3 +323,16 @@ export type RecordSendLogInput = {
   errorMessage?: string | null;
   resendMessageId?: string | null;
 };
+
+/**
+ * シナリオ別の送信実績サマリ(直近 N 日間)
+ *
+ * カード上に「直近30日:成功 X 件 / 失敗 Y 件 / スキップ Z 件」を表示するための集計値。
+ * 件数だけ持ち、復号は不要(個別履歴は /agency/marketing/logs で確認)。
+ */
+export type ScenarioSendStats = {
+  scenarioId: string;
+  sent: number;
+  failed: number;
+  skipped: number;
+};

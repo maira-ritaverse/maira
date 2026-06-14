@@ -18,6 +18,7 @@ import type {
   RecordSendLogInput,
   ScenarioActivation,
   ScenarioPreset,
+  ScenarioSendStats,
   ScenarioView,
   SendLog,
   TemplateView,
@@ -342,6 +343,54 @@ export async function listSendLogs(
     }),
   );
   return decrypted;
+}
+
+// ============================================
+// シナリオ別 送信実績サマリ(カード表示用)
+// ============================================
+
+/**
+ * 直近 N 日のシナリオ別 status カウントを返す。
+ *
+ * 件数集計のみで本文の復号は行わないため、ホットパス(MA トップ画面)で
+ * 安価に呼べる。返り値はサーバーコンポーネント側で「Map<scenarioId, stats>」に整える。
+ *
+ * RLS により自組織分のみ集計対象になる(明示的に organization_id でも絞る)。
+ */
+export async function getScenarioSendStats(
+  organizationId: string,
+  daysWindow = 30,
+): Promise<ScenarioSendStats[]> {
+  const supabase = await createClient();
+  const cutoff = new Date(Date.now() - daysWindow * 86400 * 1000).toISOString();
+
+  // 件数だけ欲しいので scenario_id と status だけ取る。
+  // PostgREST には集計関数がないため、行を取得してアプリ側でカウントする。
+  // 100 件上限の logs テーブルと違い、ここは集計目的なので全件を見る必要がある。
+  const { data, error } = await supabase
+    .from("ma_send_logs")
+    .select("scenario_id, status")
+    .eq("organization_id", organizationId)
+    .gte("sent_at", cutoff);
+
+  if (error) {
+    throw new Error(`送信実績の集計に失敗しました: ${error.message}`);
+  }
+  if (!data) return [];
+
+  // scenario_id ごとに sent/failed/skipped を 0 初期化してカウント
+  const acc = new Map<string, ScenarioSendStats>();
+  for (const row of data) {
+    let s = acc.get(row.scenario_id);
+    if (!s) {
+      s = { scenarioId: row.scenario_id, sent: 0, failed: 0, skipped: 0 };
+      acc.set(row.scenario_id, s);
+    }
+    if (row.status === "sent") s.sent++;
+    else if (row.status === "failed") s.failed++;
+    else if (row.status === "skipped") s.skipped++;
+  }
+  return Array.from(acc.values());
 }
 
 // ============================================

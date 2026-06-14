@@ -30,11 +30,22 @@ import { TestSendModal } from "./test-send-modal";
  *
  * Phase C-2(送信処理)と Phase C-3(テンプレ編集)は次タスク。
  */
+/**
+ * 直近 30 日のシナリオ別送信実績(scenario_id → {sent, failed, skipped})。
+ * 親(page.tsx)で getScenarioSendStats を呼んで形成し、ここに props で渡す。
+ * 値が無いシナリオは「0 件」として表示する。
+ */
+export type ScenarioSendStatsMap = Record<
+  string,
+  { sent: number; failed: number; skipped: number }
+>;
+
 export type MarketingScreenProps = {
   scenarios: ScenarioView[];
   consent: ConsentStatus;
   consentVersion: string;
   isAdmin: boolean;
+  sendStatsByScenarioId: ScenarioSendStatsMap;
 };
 
 export function MarketingScreen({
@@ -42,6 +53,7 @@ export function MarketingScreen({
   consent,
   consentVersion,
   isAdmin,
+  sendStatsByScenarioId,
 }: MarketingScreenProps) {
   const router = useRouter();
   const [showConsent, setShowConsent] = useState(false);
@@ -132,6 +144,7 @@ export function MarketingScreen({
               key={view.preset.id}
               view={view}
               disabled={!consent.isActive || !isAdmin}
+              stats={view.activation ? sendStatsByScenarioId[view.activation.id] : undefined}
             />
           ))}
         </div>
@@ -150,9 +163,14 @@ export function MarketingScreen({
 type ScenarioCardProps = {
   view: ScenarioView;
   disabled: boolean;
+  /**
+   * 直近 30 日の送信実績。activation が未作成 or 直近 0 件なら undefined。
+   * undefined と「0/0/0」は意味が異なる:undefined = まだ動いていない、0 = 動いたが何も送られなかった。
+   */
+  stats?: { sent: number; failed: number; skipped: number };
 };
 
-function ScenarioCard({ view, disabled }: ScenarioCardProps) {
+function ScenarioCard({ view, disabled, stats }: ScenarioCardProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -302,6 +320,20 @@ function ScenarioCard({ view, disabled }: ScenarioCardProps) {
             このシナリオは送信ロジックが未実装です。必要なデータ(面談・希望条件
             等)の整備後に有効化できるようになります。
           </p>
+        )}
+        {/* 直近 30 日の送信実績。stats=undefined は「まだ動いていない」のサイレント表示。
+            0/0/0 は「動いたが対象なし」(配信スキップ・対象 0 件)を意味する。 */}
+        {stats && (
+          <div className="text-muted-foreground flex items-center gap-2 text-[10px]">
+            <span>直近30日:</span>
+            <span className="font-mono">
+              <span className="text-emerald-700">✓ {stats.sent}</span>
+              {" / "}
+              <span className="text-red-700">✗ {stats.failed}</span>
+              {" / "}
+              <span className="text-slate-500">- {stats.skipped}</span>
+            </span>
+          </div>
         )}
         <div className="flex items-center justify-between pt-1">
           <span
