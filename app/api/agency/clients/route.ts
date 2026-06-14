@@ -42,7 +42,17 @@ export async function POST(request: Request) {
     );
   }
 
-  const { name, email, phone, status, notes, entry_site, email_distribution_enabled } = parsed.data;
+  const {
+    name,
+    email,
+    phone,
+    status,
+    notes,
+    entry_site,
+    email_distribution_enabled,
+    name_kana,
+    intake_date,
+  } = parsed.data;
 
   const { data, error } = await supabase
     .from("client_records")
@@ -58,6 +68,11 @@ export async function POST(request: Request) {
       // 新規登録時から入力可能な 2 列。
       entry_site: entry_site || null,
       email_distribution_enabled,
+      // EMPRO 拡張のうち登録時から推奨の 2 項目。
+      // name_kana:検索の前提なので最初から入れたい / intake_date:集計の起点。
+      // どちらも空文字は null に倒す(集計時の "" を排除)。
+      name_kana: name_kana || null,
+      intake_date: intake_date || null,
     })
     .select("id")
     .single();
