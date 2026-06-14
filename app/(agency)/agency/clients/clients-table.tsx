@@ -16,7 +16,6 @@ import {
   clientLinkStatusLabels,
   clientStatusLabels,
   type ClientRecordWithUpdateBadge,
-  type ClientStatus,
   type ReferralBreakdown,
 } from "@/lib/clients/types";
 import {
@@ -26,10 +25,13 @@ import {
 } from "@/lib/referrals/types";
 import { getDueStatus } from "@/lib/agency-tasks/due-status";
 import { useNow } from "@/lib/agency-tasks/use-now";
-
-type SortColumn = "name" | "status" | "createdAt";
-type SortDirection = "asc" | "desc";
-type StatusFilter = ClientStatus | "all";
+import {
+  applyClientsFilterSort,
+  buildEntrySiteOptions,
+  type SortColumn,
+  type SortDirection,
+  type StatusFilter,
+} from "@/lib/clients/filter-sort";
 
 type ClientsTableProps = {
   clients: ClientRecordWithUpdateBadge[];
@@ -88,58 +90,24 @@ export function ClientsTable({ clients }: ClientsTableProps) {
   const [entrySiteFilter, setEntrySiteFilter] = useState<string>("all");
 
   // 現在の clients から「実在するエントリーサイトの集合」を作る(降順件数)。
-  // useMemo で依存先は clients のみ(フィルタには影響しない)。
-  const entrySiteOptions = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const c of clients) {
-      const key = c.entrySite && c.entrySite.trim() !== "" ? c.entrySite : "unset";
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-  }, [clients]);
+  // 集計ロジックは lib/clients/filter-sort.ts(テスト済み)に集約。
+  const entrySiteOptions = useMemo(() => buildEntrySiteOptions(clients), [clients]);
   // 期限バッジ用の現在時刻(useSyncExternalStore で SSR null → マウント後 Date)
   const now = useNow();
 
-  const filteredSorted = useMemo(() => {
-    let result = clients;
-
-    // 検索(氏名 or メールに部分一致、大文字小文字無視)
-    const q = searchQuery.trim().toLowerCase();
-    if (q) {
-      result = result.filter(
-        (c) => c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q),
-      );
-    }
-
-    // ステータス絞り込み
-    if (statusFilter !== "all") {
-      result = result.filter((c) => c.status === statusFilter);
-    }
-
-    // エントリーサイト絞り込み(unset は null/空/空白扱い、"all" は絞らない)
-    if (entrySiteFilter !== "all") {
-      result = result.filter((c) => {
-        const key = c.entrySite && c.entrySite.trim() !== "" ? c.entrySite : "unset";
-        return key === entrySiteFilter;
-      });
-    }
-
-    // ソート(immutable: 元配列を破壊しないため slice してから sort)
-    const sorted = [...result].sort((a, b) => {
-      let cmp = 0;
-      if (sortColumn === "name") {
-        // 日本語の自然順でソート(漢字/かな対応)
-        cmp = a.name.localeCompare(b.name, "ja");
-      } else if (sortColumn === "status") {
-        cmp = a.status.localeCompare(b.status);
-      } else {
-        cmp = a.createdAt.localeCompare(b.createdAt);
-      }
-      return sortDirection === "asc" ? cmp : -cmp;
-    });
-
-    return sorted;
-  }, [clients, searchQuery, statusFilter, entrySiteFilter, sortColumn, sortDirection]);
+  // 絞り込み・並び替えは純関数に委譲(検索 + ステータス + エントリーサイト + ソート)。
+  // テストは lib/clients/filter-sort.test.ts 側で網羅(15+ ケース)。
+  const filteredSorted = useMemo(
+    () =>
+      applyClientsFilterSort(clients, {
+        searchQuery,
+        statusFilter,
+        entrySiteFilter,
+        sortColumn,
+        sortDirection,
+      }),
+    [clients, searchQuery, statusFilter, entrySiteFilter, sortColumn, sortDirection],
+  );
 
   const toggleSort = (col: SortColumn) => {
     if (sortColumn === col) {

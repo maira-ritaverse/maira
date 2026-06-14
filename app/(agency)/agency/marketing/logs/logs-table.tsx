@@ -138,7 +138,22 @@ export function LogsTable({
           />
         </div>
         {(currentScenarioId || currentStatus || currentFrom || currentTo) && (
-          <Button variant="ghost" size="sm" onClick={() => router.push("/agency/marketing/logs")}>
+          <Button
+            variant="ghost"
+            size="sm"
+            // 全フィルタ(scenario/status/from/to)を空文字で渡して削除。page は default で消える。
+            // buildLogsUrl 経由にしてハードコードを排除(LOGS_PATH と更新ロジックを 1 箇所に)。
+            onClick={() =>
+              router.push(
+                buildLogsUrl(LOGS_PATH, searchParams.toString(), {
+                  scenario: "",
+                  status: "",
+                  from: "",
+                  to: "",
+                }),
+              )
+            }
+          >
             フィルタ解除
           </Button>
         )}
