@@ -20,8 +20,17 @@ import { ExportButton } from "@/components/features/agency/export-button";
  *
  * layout.tsx でロールガード済みだが、organization 取り出しのため再度 getUserRole を呼ぶ。
  * listJobPostings は RLS により自社の求人のみ返す。
+ *
+ * 法定明示事項(2024年改正労基法 8 列)が未完了の求人だけを表示するモードを
+ * searchParams.incomplete=1 で提供。本番運用前に「入力漏れ求人をまとめて埋める」用途。
  */
-export default async function JobsPage() {
+export default async function JobsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ incomplete?: string }>;
+}) {
+  const sp = await searchParams;
+  const incompleteOnly = sp.incomplete === "1";
   const supabase = await createClient();
   const {
     data: { user },
@@ -34,7 +43,15 @@ export default async function JobsPage() {
     redirect("/app");
   }
 
-  const jobs = await listJobPostings(role.organization.id);
+  const allJobs = await listJobPostings(role.organization.id);
+  // 法定未完了モード:8 列の入力数 < 8 の求人だけに絞る。
+  // クローズ済み求人は埋める価値が低いので除外しない(運用ルールに任せる)。
+  const jobs = incompleteOnly
+    ? allJobs.filter((j) => countLabourFieldsFilled(j) < LABOUR_FIELDS_TOTAL)
+    : allJobs;
+  const incompleteCount = allJobs.filter(
+    (j) => countLabourFieldsFilled(j) < LABOUR_FIELDS_TOTAL,
+  ).length;
   const showExport = canExport(role);
 
   return (
@@ -47,6 +64,19 @@ export default async function JobsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* 法定未完了モードの切替リンク。0 件のときは出さない(押す価値が無い)。
+              モード ON のときは「すべて表示」に戻すリンク。 */}
+          {incompleteCount > 0 && (
+            <Button
+              variant={incompleteOnly ? "default" : "outline"}
+              size="sm"
+              render={<Link href={incompleteOnly ? "/agency/jobs" : "/agency/jobs?incomplete=1"} />}
+            >
+              {incompleteOnly
+                ? `すべて表示(全${allJobs.length}件)`
+                : `法定未完了 ${incompleteCount} 件`}
+            </Button>
+          )}
           {showExport && <ExportButton href="/api/agency/export/jobs" label="CSV エクスポート" />}
           <Button render={<Link href="/agency/jobs/new" />}>+ 求人登録</Button>
         </div>

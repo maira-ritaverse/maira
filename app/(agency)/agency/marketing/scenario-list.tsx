@@ -71,6 +71,24 @@ export function MarketingScreen({
     (s) => s.preset.audience === "candidate" && s.preset.channel === "email",
   );
 
+  // 配信中シナリオ数(activation.isActive)
+  const activeScenarioCount = candidateEmailScenarios.filter((s) => s.activation?.isActive).length;
+  // 直近 30 日の全シナリオ合算実績(Object.values で全エントリの和を計算)
+  const overallSendStats = Object.values(sendStatsByScenarioId).reduce(
+    (acc, s) => ({
+      sent: acc.sent + s.sent,
+      failed: acc.failed + s.failed,
+      skipped: acc.skipped + s.skipped,
+    }),
+    { sent: 0, failed: 0, skipped: 0 },
+  );
+  // 配信率:成功 / (成功 + 失敗)。分母 0 なら null(「データなし」として表示)。
+  // skipped は「対象なし」「未設定」を含むので分母に入れない設計。
+  const deliveryRate = (() => {
+    const attempted = overallSendStats.sent + overallSendStats.failed;
+    return attempted === 0 ? null : Math.round((overallSendStats.sent / attempted) * 100);
+  })();
+
   async function handleRevoke() {
     if (!window.confirm("マーケティング機能の利用を停止します。よろしいですか?")) return;
     setRevoking(true);
@@ -139,6 +157,41 @@ export function MarketingScreen({
             {revokeError}
           </p>
         )}
+      </div>
+
+      {/* 全体 KPI サマリ:配信中シナリオ数 + 直近 30 日の合算実績 + 配信率
+          シナリオ別カードに行く前の「ざっくり状況把握」用。 */}
+      <div className="bg-muted/40 grid grid-cols-2 gap-2 rounded-md border p-3 text-xs md:grid-cols-4">
+        <div>
+          <p className="text-muted-foreground">配信中シナリオ</p>
+          <p className="text-foreground mt-0.5 text-lg font-semibold">
+            {activeScenarioCount}/{candidateEmailScenarios.length}
+          </p>
+        </div>
+        <div>
+          <p className="text-muted-foreground">直近30日 成功</p>
+          <p className="mt-0.5 text-lg font-semibold text-emerald-700">{overallSendStats.sent}</p>
+        </div>
+        <div>
+          <p className="text-muted-foreground">直近30日 失敗 / スキップ</p>
+          <p className="mt-0.5 text-lg font-semibold text-slate-700">
+            <span className="text-red-700">{overallSendStats.failed}</span>
+            <span className="text-muted-foreground"> / </span>
+            <span className="text-slate-500">{overallSendStats.skipped}</span>
+          </p>
+        </div>
+        <div>
+          <p className="text-muted-foreground">配信率(成功 / 試行)</p>
+          <p className="mt-0.5 text-lg font-semibold">
+            {deliveryRate === null ? (
+              <span className="text-muted-foreground text-sm">—</span>
+            ) : (
+              <span className={deliveryRate >= 95 ? "text-emerald-700" : "text-amber-700"}>
+                {deliveryRate}%
+              </span>
+            )}
+          </p>
+        </div>
       </div>
 
       {/* シナリオカード一覧 */}

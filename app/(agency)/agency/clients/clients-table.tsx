@@ -84,6 +84,19 @@ export function ClientsTable({ clients }: ClientsTableProps) {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  // エントリーサイト絞り込み。"all" は絞らない、"unset" は entrySite が null/空文字。
+  const [entrySiteFilter, setEntrySiteFilter] = useState<string>("all");
+
+  // 現在の clients から「実在するエントリーサイトの集合」を作る(降順件数)。
+  // useMemo で依存先は clients のみ(フィルタには影響しない)。
+  const entrySiteOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const c of clients) {
+      const key = c.entrySite && c.entrySite.trim() !== "" ? c.entrySite : "unset";
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  }, [clients]);
   // 期限バッジ用の現在時刻(useSyncExternalStore で SSR null → マウント後 Date)
   const now = useNow();
 
@@ -103,6 +116,14 @@ export function ClientsTable({ clients }: ClientsTableProps) {
       result = result.filter((c) => c.status === statusFilter);
     }
 
+    // エントリーサイト絞り込み(unset は null/空/空白扱い、"all" は絞らない)
+    if (entrySiteFilter !== "all") {
+      result = result.filter((c) => {
+        const key = c.entrySite && c.entrySite.trim() !== "" ? c.entrySite : "unset";
+        return key === entrySiteFilter;
+      });
+    }
+
     // ソート(immutable: 元配列を破壊しないため slice してから sort)
     const sorted = [...result].sort((a, b) => {
       let cmp = 0;
@@ -118,7 +139,7 @@ export function ClientsTable({ clients }: ClientsTableProps) {
     });
 
     return sorted;
-  }, [clients, searchQuery, statusFilter, sortColumn, sortDirection]);
+  }, [clients, searchQuery, statusFilter, entrySiteFilter, sortColumn, sortDirection]);
 
   const toggleSort = (col: SortColumn) => {
     if (sortColumn === col) {
@@ -156,6 +177,22 @@ export function ClientsTable({ clients }: ClientsTableProps) {
             </option>
           ))}
         </select>
+        {/* エントリーサイト絞り込み。現在のデータから検出した媒体だけ選べる
+            (空の媒体オプションを並べると業務上のノイズになるため)。 */}
+        {entrySiteOptions.length > 0 && (
+          <select
+            value={entrySiteFilter}
+            onChange={(e) => setEntrySiteFilter(e.target.value)}
+            className="border-input bg-background rounded-lg border px-3 py-1.5 text-sm"
+          >
+            <option value="all">すべての媒体</option>
+            {entrySiteOptions.map(([key, count]) => (
+              <option key={key} value={key}>
+                {key === "unset" ? "未設定" : key}({count})
+              </option>
+            ))}
+          </select>
+        )}
         <span className="text-muted-foreground text-sm">{filteredSorted.length}件</span>
       </div>
 
