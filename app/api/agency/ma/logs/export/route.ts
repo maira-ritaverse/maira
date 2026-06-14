@@ -1,18 +1,17 @@
 /**
  * MA 送信履歴 CSV エクスポート
  *
- *   GET /api/agency/ma/logs/export?scenario=...&status=...
+ *   GET /api/agency/ma/logs/export?scenario=...&status=...&from=YYYY-MM-DD&to=YYYY-MM-DD
  *
  * 同 org メンバーが SELECT 可能なら誰でも実行可(運用上は管理職以外も監査することがある)。
  * 復号は内部で済ませて、CSV の中には平文が入る。
  *
- * クエリパラメータは UI のフィルタと同じ scenarioId / status を受け付ける。
- * 上限は安全側に倒して 1000 行(過剰負荷を防ぐ。ページング/UI からの要求は別途)。
+ * クエリパラメータは UI のフィルタと同じ scenarioId / status / 日付範囲を受け付ける。
+ * 解釈は lib/ma/logs-filters の純関数を使い、UI と完全に同じ挙動を保証する。
+ * 上限は安全側に倒して 1000 行(過剰負荷を防ぐ。UI のページング範囲を超える要求は別途)。
  *
- * セキュリティメモ:
- *   - CSV インジェクション対策:セル先頭が = + - @ の場合は ' をプレフィックスして
- *     Excel で式として評価されないようにする
- *   - 改行・ダブルクォート・カンマを含むセルは "..." で囲み、内部の " は "" にエスケープ
+ * CSV の組み立て・インジェクション対策・ファイル名・ダウンロードヘッダは
+ * すべて lib/csv の共通 util に集約済み(他の admin/jobs/clients/referrals 等と同じ実装)。
  */
 
 import { NextResponse } from "next/server";
@@ -20,7 +19,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { listScenarioViews, listSendLogs } from "@/lib/ma/queries";
 import { parseLogDateRange, parseLogStatus } from "@/lib/ma/logs-filters";
-import type { SendLog } from "@/lib/ma/types";
+import { buildCsvFilename, csvFormat, toCsv } from "@/lib/csv/format";
+import { csvResponse } from "@/lib/csv/response";
 
 const MAX_ROWS = 1000;
 
@@ -66,73 +66,32 @@ export async function GET(request: Request) {
       if (v.activation) scenarioNameById.set(v.activation.id, v.preset.name);
     }
 
-    const csv = buildCsv(logs, scenarioNameById);
-    const filename = `ma-send-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+    const header = [
+      "送信日時",
+      "シナリオ",
+      "受信者メール",
+      "件名",
+      "本文",
+      "ステータス",
+      "エラー",
+      "Resend ID",
+    ];
+    const rows = logs.map((log) => [
+      csvFormat.isoDateTime(log.sentAt),
+      csvFormat.text(scenarioNameById.get(log.scenarioId) ?? "(削除済シナリオ)"),
+      csvFormat.text(log.recipientEmail),
+      csvFormat.text(log.subject),
+      csvFormat.text(log.body),
+      csvFormat.text(log.status),
+      csvFormat.text(log.errorMessage),
+      csvFormat.text(log.resendMessageId),
+    ]);
 
-    return new NextResponse(csv, {
-      status: 200,
-      headers: {
-        // UTF-8 BOM 付き(Excel で文字化けしないため)
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-      },
-    });
+    const csv = toCsv([header, ...rows]);
+    const filename = buildCsvFilename("ma-send-logs");
+    return csvResponse(csv, filename);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: "Failed to export logs", message }, { status: 500 });
   }
-}
-
-/**
- * SendLog 配列を CSV 文字列に変換する。
- * UTF-8 BOM 付き(Excel が UTF-8 と認識して日本語が化けないため)。
- */
-function buildCsv(logs: SendLog[], scenarioNameById: Map<string, string>): string {
-  const header = [
-    "送信日時",
-    "シナリオ",
-    "受信者メール",
-    "件名",
-    "本文",
-    "ステータス",
-    "エラー",
-    "Resend ID",
-  ];
-  const rows: string[] = [header.map(escapeCell).join(",")];
-  for (const log of logs) {
-    rows.push(
-      [
-        log.sentAt,
-        scenarioNameById.get(log.scenarioId) ?? "(削除済シナリオ)",
-        log.recipientEmail,
-        log.subject,
-        log.body,
-        log.status,
-        log.errorMessage ?? "",
-        log.resendMessageId ?? "",
-      ]
-        .map(escapeCell)
-        .join(","),
-    );
-  }
-  // BOM + CRLF(Excel 互換のため改行は \r\n)
-  return "﻿" + rows.join("\r\n") + "\r\n";
-}
-
-/**
- * CSV 1 セルの値をエスケープする純粋関数。
- *   - = + - @ で始まる場合は ' を前置(CSV インジェクション対策)
- *   - " カンマ 改行 を含む場合は "..." で囲み、" は "" にエスケープ
- *
- * テストしやすいよう named export しても良いが、今回は API ルート内部に閉じる。
- */
-function escapeCell(value: string): string {
-  let v = value;
-  // CSV インジェクション対策:Excel で式として評価される文字を無効化
-  if (/^[=+\-@]/.test(v)) v = "'" + v;
-  // 特殊文字を含む場合は囲む
-  if (/[",\r\n]/.test(v)) {
-    v = `"${v.replace(/"/g, '""')}"`;
-  }
-  return v;
 }
