@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  clientEmploymentTypeLabels,
   clientLinkStatusLabels,
   clientStatusLabels,
   type ClientRecordWithUpdateBadge,
@@ -27,11 +28,14 @@ import { getDueStatus } from "@/lib/agency-tasks/due-status";
 import { useNow } from "@/lib/agency-tasks/use-now";
 import {
   applyClientsFilterSort,
+  buildEmploymentTypeOptions,
   buildEntrySiteOptions,
+  buildPrefectureOptions,
   type SortColumn,
   type SortDirection,
   type StatusFilter,
 } from "@/lib/clients/filter-sort";
+import type { ClientEmploymentType } from "@/lib/clients/types";
 
 type ClientsTableProps = {
   clients: ClientRecordWithUpdateBadge[];
@@ -88,25 +92,42 @@ export function ClientsTable({ clients }: ClientsTableProps) {
   const [searchQuery, setSearchQuery] = useState("");
   // エントリーサイト絞り込み。"all" は絞らない、"unset" は entrySite が null/空文字。
   const [entrySiteFilter, setEntrySiteFilter] = useState<string>("all");
+  // EMPRO 拡張:都道府県絞り込み / 雇用形態絞り込み。同じ "all" + "unset" + 値 のパターン。
+  const [prefectureFilter, setPrefectureFilter] = useState<string>("all");
+  const [employmentTypeFilter, setEmploymentTypeFilter] = useState<string>("all");
 
   // 現在の clients から「実在するエントリーサイトの集合」を作る(降順件数)。
   // 集計ロジックは lib/clients/filter-sort.ts(テスト済み)に集約。
   const entrySiteOptions = useMemo(() => buildEntrySiteOptions(clients), [clients]);
+  // EMPRO 拡張の選択肢(同パターン)
+  const prefectureOptions = useMemo(() => buildPrefectureOptions(clients), [clients]);
+  const employmentTypeOptions = useMemo(() => buildEmploymentTypeOptions(clients), [clients]);
   // 期限バッジ用の現在時刻(useSyncExternalStore で SSR null → マウント後 Date)
   const now = useNow();
 
-  // 絞り込み・並び替えは純関数に委譲(検索 + ステータス + エントリーサイト + ソート)。
-  // テストは lib/clients/filter-sort.test.ts 側で網羅(15+ ケース)。
+  // 絞り込み・並び替えは純関数に委譲(検索 + ステータス + エントリーサイト + 都道府県 + 雇用形態 + ソート)。
+  // テストは lib/clients/filter-sort.test.ts 側で網羅。
   const filteredSorted = useMemo(
     () =>
       applyClientsFilterSort(clients, {
         searchQuery,
         statusFilter,
         entrySiteFilter,
+        prefectureFilter,
+        employmentTypeFilter,
         sortColumn,
         sortDirection,
       }),
-    [clients, searchQuery, statusFilter, entrySiteFilter, sortColumn, sortDirection],
+    [
+      clients,
+      searchQuery,
+      statusFilter,
+      entrySiteFilter,
+      prefectureFilter,
+      employmentTypeFilter,
+      sortColumn,
+      sortDirection,
+    ],
   );
 
   const toggleSort = (col: SortColumn) => {
@@ -128,7 +149,7 @@ export function ClientsTable({ clients }: ClientsTableProps) {
       {/* 検索・フィルタ行 */}
       <div className="flex flex-wrap items-center gap-3">
         <Input
-          placeholder="氏名・メールで検索"
+          placeholder="氏名・氏名カナ・メールで検索"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="max-w-xs"
@@ -161,6 +182,43 @@ export function ClientsTable({ clients }: ClientsTableProps) {
             ))}
           </select>
         )}
+        {/* EMPRO 拡張:都道府県絞り込み。実在する都道府県だけを件数付きで表示。
+            「unset」(未入力)が混じる場合のみそれも選べる(リストにある時のみ)。 */}
+        {prefectureOptions.length > 0 && (
+          <select
+            value={prefectureFilter}
+            onChange={(e) => setPrefectureFilter(e.target.value)}
+            className="border-input bg-background rounded-lg border px-3 py-1.5 text-sm"
+          >
+            <option value="all">すべての都道府県</option>
+            {prefectureOptions.map(([key, count]) => (
+              <option key={key} value={key}>
+                {key === "unset" ? "未設定" : key}({count})
+              </option>
+            ))}
+          </select>
+        )}
+        {/* EMPRO 拡張:雇用形態絞り込み。enum 値で実在するものだけ。 */}
+        {employmentTypeOptions.length > 0 && (
+          <select
+            value={employmentTypeFilter}
+            onChange={(e) => setEmploymentTypeFilter(e.target.value)}
+            className="border-input bg-background rounded-lg border px-3 py-1.5 text-sm"
+          >
+            <option value="all">すべての雇用形態</option>
+            {employmentTypeOptions.map(([key, count]) => {
+              const label =
+                key === "unset"
+                  ? "未設定"
+                  : clientEmploymentTypeLabels[key as ClientEmploymentType];
+              return (
+                <option key={key} value={key}>
+                  {label}({count})
+                </option>
+              );
+            })}
+          </select>
+        )}
         <span className="text-muted-foreground text-sm">{filteredSorted.length}件</span>
       </div>
 
@@ -172,8 +230,11 @@ export function ClientsTable({ clients }: ClientsTableProps) {
               <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("name")}>
                 氏名{sortArrow("name")}
               </TableHead>
+              <TableHead>氏名カナ</TableHead>
               <TableHead>メール</TableHead>
               <TableHead>電話</TableHead>
+              <TableHead>都道府県</TableHead>
+              <TableHead>雇用形態</TableHead>
               <TableHead
                 className="cursor-pointer select-none"
                 onClick={() => toggleSort("status")}
@@ -184,6 +245,7 @@ export function ClientsTable({ clients }: ClientsTableProps) {
               <TableHead>連携</TableHead>
               <TableHead>MA配信</TableHead>
               <TableHead>担当者</TableHead>
+              <TableHead>受付日</TableHead>
               <TableHead
                 className="cursor-pointer select-none"
                 onClick={() => toggleSort("createdAt")}
@@ -195,7 +257,7 @@ export function ClientsTable({ clients }: ClientsTableProps) {
           <TableBody>
             {filteredSorted.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-muted-foreground py-8 text-center">
+                <TableCell colSpan={13} className="text-muted-foreground py-8 text-center">
                   該当するクライアントがいません
                 </TableCell>
               </TableRow>
@@ -244,8 +306,22 @@ export function ClientsTable({ clients }: ClientsTableProps) {
                         )}
                       </div>
                     </TableCell>
+                    {/* EMPRO 拡張(マイグレーション 20260615100001):氏名カナ */}
+                    <TableCell className="text-muted-foreground">
+                      {client.nameKana ?? "—"}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{client.email}</TableCell>
                     <TableCell className="text-muted-foreground">{client.phone ?? "—"}</TableCell>
+                    {/* EMPRO 拡張:都道府県(エリア絞り込みのキー)*/}
+                    <TableCell className="text-muted-foreground">
+                      {client.prefecture ?? "—"}
+                    </TableCell>
+                    {/* EMPRO 拡張:雇用形態(enum をラベル化)*/}
+                    <TableCell className="text-muted-foreground">
+                      {client.currentEmploymentType
+                        ? clientEmploymentTypeLabels[client.currentEmploymentType]
+                        : "—"}
+                    </TableCell>
                     <TableCell>
                       <span className="bg-muted inline-block rounded-full px-2 py-0.5 text-xs whitespace-nowrap">
                         {clientStatusLabels[client.status]}
@@ -283,6 +359,13 @@ export function ClientsTable({ clients }: ClientsTableProps) {
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {client.assigneeName ?? "未割当"}
+                    </TableCell>
+                    {/* EMPRO 拡張:受付日(intake_date)。null は「未入力」として "—"。
+                        登録日(created_at)とは別物で、面談・対応の起点を明示する。 */}
+                    <TableCell className="text-muted-foreground whitespace-nowrap">
+                      {client.intakeDate
+                        ? new Date(client.intakeDate).toLocaleDateString("ja-JP")
+                        : "—"}
                     </TableCell>
                     <TableCell className="text-muted-foreground whitespace-nowrap">
                       {new Date(client.createdAt).toLocaleDateString("ja-JP")}

@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   applyClientsFilterSort,
+  buildEmploymentTypeOptions,
   buildEntrySiteOptions,
+  buildPrefectureOptions,
   normalizeEntrySiteKey,
   type ClientForFilterSort,
   type FilterSortOptions,
@@ -17,21 +19,37 @@ import {
  * Pick 派生型(ClientForFilterSort)で受けている。
  */
 
-// テスト fixture を簡潔に作るヘルパー(必要なフィールドだけ受け取る)
+// テスト fixture を簡潔に作るヘルパー(必要なフィールドだけ受け取る)。
+// EMPRO 拡張(nameKana / prefecture / currentEmploymentType)は任意引数で、
+// 既存テストは未指定で null フォールバック → 旧テスト破壊なし。
 function client(
   name: string,
   email: string,
   status: ClientForFilterSort["status"],
   createdAt: string,
   entrySite: string | null = null,
+  extras: Partial<
+    Pick<ClientForFilterSort, "nameKana" | "prefecture" | "currentEmploymentType">
+  > = {},
 ): ClientForFilterSort {
-  return { name, email, status, createdAt, entrySite };
+  return {
+    name,
+    email,
+    status,
+    createdAt,
+    entrySite,
+    nameKana: extras.nameKana ?? null,
+    prefecture: extras.prefecture ?? null,
+    currentEmploymentType: extras.currentEmploymentType ?? null,
+  };
 }
 
 const baseOpts: FilterSortOptions = {
   searchQuery: "",
   statusFilter: "all",
   entrySiteFilter: "all",
+  prefectureFilter: "all",
+  employmentTypeFilter: "all",
   sortColumn: "createdAt",
   sortDirection: "desc",
 };
@@ -225,5 +243,156 @@ describe("buildEntrySiteOptions", () => {
       client("B", "b@x", "job_matching", "2026-06-02", null),
     ];
     expect(buildEntrySiteOptions(onlyNull)).toEqual([["unset", 2]]);
+  });
+});
+
+// ====================================================================
+// EMPRO 拡張(マイグレーション 20260615100001)で追加された 3 軸
+// ====================================================================
+
+describe("applyClientsFilterSort — 氏名カナ検索", () => {
+  const fixtures = [
+    client("田中太郎", "tanaka@x", "job_matching", "2026-06-01", null, {
+      nameKana: "タナカ タロウ",
+    }),
+    client("佐藤花子", "sato@x", "job_matching", "2026-06-02", null, {
+      nameKana: "サトウ ハナコ",
+    }),
+    client("Smith John", "smith@x", "job_matching", "2026-06-03", null, {
+      nameKana: null, // カナ未入力
+    }),
+  ];
+
+  it("カナで部分一致検索できる", () => {
+    const r = applyClientsFilterSort(fixtures, { ...baseOpts, searchQuery: "タナカ" });
+    expect(r.map((c) => c.name)).toEqual(["田中太郎"]);
+  });
+
+  it("カナで姓のみでもヒット", () => {
+    const r = applyClientsFilterSort(fixtures, { ...baseOpts, searchQuery: "サトウ" });
+    expect(r.map((c) => c.name)).toEqual(["佐藤花子"]);
+  });
+
+  it("カナが null のレコードは name/email でだけヒット可能", () => {
+    expect(
+      applyClientsFilterSort(fixtures, { ...baseOpts, searchQuery: "Smith" }).map((c) => c.name),
+    ).toEqual(["Smith John"]);
+    // カナで検索しても null のレコードは出ない(当然)
+    expect(
+      applyClientsFilterSort(fixtures, { ...baseOpts, searchQuery: "スミス" }).map((c) => c.name),
+    ).toEqual([]);
+  });
+});
+
+describe("applyClientsFilterSort — 都道府県絞り込み", () => {
+  const fixtures = [
+    client("A", "a@x", "job_matching", "2026-06-01", null, { prefecture: "東京都" }),
+    client("B", "b@x", "job_matching", "2026-06-02", null, { prefecture: "東京都" }),
+    client("C", "c@x", "job_matching", "2026-06-03", null, { prefecture: "大阪府" }),
+    client("D", "d@x", "job_matching", "2026-06-04", null, { prefecture: null }),
+  ];
+
+  it("'all' は絞らない", () => {
+    expect(applyClientsFilterSort(fixtures, { ...baseOpts, prefectureFilter: "all" })).toHaveLength(
+      4,
+    );
+  });
+
+  it("特定の都道府県で絞る", () => {
+    const r = applyClientsFilterSort(fixtures, { ...baseOpts, prefectureFilter: "東京都" });
+    expect(r.map((c) => c.name).sort()).toEqual(["A", "B"]);
+  });
+
+  it("'unset' は null/空/空白を全部拾う", () => {
+    const r = applyClientsFilterSort(fixtures, { ...baseOpts, prefectureFilter: "unset" });
+    expect(r.map((c) => c.name)).toEqual(["D"]);
+  });
+});
+
+describe("applyClientsFilterSort — 雇用形態絞り込み", () => {
+  const fixtures = [
+    client("A", "a@x", "job_matching", "2026-06-01", null, { currentEmploymentType: "full_time" }),
+    client("B", "b@x", "job_matching", "2026-06-02", null, { currentEmploymentType: "full_time" }),
+    client("C", "c@x", "job_matching", "2026-06-03", null, { currentEmploymentType: "contract" }),
+    client("D", "d@x", "job_matching", "2026-06-04", null, { currentEmploymentType: null }),
+  ];
+
+  it("'all' は絞らない", () => {
+    expect(
+      applyClientsFilterSort(fixtures, { ...baseOpts, employmentTypeFilter: "all" }),
+    ).toHaveLength(4);
+  });
+
+  it("enum 値で絞る(full_time)", () => {
+    const r = applyClientsFilterSort(fixtures, {
+      ...baseOpts,
+      employmentTypeFilter: "full_time",
+    });
+    expect(r.map((c) => c.name).sort()).toEqual(["A", "B"]);
+  });
+
+  it("'unset' は currentEmploymentType=null を拾う", () => {
+    const r = applyClientsFilterSort(fixtures, { ...baseOpts, employmentTypeFilter: "unset" });
+    expect(r.map((c) => c.name)).toEqual(["D"]);
+  });
+});
+
+describe("applyClientsFilterSort — EMPRO フィルタの AND 適用", () => {
+  it("都道府県 + 雇用形態 + ステータス が AND で適用される", () => {
+    const fixtures = [
+      client("A", "a@x", "job_matching", "2026-06-01", null, {
+        prefecture: "東京都",
+        currentEmploymentType: "full_time",
+      }),
+      client("B", "b@x", "completed", "2026-06-02", null, {
+        prefecture: "東京都",
+        currentEmploymentType: "full_time",
+      }),
+      client("C", "c@x", "job_matching", "2026-06-03", null, {
+        prefecture: "大阪府",
+        currentEmploymentType: "full_time",
+      }),
+    ];
+    const r = applyClientsFilterSort(fixtures, {
+      ...baseOpts,
+      prefectureFilter: "東京都",
+      employmentTypeFilter: "full_time",
+      statusFilter: "job_matching",
+    });
+    expect(r.map((c) => c.name)).toEqual(["A"]);
+  });
+});
+
+describe("buildPrefectureOptions / buildEmploymentTypeOptions", () => {
+  const fixtures = [
+    client("A", "a@x", "job_matching", "2026-06-01", null, {
+      prefecture: "東京都",
+      currentEmploymentType: "full_time",
+    }),
+    client("B", "b@x", "job_matching", "2026-06-02", null, {
+      prefecture: "東京都",
+      currentEmploymentType: "contract",
+    }),
+    client("C", "c@x", "job_matching", "2026-06-03", null, {
+      prefecture: null,
+      currentEmploymentType: null,
+    }),
+  ];
+
+  it("都道府県オプション:件数降順", () => {
+    const r = buildPrefectureOptions(fixtures);
+    expect(r[0]).toEqual(["東京都", 2]);
+    expect(r.find(([k]) => k === "unset")).toEqual(["unset", 1]);
+  });
+
+  it("雇用形態オプション:enum 値 + 件数", () => {
+    const r = buildEmploymentTypeOptions(fixtures);
+    const keys = r.map(([k]) => k).sort();
+    expect(keys).toEqual(["contract", "full_time", "unset"]);
+  });
+
+  it("空配列なら空配列(両関数)", () => {
+    expect(buildPrefectureOptions([])).toEqual([]);
+    expect(buildEmploymentTypeOptions([])).toEqual([]);
   });
 });
