@@ -58,6 +58,16 @@ export async function POST(request: Request) {
       required_skills: d.required_skills || null,
       preferred_skills: d.preferred_skills || null,
       status: d.status,
+      // 法定明示事項(マイグレーション 20260615000004 で追加)。
+      // 空文字は null に倒す(DB レベルで意味のない空文字を排除)。
+      work_change_scope: d.work_change_scope || null,
+      location_change_scope: d.location_change_scope || null,
+      smoking_prevention_measure: d.smoking_prevention_measure || null,
+      probation_period: d.probation_period || null,
+      work_hours: d.work_hours || null,
+      break_time: d.break_time || null,
+      holidays: d.holidays || null,
+      application_qualifications: d.application_qualifications || null,
     })
     .select("id")
     .single();

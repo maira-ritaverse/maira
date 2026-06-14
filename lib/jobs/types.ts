@@ -28,6 +28,16 @@ export type JobPosting = {
   requiredSkills: string | null;
   preferredSkills: string | null;
   status: JobStatus;
+  // マイグレーション 20260615000004 で追加された 8 列。すべて NULL 許容。
+  // 法定明示事項 + 2024年改正労基法対応 + エージェント業務で頻出の確認項目。
+  workChangeScope: string | null; // 業務内容(変更の範囲)
+  locationChangeScope: string | null; // 就業場所(変更の範囲)
+  smokingPreventionMeasure: string | null; // 受動喫煙防止措置
+  probationPeriod: string | null; // 試用期間
+  workHours: string | null; // 勤務時間
+  breakTime: string | null; // 休憩時間
+  holidays: string | null; // 休日休暇
+  applicationQualifications: string | null; // 応募資格
   createdByMemberId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -46,6 +56,10 @@ const salaryField = z.preprocess((val) => {
   return val;
 }, z.number().int().min(0).max(100000).nullable());
 
+// マイグレーション 20260615000004 で追加された自由入力項目用の共通バリデーション。
+// 法定明示事項なので「未入力」は許容するが、誤った巨大入力を防ぐため max 2000。
+const labourField = z.string().max(2000).optional().or(z.literal(""));
+
 export const createJobRequestSchema = z.object({
   company_name: z.string().min(1, "求人企業名を入力してください").max(100),
   position: z.string().min(1, "職種を入力してください").max(100),
@@ -57,6 +71,14 @@ export const createJobRequestSchema = z.object({
   required_skills: z.string().max(2000).optional().or(z.literal("")),
   preferred_skills: z.string().max(2000).optional().or(z.literal("")),
   status: z.enum(["open", "paused", "closed"]).default("open"),
+  work_change_scope: labourField,
+  location_change_scope: labourField,
+  smoking_prevention_measure: labourField,
+  probation_period: labourField,
+  work_hours: labourField,
+  break_time: labourField,
+  holidays: labourField,
+  application_qualifications: labourField,
 });
 
 export type CreateJobRequest = z.infer<typeof createJobRequestSchema>;
@@ -72,6 +94,14 @@ export const updateJobRequestSchema = z.object({
   required_skills: z.string().max(2000).optional().or(z.literal("")),
   preferred_skills: z.string().max(2000).optional().or(z.literal("")),
   status: z.enum(["open", "paused", "closed"]).optional(),
+  work_change_scope: labourField,
+  location_change_scope: labourField,
+  smoking_prevention_measure: labourField,
+  probation_period: labourField,
+  work_hours: labourField,
+  break_time: labourField,
+  holidays: labourField,
+  application_qualifications: labourField,
 });
 
 export type UpdateJobRequest = z.infer<typeof updateJobRequestSchema>;

@@ -21,6 +21,16 @@ type JobPostingRow = {
   required_skills: string | null;
   preferred_skills: string | null;
   status: string;
+  // マイグレーション 20260615000004 で追加。
+  // ALTER 直後の既存レコードは全て null。
+  work_change_scope: string | null;
+  location_change_scope: string | null;
+  smoking_prevention_measure: string | null;
+  probation_period: string | null;
+  work_hours: string | null;
+  break_time: string | null;
+  holidays: string | null;
+  application_qualifications: string | null;
   created_by_member_id: string | null;
   created_at: string;
   updated_at: string;
@@ -40,6 +50,14 @@ function rowToJobPosting(row: JobPostingRow): JobPosting {
     requiredSkills: row.required_skills,
     preferredSkills: row.preferred_skills,
     status: row.status as JobPosting["status"],
+    workChangeScope: row.work_change_scope,
+    locationChangeScope: row.location_change_scope,
+    smokingPreventionMeasure: row.smoking_prevention_measure,
+    probationPeriod: row.probation_period,
+    workHours: row.work_hours,
+    breakTime: row.break_time,
+    holidays: row.holidays,
+    applicationQualifications: row.application_qualifications,
     createdByMemberId: row.created_by_member_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

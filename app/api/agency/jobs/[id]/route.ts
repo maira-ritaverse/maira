@@ -60,6 +60,26 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   if (d.required_skills !== undefined) updateData.required_skills = d.required_skills || null;
   if (d.preferred_skills !== undefined) updateData.preferred_skills = d.preferred_skills || null;
   if (d.status !== undefined) updateData.status = d.status;
+  // 法定明示事項 8 列(マイグレーション 20260615000004)。
+  // 空文字 → null に倒す(他の自由入力フィールドと同じ方針)。
+  if (d.work_change_scope !== undefined) {
+    updateData.work_change_scope = d.work_change_scope || null;
+  }
+  if (d.location_change_scope !== undefined) {
+    updateData.location_change_scope = d.location_change_scope || null;
+  }
+  if (d.smoking_prevention_measure !== undefined) {
+    updateData.smoking_prevention_measure = d.smoking_prevention_measure || null;
+  }
+  if (d.probation_period !== undefined) {
+    updateData.probation_period = d.probation_period || null;
+  }
+  if (d.work_hours !== undefined) updateData.work_hours = d.work_hours || null;
+  if (d.break_time !== undefined) updateData.break_time = d.break_time || null;
+  if (d.holidays !== undefined) updateData.holidays = d.holidays || null;
+  if (d.application_qualifications !== undefined) {
+    updateData.application_qualifications = d.application_qualifications || null;
+  }
 
   if (Object.keys(updateData).length === 0) {
     return NextResponse.json({ success: true });
