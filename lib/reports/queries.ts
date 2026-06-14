@@ -1159,3 +1159,88 @@ function diffDays(fromIso: string, toIso: string): number {
   const b = new Date(toIso).getTime();
   return (b - a) / 86_400_000;
 }
+
+// ============================================
+// F:成約率(get_referral_kpi_summary RPC のラッパ)
+// ============================================
+//
+// SQL 側で完結する集計(20260614000001_add_kpi_rpc.sql 〜 000003)を
+// レポート画面用の薄い型に変換するだけのラッパ。
+//
+// なぜ独自 SQL ではなく RPC を呼ぶか:
+//   集計ロジック(日付境界・「この日を含む」半開区間・status='joined' の
+//   絞り込み)を SQL 側に一元化したいため。フロントは数値だけ受ける。
+//
+// 二重のテナント分離:
+//   - 既存と同じく外側で RLS が効く
+//   - RPC 内で p_organization_id != current_user_organization_id() なら
+//     42501 を raise する(SECURITY DEFINER で RLS をバイパスしているため)
+
+export type PlacementRate = {
+  /** 集計対象の期間。UI 側でそのまま表示できるよう保持。 */
+  period: Period;
+  /** 期間内に作成された referrals の件数。 */
+  totalReferrals: number;
+  /** うち status='joined' に到達した件数。 */
+  totalPlacements: number;
+  /**
+   * 成約率(%、小数第 2 位)。
+   * 母数 = 0 のときはゼロ除算を避けるため null。
+   * UI 側でこの null を「データなし表示」に分岐させる。
+   */
+  rate: number | null;
+};
+
+/**
+ * 期間内の成約率(placement rate)を取得する。
+ *
+ * - RPC: public.get_referral_kpi_summary
+ * - 失敗時はレポート画面全体を落とさないよう、空データ(rate=null)を返す。
+ *   エラー詳細はサーバーログに残す。
+ */
+export async function getPlacementRate(
+  organizationId: string,
+  period: Period,
+): Promise<PlacementRate> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("get_referral_kpi_summary", {
+    p_organization_id: organizationId,
+    p_start_date: period.from,
+    p_end_date: period.to,
+  });
+
+  if (error) {
+    console.error("[reports] getPlacementRate rpc error:", error);
+    return {
+      period,
+      totalReferrals: 0,
+      totalPlacements: 0,
+      rate: null,
+    };
+  }
+
+  // RPC は json_build_object で返す。型生成を待たず手書きで narrow する。
+  const json = (data ?? {}) as KpiSummaryRpcJson;
+
+  // placement_rate は SQL 側で null を返す(母数 0 の場合)。
+  // Number(null) = 0 になってしまうので、明示的に null チェック。
+  const rate = json.placement_rate == null ? null : Number(json.placement_rate);
+
+  return {
+    period,
+    totalReferrals: Number(json.total_referrals ?? 0),
+    totalPlacements: Number(json.total_placements ?? 0),
+    rate,
+  };
+}
+
+/** get_referral_kpi_summary RPC の戻り JSON(手書きで narrow するため) */
+type KpiSummaryRpcJson = {
+  total_referrals?: number;
+  total_placements?: number;
+  total_interviews?: number;
+  placement_rate?: number | null;
+  start_date?: string;
+  end_date?: string;
+};

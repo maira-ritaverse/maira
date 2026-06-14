@@ -7,6 +7,7 @@ import {
   getClientStatusDistribution,
   getMonthlyDealsRevenue,
   getPhaseDuration,
+  getPlacementRate,
   getReferralStatusDistribution,
   getSelectionFunnel,
   getSelectionFunnelByCandidate,
@@ -17,6 +18,7 @@ import { ExportButton } from "@/components/features/agency/export-button";
 import { PeriodFilter } from "./period-filter";
 import { StatusDistributionSection } from "./status-distribution-section";
 import { MonthlyDealsSection } from "./monthly-deals-section";
+import { PlacementRateSection } from "./placement-rate-section";
 import { SelectionFunnelSection } from "./selection-funnel-section";
 import { AdvisorPerformanceSection } from "./advisor-performance-section";
 import { PhaseDurationSection } from "./phase-duration-section";
@@ -67,6 +69,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
     clients,
     referrals,
     monthlyDeals,
+    placementRate,
     funnelByApplication,
     funnelByCandidate,
     advisor,
@@ -75,6 +78,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
     getClientStatusDistribution(role.organization.id),
     getReferralStatusDistribution(role.organization.id),
     getMonthlyDealsRevenue(role.organization.id, period),
+    getPlacementRate(role.organization.id, period),
     getSelectionFunnel(role.organization.id, period),
     getSelectionFunnelByCandidate(role.organization.id, period),
     getAdvisorPerformance(role.organization.id, viewer, period),
@@ -105,6 +109,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
       <div className="space-y-4">
         <StatusDistributionSection clients={clients} referrals={referrals} />
         <MonthlyDealsSection data={monthlyDeals} />
+        <PlacementRateSection data={placementRate} />
         <SelectionFunnelSection application={funnelByApplication} candidate={funnelByCandidate} />
         <AdvisorPerformanceSection data={advisor} />
         <PhaseDurationSection data={phaseDuration} />
