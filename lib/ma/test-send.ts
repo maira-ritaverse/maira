@@ -28,7 +28,7 @@ export type TestSendResult =
   | { sent: true; messageId: string | null }
   | { sent: false; reason: "not_configured" | "send_failed" | "template_missing"; error?: string };
 
-type TemplateVariableValues = {
+export type TemplateVariableValues = {
   candidate_name: string;
   candidate_last_name: string;
   candidate_first_name: string;
@@ -59,8 +59,15 @@ const DEFAULT_TEST_VALUES: TemplateVariableValues = {
 /**
  * テンプレート文字列内の `{{key}}` を ctx の値で置換する。
  * Edge Function 側 template-expander.ts と同じセマンティクス。
+ *
+ * 仕様:
+ *   - 既知キーのみ置換(未知キーは `{{xxx}}` のまま残す = 運用ミス検知)
+ *   - 値が空文字なら空文字に置換(「(未設定)」のようなプレースホルダは出さない)
+ *   - 同じキーが複数回出てきても全部置換(g フラグ)
+ *
+ * テストしやすいよう export(unit test から import)。
  */
-function expandTemplate(template: string, ctx: TemplateVariableValues): string {
+export function expandTemplate(template: string, ctx: TemplateVariableValues): string {
   const allowed = new Set(Object.keys(ctx));
   return template.replace(/\{\{(\w+)\}\}/g, (match, rawKey: string) => {
     if (!allowed.has(rawKey)) return match;

@@ -41,8 +41,31 @@ export default async function MarketingPage() {
     getActiveConsent(role.organization.id, "email_ma"),
   ]);
 
+  // Resend 設定診断:Vercel 環境変数の有無だけ見る。
+  // 値そのものは絶対にクライアントに渡さない(キー漏洩防止)。
+  // 「設定されているか」だけを真偽値で渡す。
+  const resendConfigured = Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
+      {/* Resend 未設定の場合は警告バナーを出す。
+          admin だけでなく advisor にも見せる(運用状況の透明性のため)。 */}
+      {!resendConfigured && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <p className="font-semibold">⚠ Resend が未設定です</p>
+          <p className="mt-1">
+            <code className="font-mono text-xs">RESEND_API_KEY</code> または{" "}
+            <code className="font-mono text-xs">EMAIL_FROM</code> が Vercel
+            の環境変数に設定されていません。
+            <br />
+            シナリオを有効化しても自動配信は <code>skipped</code>{" "}
+            としてログに記録されるだけで、実際のメールは送信されません。
+            <br />
+            設定方法は <code className="font-mono text-xs">docs/ma-ops-guide.md</code> を参照。
+          </p>
+        </div>
+      )}
+
       <MarketingScreen
         scenarios={scenarios}
         consent={consent}
