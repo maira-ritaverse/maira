@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   countLabourFieldsFilled,
+  createJobRequestSchema,
   formatSalaryRange,
   LABOUR_FIELDS_TOTAL,
+  updateJobRequestSchema,
   type JobPosting,
 } from "./types";
 
@@ -141,5 +143,96 @@ describe("countLabourFieldsFilled", () => {
         applicationQualifications: "Webアプリ3年以上", // 有効
       }),
     ).toBe(2);
+  });
+});
+
+/**
+ * 求人作成・更新の zod スキーマテスト。
+ *
+ * salary_min/max の preprocessor(空文字 → null、文字列数値 → number)は
+ * フォーム入力の挙動と DB の整数制約の橋渡しなので、境界値を明示的に固める。
+ * labourField の「空文字 OK」も法定明示事項の段階的入力を許容する契約。
+ */
+describe("createJobRequestSchema", () => {
+  const base = { company_name: "テスト株式会社", position: "エンジニア" };
+
+  it("最小構成(company_name + position)で通る、status は default 'open'", () => {
+    const r = createJobRequestSchema.safeParse(base);
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.status).toBe("open");
+  });
+
+  it("company_name / position が空文字なら失敗", () => {
+    expect(createJobRequestSchema.safeParse({ ...base, company_name: "" }).success).toBe(false);
+    expect(createJobRequestSchema.safeParse({ ...base, position: "" }).success).toBe(false);
+  });
+
+  it("salary_min/max は数値・文字列数値・null・undefined・空文字を受け付ける", () => {
+    // フォームの <input type="number"> 由来の "" を null に正規化する契約
+    expect(createJobRequestSchema.safeParse({ ...base, salary_min: 500 }).success).toBe(true);
+    expect(createJobRequestSchema.safeParse({ ...base, salary_min: "500" }).success).toBe(true);
+    expect(createJobRequestSchema.safeParse({ ...base, salary_min: null }).success).toBe(true);
+    expect(createJobRequestSchema.safeParse({ ...base, salary_min: "" }).success).toBe(true);
+  });
+
+  it("salary は 0 を許容、負の値・上限超は失敗", () => {
+    expect(createJobRequestSchema.safeParse({ ...base, salary_min: 0 }).success).toBe(true);
+    expect(createJobRequestSchema.safeParse({ ...base, salary_min: -1 }).success).toBe(false);
+    expect(createJobRequestSchema.safeParse({ ...base, salary_max: 100001 }).success).toBe(false);
+    expect(createJobRequestSchema.safeParse({ ...base, salary_max: 100000 }).success).toBe(true);
+  });
+
+  it("salary に数値化できない文字列は失敗", () => {
+    expect(createJobRequestSchema.safeParse({ ...base, salary_min: "abc" }).success).toBe(false);
+  });
+
+  it("status は open/paused/closed のみ", () => {
+    for (const s of ["open", "paused", "closed"] as const) {
+      expect(createJobRequestSchema.safeParse({ ...base, status: s }).success).toBe(true);
+    }
+    expect(createJobRequestSchema.safeParse({ ...base, status: "archived" }).success).toBe(false);
+  });
+
+  it("description は 5000 文字までは OK / 5001 文字で失敗", () => {
+    expect(
+      createJobRequestSchema.safeParse({ ...base, description: "a".repeat(5000) }).success,
+    ).toBe(true);
+    expect(
+      createJobRequestSchema.safeParse({ ...base, description: "a".repeat(5001) }).success,
+    ).toBe(false);
+  });
+
+  it("法定明示事項 8 列は空文字 OK / 2000 文字までは OK / 2001 で失敗", () => {
+    // 段階的入力(まずは空のまま登録、後で埋める)を許容する契約
+    expect(createJobRequestSchema.safeParse({ ...base, work_hours: "" }).success).toBe(true);
+    expect(
+      createJobRequestSchema.safeParse({ ...base, work_hours: "a".repeat(2000) }).success,
+    ).toBe(true);
+    expect(
+      createJobRequestSchema.safeParse({ ...base, work_hours: "a".repeat(2001) }).success,
+    ).toBe(false);
+  });
+});
+
+describe("updateJobRequestSchema", () => {
+  it("全フィールド省略可(部分更新)", () => {
+    expect(updateJobRequestSchema.safeParse({}).success).toBe(true);
+  });
+
+  it("company_name は省略可だが、与えるなら空文字不可", () => {
+    expect(updateJobRequestSchema.safeParse({}).success).toBe(true);
+    expect(updateJobRequestSchema.safeParse({ company_name: "" }).success).toBe(false);
+    expect(updateJobRequestSchema.safeParse({ company_name: "X" }).success).toBe(true);
+  });
+
+  it("status は open/paused/closed のみ", () => {
+    expect(updateJobRequestSchema.safeParse({ status: "open" }).success).toBe(true);
+    expect(updateJobRequestSchema.safeParse({ status: "archived" }).success).toBe(false);
+  });
+
+  it("salary の preprocessor は更新スキーマでも同じ挙動", () => {
+    expect(updateJobRequestSchema.safeParse({ salary_min: "" }).success).toBe(true);
+    expect(updateJobRequestSchema.safeParse({ salary_min: null }).success).toBe(true);
+    expect(updateJobRequestSchema.safeParse({ salary_min: 100001 }).success).toBe(false);
   });
 });
