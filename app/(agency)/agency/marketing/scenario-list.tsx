@@ -12,6 +12,7 @@ import {
   type ScenarioView,
 } from "@/lib/ma/types";
 import { ConsentModal } from "./consent-modal";
+import { TestSendModal } from "./test-send-modal";
 
 /**
  * マーケティング画面のクライアント側コンポーネント
@@ -78,11 +79,17 @@ export function MarketingScreen({
     <>
       {/* ヘッダ */}
       <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-bold">Eメール(MA)</h1>
-          <span className="rounded bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
-            β版
-          </span>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold">Eメール(MA)</h1>
+            <span className="rounded bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
+              β版
+            </span>
+          </div>
+          {/* 送信履歴へのナビ。同意状態に関係なく閲覧可(advisor も含む)。 */}
+          <Button variant="outline" size="sm" render={<Link href="/agency/marketing/logs" />}>
+            送信履歴
+          </Button>
         </div>
         <p className="text-muted-foreground text-sm">Eメール自動配信シナリオの管理・設定</p>
 
@@ -149,10 +156,17 @@ function ScenarioCard({ view, disabled }: ScenarioCardProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [showTestSend, setShowTestSend] = useState(false);
+
+  // 起点+N日後/前の N を編集中フラグ。値は文字列で持って onBlur で確定する。
+  // -365 〜 365 のレンジは API 側 Zod で再検証。
+  const [editingDays, setEditingDays] = useState<string | null>(null);
 
   const isActive = view.activation?.isActive ?? false;
   const days = view.effectiveTriggerDays;
   const daysLabel = days < 0 ? `${Math.abs(days)}日前` : `${days}日後`;
+  // プリセットのデフォルトと違うときは「カスタム」表示にする
+  const overridden = view.activation?.triggerDaysOverride != null;
 
   // 送信側(Edge Function)で判定ロジックが実装されているかどうか。
   // 未実装シナリオは ON にしても送られないため、UI で明示的に無効化する。
@@ -184,6 +198,47 @@ function ScenarioCard({ view, disabled }: ScenarioCardProps) {
     });
   }
 
+  // 日数を確定保存(空欄 → null = プリセットのデフォルトに戻す)
+  function commitDays() {
+    const raw = (editingDays ?? "").trim();
+    setEditingDays(null);
+    let next: number | null = null;
+    if (raw !== "") {
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+        setError("整数を入力してください");
+        return;
+      }
+      if (parsed < -365 || parsed > 365) {
+        setError("-365 〜 365 の範囲で入力してください");
+        return;
+      }
+      next = parsed;
+    }
+    // 同値なら何もしない(無駄なリクエストを避ける)
+    if (next === (view.activation?.triggerDaysOverride ?? null)) return;
+    startTransition(async () => {
+      setError(null);
+      try {
+        const res = await fetch("/api/agency/ma/scenarios", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            presetId: view.preset.id,
+            triggerDaysOverride: next,
+          }),
+        });
+        if (!res.ok) {
+          const data = (await res.json().catch(() => null)) as { message?: string } | null;
+          throw new Error(data?.message ?? "日数の更新に失敗しました");
+        }
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "不明なエラー");
+      }
+    });
+  }
+
   return (
     <Card>
       <CardHeader className="space-y-1">
@@ -198,9 +253,47 @@ function ScenarioCard({ view, disabled }: ScenarioCardProps) {
             </span>
           )}
         </div>
-        <p className="text-muted-foreground text-xs">
-          起点: {view.preset.triggerEvent} → {daysLabel}
-        </p>
+        <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+          <span>起点: {view.preset.triggerEvent} → </span>
+          {/* 日数編集:有効化後 + 実装済み + 親 disabled でない時のみ編集可。
+              編集不可時はラベル表示。 */}
+          {view.activation && implemented && !disabled ? (
+            editingDays !== null ? (
+              <input
+                type="number"
+                autoFocus
+                value={editingDays}
+                onChange={(e) => setEditingDays(e.target.value)}
+                onBlur={commitDays}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.currentTarget.blur();
+                  } else if (e.key === "Escape") {
+                    setEditingDays(null);
+                  }
+                }}
+                placeholder={String(view.preset.defaultTriggerDays)}
+                className="w-20 rounded border px-1.5 py-0.5 text-xs"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditingDays(String(days))}
+                className="hover:bg-accent rounded px-1 py-0.5 text-left text-xs"
+                title="クリックで日数を編集(空にするとデフォルトに戻る)"
+              >
+                <span className="font-medium">{daysLabel}</span>
+                {overridden && (
+                  <span className="ml-1 rounded bg-blue-100 px-1 text-[10px] text-blue-700">
+                    カスタム
+                  </span>
+                )}
+              </button>
+            )
+          ) : (
+            <span>{daysLabel}</span>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
         <p className="text-muted-foreground">{view.preset.description}</p>
@@ -219,20 +312,33 @@ function ScenarioCard({ view, disabled }: ScenarioCardProps) {
             {isActive ? "● 配信中" : "○ 停止中"}
           </span>
           <div className="flex items-center gap-2">
-            {/* テンプレート編集は有効化(scenario行が存在する)後のみ可能。
-                未有効化時は scenario_id が存在しないためリンクを出さない。 */}
+            {/* テンプレート編集 + テスト送信は、有効化(scenario行が存在)後のみ可能。
+                未有効化時は scenario_id が存在しないためボタンを出さない。 */}
             {view.activation && implemented && (
-              <Button
-                size="sm"
-                variant="ghost"
-                render={
-                  <Link
-                    href={`/agency/marketing/${encodeURIComponent(view.activation.id)}/template`}
-                  />
-                }
-              >
-                テンプレート編集
-              </Button>
+              <>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  render={
+                    <Link
+                      href={`/agency/marketing/${encodeURIComponent(view.activation.id)}/template`}
+                    />
+                  }
+                >
+                  テンプレート編集
+                </Button>
+                {/* テスト送信は admin のみ。disabled は同意状態と関係なく、
+                    テスト目的のため open する(API 側で admin チェック)。 */}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowTestSend(true)}
+                  disabled={disabled}
+                  title="1 通だけテストメールを送って動作確認"
+                >
+                  テスト送信
+                </Button>
+              </>
             )}
             <Button
               size="sm"
@@ -250,6 +356,15 @@ function ScenarioCard({ view, disabled }: ScenarioCardProps) {
           </p>
         )}
       </CardContent>
+      {/* テスト送信モーダル。activation が無い時は表示する余地が無いのでガード。 */}
+      {view.activation && (
+        <TestSendModal
+          open={showTestSend}
+          scenarioId={view.activation.id}
+          scenarioName={view.preset.name}
+          onClose={() => setShowTestSend(false)}
+        />
+      )}
     </Card>
   );
 }

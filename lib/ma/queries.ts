@@ -19,6 +19,7 @@ import type {
   ScenarioActivation,
   ScenarioPreset,
   ScenarioView,
+  SendLog,
   TemplateView,
 } from "./types";
 
@@ -275,6 +276,72 @@ export async function recordConsent(params: {
     revokedAt: data.revoked_at,
     revokedByMemberId: data.revoked_by_member_id,
   };
+}
+
+// ============================================
+// 送信履歴(復号して画面表示用)
+// ============================================
+
+/**
+ * 自組織の送信履歴を取得する(復号済み)。
+ *
+ * 監査用途で UI に表示する想定。デフォルトで最新 100 件、シナリオ別 / ステータス別の
+ * 絞り込みオプションを受け付ける。
+ *
+ * 復号は API ルート / Server Component 内でのみ行う(Web クライアントには平文を返さない)。
+ */
+export async function listSendLogs(
+  organizationId: string,
+  opts?: {
+    scenarioId?: string;
+    status?: SendLog["status"];
+    limit?: number;
+  },
+): Promise<SendLog[]> {
+  const supabase = await createClient();
+
+  let query = supabase
+    .from("ma_send_logs")
+    .select(
+      "id, organization_id, scenario_id, recipient_client_record_id, recipient_email, encrypted_subject, encrypted_body, sent_at, status, error_message, resend_message_id",
+    )
+    .eq("organization_id", organizationId)
+    .order("sent_at", { ascending: false })
+    .limit(opts?.limit ?? 100);
+
+  if (opts?.scenarioId) query = query.eq("scenario_id", opts.scenarioId);
+  if (opts?.status) query = query.eq("status", opts.status);
+
+  const { data, error } = await query;
+  if (error) {
+    throw new Error(`送信履歴の取得に失敗しました: ${error.message}`);
+  }
+  if (!data) return [];
+
+  // 各行の subject/body を並列に復号
+  const decrypted = await Promise.all(
+    data.map(async (row) => {
+      const subject = row.encrypted_subject
+        ? ((await decryptField(row.encrypted_subject)) ?? "")
+        : "";
+      const body = row.encrypted_body ? ((await decryptField(row.encrypted_body)) ?? "") : "";
+      const log: SendLog = {
+        id: row.id,
+        organizationId: row.organization_id,
+        scenarioId: row.scenario_id,
+        recipientClientRecordId: row.recipient_client_record_id,
+        recipientEmail: row.recipient_email,
+        subject,
+        body,
+        sentAt: row.sent_at,
+        status: row.status,
+        errorMessage: row.error_message,
+        resendMessageId: row.resend_message_id,
+      };
+      return log;
+    }),
+  );
+  return decrypted;
 }
 
 // ============================================
