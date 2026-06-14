@@ -37,10 +37,22 @@ http://localhost:3000 にアクセス。
 ## テスト・型チェック
 
 ```bash
-pnpm test       # vitest(純粋関数のユニットテスト)
-pnpm tsc --noEmit
-pnpm eslint .
+pnpm test       # vitest(純粋関数 + zod スキーマ + プロンプト原則のユニットテスト、800+ ケース)
+pnpm type-check # tsc --noEmit
+pnpm lint       # eslint
 ```
+
+### 自動化(3 段品質ゲート)
+
+| いつ              | 何が走る                               | 設定                                                   |
+| ----------------- | -------------------------------------- | ------------------------------------------------------ |
+| `git commit` 前   | 変更ファイルに prettier + eslint --fix | [.husky/pre-commit](./.husky/pre-commit)               |
+| `git push` 前     | 型チェック + テスト全件                | [.husky/pre-push](./.husky/pre-push)                   |
+| PR / main push 時 | lint + 型チェック + テスト(並列)       | [.github/workflows/ci.yml](./.github/workflows/ci.yml) |
+
+緊急時は `git push --no-verify` で pre-push スキップ可能(CI で結局走る)。
+
+依存関係更新は [Dependabot](./.github/dependabot.yml) が月次で npm + GitHub Actions の PR を自動作成(major は人間判断のため除外)。
 
 ## 主な機能ドキュメント
 
