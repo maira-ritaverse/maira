@@ -90,6 +90,10 @@ export type ClientRecord = {
   emailDistributionEnabled: boolean;
   // 平文。リクナビ / ビズリーチ等の出典。集計用なので一覧クエリにも含める。
   entrySite: string | null;
+  // 「他社エージェント利用状況」が **入力済みかどうか**(値そのものは含めない)。
+  // 一覧で「⚠ 他社利用中」バッジを出すために使う。
+  // 復号は N+1 になるので、暗号文の null 判定だけで「存在のみ」を導出する設計。
+  hasOtherAgencyStatus: boolean;
   createdAt: string;
   updatedAt: string;
 };

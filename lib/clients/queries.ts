@@ -72,6 +72,10 @@ function rowToClientRecord(row: ClientRecordRow): ClientRecord {
     closeReason: row.close_reason as ClientRecord["closeReason"],
     emailDistributionEnabled: row.email_distribution_enabled,
     entrySite: row.entry_site,
+    // 暗号文の存在のみで「他社エージェント利用情報の有無」を導出。
+    // 復号はしない(N+1 を避けるため、一覧用クエリでも安全に使える)。
+    hasOtherAgencyStatus:
+      row.encrypted_other_agency_status !== null && row.encrypted_other_agency_status !== "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

@@ -226,6 +226,17 @@ export function ClientsTable({ clients }: ClientsTableProps) {
                             更新あり
                           </span>
                         )}
+                        {/* 他社エージェント利用情報が登録済みのとき競合警告を出す。
+                            値の中身は暗号化されているのでここでは表示しない(N+1 復号回避)。
+                            紫系で他のバッジ(赤/黄/青/緑)と被らない色に。 */}
+                        {client.hasOtherAgencyStatus && (
+                          <span
+                            className="inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-purple-700 dark:bg-purple-950 dark:text-purple-300"
+                            title="他社エージェント利用状況が記録されています(詳細は詳細画面で)"
+                          >
+                            ⚠ 他社利用中
+                          </span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{client.email}</TableCell>
