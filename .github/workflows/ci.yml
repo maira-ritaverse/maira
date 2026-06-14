@@ -1,0 +1,78 @@
+name: CI
+
+# トリガー:main への push と、main 向けの全 PR で走らせる。
+# 機能ブランチへの push 自体では走らせない(PR を出すまではローカル test で十分)。
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# 同じ PR の連続 push では、古い方をキャンセルして最新のだけ走らせる。
+# Action 時間と料金を節約。
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 3 ジョブを並列実行(lint / type-check / test)。
+  # 1 つでも落ちたら PR をブロック(必要に応じて branch protection で必須化する)。
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm を Node のセットアップより先に入れる(setup-node の cache: pnpm が pnpm を要求するため)。
+      - uses: pnpm/action-setup@v4
+        with:
+          # package.json に packageManager がなく lockfileVersion 9 を使っているので、
+          # 互換性のあるメジャーバージョンを明示。ローカルは pnpm 11 系。
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          # 24 系は LTS ではないが、ローカル(v24.15)と揃える方が再現性が高い。
+          # ローカル開発側を LTS に下げる予定があれば、ここと同時に変える。
+          node-version: 24
+          cache: pnpm
+
+      # frozen-lockfile で lock の自動更新を防ぐ(CI で意図せぬ依存更新が混ざらないように)。
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm lint
+
+  type-check:
+    name: Type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm type-check
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # vitest run(package.json の "test" スクリプト)。
+      # 暗号化テスト(lib/crypto/field-encryption)はテスト内で
+      # FIELD_ENCRYPTION_KEYS / FIELD_ENCRYPTION_CURRENT_VERSION を beforeEach で
+      # 設定するため、CI 側で外部の鍵を渡す必要はない。本番鍵は Vercel 側で管理。
+      - run: pnpm test
