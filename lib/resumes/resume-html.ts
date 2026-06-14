@@ -1,3 +1,4 @@
+import { escapeHtml } from "@/lib/html/escape";
 import { genderLabels, type EducationItem, type LicenseItem, type Resume } from "./types";
 
 /**
@@ -572,19 +573,6 @@ function formatDocumentDate(documentDate: string | null): string {
   return `${safe.getFullYear()} 年 ${safe.getMonth() + 1} 月 ${safe.getDate()} 日`;
 }
 
-/**
- * HTML エスケープ。
- *
- * resume の文字列項目(氏名・住所・志望動機等)はユーザー入力なので、
- * テンプレートリテラルで埋め込む前に必ず通す。
- * これを忘れると </body> や <script> を仕込まれて PDF 出力が壊れる/
- * 任意スクリプト実行(Puppeteer 内)につながる。
- */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
+// escapeHtml は lib/html/escape.ts に集約(本ファイル冒頭で import)。
+// resume の文字列項目(氏名・住所・志望動機等)を埋め込む前に必ず通す責務は同じ。
+// 履歴書 / 職務経歴書で共有することで、片方だけバグ修正が当たる事故を防ぐ。

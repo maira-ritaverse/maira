@@ -1,3 +1,4 @@
+import { escapeHtml } from "@/lib/html/escape";
 import {
   employmentTypeLabels,
   skillCategories,
@@ -414,18 +415,6 @@ function formatDocumentDate(documentDate: string | null): string {
   return `${safe.getFullYear()} 年 ${safe.getMonth() + 1} 月 ${safe.getDate()} 日`;
 }
 
-/**
- * HTML エスケープ。
- *
- * CV の文字列項目(会社名・業務内容・自己PR 等)はユーザー入力なので、
- * テンプレートリテラル埋込前に必ず通す。
- * 履歴書 resume-html.ts と同じ実装。
- */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
+// escapeHtml は lib/html/escape.ts に集約(本ファイル冒頭で import)。
+// 履歴書(resume-html.ts)と同じ責務を共有することで、片方だけバグ修正が当たる
+// 事故を防ぐ。会社名・業務内容・自己PR を埋め込む前に必ず通す責務は同じ。
