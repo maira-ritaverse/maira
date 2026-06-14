@@ -28,6 +28,8 @@ const navItems: NavItem[] = [
   { href: "/agency/clients", icon: "👥", label: "クライアント管理" },
   { href: "/agency/jobs", icon: "💼", label: "求人管理" },
   { href: "/agency/reports", icon: "📊", label: "レポート" },
+  // マーケティング(MA)は β機能。advisor も閲覧可。配信制御は admin のみ(画面/API側で判定)。
+  { href: "/agency/marketing", icon: "📣", label: "マーケティング" },
   // メンバー管理は admin 専用(サーバー側でも /agency/members を redirect)
   { href: "/agency/members", icon: "⚙️", label: "メンバー管理", requiredRole: "admin" },
   // 将来追加予定:
