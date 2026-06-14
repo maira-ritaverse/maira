@@ -8,6 +8,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { decryptField } from "@/lib/crypto/field-encryption";
 import type {
+  ClientCloseReason,
   ClientRecord,
   ClientRecordWithAssignee,
   ClientRecordWithAssigneeAndDues,
@@ -80,6 +81,82 @@ function rowToClientRecord(row: ClientRecordRow): ClientRecord {
     updatedAt: row.updated_at,
   };
 }
+
+// ============================================
+// 分布サマリ集計(失注理由・チャネル別)
+// ============================================
+
+/**
+ * クライアント全体の分布サマリ。失注理由(close_reason)と
+ * エントリーサイト(entry_site)の 2 軸を返す。
+ */
+export type ClientDistributionStats = {
+  closeReasons: Record<string, number>;
+  entrySites: Record<string, number>;
+  totalClients: number;
+};
+
+/**
+ * close_reason の集計純粋関数。
+ *
+ * 値が null/空文字のレコードは `"unset"` キーにまとめる。
+ * テスト・リファクタリングしやすいよう DB アクセスから分離する。
+ */
+export function aggregateCloseReasons(
+  rows: { close_reason: string | null }[],
+): Record<string, number> {
+  const acc: Record<string, number> = {};
+  for (const row of rows) {
+    const key = row.close_reason && row.close_reason !== "" ? row.close_reason : "unset";
+    acc[key] = (acc[key] ?? 0) + 1;
+  }
+  return acc;
+}
+
+/**
+ * entry_site の集計純粋関数。
+ *
+ * 大文字小文字や全角半角の正規化はしない(運用上「リクナビ」「Recnabi」が
+ * 同じ媒体だと言える保証がないため。「同名で書く」のは運用ルール側で吸収する)。
+ */
+export function aggregateEntrySites(rows: { entry_site: string | null }[]): Record<string, number> {
+  const acc: Record<string, number> = {};
+  for (const row of rows) {
+    const key = row.entry_site && row.entry_site.trim() !== "" ? row.entry_site : "unset";
+    acc[key] = (acc[key] ?? 0) + 1;
+  }
+  return acc;
+}
+
+/**
+ * 組織全体のクライアント分布を集計して返す(close_reason × entry_site)。
+ *
+ * 一覧トップに表示するサマリカード用。N+1 を避けるため 1 クエリで両軸の元データを取得し、
+ * 純粋関数で集計する。
+ */
+export async function getClientDistributionStats(
+  organizationId: string,
+): Promise<ClientDistributionStats> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("client_records")
+    .select("close_reason, entry_site")
+    .eq("organization_id", organizationId);
+
+  if (error) {
+    throw new Error(`クライアント分布の集計に失敗しました: ${error.message}`);
+  }
+  const rows = data ?? [];
+  return {
+    closeReasons: aggregateCloseReasons(rows),
+    entrySites: aggregateEntrySites(rows),
+    totalClients: rows.length,
+  };
+}
+
+// 公開する型エイリアス(close_reason のキーセット)を再エクスポートしておくと、
+// UI 側で Record の key 型を絞り込みやすい。
+export type { ClientCloseReason };
 
 /**
  * 企業のクライアント一覧を取得

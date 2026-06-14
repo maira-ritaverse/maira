@@ -195,6 +195,16 @@ export function TemplateEditor({ template, isAdmin }: Props) {
                   disabled={!isAdmin}
                   maxLength={500}
                 />
+                {/* 件名にも文字数カウンタを出す。メーラーで折り返される目安として
+                    50〜80 文字程度を超えると黄、500 が上限。 */}
+                <p
+                  className={`text-xs ${
+                    subject.length > 80 ? "text-amber-700" : "text-muted-foreground"
+                  }`}
+                >
+                  {subject.length} / 500 文字
+                  {subject.length > 80 && " ・ 件名が長すぎる可能性があります"}
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="body">本文</Label>
