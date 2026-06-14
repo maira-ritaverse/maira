@@ -1,13 +1,19 @@
 import { createClient } from "@/lib/supabase/server";
+import { byteaToText, textToByteaInput } from "@/lib/crypto/bytea";
 import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
 import { careerProfileSchema, type CareerProfile, type StoredDiagnosis } from "./profile-schema";
 
 /**
  * キャリア棚卸し用の会話/メッセージ操作ヘルパー
  *
- * 暗号化は未実装(Week 3で本実装)。
- * 暫定として平文のUTF-8バイト列を bytea カラムに格納する。
- * encryption_iv は暗号化前のためダミー(空 bytea)を入れる。
+ * 暗号化状況(2 つの対象を別経路で扱う):
+ *   - career_messages.encrypted_content (bytea):
+ *       現状は AES 暗号化未適用。平文 UTF-8 を bytea にテキスト入力形式
+ *       ('\xHEX')で格納する暫定状態。encryption_iv は空 bytea のダミー。
+ *       会話履歴は将来的に AES に切り替える予定。
+ *   - career_profiles.encrypted_data (text):
+ *       既に AES-256-GCM 暗号化済み。v{n}:base64url 形式でテキスト列に格納。
+ *       旧 bytea カラムと encryption_iv は DROP 済み(マイグレーション実施済)。
  */
 
 export type MessageForChat = {
@@ -79,7 +85,7 @@ export async function getMessages(conversationId: string): Promise<MessageForCha
 
   return (data ?? []).map((row) => ({
     role: row.role as MessageForChat["role"],
-    content: bytesToText(row.encrypted_content),
+    content: byteaToText(row.encrypted_content),
   }));
 }
 
@@ -154,50 +160,10 @@ export async function listCareerConversations(userId: string) {
   return data ?? [];
 }
 
-// ====================================================================
-// バイト列とテキストの相互変換(暫定)
-// Week 3 で AES-256-GCM の本物の暗号化に置き換える。
-// ====================================================================
-
-/**
- * テキストを PostgreSQL bytea 入力用の文字列に変換する。
- *
- * supabase-js は insert/update の値を JSON.stringify するため、Node の Buffer を
- * そのまま渡すと Buffer.toJSON() が呼ばれて `{"type":"Buffer","data":[...]}` という
- * オブジェクトに変換され、PostgREST はそのバイト列(=JSON文字列)を bytea に書き込む。
- * 結果として読み戻したデータが文字化けする。
- *
- * これを避けるため、bytea には PostgreSQL の bytea テキスト入力形式
- * `\x` + hex 文字列を渡す。supabase-js が文字列として送り、PostgreSQL 側が
- * bytea にデコードしてくれる。読み出し側の bytesToText は既に `\x` 対応済み。
- */
-function textToByteaInput(text: string): string {
-  return "\\x" + Buffer.from(text, "utf-8").toString("hex");
-}
-
-/**
- * Supabase が返す bytea を文字列に戻す
- *
- * supabase-js は bytea を以下のいずれかの形式で返す可能性がある:
- * 1. "\\x..." プレフィックス付きの16進数文字列(PostgREST デフォルト)
- * 2. Base64 文字列
- * 3. Uint8Array / Buffer
- */
-function bytesToText(value: unknown): string {
-  if (typeof value === "string") {
-    if (value.startsWith("\\x")) {
-      return Buffer.from(value.slice(2), "hex").toString("utf-8");
-    }
-    return Buffer.from(value, "base64").toString("utf-8");
-  }
-
-  if (value instanceof Uint8Array) {
-    return Buffer.from(value).toString("utf-8");
-  }
-
-  // 想定外の形式が来た場合は安全側に倒して空文字
-  return "";
-}
+// bytea ⇄ 文字列の相互変換は lib/crypto/bytea.ts に集約済み(本ファイル冒頭で
+// textToByteaInput / byteaToText を import)。以前は同じヘルパーがここに重複
+// 定義されていたが、テスト(lib/crypto/bytea.test.ts)を共通側に集約するため
+// 削除した。挙動は同等(supabase-js が返す \x hex / base64 / Uint8Array を吸収)。
 
 // ====================================================================
 // career_profiles の CRUD ヘルパー

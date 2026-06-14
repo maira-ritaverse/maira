@@ -293,7 +293,7 @@ export function isScenarioImplemented(key: string): key is ImplementedScenarioKe
  * ma_send_logs 1 行の型(画面表示・JSON シリアライズ用)
  *
  * 件名・本文は復号後の平文を入れる前提。RLS で同 org メンバーは閲覧可能。
- * 監査ログとして UI 表示する場合は復号して見せる(送信履歴画面、未実装)。
+ * 監査ログ用の送信履歴画面 /agency/marketing/logs で復号して表示する。
  */
 export type SendLog = {
   id: string;
