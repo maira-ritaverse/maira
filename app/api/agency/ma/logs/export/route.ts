@@ -19,6 +19,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { listScenarioViews, listSendLogs } from "@/lib/ma/queries";
+import { parseLogDateRange, parseLogStatus } from "@/lib/ma/logs-filters";
 import type { SendLog } from "@/lib/ma/types";
 
 const MAX_ROWS = 1000;
@@ -37,20 +38,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // フィルタ解釈は UI ページと同じ純関数を使う(lib/ma/logs-filters、テスト済み)。
+  // ?scenario= は組織内の uuid をそのまま使う(RLS が org でフィルタするので追加検証不要)。
   const url = new URL(request.url);
   const scenarioId = url.searchParams.get("scenario") ?? undefined;
-  const statusRaw = url.searchParams.get("status") ?? undefined;
-  const status =
-    statusRaw === "sent" || statusRaw === "failed" || statusRaw === "skipped"
-      ? statusRaw
-      : undefined;
-
-  // 日付フィルタ(UI と同じ仕様)。YYYY-MM-DD のみ受け付け、時刻補完して使う。
-  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-  const fromRaw = url.searchParams.get("from") ?? "";
-  const toRaw = url.searchParams.get("to") ?? "";
-  const dateFrom = dateRegex.test(fromRaw) ? `${fromRaw}T00:00:00.000Z` : undefined;
-  const dateTo = dateRegex.test(toRaw) ? `${toRaw}T23:59:59.999Z` : undefined;
+  const status = parseLogStatus(url.searchParams.get("status"));
+  const { dateFrom, dateTo } = parseLogDateRange(
+    url.searchParams.get("from"),
+    url.searchParams.get("to"),
+  );
 
   try {
     const [logs, scenarios] = await Promise.all([

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { listScenarioViews, listSendLogs } from "@/lib/ma/queries";
+import { parseLogDateRange, parseLogPage, parseLogStatus } from "@/lib/ma/logs-filters";
 import { Button } from "@/components/ui/button";
 import { LogsTable } from "./logs-table";
 
@@ -40,26 +41,16 @@ export default async function MarketingLogsPage({
     redirect("/app");
   }
 
-  // status の絞り込みは Zod 経由ではなく軽量に文字列マッチ(URL を直接打たれても安全に倒す)
-  const statusFilter =
-    sp.status === "sent" || sp.status === "failed" || sp.status === "skipped"
-      ? sp.status
-      : undefined;
+  // フィルタ解釈は lib/ma/logs-filters.ts に集約(CSV エクスポート API と共有・テスト済み)。
+  // 不正値は黙って全体表示に倒す方針。
+  const statusFilter = parseLogStatus(sp.status);
   const scenarioFilter = sp.scenario && sp.scenario.length > 0 ? sp.scenario : undefined;
+  const { dateFrom, dateTo } = parseLogDateRange(sp.from, sp.to);
 
-  // 日付フィルタ:YYYY-MM-DD 形式のみ受け付ける(URL を直接打たれても安全に倒す)。
-  // from は 00:00、to は 23:59:59.999 で時刻補完して、その日全体を含むようにする。
-  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-  const dateFrom = sp.from && dateRegex.test(sp.from) ? `${sp.from}T00:00:00.000Z` : undefined;
-  const dateTo = sp.to && dateRegex.test(sp.to) ? `${sp.to}T23:59:59.999Z` : undefined;
-
-  // ページ番号:1 始まり、不正値は 1 に倒す。
+  // ページ番号:1 始まり。
   // 「次ページがあるか」を判定するため limit+1 件を取得し、ハミ出した最後の 1 件は表示しない。
   const PAGE_SIZE = 100;
-  const pageNum = (() => {
-    const n = Number(sp.page);
-    return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
-  })();
+  const pageNum = parseLogPage(sp.page);
   const offset = (pageNum - 1) * PAGE_SIZE;
 
   // シナリオ名解決のためにビューも取る(scenario_id → preset.name の Map をテーブル側に渡す)
@@ -109,14 +100,15 @@ export default async function MarketingLogsPage({
         </Button>
       </div>
 
+      {/* UI 側にも生の YYYY-MM-DD を渡す。dateFrom/dateTo が valid なら sp.from/sp.to もそのまま使える。 */}
       <LogsTable
         logs={logs}
         scenarioNameById={Object.fromEntries(scenarioNameById)}
         filterOptions={filterOptions}
         currentScenarioId={scenarioFilter}
         currentStatus={statusFilter}
-        currentFrom={sp.from && dateRegex.test(sp.from) ? sp.from : undefined}
-        currentTo={sp.to && dateRegex.test(sp.to) ? sp.to : undefined}
+        currentFrom={dateFrom ? sp.from : undefined}
+        currentTo={dateTo ? sp.to : undefined}
         currentPage={pageNum}
         hasNextPage={hasNextPage}
       />
