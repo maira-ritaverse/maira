@@ -4,8 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { getJobPosting } from "@/lib/jobs/queries";
 import { jobStatusLabels, formatSalaryRange } from "@/lib/jobs/types";
+import { listClientRecordsWithAssignee } from "@/lib/clients/queries";
 import { Button } from "@/components/ui/button";
 import { JobDetailForm } from "./job-detail-form";
+import { JobMatchingSection } from "./job-matching-section";
 
 /**
  * 求人詳細画面
@@ -35,6 +37,22 @@ export default async function JobDetailPage({ params }: RouteParams) {
   if (!job || job.organizationId !== role.organization.id) {
     notFound();
   }
+
+  // 自社の全クライアント取得(active なものに絞ってマッチング)+ 既応募の clientRecordIds
+  const [allClients, { data: referralRows }] = await Promise.all([
+    listClientRecordsWithAssignee(role.organization.id),
+    supabase
+      .from("referrals")
+      .select("client_record_id")
+      .eq("organization_id", role.organization.id)
+      .eq("job_posting_id", id),
+  ]);
+  const alreadyAppliedClientIds = ((referralRows ?? []) as Array<{ client_record_id: string }>).map(
+    (r) => r.client_record_id,
+  );
+  const activeClients = allClients.filter(
+    (c) => c.status !== "completed" && c.status !== "declined",
+  );
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -68,6 +86,13 @@ export default async function JobDetailPage({ params }: RouteParams) {
       </div>
 
       <JobDetailForm job={job} />
+
+      {/* マッチする顧客候補:既応募は除外。score 15 点未満は出さない。 */}
+      <JobMatchingSection
+        job={job}
+        clients={activeClients}
+        alreadyAppliedClientIds={alreadyAppliedClientIds}
+      />
     </div>
   );
 }

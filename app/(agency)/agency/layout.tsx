@@ -3,7 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { AgencySidebar } from "@/components/features/agency/agency-sidebar";
 import { NotificationBell } from "@/components/features/notifications/notification-bell";
+import { PrivacyPolicyModal } from "@/components/features/privacy-policy-modal";
 import { UserMenu } from "@/components/features/user-menu";
+import { getPolicyAcceptance, needsToAccept } from "@/lib/privacy/policy";
 
 /**
  * エージェント企業メンバー向けの共通レイアウト
@@ -31,12 +33,13 @@ export default async function AgencyLayout({ children }: { children: React.React
     redirect("/app");
   }
 
-  // ヘッダー表示用に display_name を取得(求職者向け layout と同じパターン)
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("display_name")
-    .eq("id", user.id)
-    .single();
+  // ヘッダー表示用 display_name + プライバシーポリシー同意状態を並行取得
+  const [{ data: profile }, policyAcceptance] = await Promise.all([
+    supabase.from("profiles").select("display_name").eq("id", user.id).single(),
+    getPolicyAcceptance(user.id),
+  ]);
+  const requirePolicy = needsToAccept(policyAcceptance);
+  const hasPriorPolicy = policyAcceptance.acceptedAt !== null;
 
   return (
     <div className="bg-background flex min-h-screen">
@@ -48,6 +51,7 @@ export default async function AgencyLayout({ children }: { children: React.React
         </header>
         <main className="flex-1 overflow-auto p-6">{children}</main>
       </div>
+      {requirePolicy && <PrivacyPolicyModal hasPrior={hasPriorPolicy} />}
     </div>
   );
 }

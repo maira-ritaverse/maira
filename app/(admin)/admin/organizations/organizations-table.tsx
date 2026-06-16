@@ -1,0 +1,290 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+import { RefreshButton } from "@/components/features/admin/refresh-button";
+import { usePersistedState } from "@/lib/admin/use-persisted-state";
+import { apiFetch, getErrorMessage } from "@/lib/api/client-fetch";
+
+type OrgStatus = "active" | "dormant" | "no_admin";
+
+type OrgRow = {
+  id: string;
+  name: string;
+  createdAt: string;
+  memberCount: number;
+  adminCount: number;
+  advisorCount: number;
+  clientCount: number;
+  linkedClientCount: number;
+  lastMemberAt: string | null;
+  status: OrgStatus;
+};
+
+type SortKey =
+  | "name"
+  | "createdAt"
+  | "adminCount"
+  | "advisorCount"
+  | "clientCount"
+  | "linkedClientCount"
+  | "status";
+type SortDir = "asc" | "desc";
+
+/** ステータスの並び順:アラート寄りを優先(運営が対応必要な順)。 */
+const STATUS_ORDER: Record<OrgStatus, number> = {
+  no_admin: 0,
+  dormant: 1,
+  active: 2,
+};
+
+type ListResponse = {
+  organizations: OrgRow[];
+  total: number;
+};
+
+/** 並べ替え判定:string と number と OrgStatus を統一して扱う。 */
+function compareOrgs(a: OrgRow, b: OrgRow, key: SortKey, dir: SortDir): number {
+  const sign = dir === "asc" ? 1 : -1;
+  if (key === "name") return a.name.localeCompare(b.name, "ja") * sign;
+  if (key === "createdAt") {
+    return (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) * sign;
+  }
+  if (key === "status") {
+    return (STATUS_ORDER[a.status] - STATUS_ORDER[b.status]) * sign;
+  }
+  // 残りは数値カラム
+  return ((a[key] as number) - (b[key] as number)) * sign;
+}
+
+/**
+ * 組織一覧テーブル。
+ *
+ * 表示項目:
+ *   - 企業名
+ *   - 作成日
+ *   - メンバー数(admin / 合計)
+ *   - 最終メンバー追加日(運営アクティビティの目安)
+ *
+ * 状態色:
+ *   - admin が 0 人 → 警告色(管理不能状態の可能性)
+ *   - 最終メンバー追加が 90 日以上前 → 注意色(休眠の可能性)
+ */
+export function OrganizationsTable() {
+  const [orgs, setOrgs] = useState<OrgRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  // ソート状態を localStorage に永続化(画面遷移後も復元)
+  const [sortKey, setSortKey] = usePersistedState<SortKey>("admin-orgs-sortKey", "createdAt");
+  const [sortDir, setSortDir] = usePersistedState<SortDir>("admin-orgs-sortDir", "desc");
+
+  const fetchOrgs = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch<ListResponse>(`/api/admin/organizations`);
+      setOrgs(res?.organizations ?? []);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const didLoadRef = useRef(false);
+  useEffect(() => {
+    if (didLoadRef.current) return;
+    didLoadRef.current = true;
+    void fetchOrgs();
+  }, []);
+
+  const sortedOrgs = useMemo(() => {
+    return [...orgs].sort((a, b) => compareOrgs(a, b, sortKey, sortDir));
+  }, [orgs, sortKey, sortDir]);
+
+  const toggleSort = (k: SortKey) => {
+    if (sortKey === k) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(k);
+      // 数値系は降順から(多い順を見たいケースが多い)、文字列は昇順から
+      setSortDir(k === "name" ? "asc" : "desc");
+    }
+  };
+
+  if (loading) {
+    return <p className="text-muted-foreground text-sm">読み込み中…</p>;
+  }
+  if (error) {
+    return <p className="text-destructive text-xs">{error}</p>;
+  }
+  if (orgs.length === 0) {
+    return <p className="text-muted-foreground text-sm">登録されている組織がありません。</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <p className="text-muted-foreground text-xs">{orgs.length} 件</p>
+        <RefreshButton onClick={() => void fetchOrgs()} loading={loading} />
+      </div>
+      <div className="overflow-x-auto rounded border">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-muted/50 text-muted-foreground sticky top-0 z-10 text-xs">
+            <tr>
+              <SortHeader
+                k="name"
+                label="企業名"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onClick={toggleSort}
+              />
+              <SortHeader
+                k="createdAt"
+                label="作成日"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onClick={toggleSort}
+              />
+              <SortHeader
+                k="adminCount"
+                label="admin"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onClick={toggleSort}
+                align="right"
+              />
+              <SortHeader
+                k="advisorCount"
+                label="advisor"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onClick={toggleSort}
+                align="right"
+              />
+              <SortHeader
+                k="clientCount"
+                label="求職者(client)"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onClick={toggleSort}
+                align="right"
+              />
+              <SortHeader
+                k="linkedClientCount"
+                label="うち連携済"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onClick={toggleSort}
+                align="right"
+              />
+              <SortHeader
+                k="status"
+                label="状態"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onClick={toggleSort}
+              />
+              <th className="px-3 py-2.5 text-right">詳細</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedOrgs.map((o) => (
+              <tr
+                key={o.id}
+                className="hover:bg-accent/40 odd:bg-muted/10 border-t transition-colors"
+              >
+                <td className="px-3 py-2.5">
+                  <div className="font-medium">{o.name}</div>
+                  <div className="text-muted-foreground text-[10px]">{o.id}</div>
+                </td>
+                <td className="px-3 py-2.5 text-xs">
+                  {new Date(o.createdAt).toLocaleDateString("ja-JP")}
+                </td>
+                <td className="px-3 py-2.5 text-right text-xs">{o.adminCount}</td>
+                <td className="px-3 py-2.5 text-right text-xs font-semibold">{o.advisorCount}</td>
+                <td className="px-3 py-2.5 text-right text-xs font-semibold">{o.clientCount}</td>
+                <td className="px-3 py-2.5 text-right text-xs">
+                  {o.linkedClientCount}
+                  {o.clientCount > 0 && (
+                    <span className="text-muted-foreground ml-1 text-[10px]">
+                      ({Math.round((o.linkedClientCount / o.clientCount) * 100)}%)
+                    </span>
+                  )}
+                </td>
+                <td className="px-3 py-2.5">
+                  <StatusBadge status={o.status} />
+                </td>
+                <td className="px-3 py-2.5 text-right">
+                  <Link
+                    href={`/admin/organizations/${o.id}`}
+                    className="text-foreground text-xs font-medium hover:underline"
+                  >
+                    詳細 →
+                  </Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SortHeader({
+  k,
+  label,
+  sortKey,
+  sortDir,
+  onClick,
+  align = "left",
+}: {
+  k: SortKey;
+  label: string;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onClick: (k: SortKey) => void;
+  align?: "left" | "right";
+}) {
+  const active = sortKey === k;
+  return (
+    <th className={`px-3 py-2.5 ${align === "right" ? "text-right" : "text-left"}`}>
+      <button
+        type="button"
+        onClick={() => onClick(k)}
+        className={`inline-flex items-center gap-1 ${
+          active ? "text-foreground font-semibold" : "hover:text-foreground"
+        }`}
+      >
+        <span>{label}</span>
+        <span aria-hidden className="text-[9px]">
+          {active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}
+        </span>
+      </button>
+    </th>
+  );
+}
+
+function StatusBadge({ status }: { status: OrgStatus }) {
+  if (status === "no_admin") {
+    return (
+      <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-900 dark:bg-red-950/40 dark:text-red-200">
+        admin 不在
+      </span>
+    );
+  }
+  if (status === "dormant") {
+    return (
+      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+        休眠の可能性
+      </span>
+    );
+  }
+  return (
+    <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+      稼働中
+    </span>
+  );
+}

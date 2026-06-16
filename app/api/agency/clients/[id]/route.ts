@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { encryptField } from "@/lib/crypto/field-encryption";
 import { getUserRole } from "@/lib/organizations/queries";
 import { updateClientRequestSchema } from "@/lib/clients/types";
+import { logClientChanges } from "@/lib/audit/client-audit-log";
 
 /**
  * PATCH /api/agency/clients/[id]
@@ -170,6 +171,13 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     updateData[key] = Array.isArray(v) && v.length === 0 ? null : v;
   }
 
+  // CRM 自由タグ(20260615140001 マイグレーション)。
+  // 上記 EMPRO タグ配列と異なり、DB default が '{}' なので「クリア」は [] のまま
+  // 保存する(NOT NULL 列なので null は不可)。
+  if (d.crm_tags !== undefined) {
+    updateData.crm_tags = Array.isArray(d.crm_tags) ? d.crm_tags : [];
+  }
+
   // 暗号化対象(EMPRO 拡張、6 列)。
   // 上の recommendation_comment と同パターン:undefined=触らない / "" → null / 非空 → encryptField。
   const ENCRYPTED_FIELD_MAP = [
@@ -202,6 +210,78 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     return NextResponse.json({ success: true });
   }
 
+  // ────────────────────────────────────────────
+  // 変更履歴(client_audit_log)用に旧値を取得する。
+  // 対象は updateData に含まれる「平文」列のみ。暗号化列は値を残さない方針で除外。
+  // ────────────────────────────────────────────
+  const PLAIN_LOGGABLE_KEYS = new Set<string>([
+    "name",
+    "email",
+    "phone",
+    "status",
+    "assigned_member_id",
+    "notes",
+    "close_reason",
+    "entry_site",
+    "email_distribution_enabled",
+    "name_kana",
+    "birth_date",
+    "gender",
+    "nationality",
+    "marital_status",
+    "postal_code",
+    "prefecture",
+    "city",
+    "street",
+    "building",
+    "phone2",
+    "email2",
+    "current_employment_type",
+    "current_annual_income",
+    "final_education",
+    "job_change_timing",
+    "desired_annual_income",
+    "intake_date",
+    "first_meeting_date",
+    "experience_industries",
+    "experience_occupations",
+    "desired_industries",
+    "desired_occupations",
+    "desired_locations",
+    "crm_tags",
+  ]);
+  // 暗号化フィールドの監査:値は記録しないが「変更があった事実」だけは残す。
+  // 比較は暗号文同士で行う(平文の復号は行わない、サーバー側に平文を持たないため)。
+  // IV はレコード単位で新規生成されるので、同じ平文を再保存しても暗号文は変わる ──
+  // つまり「触れたこと」がほぼ「変更があったこと」と同義になるが、それで OK
+  // (誤動作で同じ値を上書きしただけでも履歴に「触れた」と残るのは監査的にも望ましい)。
+  const ENCRYPTED_LOGGABLE_KEYS = new Set<string>([
+    "encrypted_recommendation_comment",
+    "encrypted_other_agency_status",
+    "encrypted_contact_method_preference",
+    "encrypted_education_detail",
+    "encrypted_skills",
+    "encrypted_job_change_reason",
+    "encrypted_desired_conditions",
+    "encrypted_meeting_notes",
+    "encrypted_status_memo",
+  ]);
+  const loggableTouchedKeys = Object.keys(updateData).filter(
+    (k) => PLAIN_LOGGABLE_KEYS.has(k) || ENCRYPTED_LOGGABLE_KEYS.has(k),
+  );
+  // SELECT は触られた列のみに絞ってサイズを抑える。
+  // 変更履歴目的なので Service Role 不要(RLS で自社のみ読める)。
+  let oldRow: Record<string, unknown> | null = null;
+  if (loggableTouchedKeys.length > 0) {
+    const { data } = await supabase
+      .from("client_records")
+      .select(loggableTouchedKeys.join(","))
+      .eq("id", id)
+      .eq("organization_id", role.organization.id)
+      .maybeSingle();
+    oldRow = (data as Record<string, unknown> | null) ?? null;
+  }
+
   const { error } = await supabase
     .from("client_records")
     .update(updateData)
@@ -215,5 +295,64 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     );
   }
 
+  // 監査ログ:変更があった列ごとに 1 行ずつ insert。
+  // 値の serialize は単純化:文字列はそのまま / 配列は ', ' join / boolean は文字列化 / null は null。
+  // 暗号化列は「変更があった」事実だけ残す:old_value = new_value = null とし、
+  // field_name の "encrypted_" プレフィックスで UI 側が暗号化変更と識別する。
+  if (oldRow && role.member && loggableTouchedKeys.length > 0) {
+    const changes = loggableTouchedKeys
+      .map((key) => {
+        const isEncrypted = ENCRYPTED_LOGGABLE_KEYS.has(key);
+        if (isEncrypted) {
+          // 暗号文同士で「文字列等価」かを比較する(IV が違うので等価でないことが普通)。
+          // null vs null は触れていないと判定してスキップ。
+          const oldEnc = (oldRow![key] as string | null) ?? null;
+          const newEnc = (updateData[key] as string | null) ?? null;
+          if (oldEnc === newEnc) {
+            return null;
+          }
+          return { fieldName: key, oldValue: null, newValue: null };
+        }
+        const ov = serializeAuditValue(oldRow![key] ?? null);
+        const nv = serializeAuditValue(updateData[key] ?? null);
+        if (ov === nv) return null;
+        return { fieldName: key, oldValue: ov, newValue: nv };
+      })
+      .filter(
+        (c): c is { fieldName: string; oldValue: string | null; newValue: string | null } =>
+          c !== null,
+      );
+    if (changes.length > 0) {
+      // 失敗してもユーザ操作は成功扱い(関数内で warn のみ)。
+      await logClientChanges(
+        {
+          organizationId: role.organization.id,
+          clientRecordId: id,
+          actorMemberId: role.member.id,
+        },
+        changes,
+      );
+    }
+  }
+
   return NextResponse.json({ success: true });
+}
+
+/**
+ * 監査ログの値文字列化:UI 表示と前後比較に使う統一フォーマット。
+ *  - 文字列はそのまま(空文字は null に倒す:DB の "" と null を等価扱い)
+ *  - 配列は ', ' で連結
+ *  - boolean は 'true' / 'false'
+ *  - number は文字列化
+ *  - その他は JSON 文字列化(jsonb 等の将来拡張に備える)
+ */
+function serializeAuditValue(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string") return value === "" ? null : value;
+  if (Array.isArray(value)) {
+    return value.length === 0 ? null : value.map((v) => String(v)).join(", ");
+  }
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "number") return String(value);
+  return JSON.stringify(value);
 }

@@ -232,6 +232,16 @@ export async function saveCareerProfile(userId: string, profile: CareerProfile):
       throw new Error(`Failed to create career profile: ${error.message}`);
     }
   }
+
+  // 棚卸し更新を受けて AI 求人推薦のキャッシュを invalidate する。
+  // 次回 /app/recommended-jobs を開いたときに hash mismatch で再計算されるが、
+  // 明示的に無効化することで「キャッシュが古い理由」を明確にする。
+  // 失敗してもユーザ操作は止めない(ベストエフォート)。
+  try {
+    await supabase.from("seeker_job_recommendations").delete().eq("user_id", userId);
+  } catch (err) {
+    console.warn("[career-profile-save] failed to invalidate seeker_job_recommendations", err);
+  }
 }
 
 /**

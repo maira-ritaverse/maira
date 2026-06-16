@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { signupSchema, type SignupInput } from "@/lib/validations/auth";
 import { signup } from "@/app/auth/actions";
+import { GoogleSignInButton } from "@/components/features/auth/google-sign-in-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -103,63 +104,112 @@ export function SignupForm({ invitation }: Props) {
           </Alert>
         )}
 
-        <form onSubmit={handleSubmit(onSubmit)} className="bg-card space-y-4 rounded-lg border p-6">
-          {serverError && (
-            <Alert variant="destructive">
-              <AlertDescription>{serverError}</AlertDescription>
-            </Alert>
-          )}
+        <div className="bg-card space-y-4 rounded-lg border p-6">
+          {/* Google で登録(優先導線、招待トークンも引き継ぐ) */}
+          <GoogleSignInButton
+            label={invitation ? "Google で登録(招待)" : "Google で登録"}
+            invitationToken={invitation?.token}
+          />
 
-          <div className="space-y-2">
-            <Label htmlFor="displayName">表示名</Label>
-            <Input
-              id="displayName"
-              type="text"
-              placeholder="例: 太郎"
-              {...register("displayName")}
-              disabled={isPending}
-            />
-            {errors.displayName && (
-              <p className="text-sm text-red-600">{errors.displayName.message}</p>
+          {/* or 区切り */}
+          <div className="flex items-center gap-3">
+            <div className="bg-border h-px flex-1" />
+            <span className="text-muted-foreground text-xs">または</span>
+            <div className="bg-border h-px flex-1" />
+          </div>
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            {serverError && (
+              <Alert variant="destructive">
+                <AlertDescription>{serverError}</AlertDescription>
+              </Alert>
             )}
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="email">メールアドレス</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="you@example.com"
-              {...register("email")}
-              // 招待経由は招待メール固定(変更不可)
-              readOnly={!!invitation}
-              disabled={isPending}
-              className={invitation ? "bg-muted cursor-not-allowed" : undefined}
-            />
-            {errors.email && <p className="text-sm text-red-600">{errors.email.message}</p>}
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="displayName">表示名</Label>
+              <Input
+                id="displayName"
+                type="text"
+                placeholder="例: 太郎"
+                {...register("displayName")}
+                disabled={isPending}
+              />
+              {errors.displayName && (
+                <p className="text-sm text-red-600">{errors.displayName.message}</p>
+              )}
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="password">パスワード</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="8文字以上"
-              {...register("password")}
-              disabled={isPending}
-            />
-            {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">メールアドレス</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                {...register("email")}
+                // 招待経由は招待メール固定(変更不可)
+                readOnly={!!invitation}
+                disabled={isPending}
+                className={invitation ? "bg-muted cursor-not-allowed" : undefined}
+              />
+              {errors.email && <p className="text-sm text-red-600">{errors.email.message}</p>}
+            </div>
 
-          {/* invitationToken は hidden で保持(Server Action 側でも上書きするが、保険) */}
-          {invitation && (
-            <input type="hidden" {...register("invitationToken")} value={invitation.token} />
-          )}
+            <div className="space-y-2">
+              <Label htmlFor="password">パスワード</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="8文字以上"
+                {...register("password")}
+                disabled={isPending}
+              />
+              {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
+            </div>
 
-          <Button type="submit" className="w-full" disabled={isPending}>
-            {isPending ? "登録中..." : invitation ? "登録して参加する" : "新規登録"}
-          </Button>
-        </form>
+            {/* invitationToken は hidden で保持(Server Action 側でも上書きするが、保険) */}
+            {invitation && (
+              <input type="hidden" {...register("invitationToken")} value={invitation.token} />
+            )}
+
+            {/* 利用規約 + プライバシーポリシー同意(ADR 0006)。
+              本人の明示同意がないと登録できないようにする(zod literal(true) で強制)。 */}
+            <div className="space-y-2">
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  {...register("agreeToTerms")}
+                  disabled={isPending}
+                  className="mt-1"
+                />
+                <span>
+                  <Link
+                    href="/terms"
+                    target="_blank"
+                    className="text-foreground font-medium underline"
+                  >
+                    利用規約
+                  </Link>
+                  {" と "}
+                  <Link
+                    href="/privacy"
+                    target="_blank"
+                    className="text-foreground font-medium underline"
+                  >
+                    プライバシーポリシー
+                  </Link>
+                  {" に同意します(必須)"}
+                </span>
+              </label>
+              {errors.agreeToTerms && (
+                <p className="text-sm text-red-600">{errors.agreeToTerms.message}</p>
+              )}
+            </div>
+
+            <Button type="submit" className="w-full" disabled={isPending}>
+              {isPending ? "登録中..." : invitation ? "登録して参加する" : "新規登録"}
+            </Button>
+          </form>
+        </div>
 
         <p className="text-muted-foreground text-center text-sm">
           既にアカウントをお持ちですか?{" "}

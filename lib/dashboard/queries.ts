@@ -2,9 +2,15 @@ import { createClient } from "@/lib/supabase/server";
 import { getCareerProfile, listCareerConversations } from "@/lib/career/conversations";
 import { listDocumentConversations } from "@/lib/documents/conversations";
 import { listApplications } from "@/lib/applications/queries";
+import { checkAiUsageLimit } from "@/lib/features/ai-usage";
+import { checkIntakeLimit } from "@/lib/features/usage-limits";
+import { listUpcomingMeetingsForSeeker } from "@/lib/meetings/queries";
+import { listPendingSharesForSeeker } from "@/lib/meetings/shares-queries";
 import { listAllTasks } from "@/lib/tasks/queries";
 import type { CareerProfile } from "@/lib/career/profile-schema";
 import type { Application, ApplicationStatus } from "@/lib/applications/types";
+import type { MeetingScheduleView } from "@/lib/meetings/types";
+import type { InterviewShareView } from "@/lib/meetings/shares-queries";
 import type { Task } from "@/lib/tasks/types";
 
 /**
@@ -54,6 +60,22 @@ export type DashboardData = {
       createdAt: string;
     }>;
   };
+  /** AI 求人推薦が「新しく更新可能」な状態か(棚卸し更新後など、キャッシュが破棄された状態) */
+  jobRecommendations: {
+    hasFreshSignal: boolean;
+    /** 連携エージェンシーが 1 件以上あって、open 求人もありそうか(粗い目安) */
+    hasLinkedAgencyJobs: boolean;
+  };
+  /** 今月の AI 利用量サマリ(残量見える化用、3 機能の現在 / 上限) */
+  aiUsageSummary: {
+    photo: { current: number; limit: number };
+    recommendation: { current: number; limit: number };
+    intake: { current: number; limit: number };
+    /** 残量警告(80% 以上で表示)が必要なものが 1 つでもあるか */
+    hasWarning: boolean;
+  };
+  /** 未読通知件数(in-app 通知ベル代わりに、ダッシュボードに件数バッジ表示) */
+  unreadNotificationCount: number;
   applications: {
     total: number;
     statusCounts: Record<ApplicationStatus, number>;
@@ -67,6 +89,10 @@ export type DashboardData = {
     dueThisWeek: Task[];
     upcoming: Task[];
   };
+  /** 今後の面談予定(エージェントが予約したもの) */
+  upcomingMeetings: MeetingScheduleView[];
+  /** エージェント面談の文字起こし結果に対する「承認待ち」レビュー */
+  pendingInterviewShares: InterviewShareView[];
   status: UserStatus;
 };
 
@@ -92,6 +118,8 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
     documentConversations,
     applications,
     allTasks,
+    { data: recRow },
+    { data: linkedRow },
   ] = await Promise.all([
     supabase.from("profiles").select("display_name").eq("id", userId).maybeSingle(),
     supabase.auth.getUser(),
@@ -100,7 +128,49 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
     listDocumentConversations(userId),
     listApplications(userId),
     listAllTasks(userId),
+    // seeker_job_recommendations:行が「無い」= 棚卸し更新で invalidate された / 未生成
+    supabase
+      .from("seeker_job_recommendations")
+      .select("inputs_hash, generated_at")
+      .eq("user_id", userId)
+      .maybeSingle(),
+    // linked エージェンシーが 1 件以上あるか(連携前なら推薦カードは出さない)
+    supabase
+      .from("client_records")
+      .select("id")
+      .eq("linked_user_id", userId)
+      .eq("link_status", "linked")
+      .limit(1)
+      .maybeSingle(),
   ]);
+
+  // AI 利用量サマリ + 未読通知数 + 今後の面談予定 + 承認待ちレビュー(6 並列)
+  const [
+    photoUsage,
+    recUsage,
+    intakeUsage,
+    { count: unreadCount },
+    upcomingMeetings,
+    pendingInterviewShares,
+  ] = await Promise.all([
+    checkAiUsageLimit(supabase, userId, "photo_enhance"),
+    checkAiUsageLimit(supabase, userId, "job_recommendation_seeker"),
+    checkIntakeLimit(supabase, userId),
+    supabase
+      .from("notifications")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .is("read_at", null),
+    // 求職者本人が seeker_user_id に紐づく予定(エージェントが予約したもの)
+    listUpcomingMeetingsForSeeker(supabase, userId, { limit: 5 }),
+    // 求職者本人宛の承認待ちレビュー
+    listPendingSharesForSeeker(supabase, userId),
+  ]);
+  const ratio = (c: number, l: number) => (l > 0 ? c / l : 0);
+  const hasWarning =
+    ratio(photoUsage.current, photoUsage.limit) >= 0.8 ||
+    ratio(recUsage.current, recUsage.limit) >= 0.8 ||
+    ratio(intakeUsage.current, intakeUsage.limit) >= 0.8;
 
   // 応募のステータス別カウント。
   // enum の全キーをゼロで初期化してから集計し、UI 側で `?? 0` を書かなくて済むようにする。
@@ -219,6 +289,21 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
       dueThisWeek,
       upcoming,
     },
+    jobRecommendations: {
+      // 棚卸し更新で seeker_job_recommendations が delete されたか、まだ未生成のとき
+      // 「新しい推薦が見られるかも」状態とみなす。career_profile が無いと精度が低いので除外。
+      hasFreshSignal: careerProfile !== null && !recRow,
+      hasLinkedAgencyJobs: !!linkedRow,
+    },
+    aiUsageSummary: {
+      photo: { current: photoUsage.current, limit: photoUsage.limit },
+      recommendation: { current: recUsage.current, limit: recUsage.limit },
+      intake: { current: intakeUsage.current, limit: intakeUsage.limit },
+      hasWarning,
+    },
+    unreadNotificationCount: unreadCount ?? 0,
+    upcomingMeetings,
+    pendingInterviewShares,
     status,
   };
 }

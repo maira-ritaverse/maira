@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -36,7 +37,16 @@ import { Label } from "@/components/ui/label";
  * テキストで入力 → setValueAs で string[] に変換して PATCH に送る。
  */
 
-type Props = { client: ClientRecordWithDecrypted };
+type Props = {
+  client: ClientRecordWithDecrypted;
+  /** 求職者の証明写真(本人が履歴書登録した最新分。SSR で発行された署名 URL) */
+  seekerPhoto?: {
+    signedUrl: string;
+    resumeId: string;
+    resumeTitle: string;
+    resumeUpdatedAt: string;
+  } | null;
+};
 
 /**
  * カンマ区切り文字列 → string[] のパース(タグフィールド用)。
@@ -58,7 +68,7 @@ function parseCsvTags(value: unknown): string[] {
     .filter((s) => s.length > 0);
 }
 
-export function ClientDetailForm({ client }: Props) {
+export function ClientDetailForm({ client, seekerPhoto }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -113,6 +123,8 @@ export function ClientDetailForm({ client }: Props) {
       job_change_timing: client.jobChangeTiming ?? "",
       intake_date: client.intakeDate ?? "",
       first_meeting_date: client.firstMeetingDate ?? "",
+      // CRM 自由タグ(20260615140001)。default は空配列で「タグ無し」。
+      crm_tags: client.crmTags,
       // 暗号化対象の自由記述
       education_detail: client.educationDetail ?? "",
       skills: client.skills ?? "",
@@ -158,6 +170,51 @@ export function ClientDetailForm({ client }: Props) {
             <AlertDescription>{successMessage}</AlertDescription>
           </Alert>
         )}
+
+        {/*
+          証明写真(本人が履歴書に登録した最新分)をフォーム左上に配置。
+          写真ありなら 3:4 サムネ + 履歴書リンク、未登録なら控えめなプレースホルダ。
+          詳細編集の冒頭で「相手の顔」が見える状態を作る。
+        */}
+        <div className="border-input bg-muted/30 flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center">
+          <div className="border-input bg-background relative aspect-3/4 w-20 shrink-0 overflow-hidden rounded-md border">
+            {seekerPhoto ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={seekerPhoto.signedUrl}
+                alt={`${client.name} の証明写真`}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="text-muted-foreground flex h-full w-full items-center justify-center text-[10px] leading-tight">
+                写真
+                <br />
+                未登録
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 flex-1 text-xs">
+            {seekerPhoto ? (
+              <>
+                <p className="text-foreground truncate text-sm font-medium">
+                  {seekerPhoto.resumeTitle}
+                </p>
+                <p className="text-muted-foreground mt-0.5">
+                  本人登録 ・ 更新:
+                  {new Date(seekerPhoto.resumeUpdatedAt).toLocaleDateString("ja-JP")}
+                </p>
+                <Link
+                  href={`/agency/clients/${client.id}/resumes/${seekerPhoto.resumeId}`}
+                  className="text-foreground mt-1 inline-block text-[11px] underline-offset-4 hover:underline"
+                >
+                  履歴書を開く →
+                </Link>
+              </>
+            ) : (
+              <p className="text-muted-foreground">求職者は履歴書に証明写真を登録していません。</p>
+            )}
+          </div>
+        </div>
 
         <div className="space-y-2">
           <Label htmlFor="name">
@@ -649,6 +706,21 @@ export function ClientDetailForm({ client }: Props) {
             面談・運用情報
           </summary>
           <div className="mt-3 space-y-3">
+            {/* CRM 自由タグ。VIP / 要フォロー 等を組織で自由運用。
+                experience_industries と同じカンマ区切りパターン(parseCsvTags 経由)。 */}
+            <div className="space-y-2">
+              <Label htmlFor="crm_tags">CRM タグ(カンマ区切り)</Label>
+              <Input
+                id="crm_tags"
+                {...register("crm_tags", { setValueAs: parseCsvTags })}
+                disabled={isPending}
+                defaultValue={client.crmTags.join(", ")}
+                placeholder="例:VIP, 要フォロー, 上場志望"
+              />
+              <p className="text-muted-foreground text-xs">
+                組織で自由に運用するフラグ。一覧の絞り込みにも使える。
+              </p>
+            </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="intake_date">受付年月日</Label>

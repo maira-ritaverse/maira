@@ -204,6 +204,15 @@ export type ClientRecord = {
   intakeDate: string | null; // YYYY-MM-DD
   firstMeetingDate: string | null; // YYYY-MM-DD
 
+  // CRM 運用フラグ用の自由タグ(VIP / 要フォロー / 上場志望 等)。
+  // 空配列がデフォルト。NULL は来ない契約(DB default '{}'::text[])。
+  // experience_industries / desired_industries とは別物(あちらは業務軸の構造化タグ)。
+  crmTags: string[];
+
+  // カスタムフィールド値(20260615210001)。空オブジェクトがデフォルト。
+  // キーは client_custom_field_definitions.key と対応。値は型ごとに異なる(JSON)。
+  customFields: Record<string, unknown>;
+
   createdAt: string;
   updatedAt: string;
 };
@@ -277,6 +286,14 @@ export type ClientRecordWithReferralBreakdown = ClientRecordWithAssigneeAndDues 
 export type ClientRecordWithUpdateBadge = ClientRecordWithReferralBreakdown & {
   hasUnreadUpdate: boolean;
   latestUpdatedAt: string | null;
+  // 沈黙顧客アラート(CRM 機能):
+  //   最後に客先と対応があった日時(client_interactions.occurred_at の最大値)。
+  //   null = 一度も対応履歴が無い(新規受付したがまだ動けていない顧客)。
+  //   「N 日以上対応なし」の判定は createdAt を fallback にして lib/clients/filter-sort.ts で行う。
+  lastInteractionAt: string | null;
+  // 次の Web 面談予約(meeting_schedules.starts_at の最小値、status='scheduled' のみ)。
+  // null = 予約なし。
+  nextMeetingAt: string | null;
 };
 
 // ────────────────────────────────────────────
@@ -429,6 +446,9 @@ export const updateClientRequestSchema = z.object({
   // 運用キー日付
   intake_date: dateField,
   first_meeting_date: dateField,
+  // CRM 自由タグ(20260615140001 マイグレーション)
+  // 空配列で「クリア」(API ルートで [] → null は無く、そのまま [] を保存)。
+  crm_tags: tagArrayField.optional(),
 
   // ────────────────────────────────────────────
   // EMPRO 準拠の暗号化対象(自由記述、API ルートで encryptField)

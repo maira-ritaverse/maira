@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ImagePlusIcon, Sparkles } from "lucide-react";
+import { PhotoAiCompareModal } from "./photo-ai-compare-modal";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -840,8 +841,11 @@ function ResumePhotoField({
   // これがある間は署名URLより優先表示(差し替えが即時反映される)。
   const [localPreview, setLocalPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  // AI 仕上げ比較モーダルに渡す元ファイル(null なら閉じている)
+  const [aiCompareFile, setAiCompareFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const aiFileInputRef = useRef<HTMLInputElement>(null);
 
   // FileReader URL は手動 revoke しないとリークするため、入れ替わり/アンマウント時に開放する。
   useEffect(() => {
@@ -903,6 +907,25 @@ function ResumePhotoField({
       // 同じファイル名を再選択しても onChange が発火するようリセット
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  };
+
+  // AI 仕上げ:ファイル選択時に比較モーダルを開くだけ。実際の AI 呼出と保存は
+  // モーダル側で行う(Before/After 確認後に承認して保存するフロー)。
+  const handleAiSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    if (!PHOTO_ACCEPT.split(",").includes(file.type)) {
+      setError("対応形式は JPG / PNG のみです");
+      event.target.value = "";
+      return;
+    }
+    if (file.size > PHOTO_MAX_BYTES) {
+      setError(`ファイルサイズは ${PHOTO_MAX_BYTES / 1024 / 1024}MB 以下にしてください`);
+      event.target.value = "";
+      return;
+    }
+    setAiCompareFile(file);
   };
 
   const handleDelete = async () => {
@@ -989,6 +1012,29 @@ function ResumePhotoField({
           <p className="text-muted-foreground">
             JPG / PNG、5MB 以下。サーバーで証明写真サイズ(3:4)に自動最適化されます
           </p>
+          {/*
+            AI 仕上げ:自撮りを OpenAI で証明写真風(白背景・正面・3:4)に変換。
+            通常アップロードとは別 input(別 ref)で切り分ける。
+          */}
+          <div>
+            <label
+              className="inline-flex cursor-pointer items-center gap-1 text-emerald-700 underline-offset-4 hover:underline dark:text-emerald-300"
+              aria-label="自撮り写真を AI で証明写真にする"
+            >
+              <input
+                ref={aiFileInputRef}
+                type="file"
+                accept={PHOTO_ACCEPT}
+                onChange={handleAiSelect}
+                disabled={isUploading}
+                className="sr-only"
+              />
+              ✨ AI で証明写真にする(自撮りから)
+            </label>
+            <p className="text-muted-foreground mt-1 text-[11px]">
+              背景を整え、3:4 トリミングします。元 / AI 仕上げ後を比較してから保存できます。
+            </p>
+          </div>
           {hasPhoto && (
             <div className="flex flex-wrap gap-2">
               {/*
@@ -1018,6 +1064,25 @@ function ResumePhotoField({
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
       </div>
+
+      {/* AI 仕上げ Before/After 比較モーダル */}
+      {aiCompareFile && (
+        <PhotoAiCompareModal
+          resumeId={resumeId}
+          originalFile={aiCompareFile}
+          onClose={() => {
+            setAiCompareFile(null);
+            if (aiFileInputRef.current) aiFileInputRef.current.value = "";
+          }}
+          onSaved={(path) => {
+            setPhotoPath(path);
+            setAiCompareFile(null);
+            if (aiFileInputRef.current) aiFileInputRef.current.value = "";
+            // 仕上げ後の署名 URL を取り直すためにリロード
+            window.location.reload();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -80,6 +80,11 @@ type ClientRecordRow = {
   first_meeting_date: string | null;
   encrypted_meeting_notes: string | null;
   encrypted_status_memo: string | null;
+  // CRM 自由タグ(20260615140001 マイグレーション)
+  crm_tags: string[] | null;
+
+  // カスタムフィールド値(20260615210001)
+  custom_fields: Record<string, unknown> | null;
 
   created_at: string;
   updated_at: string;
@@ -138,6 +143,10 @@ function rowToClientRecord(row: ClientRecordRow): ClientRecord {
     jobChangeTiming: row.job_change_timing as ClientRecord["jobChangeTiming"],
     intakeDate: row.intake_date,
     firstMeetingDate: row.first_meeting_date,
+    // CRM タグは DB default '{}' なので null は来ない契約だが、念のため [] にフォールバック。
+    crmTags: row.crm_tags ?? [],
+    // カスタムフィールドも DB default '{}'::jsonb。
+    customFields: row.custom_fields ?? {},
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -218,6 +227,59 @@ export async function getClientDistributionStats(
 // 公開する型エイリアス(close_reason のキーセット)を再エクスポートしておくと、
 // UI 側で Record の key 型を絞り込みやすい。
 export type { ClientCloseReason };
+
+/**
+ * 企業のクライアント総件数を取得(ページネーション / アラート判定用)。
+ *
+ * head: true で行データを取らずに count だけ返すので高速。
+ * 失敗時は null を返し、呼び出し側で「不明」フォールバック表示を許す。
+ */
+export async function getClientRecordsTotalCount(organizationId: string): Promise<number | null> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("client_records")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId);
+  if (error) return null;
+  return count ?? null;
+}
+
+/**
+ * ページネーション付きクライアント一覧(基盤)
+ *
+ * 「全件 + JS フィルタ」が現状の主要パターンだが、組織が一定規模を超えると
+ * メモリ負荷とハイドレーション時間が増えるため、サーバー側で limit/offset を
+ * 効かせて取得する基盤を提供する。
+ *
+ * 用途:
+ *   - ダッシュボードの「最近登録された顧客」widget
+ *   - 将来の「ページ送り UI」(現状の clients-view-tabs は全件読みで動く)
+ *
+ * RLS で自社のみ取得。担当者名 / referralBreakdown は load しない
+ * (それらを足す上位 API は listClientRecordsWith* シリーズに集約)。
+ */
+export async function listClientRecordsPaginated(
+  organizationId: string,
+  opts: { limit: number; offset?: number; orderBy?: "created_at" | "updated_at" } = {
+    limit: 50,
+    offset: 0,
+    orderBy: "created_at",
+  },
+): Promise<ClientRecord[]> {
+  const supabase = await createClient();
+  const offset = opts.offset ?? 0;
+  const orderBy = opts.orderBy ?? "created_at";
+
+  const { data, error } = await supabase
+    .from("client_records")
+    .select("*")
+    .eq("organization_id", organizationId)
+    .order(orderBy, { ascending: false })
+    .range(offset, offset + opts.limit - 1);
+
+  if (error || !data) return [];
+  return (data as ClientRecordRow[]).map(rowToClientRecord);
+}
 
 /**
  * 企業のクライアント一覧を取得
@@ -525,9 +587,58 @@ export async function listClientRecordsWithUpdateBadge(
 
   const disclosable = clients.filter(isDisclosable);
 
+  // 最終対応日時(沈黙アラート用)+ 次の面談 を並列に集約。
+  const nowIso = new Date().toISOString();
+  const [interactionRowsRes, nextMeetingRowsRes] = await Promise.all([
+    supabase
+      .from("client_interactions")
+      .select("client_record_id, occurred_at")
+      .order("occurred_at", { ascending: false }),
+    // meeting_schedules:本人組織分の今後の予約(キャンセル除外)を starts_at 昇順
+    supabase
+      .from("meeting_schedules")
+      .select("client_record_id, starts_at")
+      .eq("organization_id", organizationId)
+      .neq("status", "canceled")
+      .gte("starts_at", nowIso)
+      .order("starts_at", { ascending: true }),
+  ]);
+
+  const lastInteractionByClientId = new Map<string, string>();
+  if (!interactionRowsRes.error && interactionRowsRes.data) {
+    for (const row of interactionRowsRes.data as Array<{
+      client_record_id: string;
+      occurred_at: string;
+    }>) {
+      if (!lastInteractionByClientId.has(row.client_record_id)) {
+        lastInteractionByClientId.set(row.client_record_id, row.occurred_at);
+      }
+    }
+  }
+
+  // 次の面談 Map(starts_at 昇順なので、先頭採用で最小値が入る)
+  const nextMeetingByClientId = new Map<string, string>();
+  if (!nextMeetingRowsRes.error && nextMeetingRowsRes.data) {
+    for (const row of nextMeetingRowsRes.data as Array<{
+      client_record_id: string | null;
+      starts_at: string;
+    }>) {
+      if (!row.client_record_id) continue;
+      if (!nextMeetingByClientId.has(row.client_record_id)) {
+        nextMeetingByClientId.set(row.client_record_id, row.starts_at);
+      }
+    }
+  }
+
   // 早期 return:開示対象が無ければ追加クエリ 4 本を投げる必要なし。
   if (disclosable.length === 0) {
-    return clients.map((c) => ({ ...c, hasUnreadUpdate: false, latestUpdatedAt: null }));
+    return clients.map((c) => ({
+      ...c,
+      hasUnreadUpdate: false,
+      latestUpdatedAt: null,
+      lastInteractionAt: lastInteractionByClientId.get(c.id) ?? null,
+      nextMeetingAt: nextMeetingByClientId.get(c.id) ?? null,
+    }));
   }
 
   const linkedUserIds = disclosable
@@ -593,8 +704,16 @@ export async function listClientRecordsWithUpdateBadge(
   // 5) 各クライアントに hasUnreadUpdate / latestUpdatedAt を付与。
   //    判定は computeHasUnreadUpdate(純粋関数)に委譲する。
   return clients.map((c) => {
+    const lastInteractionAt = lastInteractionByClientId.get(c.id) ?? null;
+    const nextMeetingAt = nextMeetingByClientId.get(c.id) ?? null;
     if (!isDisclosable(c) || !c.linkedUserId) {
-      return { ...c, hasUnreadUpdate: false, latestUpdatedAt: null };
+      return {
+        ...c,
+        hasUnreadUpdate: false,
+        latestUpdatedAt: null,
+        lastInteractionAt,
+        nextMeetingAt,
+      };
     }
     const latestUpdatedAt = maxIsoTimestamp([
       docMaxByUserId.get(c.linkedUserId),
@@ -602,7 +721,7 @@ export async function listClientRecordsWithUpdateBadge(
     ]);
     const lastViewedAt = lastViewedByClientId.get(c.id) ?? null;
     const hasUnreadUpdate = computeHasUnreadUpdate(latestUpdatedAt, lastViewedAt);
-    return { ...c, hasUnreadUpdate, latestUpdatedAt };
+    return { ...c, hasUnreadUpdate, latestUpdatedAt, lastInteractionAt, nextMeetingAt };
   });
 }
 

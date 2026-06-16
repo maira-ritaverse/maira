@@ -5,6 +5,8 @@ import { listOrganizationMembersWithMeta } from "@/lib/organizations/members";
 import { buildInvitationUrl, listPendingInvitations } from "@/lib/organizations/invitations";
 import { MembersTable } from "./members-table";
 import { InvitationsSection } from "./invitations-section";
+import { SlackSettingsSection } from "./slack-settings-section";
+import { getOrganizationSlackWebhookUrl } from "@/lib/slack/notify";
 
 /**
  * メンバー管理画面(admin 専用)
@@ -35,9 +37,10 @@ export default async function MembersPage() {
     redirect("/agency/clients");
   }
 
-  const [members, invitations] = await Promise.all([
+  const [members, invitations, slackWebhookUrl] = await Promise.all([
     listOrganizationMembersWithMeta(role.organization.id),
     listPendingInvitations(role.organization.id),
+    getOrganizationSlackWebhookUrl(role.organization.id),
   ]);
 
   // 招待リンクは NEXT_PUBLIC_SITE_URL を基準にサーバー側で組み立てて渡す
@@ -66,6 +69,10 @@ export default async function MembersPage() {
         <h2 className="text-lg font-semibold">招待中({invitations.length}件)</h2>
         <InvitationsSection invitations={invitationsWithUrl} />
       </section>
+
+      {/* Slack 連携(Incoming Webhook)。応募ステータスの内定 / 入社 / 見送りを
+          自動で Slack に投稿する。組織ごとに 1 つの URL を保存。 */}
+      <SlackSettingsSection currentUrl={slackWebhookUrl} />
     </div>
   );
 }

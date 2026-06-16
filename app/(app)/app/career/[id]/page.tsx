@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { GenerateProfileButton } from "@/components/features/generate-profile-button";
+import { ToIntakeButton } from "./to-intake-button";
 import { Button } from "@/components/ui/button";
 import { getMessages, verifyConversationOwner } from "@/lib/career/conversations";
 import { createClient } from "@/lib/supabase/server";
@@ -40,6 +41,7 @@ export default async function CareerConversationPage({
         </div>
         <div className="flex items-center gap-2">
           <GenerateProfileButton conversationId={id} />
+          <ToIntakeButton conversationId={id} />
           <Button render={<Link href="/app/career" />} variant="outline" size="sm">
             一覧に戻る
           </Button>

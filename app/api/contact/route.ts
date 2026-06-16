@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { sendContactNotificationEmail } from "@/lib/email/contact";
+import { createServiceClient } from "@/lib/supabase/service";
 
 /**
  * LP 問い合わせフォーム送信 API
@@ -78,7 +79,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "入力内容に誤りがあります。" }, { status: 400 });
   }
 
-  // 3) Resend で通知メール送信
+  // 3) DB に保存(運営者の受信箱に履歴として残す)
+  //    メール送信が失敗してもデータは残るので、運営者は後から拾える。
+  //    service_role を使うのは anon に INSERT 権限を与えないため。
+  try {
+    const admin = createServiceClient();
+    await admin.from("contact_messages").insert({
+      company: parsed.data.company,
+      name: parsed.data.name,
+      email: parsed.data.email,
+      message: parsed.data.message,
+      ip_address: ip === "unknown" ? null : ip,
+      user_agent: request.headers.get("user-agent"),
+    });
+  } catch (err) {
+    // 保存失敗は致命的でないのでログだけ吐いて続行(メール送信は試みる)
+    console.error("[api/contact] contact_messages の保存に失敗:", err);
+  }
+
+  // 4) Resend で通知メール送信
   const result = await sendContactNotificationEmail(parsed.data);
 
   if (!result.sent) {

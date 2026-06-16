@@ -75,4 +75,14 @@ jobs:
       # 暗号化テスト(lib/crypto/field-encryption)はテスト内で
       # FIELD_ENCRYPTION_KEYS / FIELD_ENCRYPTION_CURRENT_VERSION を beforeEach で
       # 設定するため、CI 側で外部の鍵を渡す必要はない。本番鍵は Vercel 側で管理。
-      - run: pnpm test
+      - run: pnpm test:coverage
+
+      # カバレッジサマリ JSON を成果物としてアップロード。
+      # 数値の閾値 enforcement は vitest 設定で 0 から始めて段階的に上げる方針。
+      - name: Upload coverage summary
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-summary
+          path: coverage/coverage-summary.json
+          if-no-files-found: ignore

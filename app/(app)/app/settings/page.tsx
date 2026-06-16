@@ -1,5 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import {
+  AlertTriangle,
+  BarChart3,
+  ChevronRight,
+  GraduationCap,
+  Lock,
+  type LucideIcon,
+  User,
+} from "lucide-react";
+
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
 
@@ -17,24 +27,41 @@ export default async function SettingsPage() {
 
   if (!user) redirect("/login");
 
-  const menuItems = [
+  const menuItems: Array<{
+    href: string;
+    Icon: LucideIcon;
+    title: string;
+    description: string;
+  }> = [
     {
       href: "/app/settings/profile",
-      icon: "👤",
+      Icon: User,
       title: "プロフィール",
       description: "表示名などの基本情報",
     },
     {
       href: "/app/settings/password",
-      icon: "🔒",
+      Icon: Lock,
       title: "パスワード",
       description: "ログインパスワードの変更",
     },
     {
       href: "/app/settings/onboarding",
-      icon: "🎓",
+      Icon: GraduationCap,
       title: "オンボーディングツアー",
       description: "Mairaの使い方ツアーを再表示",
+    },
+    {
+      href: "/app/settings/integrations",
+      Icon: BarChart3,
+      title: "AI 利用状況",
+      description: "今月の AI ヒアリング・証明写真・求人推薦の利用回数",
+    },
+    {
+      href: "/app/settings/account",
+      Icon: AlertTriangle,
+      title: "アカウント",
+      description: "登録メアドの確認 / アカウントの削除",
     },
   ];
 
@@ -52,12 +79,12 @@ export default async function SettingsPage() {
               href={item.href}
               className="hover:bg-accent flex items-center gap-4 p-4 transition-colors"
             >
-              <span className="text-2xl">{item.icon}</span>
+              <item.Icon className="text-muted-foreground size-5 shrink-0" aria-hidden />
               <div className="min-w-0 flex-1">
                 <p className="font-medium">{item.title}</p>
                 <p className="text-muted-foreground text-sm">{item.description}</p>
               </div>
-              <span className="text-muted-foreground text-sm">→</span>
+              <ChevronRight className="text-muted-foreground size-4" aria-hidden />
             </Link>
           </Card>
         ))}

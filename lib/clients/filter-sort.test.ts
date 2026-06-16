@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   applyClientsFilterSort,
+  buildCrmTagOptions,
   buildEmploymentTypeOptions,
   buildEntrySiteOptions,
   buildPrefectureOptions,
@@ -29,7 +30,10 @@ function client(
   createdAt: string,
   entrySite: string | null = null,
   extras: Partial<
-    Pick<ClientForFilterSort, "nameKana" | "prefecture" | "currentEmploymentType">
+    Pick<
+      ClientForFilterSort,
+      "nameKana" | "prefecture" | "currentEmploymentType" | "lastInteractionAt" | "crmTags"
+    >
   > = {},
 ): ClientForFilterSort {
   return {
@@ -41,6 +45,8 @@ function client(
     nameKana: extras.nameKana ?? null,
     prefecture: extras.prefecture ?? null,
     currentEmploymentType: extras.currentEmploymentType ?? null,
+    lastInteractionAt: extras.lastInteractionAt ?? null,
+    crmTags: extras.crmTags ?? [],
   };
 }
 
@@ -394,5 +400,171 @@ describe("buildPrefectureOptions / buildEmploymentTypeOptions", () => {
   it("空配列なら空配列(両関数)", () => {
     expect(buildPrefectureOptions([])).toEqual([]);
     expect(buildEmploymentTypeOptions([])).toEqual([]);
+  });
+});
+
+// ────────────────────────────────────────────
+// silenceFilter(沈黙顧客アラート、CRM 機能)
+// ────────────────────────────────────────────
+describe("applyClientsFilterSort — silenceFilter(沈黙顧客)", () => {
+  // 基準現在時刻:2026-06-15 00:00:00 UTC
+  const now = Date.parse("2026-06-15T00:00:00.000Z");
+
+  // fixture:
+  //   silent60 -- 最終対応 65 日前(→ 14d / 30d / 60d で残る、90d で消える)
+  //   silent30 -- 最終対応 31 日前(→ 14d / 30d で残る、60d / 90d で消える)
+  //   recent  -- 最終対応 5 日前(→ どの閾値でも消える)
+  //   never_old -- 対応無し、作成 100 日前(→ 14d / 30d / 60d / 90d で残る、never で残る)
+  //   never_new -- 対応無し、作成 3 日前(→ 14d 以上では消える、never で残る)
+  const fixtures = [
+    client("silent60", "s60@x.com", "job_matching", "2026-06-14", null, {
+      lastInteractionAt: "2026-04-11T00:00:00.000Z", // 65 日前
+    }),
+    client("silent30", "s30@x.com", "job_matching", "2026-06-14", null, {
+      lastInteractionAt: "2026-05-15T00:00:00.000Z", // 31 日前
+    }),
+    client("recent", "r@x.com", "job_matching", "2026-06-14", null, {
+      lastInteractionAt: "2026-06-10T00:00:00.000Z", // 5 日前
+    }),
+    client("never_old", "no@x.com", "job_matching", "2026-03-07", null, {
+      lastInteractionAt: null, // 対応無し、作成 100 日前
+    }),
+    client("never_new", "nn@x.com", "job_matching", "2026-06-12", null, {
+      lastInteractionAt: null, // 対応無し、作成 3 日前
+    }),
+  ];
+
+  it("'all' は絞らない", () => {
+    const r = applyClientsFilterSort(fixtures, { ...baseOpts, silenceFilter: "all", now });
+    expect(r).toHaveLength(5);
+  });
+
+  it("silenceFilter を渡さない場合も全件返す(後方互換)", () => {
+    expect(applyClientsFilterSort(fixtures, baseOpts)).toHaveLength(5);
+  });
+
+  it("'14d' は 14 日以上経過(対応無しは createdAt を起点)", () => {
+    const r = applyClientsFilterSort(fixtures, { ...baseOpts, silenceFilter: "14d", now });
+    const names = r.map((c) => c.name).sort();
+    // silent60, silent30, never_old(100 日前作成)が残る
+    expect(names).toEqual(["never_old", "silent30", "silent60"]);
+  });
+
+  it("'30d' は 30 日以上経過", () => {
+    const r = applyClientsFilterSort(fixtures, { ...baseOpts, silenceFilter: "30d", now });
+    const names = r.map((c) => c.name).sort();
+    expect(names).toEqual(["never_old", "silent30", "silent60"]);
+  });
+
+  it("'60d' は 60 日以上経過(silent30 は消える)", () => {
+    const r = applyClientsFilterSort(fixtures, { ...baseOpts, silenceFilter: "60d", now });
+    const names = r.map((c) => c.name).sort();
+    expect(names).toEqual(["never_old", "silent60"]);
+  });
+
+  it("'90d' は 90 日以上経過(silent60 も消え、never_old だけ残る)", () => {
+    const r = applyClientsFilterSort(fixtures, { ...baseOpts, silenceFilter: "90d", now });
+    expect(r).toHaveLength(1);
+    expect(r[0].name).toBe("never_old");
+  });
+
+  it("'never' は lastInteractionAt が null のレコードのみ", () => {
+    const r = applyClientsFilterSort(fixtures, { ...baseOpts, silenceFilter: "never", now });
+    const names = r.map((c) => c.name).sort();
+    expect(names).toEqual(["never_new", "never_old"]);
+  });
+
+  it("now が未指定でも落ちず素通り(silenceFilter の判定はスキップ)", () => {
+    const r = applyClientsFilterSort(fixtures, { ...baseOpts, silenceFilter: "30d" });
+    expect(r).toHaveLength(5);
+  });
+
+  it("不正な日付文字列は除外(Date.parse が NaN を返すケース)", () => {
+    const broken = client("broken", "b@x.com", "job_matching", "not-a-date", null, {
+      lastInteractionAt: "also-not-a-date",
+    });
+    const r = applyClientsFilterSort([broken], { ...baseOpts, silenceFilter: "30d", now });
+    expect(r).toHaveLength(0);
+  });
+
+  it("他のフィルタと組み合わせ:silenceFilter + statusFilter", () => {
+    const mixed = [
+      ...fixtures,
+      client("silent_completed", "sc@x.com", "completed", "2026-06-14", null, {
+        lastInteractionAt: "2026-04-11T00:00:00.000Z",
+      }),
+    ];
+    const r = applyClientsFilterSort(mixed, {
+      ...baseOpts,
+      silenceFilter: "30d",
+      statusFilter: "completed",
+      now,
+    });
+    expect(r).toHaveLength(1);
+    expect(r[0].name).toBe("silent_completed");
+  });
+});
+
+// ────────────────────────────────────────────
+// CRM 自由タグフィルタ
+// ────────────────────────────────────────────
+describe("applyClientsFilterSort — tagFilter(CRM 自由タグ)", () => {
+  const fixtures = [
+    client("a", "a@x.com", "job_matching", "2026-06-14", null, { crmTags: ["VIP", "上場志望"] }),
+    client("b", "b@x.com", "job_matching", "2026-06-14", null, { crmTags: ["要フォロー"] }),
+    client("c", "c@x.com", "job_matching", "2026-06-14", null, { crmTags: ["VIP", "要フォロー"] }),
+    client("d", "d@x.com", "job_matching", "2026-06-14", null, { crmTags: [] }),
+  ];
+
+  it("tagFilter 未指定 / 空配列は絞らない", () => {
+    expect(applyClientsFilterSort(fixtures, baseOpts)).toHaveLength(4);
+    expect(applyClientsFilterSort(fixtures, { ...baseOpts, tagFilter: [] })).toHaveLength(4);
+  });
+
+  it("単一タグでの絞り込み(VIP を持つもの)", () => {
+    const r = applyClientsFilterSort(fixtures, { ...baseOpts, tagFilter: ["VIP"] });
+    expect(r.map((c) => c.name).sort()).toEqual(["a", "c"]);
+  });
+
+  it("複数タグは AND 条件(VIP + 要フォロー 両方を持つもの)", () => {
+    const r = applyClientsFilterSort(fixtures, { ...baseOpts, tagFilter: ["VIP", "要フォロー"] });
+    expect(r).toHaveLength(1);
+    expect(r[0].name).toBe("c");
+  });
+
+  it("存在しないタグでは 0 件", () => {
+    expect(
+      applyClientsFilterSort(fixtures, { ...baseOpts, tagFilter: ["存在しない"] }),
+    ).toHaveLength(0);
+  });
+});
+
+describe("buildCrmTagOptions", () => {
+  it("空入力は空配列", () => {
+    expect(buildCrmTagOptions([])).toEqual([]);
+  });
+
+  it("件数降順で並ぶ", () => {
+    const fixtures = [
+      client("a", "a@x.com", "job_matching", "2026-06-14", null, { crmTags: ["VIP"] }),
+      client("b", "b@x.com", "job_matching", "2026-06-14", null, { crmTags: ["VIP", "上場志望"] }),
+      client("c", "c@x.com", "job_matching", "2026-06-14", null, {
+        crmTags: ["VIP", "要フォロー"],
+      }),
+    ];
+    const r = buildCrmTagOptions(fixtures);
+    expect(r[0]).toEqual(["VIP", 3]);
+    const restKeys = r
+      .slice(1)
+      .map(([k]) => k)
+      .sort();
+    expect(restKeys).toEqual(["上場志望", "要フォロー"]);
+  });
+
+  it("空文字タグは無視", () => {
+    const fixtures = [
+      client("a", "a@x.com", "job_matching", "2026-06-14", null, { crmTags: ["", "VIP"] }),
+    ];
+    expect(buildCrmTagOptions(fixtures)).toEqual([["VIP", 1]]);
   });
 });

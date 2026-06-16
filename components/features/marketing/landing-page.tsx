@@ -748,21 +748,12 @@ function Footer() {
           </p>
           <ul className="mt-5 space-y-3 text-[0.88rem]">
             <li>
-              {/* 規約類は未整備のため、リンク枠だけ用意。整備時に href を差し替える */}
-              <a
-                href="#"
-                aria-disabled="true"
-                className="text-white/55 transition-colors hover:text-white"
-              >
+              <a href="/terms" className="text-white/70 transition-colors hover:text-white">
                 利用規約
               </a>
             </li>
             <li>
-              <a
-                href="#"
-                aria-disabled="true"
-                className="text-white/55 transition-colors hover:text-white"
-              >
+              <a href="/privacy" className="text-white/70 transition-colors hover:text-white">
                 プライバシーポリシー
               </a>
             </li>

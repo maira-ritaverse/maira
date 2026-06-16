@@ -20,11 +20,26 @@ import {
   listReferralStatusHistoriesByReferralIds,
 } from "@/lib/referrals/queries";
 import { listTasksByClient, listOrganizationMembers } from "@/lib/agency-tasks/queries";
+import { listClientAuditLog } from "@/lib/audit/client-audit-log";
 import { createClient } from "@/lib/supabase/server";
+import { buildActivityTimeline } from "@/lib/clients/activity-timeline";
+import { rowToCustomFieldDefinition, type CustomFieldDefinition } from "@/lib/custom-fields/types";
+import { SectionLayoutContainer } from "@/components/features/layout/section-layout-container";
+import { getLinkedSeekerLatestPhoto } from "@/lib/agency/seeker-photo";
+
+import { ActivityTimelineSection } from "./activity-timeline-section";
+import { AuditLogSection } from "./audit-log-section";
 import { ClientDetailForm } from "./client-detail-form";
+import { CustomFieldsSection } from "./custom-fields-section";
+import { AiMatchingSection } from "./ai-matching-section";
+import { MatchingSection } from "./matching-section";
+import { ScheduleMeetingDialog } from "./schedule-meeting-dialog";
+import { SendEmailDialog } from "./send-email-dialog";
 import { DisclosableProfileSection } from "./disclosable-profile-section";
 import { AgencyDocumentsSection } from "./documents-section";
 import { InteractionsSection } from "./interactions-section";
+import { IntakeUploadSection } from "./intake-upload-section";
+import { MeetingHistorySection } from "./meeting-history-section";
 import { ReferralSection } from "./referral-section";
 import { TasksSection } from "./tasks-section";
 
@@ -79,7 +94,18 @@ export default async function ClientDetailPage({ params }: RouteParams) {
   // 一致確認済み)。RLS は organization_id = current_user_organization_id() を要求するため、
   // ここでズレた値を渡すと RLS で弾かれて「ずっと新着のまま」になる。
   // 失敗時はビューワー内で握って警告ログのみ(致命にしない)。
-  const [referrals, allJobs, interactions, tasks, members, placements] = await Promise.all([
+  // 並列取得。recordClientViewed は void(閲覧記録だけ)なので _ で受ける。
+  const [
+    referrals,
+    allJobs,
+    interactions,
+    tasks,
+    members,
+    placements,
+    _viewed,
+    auditLog,
+    seekerPhoto,
+  ] = await Promise.all([
     listReferralsByClient(client.id),
     listJobPostings(role.organization.id),
     listInteractionsByClient(client.id, role.organization.id),
@@ -91,7 +117,14 @@ export default async function ClientDetailPage({ params }: RouteParams) {
       clientRecordId: client.id,
       organizationId: client.organizationId,
     }),
+    listClientAuditLog(client.id, role.organization.id),
+    // 求職者の証明写真(linked 必須、未 linked は null を返す)
+    (client.linkStatus === "linked" || client.linkStatus === "revoke_requested") &&
+    client.linkedUserId
+      ? getLinkedSeekerLatestPhoto(client.linkedUserId)
+      : Promise.resolve(null),
   ]);
+  void _viewed;
   const openJobs = allJobs.filter((j) => j.status === "open");
 
   // 紹介の status 遷移履歴(referral_id でグルーピングされた Map)。
@@ -102,8 +135,35 @@ export default async function ClientDetailPage({ params }: RouteParams) {
     role.organization.id,
   );
 
+  // カスタムフィールド定義を取得(空でもセクションは描画しない条件で扱う)
+  const { data: ccfdRows } = await supabase
+    .from("client_custom_field_definitions")
+    .select("*")
+    .eq("organization_id", role.organization.id)
+    .order("display_order", { ascending: true })
+    .order("created_at", { ascending: true });
+  const customFieldDefs: CustomFieldDefinition[] = (
+    (ccfdRows ?? []) as Parameters<typeof rowToCustomFieldDefinition>[0][]
+  ).map(rowToCustomFieldDefinition);
+
+  // 活動タイムライン構築:対応 / タスク / 応募 / 選考遷移 / 連携状態を 1 本に統合。
+  // memberNameById は履歴の actor 名解決に使う(members は別 RPC で取得済み)。
+  const memberNameById = new Map<string, string | null>(
+    members.map((m) => [m.memberId, m.displayName]),
+  );
+  const activityEvents = buildActivityTimeline({
+    client,
+    interactions,
+    tasks,
+    referrals,
+    historiesByReferral,
+    memberNameById,
+  });
+
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    // レイアウト編集で 2 列表示にしたときに横幅を活かせるよう、container を広めに(max-w-7xl)。
+    // モバイルでは padding 由来で自然に詰まる。
+    <div className="mx-auto w-full max-w-7xl space-y-6 px-4 lg:px-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">{client.name}</h1>
@@ -124,9 +184,25 @@ export default async function ClientDetailPage({ params }: RouteParams) {
             </span>
           </div>
         </div>
-        <Button render={<Link href="/agency/clients" />} variant="outline" size="sm">
-          一覧に戻る
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* email_distribution_enabled が false の場合はダイアログ内側でガード。
+              現時点でもボタン自体は出して「配信停止です」のメッセージを見せる方が
+              ユーザの誤解を招かない。 */}
+          <ScheduleMeetingDialog clientId={client.id} clientName={client.name} />
+          <SendEmailDialog
+            clientId={client.id}
+            clientName={client.name}
+            advisorName={
+              client.assignedMemberId
+                ? (members.find((m) => m.memberId === client.assignedMemberId)?.displayName ?? null)
+                : null
+            }
+            organizationName={role.organization.name}
+          />
+          <Button render={<Link href="/agency/clients" />} variant="outline" size="sm">
+            一覧に戻る
+          </Button>
+        </div>
       </div>
 
       {/* 連携状態に応じた案内カードとアクション */}
@@ -186,46 +262,113 @@ export default async function ClientDetailPage({ params }: RouteParams) {
         </Card>
       )}
 
-      <ClientSummaryCard clientId={client.id} />
-
-      <ClientDetailForm client={client} />
-
-      {/* linked または期限内 revoke_requested のときに希望条件・書類閲覧セクションを描画。
-          認可は DB 側(documents は RLS、希望条件は SECURITY DEFINER RPC)で
-          二重防御されるが、UI 側でも条件分岐して無駄なクエリを抑える。
-          希望条件 → 書類の順で「人物理解 → 詳細書類」の自然な閲覧導線にする。
-          revoke_requested で期限超過の場合は RLS / RPC が 0 件 / forbidden を返すため、
-          セクション自体は表示されるが中身が「閲覧できる書類はありません」になる
-          (本人 UX から見て、申請後も猶予期間内は引き続き開示する設計の鏡像)。 */}
-      {(client.linkStatus === "linked" || client.linkStatus === "revoke_requested") &&
-        client.linkedUserId && (
-          <>
-            <DisclosableProfileSection clientRecordId={client.id} />
-            <AgencyDocumentsSection linkedUserId={client.linkedUserId} clientRecordId={client.id} />
-          </>
-        )}
-
-      <InteractionsSection
-        clientId={client.id}
-        interactions={interactions}
-        isAdmin={role.member.role === "admin"}
-      />
-
-      <TasksSection
-        clientId={client.id}
-        tasks={tasks}
-        members={members}
-        currentMemberId={role.member.id}
-        isAdmin={role.member.role === "admin"}
-      />
-
-      <ReferralSection
-        clientId={client.id}
-        referrals={referrals}
-        openJobs={openJobs}
-        placements={placements}
-        historiesByReferral={historiesByReferral}
-        isAdmin={role.member.role === "admin"}
+      {/* セクションは SectionLayoutContainer で並び替え可能。
+          ユーザは「📐 レイアウト編集」をオンにして:
+            ・カードを上下にドラッグして並び替え
+            ・「2 列にする」で左右 2 列レイアウト + 列の振り分け
+          できる。設定は localStorage(per-user / per-browser)に永続化。 */}
+      <SectionLayoutContainer
+        storageKey="agency-client-detail"
+        defaultOrder={[
+          "summary",
+          "detail-form",
+          "custom-fields",
+          "timeline",
+          "disclosable",
+          "documents",
+          "meetings",
+          "intake-upload",
+          "interactions",
+          "tasks",
+          "referrals",
+          "matching",
+          "ai-matching",
+          "audit",
+        ]}
+        titles={{
+          summary: "サマリ",
+          "detail-form": "詳細編集",
+          "custom-fields": "カスタム項目",
+          timeline: "活動タイムライン",
+          disclosable: "求職者プロフィール",
+          documents: "提出書類",
+          meetings: "面談履歴",
+          "intake-upload": "AI ヒアリング",
+          interactions: "対応履歴",
+          tasks: "タスク",
+          referrals: "推薦・選考管理",
+          matching: "マッチング候補(ルールベース)",
+          "ai-matching": "AI 求人推薦",
+          audit: "変更履歴",
+        }}
+        sections={{
+          summary: <ClientSummaryCard clientId={client.id} />,
+          "detail-form": <ClientDetailForm client={client} seekerPhoto={seekerPhoto} />,
+          "custom-fields": (
+            <CustomFieldsSection
+              clientId={client.id}
+              definitions={customFieldDefs}
+              initialValues={client.customFields}
+            />
+          ),
+          timeline: <ActivityTimelineSection events={activityEvents} />,
+          disclosable:
+            (client.linkStatus === "linked" || client.linkStatus === "revoke_requested") &&
+            client.linkedUserId ? (
+              <DisclosableProfileSection clientRecordId={client.id} />
+            ) : null,
+          documents:
+            (client.linkStatus === "linked" || client.linkStatus === "revoke_requested") &&
+            client.linkedUserId ? (
+              <AgencyDocumentsSection
+                linkedUserId={client.linkedUserId}
+                clientRecordId={client.id}
+              />
+            ) : null,
+          meetings: <MeetingHistorySection clientRecordId={client.id} />,
+          "intake-upload": (
+            <IntakeUploadSection
+              clientRecordId={client.id}
+              clientLinked={client.linkStatus === "linked"}
+              clientName={client.name}
+            />
+          ),
+          interactions: (
+            <InteractionsSection
+              clientId={client.id}
+              interactions={interactions}
+              isAdmin={role.member.role === "admin"}
+            />
+          ),
+          tasks: (
+            <TasksSection
+              clientId={client.id}
+              tasks={tasks}
+              members={members}
+              currentMemberId={role.member.id}
+              isAdmin={role.member.role === "admin"}
+            />
+          ),
+          referrals: (
+            <ReferralSection
+              clientId={client.id}
+              referrals={referrals}
+              openJobs={openJobs}
+              placements={placements}
+              historiesByReferral={historiesByReferral}
+              isAdmin={role.member.role === "admin"}
+            />
+          ),
+          matching: (
+            <MatchingSection
+              client={client}
+              openJobs={openJobs}
+              alreadyAppliedJobIds={referrals.map((r) => r.jobPostingId)}
+            />
+          ),
+          "ai-matching": <AiMatchingSection clientRecordId={client.id} openJobs={openJobs} />,
+          audit: <AuditLogSection entries={auditLog} />,
+        }}
       />
     </div>
   );

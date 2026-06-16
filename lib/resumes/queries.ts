@@ -73,11 +73,19 @@ export async function getResume(resumeId: string, userId: string): Promise<Resum
 // 新規作成
 //
 // 平文 PII は DB に渡さない。encrypted_pii に JSON 暗号文だけを書く。
+//
+// carryOver.photo_url:
+//   既存履歴書を「応募ごとの履歴書」として複製するケースで、写真パスを引き継ぐために使う。
+//   通常の新規作成時は省略してよい(updateResume と違って必須ではない)。
 // ============================================
-export async function createResume(userId: string, input: SaveResumeRequest): Promise<string> {
+export async function createResume(
+  userId: string,
+  input: SaveResumeRequest,
+  carryOver?: { photo_url?: string | null },
+): Promise<string> {
   const supabase = await createClient();
 
-  const encryptedPii = await buildEncryptedPii(input);
+  const encryptedPii = await buildEncryptedPii(input, carryOver);
 
   const row = {
     user_id: userId,

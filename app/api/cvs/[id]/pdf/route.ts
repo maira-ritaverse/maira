@@ -1,4 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
+import {
+  applyCvOverrides,
+  getApplicationPrCustomization,
+} from "@/lib/applications/pr-customizations";
 import { buildCvHtml } from "@/lib/cvs/cv-html";
 import { getCvWithLinkedResume } from "@/lib/cvs/queries";
 import { generatePdfFromHtml, PdfTimeoutError } from "@/lib/pdf/generate";
@@ -47,9 +51,29 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
   const { cv, linkedResumeName, linkedResumeLicenses } = resolved;
 
+  // ?applicationId=xxx があれば、その応募の cv_self_pr 差分を職務経歴書 body.self_pr に
+  // 反映した状態で PDF を生成する。応募の所有者が本人でない / カスタマイズが無い場合は
+  // 黙ってベースの CV を出す(履歴書側 PDF route と同じ方針)。
+  const url = new URL(_request.url);
+  const applicationId = url.searchParams.get("applicationId");
+  let effectiveBody = cv.body;
+  if (applicationId) {
+    const { data: appRow } = await supabase
+      .from("applications")
+      .select("user_id")
+      .eq("id", applicationId)
+      .maybeSingle();
+    if (appRow && (appRow as { user_id: string }).user_id === user.id) {
+      const custom = await getApplicationPrCustomization(applicationId);
+      if (custom) {
+        effectiveBody = applyCvOverrides(cv.body, custom.overrides);
+      }
+    }
+  }
+
   try {
     const html = buildCvHtml({
-      body: cv.body,
+      body: effectiveBody,
       name: linkedResumeName,
       licenses: linkedResumeLicenses,
       documentDate: cv.documentDate,

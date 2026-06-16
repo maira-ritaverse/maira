@@ -23,6 +23,16 @@ export const signupSchema = z.object({
    * email 自体の正当性チェックは callback 後の RPC で行う。
    */
   invitationToken: z.string().min(1).max(256).optional(),
+  /**
+   * 利用規約 + プライバシーポリシーへの同意(必須)。
+   * ADR 0006(サーバーサイド暗号化への方針確定)により、保管と AI 処理の範囲が
+   * プライバシーポリシーに明記されるため、登録時の明示同意を必須化する。
+   */
+  agreeToTerms: z.literal(true, {
+    errorMap: () => ({
+      message: "利用規約とプライバシーポリシーへの同意が必要です",
+    }),
+  }),
 });
 
 export type SignupInput = z.infer<typeof signupSchema>;

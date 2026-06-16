@@ -36,6 +36,16 @@ const emptyData: DashboardData = {
     inProgress: [],
   },
   tasks: { total: 0, overdue: [], dueToday: [], dueThisWeek: [], upcoming: [] },
+  jobRecommendations: { hasFreshSignal: false, hasLinkedAgencyJobs: false },
+  aiUsageSummary: {
+    photo: { current: 0, limit: 5 },
+    recommendation: { current: 0, limit: 20 },
+    intake: { current: 0, limit: 3 },
+    hasWarning: false,
+  },
+  unreadNotificationCount: 0,
+  upcomingMeetings: [],
+  pendingInterviewShares: [],
   status: "empty",
 };
 

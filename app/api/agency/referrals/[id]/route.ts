@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { fireInAppNotification } from "@/lib/notifications/in-app";
+import { fireInAppNotification, fireSeekerNotification } from "@/lib/notifications/in-app";
 import { getUserRole } from "@/lib/organizations/queries";
 import { getReferralStatusConfig, updateReferralRequestSchema } from "@/lib/referrals/types";
 import type { ReferralStatus } from "@/lib/referrals/types";
+import { getOrganizationSlackWebhookUrl, sendSlackMessage } from "@/lib/slack/notify";
 
 /**
  * PATCH /api/agency/referrals/[id]
@@ -173,6 +174,78 @@ export async function PATCH(request: Request, { params }: RouteParams) {
               actorDisplayName: actorProfile?.display_name ?? null,
             },
           });
+
+          // 求職者本人にも通知(linked クライアントのみ)。
+          // 求人名 + ステータス遷移のみ載せ、エージェント内部メモ(notes)等は含めない。
+          const { data: linkedRow } = await supabase
+            .from("client_records")
+            .select("linked_user_id")
+            .eq("id", clientRow.id)
+            .maybeSingle();
+          const linkedUserId = (linkedRow as { linked_user_id: string | null } | null)
+            ?.linked_user_id;
+          if (linkedUserId) {
+            // 求人名を取得(referrals → job_postings)
+            const { data: refRow } = await supabase
+              .from("referrals")
+              .select("job_posting_id, job_postings(company_name, position)")
+              .eq("id", id)
+              .maybeSingle();
+            const job =
+              (refRow as {
+                job_posting_id: string;
+                job_postings:
+                  | { company_name: string; position: string }
+                  | { company_name: string; position: string }[]
+                  | null;
+              } | null) ?? null;
+            const j = job?.job_postings
+              ? Array.isArray(job.job_postings)
+                ? job.job_postings[0]
+                : job.job_postings
+              : null;
+            const jobLabel = j ? `${j.company_name} ・ ${j.position}` : "求人";
+            const seekerTitle = fromLabel
+              ? `${fromLabel} → ${toLabel}: ${jobLabel}`
+              : `${toLabel}: ${jobLabel}`;
+            await fireSeekerNotification({
+              userId: linkedUserId,
+              payload: {
+                kind: "referral_status_change_for_seeker",
+                title: seekerTitle,
+                href: "/app/agent-referrals",
+                referralId: id,
+                jobLabel,
+                fromStatus: previousStatus,
+                toStatus: d.status,
+              },
+            });
+          }
+
+          // Slack 連携:重要な遷移(offer / joined / declined)を組織の Slack に流す。
+          // Webhook URL が未設定なら no-op で skip(notify 内で判定)。
+          // 通知失敗は本処理に影響させない(in-app と同じ方針)。
+          if (d.status === "offer" || d.status === "joined" || d.status === "declined") {
+            const slackUrl = await getOrganizationSlackWebhookUrl(orgId);
+            if (slackUrl) {
+              const fromLabelForSlack = previousStatus
+                ? getReferralStatusConfig(previousStatus as ReferralStatus).label
+                : "—";
+              const toLabelForSlack = getReferralStatusConfig(d.status).label;
+              const emojiMap: Record<string, string> = {
+                offer: ":tada:",
+                joined: ":confetti_ball:",
+                declined: ":disappointed:",
+              };
+              const emoji = emojiMap[d.status] ?? "";
+              const actorName = actorProfile?.display_name ?? "(担当者)";
+              const slackText = `${emoji} *${clientRow.name}* さんの応募ステータスが *${fromLabelForSlack} → ${toLabelForSlack}* になりました(${actorName})`;
+              const result = await sendSlackMessage({ webhookUrl: slackUrl, text: slackText });
+              if (!result.sent && result.reason === "failed") {
+                console.warn("[slack] notification failed:", result.error);
+              }
+            }
+          }
         }
       } catch (notifyErr) {
         console.error("[notifications] firing failed (referral update succeeded)", {

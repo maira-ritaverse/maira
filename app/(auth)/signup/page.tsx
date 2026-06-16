@@ -1,3 +1,6 @@
+import { redirect } from "next/navigation";
+
+import { isOpenSignupEnabled } from "@/lib/config/signup-mode";
 import { createServiceClient } from "@/lib/supabase/service";
 import type { OrganizationRole } from "@/lib/organizations/types";
 import { SignupForm } from "./signup-form";
@@ -63,6 +66,12 @@ export default async function SignupPage({
         role: data.role,
       };
     }
+  }
+
+  // BtoBtoC モード:招待トークンが無い / 無効なら自由登録は許可しない。
+  // 拡張性:NEXT_PUBLIC_OPEN_SIGNUP_ENABLED="true" にすれば C 向け開放できる。
+  if (!invitation && !isOpenSignupEnabled()) {
+    redirect("/login?reason=signup_closed");
   }
 
   return <SignupForm invitation={invitation} />;

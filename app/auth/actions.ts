@@ -1,10 +1,13 @@
 "use server";
 
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { SignupInput, LoginInput } from "@/lib/validations/auth";
+import { recordAuditLog } from "@/lib/audit/audit-log";
 import { safeNextOr } from "@/lib/auth/safe-next";
+import { isOpenSignupEnabled } from "@/lib/config/signup-mode";
 
 /**
  * 新規登録 Server Action
@@ -20,6 +23,12 @@ import { safeNextOr } from "@/lib/auth/safe-next";
  *     URL に直接埋め込むので、文字数の上限(256)はバリデーション側で担保している。
  */
 export async function signup(input: SignupInput) {
+  // BtoBtoC モード:招待トークン無しの自由登録は API レベルでも拒否する
+  // (UI でガードしていても URL を直接叩く / 古いタブからの送信を防ぐ)
+  if (!input.invitationToken && !isOpenSignupEnabled()) {
+    return { error: "自由登録は受け付けていません。管理者からの招待が必要です。" };
+  }
+
   const supabase = await createClient();
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -60,6 +69,9 @@ export async function signup(input: SignupInput) {
  */
 export async function login(input: LoginInput, next?: string | null) {
   const supabase = await createClient();
+  const hdrs = await headers();
+  const ip = hdrs.get("x-forwarded-for");
+  const ua = hdrs.get("user-agent");
 
   const { error } = await supabase.auth.signInWithPassword({
     email: input.email,
@@ -67,7 +79,29 @@ export async function login(input: LoginInput, next?: string | null) {
   });
 
   if (error) {
+    // ログイン失敗も記録(不正アクセス検知 / レート異常検知の起点)
+    await recordAuditLog({
+      userId: null,
+      action: "login",
+      metadata: { result: "failure", email: input.email, error: error.message },
+      ipAddress: ip,
+      userAgent: ua,
+    });
     return { error: error.message };
+  }
+
+  // 成功時:user.id を取得して記録(法令対応・監査用)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) {
+    await recordAuditLog({
+      userId: user.id,
+      action: "login",
+      metadata: { result: "success", email: user.email ?? null },
+      ipAddress: ip,
+      userAgent: ua,
+    });
   }
 
   revalidatePath("/", "layout");
@@ -79,7 +113,26 @@ export async function login(input: LoginInput, next?: string | null) {
  */
 export async function logout() {
   const supabase = await createClient();
+
+  // signOut 前に user を取り、後で audit_log に残す
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const hdrs = await headers();
+  const ip = hdrs.get("x-forwarded-for");
+  const ua = hdrs.get("user-agent");
+
   await supabase.auth.signOut();
+
+  if (user) {
+    await recordAuditLog({
+      userId: user.id,
+      action: "logout",
+      metadata: { email: user.email ?? null },
+      ipAddress: ip,
+      userAgent: ua,
+    });
+  }
 
   revalidatePath("/", "layout");
   redirect("/login");

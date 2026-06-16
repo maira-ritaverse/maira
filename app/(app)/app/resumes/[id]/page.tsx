@@ -7,6 +7,7 @@ import {
   PHOTO_SIGNED_URL_PREVIEW_EXPIRES_SEC,
 } from "@/lib/resumes/photo-signed-url";
 import { createClient } from "@/lib/supabase/server";
+import { ResumeAiFeedback } from "./resume-ai-feedback";
 import { ResumeTabs } from "./resume-tabs";
 
 /**
@@ -61,6 +62,9 @@ export default async function EditResumePage({ params }: PageProps) {
         photoSignedUrl={photoSignedUrl}
         hasCareerProfile={hasCareerProfile}
       />
+
+      {/* AI 添削:履歴書の構造化データから改善点と具体的なリライト例を提案 */}
+      <ResumeAiFeedback resumeId={resume.id} />
     </div>
   );
 }

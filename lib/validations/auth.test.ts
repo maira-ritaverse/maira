@@ -11,11 +11,13 @@ import { loginSchema, requestPasswordResetSchema, resetPasswordSchema, signupSch
  */
 
 describe("signupSchema", () => {
+  // ADR 0006 で agreeToTerms を必須化したため、valid fixture にも含める
   const valid = {
     email: "user@example.com",
     password: "securePass123",
     displayName: "田中太郎",
-  };
+    agreeToTerms: true,
+  } as const;
 
   it("最小構成で通る(invitationToken なし)", () => {
     expect(signupSchema.safeParse(valid).success).toBe(true);
@@ -51,6 +53,18 @@ describe("signupSchema", () => {
     expect(signupSchema.safeParse({ ...valid, invitationToken: "a".repeat(257) }).success).toBe(
       false,
     );
+  });
+
+  // ADR 0006:利用規約とプライバシーポリシー同意は必須
+  it("agreeToTerms が undefined / false は失敗", () => {
+    const { agreeToTerms: _agree, ...withoutAgree } = valid;
+    void _agree;
+    expect(signupSchema.safeParse(withoutAgree).success).toBe(false);
+    expect(signupSchema.safeParse({ ...valid, agreeToTerms: false }).success).toBe(false);
+  });
+
+  it("agreeToTerms = true で通る", () => {
+    expect(signupSchema.safeParse({ ...valid, agreeToTerms: true }).success).toBe(true);
   });
 });
 

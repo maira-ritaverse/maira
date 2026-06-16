@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -20,32 +20,47 @@ import {
   type ReferralBreakdown,
 } from "@/lib/clients/types";
 import {
+  COLUMN_LABELS,
+  SORTABLE_COLUMNS,
+  defaultColumnConfig,
+  reorderColumnTo,
+  type ColumnConfig,
+  type ColumnId,
+} from "@/lib/clients/column-config";
+import { getDueStatus } from "@/lib/agency-tasks/due-status";
+import { useNow } from "@/lib/agency-tasks/use-now";
+import type { SortColumn, SortDirection } from "@/lib/clients/filter-sort";
+import {
   getReferralStatusConfig,
   referralStatusConfig,
   type ReferralStatus,
 } from "@/lib/referrals/types";
-import { getDueStatus } from "@/lib/agency-tasks/due-status";
-import { useNow } from "@/lib/agency-tasks/use-now";
-import {
-  applyClientsFilterSort,
-  buildEmploymentTypeOptions,
-  buildEntrySiteOptions,
-  buildPrefectureOptions,
-  type SortColumn,
-  type SortDirection,
-  type StatusFilter,
-} from "@/lib/clients/filter-sort";
-import type { ClientEmploymentType } from "@/lib/clients/types";
+
+import { visibleColumns } from "./column-config-modal";
 
 type ClientsTableProps = {
+  /**
+   * 既にフィルタ + ソート済みのクライアント一覧。
+   * フィルタ / ソート状態とロジックは親(ClientsViewTabs)に集約し、
+   * ClientsTable は描画専任にする(カンバンビューと共通の絞り込み体験のため)。
+   */
   clients: ClientRecordWithUpdateBadge[];
+  sortColumn: SortColumn;
+  sortDirection: SortDirection;
+  onToggleSort: (column: SortColumn) => void;
+  /** 列の並び順 + 表示設定。未指定はデフォルト全表示。 */
+  columnConfig?: ColumnConfig;
+  /** ヘッダ DnD による並び替えを反映するコールバック(未指定なら DnD 無効) */
+  onColumnConfigChange?: (next: ColumnConfig) => void;
+  /** 列設定モーダルを開くコールバック(表示/非表示の切替用) */
+  onOpenColumnConfig?: () => void;
+  /** 一括操作:選択中の ID 群と toggle/all コールバック。null/未指定なら選択 UI を出さない。 */
+  selectedIds?: Set<string>;
+  onToggleSelectId?: (id: string) => void;
+  onToggleSelectAll?: () => void;
 };
 
 // 応募状況バッジ用の短ラベル(セル幅を圧迫しないように)。
-// 完全な日本語ラベルは referralStatusConfig 側にあるが、
-// 一覧の小バッジ表示では「書類選考」のような長めの語が並ぶと崩れるため、
-// 一覧用だけのコンパクトラベルをここで持つ。
-// 共通化したくなったら referrals/types に compactLabel として持ち上げる。
 const referralStatusCompactLabel: Record<ReferralStatus, string> = {
   planned: "予定",
   recommended: "推薦",
@@ -77,299 +92,208 @@ function countByDueStatus(
 }
 
 /**
- * クライアント一覧のテーブル表示(クライアントコンポーネント)
+ * クライアント一覧のテーブル表示(presentational)。
  *
- * - ソート/フィルタ/検索はすべてクライアント側(JS)で処理。
- *   想定データ量が少ない前提で、サーバー往復を減らして UX を優先。
- *   データ量が増えた場合はサーバー側ページネーション・絞り込みに移行する。
- * - 行クリックで /agency/clients/[id] に遷移する。
+ * 列の並び順 / 表示は columnConfig で制御。各列のセル renderer は CELL_RENDERERS に集約。
  */
-export function ClientsTable({ clients }: ClientsTableProps) {
+export function ClientsTable({
+  clients,
+  sortColumn,
+  sortDirection,
+  onToggleSort,
+  columnConfig,
+  onColumnConfigChange,
+  onOpenColumnConfig,
+  selectedIds,
+  onToggleSelectId,
+  onToggleSelectAll,
+}: ClientsTableProps) {
   const router = useRouter();
-  const [sortColumn, setSortColumn] = useState<SortColumn>("createdAt");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  // エントリーサイト絞り込み。"all" は絞らない、"unset" は entrySite が null/空文字。
-  const [entrySiteFilter, setEntrySiteFilter] = useState<string>("all");
-  // EMPRO 拡張:都道府県絞り込み / 雇用形態絞り込み。同じ "all" + "unset" + 値 のパターン。
-  const [prefectureFilter, setPrefectureFilter] = useState<string>("all");
-  const [employmentTypeFilter, setEmploymentTypeFilter] = useState<string>("all");
-
-  // 現在の clients から「実在するエントリーサイトの集合」を作る(降順件数)。
-  // 集計ロジックは lib/clients/filter-sort.ts(テスト済み)に集約。
-  const entrySiteOptions = useMemo(() => buildEntrySiteOptions(clients), [clients]);
-  // EMPRO 拡張の選択肢(同パターン)
-  const prefectureOptions = useMemo(() => buildPrefectureOptions(clients), [clients]);
-  const employmentTypeOptions = useMemo(() => buildEmploymentTypeOptions(clients), [clients]);
-  // 期限バッジ用の現在時刻(useSyncExternalStore で SSR null → マウント後 Date)
   const now = useNow();
+  const selectionEnabled = selectedIds !== undefined;
+  const allChecked =
+    selectionEnabled && clients.length > 0 && clients.every((c) => selectedIds!.has(c.id));
+  const someChecked =
+    selectionEnabled && !allChecked && clients.some((c) => selectedIds!.has(c.id));
 
-  // 絞り込み・並び替えは純関数に委譲(検索 + ステータス + エントリーサイト + 都道府県 + 雇用形態 + ソート)。
-  // テストは lib/clients/filter-sort.test.ts 側で網羅。
-  const filteredSorted = useMemo(
-    () =>
-      applyClientsFilterSort(clients, {
-        searchQuery,
-        statusFilter,
-        entrySiteFilter,
-        prefectureFilter,
-        employmentTypeFilter,
-        sortColumn,
-        sortDirection,
-      }),
-    [
-      clients,
-      searchQuery,
-      statusFilter,
-      entrySiteFilter,
-      prefectureFilter,
-      employmentTypeFilter,
-      sortColumn,
-      sortDirection,
-    ],
-  );
+  const config = columnConfig ?? defaultColumnConfig();
+  const visible = visibleColumns(config);
 
-  const toggleSort = (col: SortColumn) => {
-    if (sortColumn === col) {
-      setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortColumn(col);
-      setSortDirection("asc");
-    }
-  };
+  // ヘッダ DnD の状態
+  const [dragColIdx, setDragColIdx] = useState<number | null>(null);
+  const [hoverColIdx, setHoverColIdx] = useState<number | null>(null);
+  const dndEnabled = onColumnConfigChange !== undefined;
 
   const sortArrow = (col: SortColumn): string => {
     if (sortColumn !== col) return "";
     return sortDirection === "asc" ? " ↑" : " ↓";
   };
+  const isSortable = (id: ColumnId): id is SortColumn =>
+    (SORTABLE_COLUMNS as readonly string[]).includes(id);
+
+  // ヘッダ DnD ハンドラ。visible 配列上の index と config.order の index を変換して
+  // reorderColumnTo に渡す(非表示列を含む全体の並びで操作するため)。
+  const handleHeaderDragStart =
+    (visibleIdx: number) => (e: React.DragEvent<HTMLTableCellElement>) => {
+      if (!dndEnabled) return;
+      setDragColIdx(visibleIdx);
+      e.dataTransfer.setData("text/plain", String(visibleIdx));
+      e.dataTransfer.effectAllowed = "move";
+    };
+  const handleHeaderDragOver =
+    (visibleIdx: number) => (e: React.DragEvent<HTMLTableCellElement>) => {
+      if (!dndEnabled || dragColIdx === null) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      if (hoverColIdx !== visibleIdx) setHoverColIdx(visibleIdx);
+    };
+  const handleHeaderDrop = (visibleIdx: number) => (e: React.DragEvent<HTMLTableCellElement>) => {
+    if (!dndEnabled || dragColIdx === null) return;
+    e.preventDefault();
+    // visible 配列上の (dragColIdx, visibleIdx) を、config.order 上の index に変換
+    const fromId = visible[dragColIdx];
+    const toId = visible[visibleIdx];
+    const fromOrderIdx = config.order.indexOf(fromId);
+    const toOrderIdx = config.order.indexOf(toId);
+    if (fromOrderIdx >= 0 && toOrderIdx >= 0) {
+      onColumnConfigChange!(reorderColumnTo(config, fromOrderIdx, toOrderIdx));
+    }
+    setDragColIdx(null);
+    setHoverColIdx(null);
+  };
+  const handleHeaderDragEnd = () => {
+    setDragColIdx(null);
+    setHoverColIdx(null);
+  };
 
   return (
-    <div className="space-y-4">
-      {/* 検索・フィルタ行 */}
-      <div className="flex flex-wrap items-center gap-3">
-        <Input
-          placeholder="氏名・氏名カナ・メールで検索"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="max-w-xs"
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-          className="border-input bg-background rounded-lg border px-3 py-1.5 text-sm"
-        >
-          <option value="all">すべての対応状況</option>
-          {Object.entries(clientStatusLabels).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        {/* エントリーサイト絞り込み。現在のデータから検出した媒体だけ選べる
-            (空の媒体オプションを並べると業務上のノイズになるため)。 */}
-        {entrySiteOptions.length > 0 && (
-          <select
-            value={entrySiteFilter}
-            onChange={(e) => setEntrySiteFilter(e.target.value)}
-            className="border-input bg-background rounded-lg border px-3 py-1.5 text-sm"
-          >
-            <option value="all">すべての媒体</option>
-            {entrySiteOptions.map(([key, count]) => (
-              <option key={key} value={key}>
-                {key === "unset" ? "未設定" : key}({count})
-              </option>
-            ))}
-          </select>
+    <div className="space-y-2">
+      <div className="text-muted-foreground flex flex-wrap items-center justify-between gap-2 text-[11px]">
+        <span>💡 列見出しをドラッグして並び替え、クリックでソート</span>
+        {onOpenColumnConfig && (
+          <Button size="sm" variant="ghost" onClick={onOpenColumnConfig}>
+            ⚙ 列の表示
+          </Button>
         )}
-        {/* EMPRO 拡張:都道府県絞り込み。実在する都道府県だけを件数付きで表示。
-            「unset」(未入力)が混じる場合のみそれも選べる(リストにある時のみ)。 */}
-        {prefectureOptions.length > 0 && (
-          <select
-            value={prefectureFilter}
-            onChange={(e) => setPrefectureFilter(e.target.value)}
-            className="border-input bg-background rounded-lg border px-3 py-1.5 text-sm"
-          >
-            <option value="all">すべての都道府県</option>
-            {prefectureOptions.map(([key, count]) => (
-              <option key={key} value={key}>
-                {key === "unset" ? "未設定" : key}({count})
-              </option>
-            ))}
-          </select>
-        )}
-        {/* EMPRO 拡張:雇用形態絞り込み。enum 値で実在するものだけ。 */}
-        {employmentTypeOptions.length > 0 && (
-          <select
-            value={employmentTypeFilter}
-            onChange={(e) => setEmploymentTypeFilter(e.target.value)}
-            className="border-input bg-background rounded-lg border px-3 py-1.5 text-sm"
-          >
-            <option value="all">すべての雇用形態</option>
-            {employmentTypeOptions.map(([key, count]) => {
-              const label =
-                key === "unset"
-                  ? "未設定"
-                  : clientEmploymentTypeLabels[key as ClientEmploymentType];
-              return (
-                <option key={key} value={key}>
-                  {label}({count})
-                </option>
-              );
-            })}
-          </select>
-        )}
-        <span className="text-muted-foreground text-sm">{filteredSorted.length}件</span>
       </div>
-
-      {/* テーブル */}
-      <div className="ring-foreground/10 rounded-xl ring-1">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("name")}>
-                氏名{sortArrow("name")}
-              </TableHead>
-              <TableHead>氏名カナ</TableHead>
-              <TableHead>メール</TableHead>
-              <TableHead>電話</TableHead>
-              <TableHead>都道府県</TableHead>
-              <TableHead>雇用形態</TableHead>
-              <TableHead
-                className="cursor-pointer select-none"
-                onClick={() => toggleSort("status")}
-              >
-                対応状況{sortArrow("status")}
-              </TableHead>
-              <TableHead>応募状況</TableHead>
-              <TableHead>連携</TableHead>
-              <TableHead>MA配信</TableHead>
-              <TableHead>担当者</TableHead>
-              <TableHead>受付日</TableHead>
-              <TableHead
-                className="cursor-pointer select-none"
-                onClick={() => toggleSort("createdAt")}
-              >
-                登録日{sortArrow("createdAt")}
-              </TableHead>
+      {/*
+        Excel ライクなテーブル:
+          - 横スクロール可能(overflow-x-auto)
+          - 各セルに右側罫線(border-r)+ 行罫線(TableRow デフォルトの border-b)で格子状
+          - ヘッダは muted 背景 + bold + 罫線で立体感
+          - 最後の列の右罫線は last:border-r-0 で消す(枠線と二重にならないように)
+      */}
+      <div className="ring-foreground/10 overflow-x-auto rounded-md ring-1">
+        <Table className="border-collapse">
+          <TableHeader className="bg-muted/40">
+            <TableRow className="border-b">
+              {selectionEnabled && (
+                <TableHead className="w-10 border-r">
+                  <input
+                    type="checkbox"
+                    aria-label="全選択"
+                    checked={allChecked}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someChecked;
+                    }}
+                    onChange={onToggleSelectAll}
+                    className="cursor-pointer"
+                  />
+                </TableHead>
+              )}
+              {visible.map((id, vIdx) => {
+                const isDragging = dragColIdx === vIdx;
+                const isHoverTarget =
+                  hoverColIdx === vIdx && dragColIdx !== null && dragColIdx !== vIdx;
+                // ホバー先列の境界線:ドラッグ元より右なら右側を、左なら左側を強調
+                // 通常の border-r とは別の太い線(emerald)で「ここに落ちる」を示す
+                const indicator = isHoverTarget
+                  ? dragColIdx! < vIdx
+                    ? "shadow-[inset_-3px_0_0_0_rgba(16,185,129,1)]"
+                    : "shadow-[inset_3px_0_0_0_rgba(16,185,129,1)]"
+                  : "";
+                const sortable = isSortable(id);
+                return (
+                  <TableHead
+                    key={id}
+                    draggable={dndEnabled}
+                    onDragStart={handleHeaderDragStart(vIdx)}
+                    onDragOver={handleHeaderDragOver(vIdx)}
+                    onDrop={handleHeaderDrop(vIdx)}
+                    onDragEnd={handleHeaderDragEnd}
+                    onClick={sortable ? () => onToggleSort(id) : undefined}
+                    className={`text-foreground border-r font-semibold transition-colors select-none last:border-r-0 ${
+                      dndEnabled ? "cursor-grab active:cursor-grabbing" : ""
+                    } ${sortable && !dndEnabled ? "cursor-pointer" : ""} ${
+                      isDragging ? "opacity-50" : ""
+                    } ${indicator}`}
+                    title={
+                      dndEnabled
+                        ? sortable
+                          ? "ドラッグで並び替え / クリックでソート"
+                          : "ドラッグで並び替え"
+                        : sortable
+                          ? "クリックでソート"
+                          : undefined
+                    }
+                  >
+                    {COLUMN_LABELS[id]}
+                    {sortable && sortArrow(id)}
+                  </TableHead>
+                );
+              })}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredSorted.length === 0 ? (
+            {clients.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={13} className="text-muted-foreground py-8 text-center">
+                <TableCell
+                  colSpan={visible.length + (selectionEnabled ? 1 : 0)}
+                  className="text-muted-foreground py-8 text-center"
+                >
                   該当するクライアントがいません
                 </TableCell>
               </TableRow>
             ) : (
-              filteredSorted.map((client) => {
+              clients.map((client) => {
                 const { overdue, soon } = countByDueStatus(client.pendingDueAts, now);
+                const isSelected = selectionEnabled && selectedIds!.has(client.id);
                 return (
                   <TableRow
                     key={client.id}
-                    className="hover:bg-accent cursor-pointer"
+                    className={`hover:bg-accent cursor-pointer ${isSelected ? "bg-primary/5" : ""}`}
                     onClick={() => router.push(`/agency/clients/${client.id}`)}
                   >
-                    <TableCell className="font-medium">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span>{client.name}</span>
-                        {/* 期限超過・間近のバッジ。詳細画面のタスク色分けと同じトーン */}
-                        {overdue > 0 && (
-                          <span className="inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-red-700 dark:bg-red-950 dark:text-red-300">
-                            期限超過 {overdue}件
-                          </span>
-                        )}
-                        {soon > 0 && (
-                          <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                            まもなく {soon}件
-                          </span>
-                        )}
-                        {/* 本人データ(career_profile/resume/cv)の更新を、自分が前回見て
-                            以降に見ていない場合に出す。詳細を開いた次回ロードで消える。
-                            色はタスク超過(赤)・間近(黄)と被らない青系にして、原因の違い
-                            (エージェント都合 vs 求職者由来)を視覚的に区別する。 */}
-                        {client.hasUnreadUpdate && (
-                          <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-                            更新あり
-                          </span>
-                        )}
-                        {/* 他社エージェント利用情報が登録済みのとき競合警告を出す。
-                            値の中身は暗号化されているのでここでは表示しない(N+1 復号回避)。
-                            紫系で他のバッジ(赤/黄/青/緑)と被らない色に。 */}
-                        {client.hasOtherAgencyStatus && (
-                          <span
-                            className="inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-purple-700 dark:bg-purple-950 dark:text-purple-300"
-                            title="他社エージェント利用状況が記録されています(詳細は詳細画面で)"
-                          >
-                            ⚠ 他社利用中
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    {/* EMPRO 拡張(マイグレーション 20260615100001):氏名カナ */}
-                    <TableCell className="text-muted-foreground">
-                      {client.nameKana ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{client.email}</TableCell>
-                    <TableCell className="text-muted-foreground">{client.phone ?? "—"}</TableCell>
-                    {/* EMPRO 拡張:都道府県(エリア絞り込みのキー)*/}
-                    <TableCell className="text-muted-foreground">
-                      {client.prefecture ?? "—"}
-                    </TableCell>
-                    {/* EMPRO 拡張:雇用形態(enum をラベル化)*/}
-                    <TableCell className="text-muted-foreground">
-                      {client.currentEmploymentType
-                        ? clientEmploymentTypeLabels[client.currentEmploymentType]
-                        : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <span className="bg-muted inline-block rounded-full px-2 py-0.5 text-xs whitespace-nowrap">
-                        {clientStatusLabels[client.status]}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <ReferralBreakdownBadges breakdown={client.referralBreakdown} />
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`inline-block rounded-full px-2 py-0.5 text-xs whitespace-nowrap ${
-                          client.linkStatus === "linked"
-                            ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300"
-                            : client.linkStatus === "revoke_requested"
-                              ? "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
-                              : "bg-muted text-muted-foreground"
-                        }`}
+                    {selectionEnabled && (
+                      <TableCell
+                        className="border-r"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                        }}
                       >
-                        {clientLinkStatusLabels[client.linkStatus]}
-                      </span>
-                    </TableCell>
-                    {/* MA 配信抑制フラグの表示。許可=緑、停止=グレーで一目で区別する。
-                        実装的にはこの列は E (20260615000005) 以降のレコードでのみ
-                        意味のある値が入る(default true)。 */}
-                    <TableCell>
-                      {client.emailDistributionEnabled ? (
-                        <span className="inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-xs whitespace-nowrap text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                          許可
-                        </span>
-                      ) : (
-                        <span className="bg-muted text-muted-foreground inline-block rounded-full px-2 py-0.5 text-xs whitespace-nowrap">
-                          停止
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {client.assigneeName ?? "未割当"}
-                    </TableCell>
-                    {/* EMPRO 拡張:受付日(intake_date)。null は「未入力」として "—"。
-                        登録日(created_at)とは別物で、面談・対応の起点を明示する。 */}
-                    <TableCell className="text-muted-foreground whitespace-nowrap">
-                      {client.intakeDate
-                        ? new Date(client.intakeDate).toLocaleDateString("ja-JP")
-                        : "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground whitespace-nowrap">
-                      {new Date(client.createdAt).toLocaleDateString("ja-JP")}
-                    </TableCell>
+                        <input
+                          type="checkbox"
+                          aria-label={`${client.name} を選択`}
+                          checked={isSelected ?? false}
+                          onChange={() => onToggleSelectId?.(client.id)}
+                          className="cursor-pointer"
+                        />
+                      </TableCell>
+                    )}
+                    {visible.map((id) => (
+                      <TableCell
+                        key={id}
+                        className={
+                          // 各セルに右罫線 + 最後の列だけ消す(枠線との二重防止)
+                          // 名前列は強調(font-medium)、他は muted(罫線 + 余白の見やすさ優先)
+                          `border-r last:border-r-0 ${
+                            id === "name" ? "font-medium" : "text-muted-foreground"
+                          }`
+                        }
+                      >
+                        {renderCell(id, client, { overdue, soon })}
+                      </TableCell>
+                    ))}
                   </TableRow>
                 );
               })
@@ -382,24 +306,133 @@ export function ClientsTable({ clients }: ClientsTableProps) {
 }
 
 /**
+ * 各列の cell 描画ロジック。
+ * 既存の table セルから抜き出して 1 つの switch に集約。
+ */
+function renderCell(
+  id: ColumnId,
+  client: ClientRecordWithUpdateBadge,
+  due: { overdue: number; soon: number },
+): React.ReactNode {
+  switch (id) {
+    case "name":
+      return (
+        <div className="flex flex-wrap items-center gap-2">
+          <span>{client.name}</span>
+          {due.overdue > 0 && (
+            <span className="inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-red-700 dark:bg-red-950 dark:text-red-300">
+              期限超過 {due.overdue}件
+            </span>
+          )}
+          {due.soon > 0 && (
+            <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+              まもなく {due.soon}件
+            </span>
+          )}
+          {client.hasUnreadUpdate && (
+            <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+              更新あり
+            </span>
+          )}
+          {client.hasOtherAgencyStatus && (
+            <span
+              className="inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-purple-700 dark:bg-purple-950 dark:text-purple-300"
+              title="他社エージェント利用状況が記録されています(詳細は詳細画面で)"
+            >
+              ⚠ 他社利用中
+            </span>
+          )}
+        </div>
+      );
+    case "nameKana":
+      return client.nameKana ?? "—";
+    case "email":
+      return client.email;
+    case "phone":
+      return client.phone ?? "—";
+    case "prefecture":
+      return client.prefecture ?? "—";
+    case "employmentType":
+      return client.currentEmploymentType
+        ? clientEmploymentTypeLabels[client.currentEmploymentType]
+        : "—";
+    case "status":
+      return (
+        <span className="bg-muted inline-block rounded-full px-2 py-0.5 text-xs whitespace-nowrap">
+          {clientStatusLabels[client.status]}
+        </span>
+      );
+    case "applicationStatus":
+      return <ReferralBreakdownBadges breakdown={client.referralBreakdown} />;
+    case "linkStatus":
+      return (
+        <span
+          className={`inline-block rounded-full px-2 py-0.5 text-xs whitespace-nowrap ${
+            client.linkStatus === "linked"
+              ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300"
+              : client.linkStatus === "revoke_requested"
+                ? "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {clientLinkStatusLabels[client.linkStatus]}
+        </span>
+      );
+    case "maStatus":
+      return client.emailDistributionEnabled ? (
+        <span className="inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-xs whitespace-nowrap text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+          許可
+        </span>
+      ) : (
+        <span className="bg-muted text-muted-foreground inline-block rounded-full px-2 py-0.5 text-xs whitespace-nowrap">
+          停止
+        </span>
+      );
+    case "assignee":
+      return client.assigneeName ?? "未割当";
+    case "nextMeeting": {
+      if (!client.nextMeetingAt) {
+        return <span className="text-muted-foreground text-xs">—</span>;
+      }
+      const d = new Date(client.nextMeetingAt);
+      const isToday = d.toDateString() === new Date().toDateString();
+      return (
+        <span
+          className={`inline-block rounded-full px-2 py-0.5 text-xs whitespace-nowrap ${
+            isToday
+              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+              : "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+          }`}
+          title={d.toLocaleString("ja-JP")}
+        >
+          {d.toLocaleString("ja-JP", {
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </span>
+      );
+    }
+    case "receivedAt":
+      return client.intakeDate ? new Date(client.intakeDate).toLocaleDateString("ja-JP") : "—";
+    case "createdAt":
+      return new Date(client.createdAt).toLocaleDateString("ja-JP");
+  }
+}
+
+/**
  * 応募状況バッジ群(列セル)
  *
  * referral 段階別の件数を「ある段階だけ」横に並べる(0 件は出さない)。
  * 並び順は referralStatusConfig の order に従い、本筋(planned→joined)を先に、
  * declined は末尾 + 薄色(opacity-60)で控えめに表示する。
- *
- * 行クリックで詳細遷移するので、バッジ自体はクリック制御を持たない
- * (見た目だけのインジケータ)。
- * referral が 0 件のクライアントは「—」を控えめに出すだけにして、
- * 列が極端に空にならないようにする。
  */
 function ReferralBreakdownBadges({ breakdown }: { breakdown: ReferralBreakdown }) {
   if (breakdown.total === 0) {
     return <span className="text-muted-foreground text-xs">—</span>;
   }
 
-  // referralStatusConfig は order を持つので、それに従って並べる(declined は 99 で末尾)。
-  // byStatus はキーごとに件数。0 件のキーは持たない契約。
   const ordered = [...referralStatusConfig].sort((a, b) => a.order - b.order);
 
   return (
@@ -409,7 +442,6 @@ function ReferralBreakdownBadges({ breakdown }: { breakdown: ReferralBreakdown }
         if (!count) return null;
         const compact = referralStatusCompactLabel[cfg.value];
         const config = getReferralStatusConfig(cfg.value);
-        // declined は注意を引きすぎないよう opacity を下げる(色は status 別配色のまま)。
         const dimmed = cfg.value === "declined" ? "opacity-60" : "";
         return (
           <span

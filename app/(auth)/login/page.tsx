@@ -7,10 +7,13 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { loginSchema, type LoginInput } from "@/lib/validations/auth";
 import { login } from "@/app/auth/actions";
+import { GoogleSignInButton } from "@/components/features/auth/google-sign-in-button";
+import { SignupInquiryForm } from "@/components/features/auth/signup-inquiry-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { isOpenSignupEnabled } from "@/lib/config/signup-mode";
 
 /**
  * useSearchParams() を使うため、Next.js 15+ では静的レンダリング時に
@@ -26,9 +29,15 @@ function LoginForm() {
   const errorParam = searchParams.get("error");
   const nextParam = searchParams.get("next");
 
+  const reasonParam = searchParams.get("reason");
+
   const [isPending, setIsPending] = useState(false);
   const [serverError, setServerError] = useState<string | null>(
-    errorParam === "auth_callback_failed" ? "認証に失敗しました。もう一度お試しください。" : null,
+    errorParam === "auth_callback_failed"
+      ? "認証に失敗しました。もう一度お試しください。"
+      : reasonParam === "signup_closed"
+        ? "現在、自由登録は受け付けていません。エージェントからの招待メールをお持ちの方は、メール内のリンクから登録してください。"
+        : null,
   );
 
   const {
@@ -53,44 +62,56 @@ function LoginForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="bg-card space-y-4 rounded-lg border p-6">
-      {serverError && (
-        <Alert variant="destructive">
-          <AlertDescription>{serverError}</AlertDescription>
-        </Alert>
-      )}
+    <div className="bg-card space-y-4 rounded-lg border p-6">
+      {/* Google でログイン(優先導線) */}
+      <GoogleSignInButton label="Google でログイン" next={nextParam ?? "/app"} />
 
-      <div className="space-y-2">
-        <Label htmlFor="email">メールアドレス</Label>
-        <Input
-          id="email"
-          type="email"
-          placeholder="you@example.com"
-          {...register("email")}
-          disabled={isPending}
-        />
-        {errors.email && <p className="text-sm text-red-600">{errors.email.message}</p>}
+      {/* or 区切り */}
+      <div className="flex items-center gap-3">
+        <div className="bg-border h-px flex-1" />
+        <span className="text-muted-foreground text-xs">または</span>
+        <div className="bg-border h-px flex-1" />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="password">パスワード</Label>
-        <Input id="password" type="password" {...register("password")} disabled={isPending} />
-        {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
-      </div>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        {serverError && (
+          <Alert variant="destructive">
+            <AlertDescription>{serverError}</AlertDescription>
+          </Alert>
+        )}
 
-      <Button type="submit" className="w-full" disabled={isPending}>
-        {isPending ? "ログイン中..." : "ログイン"}
-      </Button>
+        <div className="space-y-2">
+          <Label htmlFor="email">メールアドレス</Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder="you@example.com"
+            {...register("email")}
+            disabled={isPending}
+          />
+          {errors.email && <p className="text-sm text-red-600">{errors.email.message}</p>}
+        </div>
 
-      <p className="text-center text-sm">
-        <Link
-          href="/forgot-password"
-          className="text-muted-foreground hover:text-foreground underline"
-        >
-          パスワードをお忘れですか?
-        </Link>
-      </p>
-    </form>
+        <div className="space-y-2">
+          <Label htmlFor="password">パスワード</Label>
+          <Input id="password" type="password" {...register("password")} disabled={isPending} />
+          {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
+        </div>
+
+        <Button type="submit" className="w-full" disabled={isPending}>
+          {isPending ? "ログイン中..." : "ログイン"}
+        </Button>
+
+        <p className="text-center text-sm">
+          <Link
+            href="/forgot-password"
+            className="text-muted-foreground hover:text-foreground underline"
+          >
+            パスワードをお忘れですか?
+          </Link>
+        </p>
+      </form>
+    </div>
   );
 }
 
@@ -110,12 +131,18 @@ export default function LoginPage() {
           <LoginForm />
         </Suspense>
 
-        <p className="text-muted-foreground text-center text-sm">
-          アカウントをお持ちでないですか?{" "}
-          <Link href="/signup" className="text-foreground font-medium underline">
-            新規登録
-          </Link>
-        </p>
+        {/* 自由登録モードのときだけ表示。BtoBtoC モードでは「新規登録」リンクを出さない。 */}
+        {isOpenSignupEnabled() && (
+          <p className="text-muted-foreground text-center text-sm">
+            アカウントをお持ちでないですか?{" "}
+            <Link href="/signup" className="text-foreground font-medium underline">
+              新規登録
+            </Link>
+          </p>
+        )}
+
+        {/* BtoBtoC モード:新規導入を検討中の企業向け問い合わせ受け口 */}
+        {!isOpenSignupEnabled() && <SignupInquiryForm />}
       </div>
     </main>
   );

@@ -1,13 +1,16 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppSidebar } from "@/components/features/app-sidebar";
+import { NotificationBell } from "@/components/features/notifications/notification-bell";
 import {
   PopupChatLauncher,
   PopupChatProvider,
   PopupChatWindow,
 } from "@/components/features/popup-chat";
+import { PrivacyPolicyModal } from "@/components/features/privacy-policy-modal";
 import { UserMenu } from "@/components/features/user-menu";
 import { countInvitedConnections } from "@/lib/connections/queries";
+import { getPolicyAcceptance, needsToAccept } from "@/lib/privacy/policy";
 
 /**
  * 認証後のアプリ本体の共通レイアウト
@@ -28,10 +31,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // ヘッダー表示用 display_name と、サイドナビ「エージェント連携」のバッジ用
   // 招待件数を並行取得する。invited 件数は RLS により本人宛て(メール一致)の
   // 行のみ count され、件数 0 のときはサイドナビでバッジを出さない。
-  const [{ data: profile }, invitedCount] = await Promise.all([
+  const [{ data: profile }, invitedCount, policyAcceptance] = await Promise.all([
     supabase.from("profiles").select("display_name").eq("id", user.id).single(),
     countInvitedConnections(),
+    getPolicyAcceptance(user.id),
   ]);
+
+  // プライバシーポリシー再同意が必要かを判定。古いバージョン同意済 or 完全新規で文面切替。
+  const requirePolicy = needsToAccept(policyAcceptance);
+  const hasPriorPolicy = policyAcceptance.acceptedAt !== null;
 
   return (
     // ポップアップチャットは認証後の領域全体で利用するため、ここで Provider を張る。
@@ -41,7 +49,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="bg-background flex min-h-screen">
         <AppSidebar invitedCount={invitedCount} />
         <div className="flex flex-1 flex-col">
-          <header className="flex h-14 items-center justify-end border-b px-4">
+          <header className="flex h-14 items-center justify-end gap-1 border-b px-4">
+            <NotificationBell />
             <UserMenu email={user.email ?? ""} displayName={profile?.display_name ?? null} />
           </header>
           <main className="flex-1 overflow-auto p-6">{children}</main>
@@ -49,6 +58,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </div>
       <PopupChatLauncher />
       <PopupChatWindow />
+      {requirePolicy && <PrivacyPolicyModal hasPrior={hasPriorPolicy} />}
     </PopupChatProvider>
   );
 }

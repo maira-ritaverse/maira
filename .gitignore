@@ -60,3 +60,8 @@ coverage/
 
 # Claude Code ローカル設定(個人の許可ポリシーなど)
 .claude/settings.local.json
+
+# Playwright E2E
+playwright-report/
+test-results/
+e2e/.auth/*.json

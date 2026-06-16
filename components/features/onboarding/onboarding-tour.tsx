@@ -156,6 +156,54 @@ export function OnboardingTour({ autoStart, forceStart = false, onClose }: Props
         </div>
       ),
     },
+    // ステップ8.5:AI ヒアリング(音声からの履歴書/職務経歴書自動生成)
+    {
+      target: '[data-tour="nav-career-intake"]',
+      placement: "right",
+      title: "AI ヒアリングで自動生成(β)",
+      content: (
+        <div className="space-y-2">
+          <p>
+            キャリア面談の音声をアップロードすると、AI が文字起こし → 構造化抽出 →
+            履歴書/職務経歴書の下書きまで一括で行います。
+          </p>
+          <p className="text-muted-foreground text-sm">
+            証明写真も「自撮りを AI で証明写真化(履歴書編集ページ)」する機能があります。
+          </p>
+        </div>
+      ),
+    },
+    // ステップ8.6:AI 求人推薦
+    {
+      target: '[data-tour="nav-recommended-jobs"]',
+      placement: "right",
+      title: "AI 求人推薦",
+      content: (
+        <div className="space-y-2">
+          <p>
+            連携したエージェンシーの公開求人から、棚卸し + 診断結果に基づいて AI が TOP 5
+            をランキングします。
+          </p>
+          <p className="text-muted-foreground text-sm">
+            「興味あり」「応募を依頼」のワンタップで、エージェントに意向が伝わります。
+          </p>
+        </div>
+      ),
+    },
+    // ステップ8.7:エージェント推薦進捗
+    {
+      target: '[data-tour="nav-agent-referrals"]',
+      placement: "right",
+      title: "エージェントの推薦進捗",
+      content: (
+        <div className="space-y-2">
+          <p>エージェンシーが進めている書類選考・面接などのステータスを一覧で確認できます。</p>
+          <p className="text-muted-foreground text-sm">
+            進捗が動いたら通知ベル(右上)でお知らせします。
+          </p>
+        </div>
+      ),
+    },
     // ステップ9:ユーザーメニュー
     {
       target: '[data-tour="user-menu"]',

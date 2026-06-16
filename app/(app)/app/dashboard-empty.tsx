@@ -28,26 +28,26 @@ export function DashboardEmpty() {
         <h2 className="mb-3 text-lg font-bold">Mairaができること</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Card className="p-5">
-            <p className="font-medium">💬 キャリア棚卸し</p>
+            <p className="font-medium">キャリア棚卸し</p>
             <p className="text-muted-foreground mt-2 text-sm">
               雑談形式の対話で、あなたの強み・価値観・希望を構造化します
             </p>
           </Card>
           <Card className="p-5">
-            <p className="font-medium">📝 書類作成</p>
+            <p className="font-medium">書類作成</p>
             <p className="text-muted-foreground mt-2 text-sm">
               履歴書・職務経歴書・志望動機・自己PRを、あなたの棚卸し結果から自動生成
             </p>
           </Card>
           <Card className="p-5">
-            <p className="font-medium">📋 応募管理 + Maira相談</p>
+            <p className="font-medium">応募管理 + Maira相談</p>
             <p className="text-muted-foreground mt-2 text-sm">
               応募の進捗管理 + ポップアップでいつでもMairaに相談できる
             </p>
           </Card>
           {/* 音声面接は本格ローンチで提供。未実装である旨を明示し、透過率で抑える */}
           <Card className="p-5 opacity-60">
-            <p className="font-medium">🎙️ 音声面接(準備中)</p>
+            <p className="font-medium">音声面接(準備中)</p>
             <p className="text-muted-foreground mt-2 text-sm">
               本格ローンチで提供予定。音声でリアルな面接練習ができる
             </p>

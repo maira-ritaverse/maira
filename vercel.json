@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/internal/career-intake/pickup",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/internal/integrations/google-drive/poll",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/internal/meetings/reminders",
+      "schedule": "*/10 * * * *"
+    }
+  ]
+}

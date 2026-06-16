@@ -1,0 +1,53 @@
+{
+  "name": "Maira - AI 採用エージェント",
+  "short_name": "Maira",
+  "description": "20-30 代の転職活動者向け AI 採用エージェント。キャリア棚卸し、診断、書類作成、応募管理、AI 求人推薦、面接練習を一括で。",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#10b981",
+  "lang": "ja",
+  "categories": ["business", "productivity", "education"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "AI 求人推薦",
+      "short_name": "推薦",
+      "url": "/app/recommended-jobs",
+      "description": "AI が選んだあなたへの推薦求人を見る"
+    },
+    {
+      "name": "エージェント推薦進捗",
+      "short_name": "進捗",
+      "url": "/app/agent-referrals",
+      "description": "エージェントが進めている推薦の進捗を確認"
+    },
+    {
+      "name": "AI ヒアリング",
+      "short_name": "ヒアリング",
+      "url": "/app/career-intake",
+      "description": "面談録音から履歴書を自動生成"
+    }
+  ]
+}

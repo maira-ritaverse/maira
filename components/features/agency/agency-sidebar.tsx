@@ -1,14 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
+
+import { CustomizableSidebar } from "@/components/features/customizable-sidebar";
+import type { ItemDescriptor, SidebarLayout } from "@/lib/sidebar-layout/types";
 import type { OrganizationRole } from "@/lib/organizations/types";
 
 /**
- * エージェント企業メンバー向けのサイドバー
+ * エージェント向けサイドバー(カスタマイズ可能)
  *
- * 求職者向け AppSidebar とは別物。将来的な機能追加(求人管理、マッチング等)を
- * 想定して navItems を中央集約しておく。
+ * 並び替え・グループ化・非表示はユーザの localStorage で管理。
+ * role に応じて availableItems を出し分け(admin 限定の「メンバー管理」)。
  */
 
 type Props = {
@@ -16,61 +18,64 @@ type Props = {
   memberRole: OrganizationRole;
 };
 
-type NavItem = {
-  href: string;
-  icon: string;
-  label: string;
-  // 表示に必要なロール。未指定なら全メンバーに表示。
-  requiredRole?: OrganizationRole;
-};
+const STORAGE_KEY = "maira-agency-sidebar";
 
-const navItems: NavItem[] = [
-  { href: "/agency/clients", icon: "👥", label: "クライアント管理" },
-  { href: "/agency/jobs", icon: "💼", label: "求人管理" },
-  { href: "/agency/reports", icon: "📊", label: "レポート" },
-  // マーケティング(MA)は β機能。advisor も閲覧可。配信制御は admin のみ(画面/API側で判定)。
-  { href: "/agency/marketing", icon: "📣", label: "マーケティング" },
-  // メンバー管理は admin 専用(サーバー側でも /agency/members を redirect)
-  { href: "/agency/members", icon: "⚙️", label: "メンバー管理", requiredRole: "admin" },
-  // 将来追加予定:
-  // { href: "/agency/matching", icon: "🔗", label: "マッチング" },
+const BASE_ITEMS: ItemDescriptor[] = [
+  { id: "dashboard", href: "/agency", icon: "dashboard", defaultLabel: "ダッシュボード" },
+  { id: "clients", href: "/agency/clients", icon: "users", defaultLabel: "クライアント管理" },
+  { id: "jobs", href: "/agency/jobs", icon: "briefcase", defaultLabel: "求人管理" },
+  { id: "calendar", href: "/agency/calendar", icon: "calendar", defaultLabel: "カレンダー" },
+  { id: "meetings", href: "/agency/meetings", icon: "video", defaultLabel: "面談" },
+  { id: "marketing", href: "/agency/marketing", icon: "megaphone", defaultLabel: "マーケティング" },
+  { id: "announcements", href: "/agency/announcements", icon: "bell", defaultLabel: "お知らせ" },
+  { id: "reports", href: "/agency/reports", icon: "reports", defaultLabel: "レポート" },
+  { id: "settings", href: "/agency/settings", icon: "settings", defaultLabel: "個人設定" },
 ];
+const ADMIN_ITEMS: ItemDescriptor[] = [
+  { id: "members", href: "/agency/members", icon: "user-cog", defaultLabel: "メンバー管理" },
+];
+
+const DEFAULT_LAYOUT: SidebarLayout = {
+  topLevelItemIds: ["dashboard", "calendar", "meetings", "marketing", "announcements", "reports"],
+  groups: [
+    {
+      id: "crm",
+      title: "顧客・案件管理",
+      itemIds: ["clients", "jobs"],
+    },
+    {
+      id: "settings-group",
+      title: "設定",
+      itemIds: ["members", "settings"],
+    },
+  ],
+  hiddenItemIds: [],
+};
 
 export function AgencySidebar({ organizationName, memberRole }: Props) {
   const pathname = usePathname();
+  const isActive = (href: string) =>
+    href === "/agency" ? pathname === "/agency" : pathname.startsWith(href);
+
+  // role に応じて項目フィルタ(admin のみ「メンバー管理」)
+  const availableItems = [...BASE_ITEMS, ...(memberRole === "admin" ? ADMIN_ITEMS : [])];
 
   return (
-    <aside className="bg-card hidden w-60 shrink-0 flex-col border-r p-4 md:flex">
-      <div className="mb-6">
-        <p className="text-muted-foreground text-xs">エージェント管理</p>
-        <p className="truncate font-bold">{organizationName}</p>
-        <p className="text-muted-foreground mt-1 text-xs">
-          {memberRole === "admin" ? "管理者" : "アドバイザー"}
-        </p>
-      </div>
-
-      <nav className="flex-1 space-y-1">
-        {navItems.map((item) => {
-          // ロール要件を満たさない項目は出さない(admin 専用メニュー等)
-          if (item.requiredRole && item.requiredRole !== memberRole) return null;
-          // 完全一致ではなく前方一致で判定(/agency/clients/[id] でもアクティブにする)
-          const isActive = pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
-                isActive ? "bg-primary text-primary-foreground" : "hover:bg-accent"
-              }`}
-            >
-              <span>{item.icon}</span>
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
-
-      <div className="text-muted-foreground mt-auto pt-4 text-xs">エージェント版(β)</div>
-    </aside>
+    <CustomizableSidebar
+      storageKey={STORAGE_KEY}
+      availableItems={availableItems}
+      defaultLayout={DEFAULT_LAYOUT}
+      isActive={isActive}
+      header={
+        <div>
+          <p className="text-muted-foreground text-xs">エージェント管理</p>
+          <p className="truncate font-bold">{organizationName}</p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            {memberRole === "admin" ? "管理者" : "アドバイザー"}
+          </p>
+        </div>
+      }
+      footer="エージェント版(β)"
+    />
   );
 }

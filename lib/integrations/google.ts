@@ -1,0 +1,138 @@
+/**
+ * Google OAuth 2.0 ヘルパ(Drive 経由 Meet 録画取込用)
+ *
+ * Workspace の「Meet 録画 → Drive 自動保存」機能で Drive に置かれた録画
+ * ファイルを Maira が読みに行く構成。Drive 全体は要求せず、Maira が作成
+ * したフォルダ配下だけを読む drive.file スコープを基本にする。
+ *
+ * 必要 scope:
+ *   - openid email(本人特定)
+ *   - https://www.googleapis.com/auth/drive.readonly
+ *     ※ Meet 録画は Workspace 管理者の Drive(録画作成者)に保存されるため、
+ *        最小権限としては readonly 全体になる。後で drive.file + 共有フォルダ
+ *        運用に絞れるか検討。
+ */
+
+const AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+const TOKEN_URL = "https://oauth2.googleapis.com/token";
+/**
+ * 認可で要求するスコープ。
+ *
+ * - openid email             : 本人特定(google_sub / google_email)
+ * - drive.readonly           : Meet 録画 → Drive 自動保存ファイルの読取(既存)
+ * - calendar.events          : Maira からカレンダーイベント(= Meet URL 付き)の作成 / 編集 / 削除
+ *
+ * 既存接続済みユーザは calendar.events が含まれていないので、
+ * 「Maira から会議を作成」操作時に再認可を促す(scopes_granted で UI 判定)。
+ */
+export const GOOGLE_SCOPES = [
+  "openid",
+  "email",
+  "https://www.googleapis.com/auth/drive.readonly",
+  "https://www.googleapis.com/auth/calendar.events",
+] as const;
+
+export type GoogleConfig = {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+};
+
+export function getGoogleConfig(): GoogleConfig | null {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  if (!clientId || !clientSecret || !siteUrl) return null;
+  return {
+    clientId,
+    clientSecret,
+    redirectUri: `${siteUrl.replace(/\/$/, "")}/api/integrations/google/callback`,
+  };
+}
+
+export function buildAuthorizeUrl(config: GoogleConfig, state: string): string {
+  const u = new URL(AUTHORIZE_URL);
+  u.searchParams.set("response_type", "code");
+  u.searchParams.set("client_id", config.clientId);
+  u.searchParams.set("redirect_uri", config.redirectUri);
+  u.searchParams.set("scope", GOOGLE_SCOPES.join(" "));
+  // refresh_token を確実にもらうため
+  u.searchParams.set("access_type", "offline");
+  u.searchParams.set("prompt", "consent");
+  u.searchParams.set("state", state);
+  return u.toString();
+}
+
+/**
+ * トークン応答の scope 文字列に calendar.events が含まれているかを判定する純関数。
+ * 設定画面で「再認可が必要です」バナーを出す判定に使う。
+ */
+export function hasCalendarEventsScope(scope: string | null | undefined): boolean {
+  if (!scope) return false;
+  return scope.split(/\s+/).includes("https://www.googleapis.com/auth/calendar.events");
+}
+
+/** scope 文字列に drive.readonly が含まれているかを判定する純関数 */
+export function hasDriveReadonlyScope(scope: string | null | undefined): boolean {
+  if (!scope) return false;
+  return scope.split(/\s+/).includes("https://www.googleapis.com/auth/drive.readonly");
+}
+
+/**
+ * scope 文字列を配列に正規化する純関数。
+ * 空白区切りを split + 空要素除外。callback で scopes_granted カラムに保存する用途。
+ */
+export function parseGrantedScopes(scope: string | null | undefined): string[] {
+  if (!scope) return [];
+  return scope.split(/\s+/).filter((s) => s.length > 0);
+}
+
+export type GoogleTokens = {
+  access_token: string;
+  refresh_token?: string;
+  expires_in: number;
+  scope: string;
+  token_type: "Bearer";
+  id_token?: string;
+};
+
+export async function exchangeCodeForTokens(
+  config: GoogleConfig,
+  code: string,
+): Promise<GoogleTokens> {
+  const body = new URLSearchParams({
+    grant_type: "authorization_code",
+    code,
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
+    redirect_uri: config.redirectUri,
+  });
+  const res = await fetch(TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  if (!res.ok) {
+    throw new Error(`Google token endpoint failed: ${res.status} ${await res.text()}`);
+  }
+  return (await res.json()) as GoogleTokens;
+}
+
+/** id_token を decode して sub/email を取り出す(署名検証は省略、最低限の取得用) */
+export function decodeIdToken(idToken: string | undefined): { sub: string; email: string } | null {
+  if (!idToken) return null;
+  const parts = idToken.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const payloadB64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const pad = payloadB64.length % 4 === 0 ? "" : "=".repeat(4 - (payloadB64.length % 4));
+    const payload = JSON.parse(Buffer.from(payloadB64 + pad, "base64").toString("utf8")) as {
+      sub?: string;
+      email?: string;
+    };
+    if (!payload.sub) return null;
+    return { sub: payload.sub, email: payload.email ?? "" };
+  } catch {
+    return null;
+  }
+}
