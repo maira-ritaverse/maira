@@ -59,7 +59,7 @@ export function MonthlyDealsSection({ data }: Props) {
         {/* グラフ:売上(棒)+ 件数(線)の 2 軸 */}
         {hasData ? (
           <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
               <ComposedChart data={buckets} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />

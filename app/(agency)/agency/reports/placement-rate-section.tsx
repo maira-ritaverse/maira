@@ -69,7 +69,7 @@ function Gauge({
     <div className="grid items-center gap-6 md:grid-cols-[18rem_1fr]">
       {/* 半円ゲージ + センターラベル */}
       <div className="relative mx-auto h-44 w-72 md:mx-0">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
           <RadialBarChart
             cx="50%"
             cy="100%"

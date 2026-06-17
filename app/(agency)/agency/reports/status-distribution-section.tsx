@@ -84,8 +84,8 @@ function DistributionPanel({
       </div>
 
       {/* グラフ */}
-      <div className="h-55 w-full">
-        <ResponsiveContainer width="100%" height="100%">
+      <div className="h-56 w-full">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
           <BarChart
             data={chartData}
             layout="vertical"
