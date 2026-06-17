@@ -31,6 +31,7 @@ export type InAppPayload =
   | SeekerJobInterestPayload
   | SeekerApplicationRequestPayload
   | ReferralStatusChangeForSeekerPayload
+  | RecommendationLetterFinalizedForSeekerPayload
   | MeetingInvitedPayload
   | MeetingReminderPayload
   | MeetingCanceledPayload;
@@ -90,6 +91,24 @@ export type ReferralStatusChangeForSeekerPayload = {
   jobLabel: string;
   fromStatus: string | null;
   toStatus: string;
+};
+
+/**
+ * 求職者本人向け:推薦文(recommendation_letters)が finalized になったことを通知。
+ *
+ * 本文(encrypted_body)/件名(encrypted_headline)は機微なので通知ペイロードには
+ * 載せず、href の遷移先(/app/recommendation-letters/[id])で復号して見せる。
+ */
+export type RecommendationLetterFinalizedForSeekerPayload = {
+  kind: "recommendation_letter_finalized_for_seeker";
+  /** UI 一覧用見出し(例:「推薦文が届きました(株式会社 X / PdM)」)*/
+  title: string;
+  /** 求職者向け遷移先(/app/recommendation-letters/[id]) */
+  href: string;
+  recommendationLetterId: string;
+  referralId: string;
+  jobLabel: string;
+  organizationName: string;
 };
 
 /**
@@ -174,6 +193,7 @@ export async function fireInAppNotification(params: FireParams): Promise<void> {
     seeker_application_request: "seeker_application_request",
     // 本人向け通知は org メンバー prefs と無関係なので null
     referral_status_change_for_seeker: null,
+    recommendation_letter_finalized_for_seeker: null,
     // 面談関連は組織メンバー全員が見たいケースが多い(代理対応・チーム共有)
     // ただしホスト本人は excludeUserId 経由で外す。prefs gate は当面なし。
     meeting_invited: null,

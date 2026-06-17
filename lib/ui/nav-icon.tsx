@@ -12,6 +12,7 @@
  * 後方互換のため、絵文字文字列はそのまま `<span>` で出す。
  */
 import {
+  Award,
   Bell,
   Bot,
   Briefcase,
@@ -60,6 +61,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   mic: Mic,
   link: Link2,
   bot: Bot,
+  award: Award,
 };
 
 type Props = {

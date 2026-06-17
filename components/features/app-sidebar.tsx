@@ -71,6 +71,13 @@ const AVAILABLE_ITEMS: ItemDescriptor[] = [
     defaultLabel: "エージェント推薦進捗",
     dataAttr: "nav-agent-referrals",
   },
+  {
+    id: "recommendation-letters",
+    href: "/app/recommendation-letters",
+    icon: "award",
+    defaultLabel: "推薦文",
+    dataAttr: "nav-recommendation-letters",
+  },
   { id: "interview", href: "/app/interview", icon: "bot", defaultLabel: "面接練習(β)" },
   { id: "connections", href: "/app/connections", icon: "link", defaultLabel: "エージェント連携" },
 ];
@@ -91,7 +98,7 @@ const DEFAULT_LAYOUT: SidebarLayout = {
     {
       id: "jobs",
       title: "求人・応募",
-      itemIds: ["recommended-jobs", "applications", "agent-referrals"],
+      itemIds: ["recommended-jobs", "applications", "agent-referrals", "recommendation-letters"],
     },
   ],
   hiddenItemIds: [],

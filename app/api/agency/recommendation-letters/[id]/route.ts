@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { readJsonBody, requireOrgAdmin, requireOrgMember } from "@/lib/api/auth-guards";
+import { notifyRecommendationLetterFinalized } from "@/lib/recommendation-letters/notify";
 import { deleteLetter, getLetter, updateLetter } from "@/lib/recommendation-letters/queries";
 import { updateRecommendationLetterRequestSchema } from "@/lib/recommendation-letters/types";
 
@@ -62,6 +63,23 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     return NextResponse.json({ error: "Failed to update", message: result.error }, { status: 500 });
+  }
+
+  // 確定遷移(draft → finalized)を検出して求職者本人に in-app 通知を発火。
+  // updateLetter は finalized 済を 409 で弾くので、ここに来た場合は今回の更新で
+  // finalized になったとみなして良い(status を明示的に "finalized" に上書きしたケース)。
+  if (parsed.data.status === "finalized" && result.status === "finalized") {
+    // 通知失敗はログだけ。本フローは成功扱いで返す。
+    void notifyRecommendationLetterFinalized({
+      letterId: result.id,
+      referralId: result.referralId,
+      organizationId: organization.id,
+    }).catch((err) => {
+      console.error("[recommendation-letters/PATCH] notify failed", {
+        letterId: result.id,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    });
   }
 
   return NextResponse.json({ letter: result });
