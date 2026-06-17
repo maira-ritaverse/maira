@@ -134,7 +134,7 @@ export function CreateOrganizationForm() {
           type="email"
           value={adminEmail}
           onChange={(e) => setAdminEmail(e.target.value)}
-          placeholder="admin@example.com"
+          placeholder="管理者の業務メールアドレス"
           maxLength={254}
           disabled={submitting}
           autoComplete="email"

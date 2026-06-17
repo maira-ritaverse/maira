@@ -1,9 +1,7 @@
 import Link from "next/link";
 
 /**
- * 利用規約(暫定版)
- *
- * 法務レビュー前。本番公開前に弁護士確認推奨。
+ * 利用規約
  */
 export const metadata = {
   title: "利用規約 | Maira",

@@ -56,7 +56,7 @@ export default async function ClientsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">クライアント管理</h1>
-          <p className="text-muted-foreground mt-1 text-sm">担当する求職者を管理します</p>
+          <p className="text-muted-foreground mt-1 text-sm">担当するクライアントを管理します</p>
         </div>
         <div className="flex items-center gap-2">
           {showExport && <ExportDialog />}

@@ -85,9 +85,8 @@ export function AiUsageDashboard() {
         <SummaryCard label="6 か月合計" value={grandTotal.toLocaleString()} />
       </div>
       <p className="text-muted-foreground text-[10px]">
-        ※推定コストは kind × 平均単価(OpenAI gpt-image-1 / Claude Sonnet 4.6)による概算で、為替 1USD
-        = ¥150 固定。厳密な原価ではなく桁感の把握用です。 6 か月合計コスト:
-        {formatJpy(grandTotalCostJpy)}
+        ※推定コストは kind 別の平均単価による概算で、厳密な原価ではなく桁感の把握用です。 6
+        か月合計コスト:{formatJpy(grandTotalCostJpy)}
       </p>
 
       {/* === kind 別の今月内訳 === */}

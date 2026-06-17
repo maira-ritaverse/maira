@@ -6,8 +6,6 @@ import Link from "next/link";
  * ADR 0006 でサーバーサイド暗号化への方針を確定したことに伴い、
  * 保管・AI 処理・運営者アクセスの範囲を明示する。
  * 登録時の明示同意(signup-form の checkbox)で本ページの内容に合意したことになる。
- *
- * 法務レビュー前の暫定文面。本番公開前には弁護士確認推奨。
  */
 export const metadata = {
   title: "プライバシーポリシー | Maira",
