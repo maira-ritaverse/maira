@@ -1,5 +1,6 @@
 "use client";
 
+import { Check } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -98,7 +99,9 @@ function ColorPickerPopover({
                 }`}
               >
                 {/* 選択中チェック(全行で固定幅を取って横揃え) */}
-                <span className="w-3 shrink-0 text-[12px] leading-none">{selected ? "✓" : ""}</span>
+                <span className="flex w-3 shrink-0 items-center justify-center">
+                  {selected && <Check className="h-3 w-3" />}
+                </span>
                 <span className="flex-1 font-semibold">{HEADER_COLOR_LABEL[c]}</span>
               </button>
             </li>
@@ -308,7 +311,7 @@ export function SectionLayoutContainer({ storageKey, defaultOrder, sections, tit
           variant={editing ? "default" : "ghost"}
           onClick={() => setEditing((v) => !v)}
         >
-          {editing ? "✓ 編集完了" : "📐 レイアウト編集"}
+          {editing ? "編集完了" : "レイアウト編集"}
         </Button>
       </div>
 

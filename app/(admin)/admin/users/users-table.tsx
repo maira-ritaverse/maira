@@ -224,7 +224,7 @@ export function UsersTable({ archived }: { archived: boolean }) {
                       </td>
                     </>
                   ) : (
-                    <td className="px-3 py-2.5 text-xs">{u.onboardedAt ? "✓" : "—"}</td>
+                    <td className="px-3 py-2.5 text-xs">{u.onboardedAt ? "済" : "—"}</td>
                   )}
                   <td className="px-3 py-2.5 text-right">
                     <div className="inline-flex items-center gap-2">

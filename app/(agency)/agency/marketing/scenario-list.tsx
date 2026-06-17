@@ -118,7 +118,7 @@ export function MarketingScreen({
         {consent.isActive ? (
           <div className="flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm">
             <span className="text-emerald-900">
-              ✓ 有効化済み(特約バージョン {consent.consentVersion}、
+              有効化済み(特約バージョン {consent.consentVersion}、
               {consent.acceptedAt ? new Date(consent.acceptedAt).toLocaleDateString("ja-JP") : "—"})
             </span>
             {isAdmin && (
@@ -377,11 +377,11 @@ function ScenarioCard({ view, disabled, stats, lastSentAt }: ScenarioCardProps) 
           <div className="text-muted-foreground flex items-center gap-2 text-[10px]">
             <span>直近30日:</span>
             <span className="font-mono">
-              <span className="text-emerald-700">✓ {stats.sent}</span>
+              <span className="text-emerald-700">成功 {stats.sent}</span>
               {" / "}
-              <span className="text-red-700">✗ {stats.failed}</span>
+              <span className="text-red-700">失敗 {stats.failed}</span>
               {" / "}
-              <span className="text-slate-500">- {stats.skipped}</span>
+              <span className="text-slate-500">スキップ {stats.skipped}</span>
             </span>
           </div>
         )}

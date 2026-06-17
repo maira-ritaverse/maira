@@ -266,7 +266,7 @@ export default async function ClientDetailPage({ params }: RouteParams) {
       )}
 
       {/* セクションは SectionLayoutContainer で並び替え可能。
-          ユーザは「📐 レイアウト編集」をオンにして:
+          ユーザは「レイアウト編集」をオンにして:
             ・カードを上下にドラッグして並び替え
             ・「2 列にする」で左右 2 列レイアウト + 列の振り分け
           できる。設定は localStorage(per-user / per-browser)に永続化。 */}

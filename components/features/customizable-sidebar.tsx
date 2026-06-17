@@ -364,7 +364,7 @@ export function CustomizableSidebar({
           onClick={() => setEditing((v) => !v)}
           className="flex-1"
         >
-          {editing ? "✓ 編集完了" : "📐 サイドバー編集"}
+          {editing ? "編集完了" : "サイドバー編集"}
         </Button>
         {editing && (
           <Button size="sm" variant="ghost" onClick={handleReset}>
