@@ -48,6 +48,13 @@ export type AuthFail = {
 /**
  * 「組織メンバーである」ことを保証する。admin / advisor どちらでも OK。
  * 失敗時は 401 / 403 の NextResponse を返す。
+ *
+ * archived ガード(2026-06-17 追加):
+ *   ・profiles.archived_at NOT NULL なら 403 { error: "archived" }
+ *   ・organizations.archived_at NOT NULL なら 403 { error: "organization_archived" }
+ *   レイアウト側では signOut → /login?archived=1 で弾いているが、
+ *   セッションが残るブラウザから API を直接叩かれる経路を塞ぐため、
+ *   API 層でも独立して防御する(多層防御)。
  */
 export async function requireOrgMember(): Promise<OrgMemberContext | AuthFail> {
   const supabase = await createClient();
@@ -66,6 +73,28 @@ export async function requireOrgMember(): Promise<OrgMemberContext | AuthFail> {
     return {
       ok: false,
       response: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
+    };
+  }
+
+  // archived チェック(ユーザ単位 + 組織単位を並列に取得)
+  const [{ data: profileRow }, { data: orgRow }] = await Promise.all([
+    supabase.from("profiles").select("archived_at").eq("id", user.id).maybeSingle(),
+    supabase
+      .from("organizations")
+      .select("archived_at")
+      .eq("id", role.organization.id)
+      .maybeSingle(),
+  ]);
+  if ((profileRow as { archived_at: string | null } | null)?.archived_at) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "archived" }, { status: 403 }),
+    };
+  }
+  if ((orgRow as { archived_at: string | null } | null)?.archived_at) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "organization_archived" }, { status: 403 }),
     };
   }
 
@@ -114,6 +143,21 @@ export async function requireUser(): Promise<AuthedUserContext | AuthFail> {
       response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     };
   }
+
+  // archived ガード:profiles.archived_at が NOT NULL なら拒否。
+  // 多層防御のため API 層でも独立して確認する(レイアウト側でも弾く)。
+  const { data: profileRow } = await supabase
+    .from("profiles")
+    .select("archived_at")
+    .eq("id", user.id)
+    .maybeSingle();
+  if ((profileRow as { archived_at: string | null } | null)?.archived_at) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "archived" }, { status: 403 }),
+    };
+  }
+
   return { ok: true, user, supabase };
 }
 
