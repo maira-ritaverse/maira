@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { checkCronAuth } from "@/lib/api/cron-auth";
 import { notifyShareFromAgencyIntake } from "@/lib/career-intake/post-process";
 import { runIntakeProcessing } from "@/lib/career-intake/process";
 import { getGoogleAccessToken } from "@/lib/integrations/google-token";
@@ -31,26 +32,18 @@ const STORAGE_BUCKET = "career-intake-audio";
 
 type Service = ReturnType<typeof createServiceClient>;
 
-function checkAuth(request: Request): boolean {
-  const cronSecret = process.env.INTAKE_CRON_SECRET;
-  if (!cronSecret) return false;
-  const xCron = request.headers.get("x-cron-secret");
-  if (xCron && xCron === cronSecret) return true;
-  const auth = request.headers.get("authorization");
-  if (auth && auth.toLowerCase().startsWith("bearer ") && auth.slice(7) === cronSecret) {
-    return true;
-  }
-  return false;
-}
-
 export async function POST(request: Request) {
-  if (!process.env.INTAKE_CRON_SECRET) {
-    return NextResponse.json(
-      { error: "INTAKE_CRON_SECRET 未設定のため、本エンドポイントは無効化されています" },
-      { status: 503 },
-    );
-  }
-  if (!checkAuth(request)) {
+  const auth = checkCronAuth(request);
+  if (!auth.ok) {
+    if (auth.reason === "not_configured") {
+      return NextResponse.json(
+        {
+          error:
+            "CRON_SECRET / INTAKE_CRON_SECRET 未設定のため、本エンドポイントは無効化されています",
+        },
+        { status: 503 },
+      );
+    }
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

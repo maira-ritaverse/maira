@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { checkCronAuth } from "@/lib/api/cron-auth";
 import { getGoogleAccessToken } from "@/lib/integrations/google-token";
 import { pollGoogleDriveForMeetRecordings } from "@/lib/integrations/google-drive-meet";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -19,21 +20,12 @@ import { createServiceClient } from "@/lib/supabase/service";
 
 const MAX_USERS_PER_TICK = 5;
 
-function checkAuth(request: Request): boolean {
-  const secret = process.env.INTAKE_CRON_SECRET;
-  if (!secret) return false;
-  const x = request.headers.get("x-cron-secret");
-  if (x === secret) return true;
-  const auth = request.headers.get("authorization");
-  if (auth?.toLowerCase().startsWith("bearer ") && auth.slice(7) === secret) return true;
-  return false;
-}
-
 export async function POST(request: Request) {
-  if (!process.env.INTAKE_CRON_SECRET) {
-    return NextResponse.json({ error: "INTAKE_CRON_SECRET 未設定" }, { status: 503 });
-  }
-  if (!checkAuth(request)) {
+  const auth = checkCronAuth(request);
+  if (!auth.ok) {
+    if (auth.reason === "not_configured") {
+      return NextResponse.json({ error: "CRON_SECRET 未設定" }, { status: 503 });
+    }
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

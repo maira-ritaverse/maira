@@ -19,23 +19,12 @@
  */
 import { NextResponse } from "next/server";
 
+import { checkCronAuth } from "@/lib/api/cron-auth";
 import { notifyMeetingScheduled } from "@/lib/meetings/notify";
 import { markReminderSent } from "@/lib/meetings/queries";
 import type { MeetingScheduleRow, MeetingScheduleView } from "@/lib/meetings/types";
 import { decryptField } from "@/lib/crypto/field-encryption";
 import { createServiceClient } from "@/lib/supabase/service";
-
-function checkAuth(request: Request): boolean {
-  const secret = process.env.INTAKE_CRON_SECRET;
-  if (!secret) return false;
-  const xCron = request.headers.get("x-cron-secret");
-  if (xCron && xCron === secret) return true;
-  const auth = request.headers.get("authorization");
-  if (auth && auth.toLowerCase().startsWith("bearer ") && auth.slice(7) === secret) {
-    return true;
-  }
-  return false;
-}
 
 async function rowToView(row: MeetingScheduleRow): Promise<MeetingScheduleView> {
   const agenda = row.encrypted_agenda ? ((await decryptField(row.encrypted_agenda)) ?? "") : "";
@@ -144,13 +133,17 @@ async function getClientName(
 }
 
 export async function POST(request: Request) {
-  if (!process.env.INTAKE_CRON_SECRET) {
-    return NextResponse.json(
-      { error: "INTAKE_CRON_SECRET 未設定のため、本エンドポイントは無効化されています" },
-      { status: 503 },
-    );
-  }
-  if (!checkAuth(request)) {
+  const auth = checkCronAuth(request);
+  if (!auth.ok) {
+    if (auth.reason === "not_configured") {
+      return NextResponse.json(
+        {
+          error:
+            "CRON_SECRET / INTAKE_CRON_SECRET 未設定のため、本エンドポイントは無効化されています",
+        },
+        { status: 503 },
+      );
+    }
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
