@@ -196,26 +196,30 @@ export function SectionLayoutContainer({ storageKey, defaultOrder, sections, tit
         onDragOver={handleDragOver(id)}
         onDrop={handleDrop(id)}
         onDragEnd={handleDragEnd}
-        className={`group bg-card relative overflow-hidden rounded-lg border transition-all ${
-          isDragging ? "opacity-40" : ""
+        className={`group relative transition-all ${isDragging ? "opacity-40" : ""} ${
+          isHover ? "rounded-lg ring-2 ring-emerald-500" : ""
         } ${
-          isHover ? "shadow-[0_0_0_2px_rgba(16,185,129,1)]" : ""
-        } ${editing ? "cursor-grab active:cursor-grabbing" : ""}`}
+          // 編集モードのときだけ「カード状の外枠」を出す。通常表示は
+          // 中身の Card が唯一の枠になるため二重に見えなくなる。
+          editing
+            ? "bg-card cursor-grab overflow-hidden rounded-lg border active:cursor-grabbing"
+            : ""
+        }`}
       >
-        {/* 大きなタイトルバー */}
-        <div
-          className={`flex items-center justify-between gap-2 border-b px-4 py-2.5 ${HEADER_COLOR_CLASS[color]}`}
-        >
-          <h2 className="flex items-center gap-2 text-base font-bold tracking-wide select-none">
-            {editing && (
+        {/* タイトル
+            ・編集モード:従来どおりカード上端の色付きバー(色ピッカー / 列移動も表示)
+            ・通常表示  :プレーンな見出しのみ。中身の Card との重複枠を避ける */}
+        {editing ? (
+          <div
+            className={`flex items-center justify-between gap-2 border-b px-4 py-2.5 ${HEADER_COLOR_CLASS[color]}`}
+          >
+            <h2 className="flex items-center gap-2 text-base font-bold tracking-wide select-none">
               <span className="opacity-60" aria-hidden>
                 ⠿
               </span>
-            )}
-            {title}
-          </h2>
+              {title}
+            </h2>
 
-          {editing && (
             <div className="flex items-center gap-1.5">
               {/* 色ピッカートリガー:現在の色を絵柄として持つ pill ボタン */}
               <div className="relative">
@@ -268,11 +272,15 @@ export function SectionLayoutContainer({ storageKey, defaultOrder, sections, tit
                 </Button>
               )}
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <h2 className="text-foreground mb-2 px-1 text-base font-bold tracking-wide select-none">
+            {title}
+          </h2>
+        )}
 
-        {/* セクション本体 */}
-        <div className="p-3">{sections[id] ?? null}</div>
+        {/* セクション本体(編集モードのみ余白を追加。通常表示は中身の Card 側に任せる) */}
+        <div className={editing ? "p-3" : ""}>{sections[id] ?? null}</div>
       </div>
     );
   };
