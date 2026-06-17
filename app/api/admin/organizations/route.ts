@@ -4,6 +4,7 @@ import { z } from "zod";
 import { isMairaAdmin } from "@/lib/announcements/platform-queries";
 import { recordAuditLog } from "@/lib/audit/audit-log";
 import { readJsonBody, requireUser } from "@/lib/api/auth-guards";
+import { getSiteUrl } from "@/lib/config/site-url";
 import { sendAgencyAdminInviteEmail } from "@/lib/email/agency-admin-invite";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -229,17 +230,17 @@ export async function POST(request: Request) {
   const organizationId = (orgRow as { id: string }).id;
 
   // 5. 招待リンク生成 + 自前メール送信。
-  //    inviteUserByEmail は Supabase の英語デフォルトテンプレートで送られて
-  //    しまうため(UX が崩れる)、generateLink でアクションリンクだけ取り
-  //    Resend 経由で日本語 HTML を送る。
-  //    redirectTo は /auth/callback?next=/reset-password に向ける。これにより
-  //    クリック → メール確認 + セッション発行 → パスワード設定画面に着地。
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, "") ?? "";
-  const redirectTo = siteUrl
-    ? `${siteUrl}/auth/callback?next=${encodeURIComponent("/reset-password")}`
-    : undefined;
+  //    重要:Supabase の action_link が指す /auth/v1/verify → /auth/callback の
+  //    フローは exchangeCodeForSession を前提とし、PKCE の code_verifier クッキー
+  //    が必要。招待 / リセット等の「受信者ブラウザに code_verifier が無い」
+  //    ケースでは失敗する。
+  //    そのため generateLink から hashed_token を取り出し、独自エンドポイント
+  //    /auth/confirm で verifyOtp({type, token_hash}) する形に切り替えている。
+  //    着地は /reset-password(パスワード設定画面)。
+  const siteUrl = getSiteUrl();
+  const redirectTo = `${siteUrl}/auth/confirm`;
   let invitedUserId: string | null = null;
-  let actionLink: string | null = null;
+  let hashedToken: string | null = null;
   try {
     const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
       type: "invite",
@@ -252,7 +253,7 @@ export async function POST(request: Request) {
         redirectTo,
       },
     });
-    if (linkErr || !linkData?.user || !linkData.properties?.action_link) {
+    if (linkErr || !linkData?.user || !linkData.properties?.hashed_token) {
       // 巻き戻し:organization を消す
       await admin.from("organizations").delete().eq("id", organizationId);
       return NextResponse.json(
@@ -261,7 +262,7 @@ export async function POST(request: Request) {
       );
     }
     invitedUserId = linkData.user.id;
-    actionLink = linkData.properties.action_link;
+    hashedToken = linkData.properties.hashed_token;
   } catch (err) {
     await admin.from("organizations").delete().eq("id", organizationId);
     return NextResponse.json(
@@ -270,7 +271,15 @@ export async function POST(request: Request) {
     );
   }
 
-  // 5b. 自前 HTML 招待メール送信(Resend)。送信失敗は警告ログに留め、
+  // 5b. /auth/confirm 経由で verifyOtp する URL を組み立てる。
+  //     URLSearchParams で正しくエンコード(next= の値もここで encode される)。
+  const confirmUrl = new URL(`${siteUrl}/auth/confirm`);
+  confirmUrl.searchParams.set("token_hash", hashedToken);
+  confirmUrl.searchParams.set("type", "invite");
+  confirmUrl.searchParams.set("next", "/reset-password");
+  const actionLink = confirmUrl.toString();
+
+  // 5c. 自前 HTML 招待メール送信(Resend)。送信失敗は警告ログに留め、
   //     ユーザ作成と organization 作成は維持(運営者が手動で再送できる)。
   const emailResult = await sendAgencyAdminInviteEmail({
     toEmail: adminEmail,

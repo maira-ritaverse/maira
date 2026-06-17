@@ -2,12 +2,15 @@
 
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { SignupInput, LoginInput } from "@/lib/validations/auth";
 import { recordAuditLog } from "@/lib/audit/audit-log";
 import { safeNextOr } from "@/lib/auth/safe-next";
+import { getSiteUrl } from "@/lib/config/site-url";
 import { isOpenSignupEnabled } from "@/lib/config/signup-mode";
+import { sendPasswordResetEmail } from "@/lib/email/password-reset";
 
 /**
  * 新規登録 Server Action
@@ -143,34 +146,65 @@ export async function logout() {
  *
  * メールを忘れた / パスワードを忘れたユーザー向けの「リセットメール送信」アクション。
  *
- * redirectTo の組み立ては signup() の emailRedirectTo と同型:
- *   ${SITE_URL}/auth/callback?next=/reset-password
- * → メール内リンクをクリック → Supabase が /auth/callback?code=xxx に飛ばす
- * → callback が code をセッションに交換 → next で /reset-password に着地
- * → セッションが立った状態で updateUser({ password }) を呼べる。
+ * 設計判断(2026-06-17 改定):
+ *   ・以前は supabase.auth.resetPasswordForEmail() + Supabase 標準テンプレートに
+ *     依存していたが、受信者が別ブラウザ / 別端末でリンクを開いた際に PKCE の
+ *     code_verifier クッキーが無く exchangeCodeForSession が失敗していた。
+ *   ・generateLink({type:'recovery'}) で hashed_token を取得し、独自エンドポイント
+ *     /auth/confirm で verifyOtp({type,token_hash}) する形に切り替える。
+ *     code_verifier 不要のためデバイス間で動作する。
+ *   ・メール本文も日本語 HTML に統一(他メールと layout 共有)。
  *
  * 【enumeration 対策・重要】
  *   未登録メールに対する挙動を「成功」と区別させないため、
- *   resetPasswordForEmail がエラーを返しても呼び出し側には常に { success: true } を返す。
- *   - 区別できると「このメールはこのサービスに登録済みか?」が当てられてしまう。
- *   - 内部的なエラーは console.error にエラーの種類だけ記録(メールアドレス値は出さない)。
- *   - レート制限など真の障害はサーバーログ側で監視する想定。
+ *   generateLink がエラーを返してもメール送信失敗でも、呼び出し側には常に
+ *   { success: true } を返す。エラーは console.error に種別だけ。
  */
 export async function requestPasswordReset(email: string) {
-  const supabase = await createClient();
+  const siteUrl = getSiteUrl();
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  const redirectTo = `${siteUrl}/auth/callback?next=${encodeURIComponent("/reset-password")}`;
+  try {
+    // generateLink は service_role が必須。anon クライアントでは呼べない。
+    const admin = createServiceClient();
+    const { data, error } = await admin.auth.admin.generateLink({
+      type: "recovery",
+      email,
+      options: {
+        // generateLink の redirectTo は本来 action_link 末尾に付くものだが、
+        // 自前の /auth/confirm を URL として組み直すため使わない。
+        // ただし「Supabase の Site URL 設定」検証で参照されるため安全側で渡す。
+        redirectTo: `${siteUrl}/auth/confirm`,
+      },
+    });
 
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo,
-  });
+    if (error || !data?.properties?.hashed_token) {
+      // メール本文・アドレスは出さない。エラー種別のメタ情報だけ。
+      // user_not_found の error が来た場合もここで握りつぶす(enumeration 対策)。
+      console.error("[requestPasswordReset] generateLink failed", {
+        name: error?.name,
+        status: error?.status,
+      });
+      return { success: true as const };
+    }
 
-  if (error) {
-    // メール本文・アドレスは出さない。エラー種別のメタ情報だけ。
-    console.error("[requestPasswordReset] resetPasswordForEmail failed", {
-      name: error.name,
-      status: error.status,
+    // /auth/confirm に渡す URL を組み立て
+    const confirmUrl = new URL(`${siteUrl}/auth/confirm`);
+    confirmUrl.searchParams.set("token_hash", data.properties.hashed_token);
+    confirmUrl.searchParams.set("type", "recovery");
+    confirmUrl.searchParams.set("next", "/reset-password");
+
+    const result = await sendPasswordResetEmail({
+      toEmail: email,
+      actionLink: confirmUrl.toString(),
+    });
+    if (!result.sent) {
+      console.error("[requestPasswordReset] sendPasswordResetEmail failed", {
+        reason: result.reason,
+      });
+    }
+  } catch (err) {
+    console.error("[requestPasswordReset] unexpected", {
+      name: err instanceof Error ? err.name : "unknown",
     });
   }
 
