@@ -1,9 +1,9 @@
+import { Pin } from "lucide-react";
 import Link from "next/link";
 
 import { Card } from "@/components/ui/card";
 import { listAllPlatformAnnouncementsForAdmin } from "@/lib/announcements/platform-queries";
 import {
-  PLATFORM_CATEGORY_ICON,
   PLATFORM_CATEGORY_LABEL,
   type PlatformAnnouncement,
 } from "@/lib/announcements/platform-types";
@@ -53,14 +53,19 @@ export default async function AdminAnnouncementsPage() {
                     <div className="space-y-0.5">
                       <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
                         <span className="bg-muted rounded px-1.5 py-0.5">
-                          {PLATFORM_CATEGORY_ICON[a.category]} {PLATFORM_CATEGORY_LABEL[a.category]}
+                          {PLATFORM_CATEGORY_LABEL[a.category]}
                         </span>
                         <span className="text-muted-foreground">
                           {a.targetType === "all"
                             ? "全エージェント宛"
                             : `特定 ${a.targetOrganizationIds.length} 社宛`}
                         </span>
-                        {a.isPinned && <span>📌 固定</span>}
+                        {a.isPinned && (
+                          <span className="inline-flex items-center gap-1">
+                            <Pin className="h-3 w-3" />
+                            固定
+                          </span>
+                        )}
                         {a.requireAck && <span>要承認</span>}
                         {expired && <span className="text-muted-foreground">期限切れ</span>}
                       </div>

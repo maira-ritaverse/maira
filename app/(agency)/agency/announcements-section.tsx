@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { Pin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   PLATFORM_CATEGORY_CLASS,
-  PLATFORM_CATEGORY_ICON,
   PLATFORM_CATEGORY_LABEL,
   type PlatformAnnouncement,
 } from "@/lib/announcements/platform-types";
@@ -107,11 +107,12 @@ export function AnnouncementsSection() {
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${PLATFORM_CATEGORY_CLASS[a.category]}`}
                     >
-                      {PLATFORM_CATEGORY_ICON[a.category]} {PLATFORM_CATEGORY_LABEL[a.category]}
+                      {PLATFORM_CATEGORY_LABEL[a.category]}
                     </span>
                     {a.isPinned && (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-                        📌 固定
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                        <Pin className="h-3 w-3" />
+                        固定
                       </span>
                     )}
                     {a.requireAck && a.acknowledgedAt === null && (

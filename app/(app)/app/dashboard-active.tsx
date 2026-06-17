@@ -1,3 +1,4 @@
+import { Bell } from "lucide-react";
 import Link from "next/link";
 import { AptitudeRadar } from "@/components/features/diagnosis/aptitude-radar";
 import { InterviewShareCard } from "@/components/features/meetings/interview-share-card";
@@ -187,8 +188,9 @@ export function DashboardActive({ data }: Props) {
       {data.unreadNotificationCount > 0 && (
         <Card className="border-rose-300 bg-rose-50/40 p-4 dark:border-rose-900 dark:bg-rose-950/20">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="font-medium">
-              🔔 新着のお知らせが {data.unreadNotificationCount} 件あります
+            <p className="flex items-center gap-2 font-medium">
+              <Bell className="h-4 w-4" />
+              新着のお知らせが {data.unreadNotificationCount} 件あります
             </p>
             <Button render={<Link href="/app/agent-referrals" />} size="sm" variant="outline">
               進捗を確認

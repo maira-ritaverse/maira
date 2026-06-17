@@ -24,14 +24,6 @@ export const PLATFORM_CATEGORY_LABEL: Record<PlatformAnnouncementCategory, strin
   feature: "新機能",
 };
 
-export const PLATFORM_CATEGORY_ICON: Record<PlatformAnnouncementCategory, string> = {
-  info: "📣",
-  maintenance: "🛠",
-  important: "❗",
-  promotion: "🎁",
-  feature: "✨",
-};
-
 /** カテゴリ → タイトルバー Tailwind クラス(UI 側で利用) */
 export const PLATFORM_CATEGORY_CLASS: Record<PlatformAnnouncementCategory, string> = {
   info: "bg-blue-100 text-blue-900 dark:bg-blue-950/60 dark:text-blue-100",

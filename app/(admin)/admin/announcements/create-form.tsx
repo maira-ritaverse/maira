@@ -10,7 +10,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   PLATFORM_ANNOUNCEMENT_CATEGORIES,
-  PLATFORM_CATEGORY_ICON,
   PLATFORM_CATEGORY_LABEL,
   type PlatformAnnouncementCategory,
   type PlatformAnnouncementTargetType,
@@ -127,7 +126,7 @@ export function AnnouncementCreateForm() {
             >
               {PLATFORM_ANNOUNCEMENT_CATEGORIES.map((c) => (
                 <option key={c} value={c}>
-                  {PLATFORM_CATEGORY_ICON[c]} {PLATFORM_CATEGORY_LABEL[c]}
+                  {PLATFORM_CATEGORY_LABEL[c]}
                 </option>
               ))}
             </select>

@@ -259,7 +259,7 @@ export default async function AgencyDashboardPage() {
               </div>
               {sortedQualityFields.length === 0 ? (
                 <p className="text-muted-foreground py-4 text-center text-sm">
-                  未入力項目はありません 🎉
+                  未入力項目はありません
                 </p>
               ) : (
                 <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
@@ -306,9 +306,7 @@ export default async function AgencyDashboardPage() {
                 </Button>
               </div>
             ) : (
-              <p className="text-muted-foreground py-2 text-center text-sm">
-                重複候補はありません 🎉
-              </p>
+              <p className="text-muted-foreground py-2 text-center text-sm">重複候補はありません</p>
             ),
           "quick-actions": (
             <div className="flex flex-wrap gap-2">
