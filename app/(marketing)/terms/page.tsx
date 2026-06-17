@@ -22,7 +22,7 @@ export default function TermsPage() {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">第 1 条(適用)</h2>
           <p>
-            本規約は、Revorise Inc.(以下「当社」)が提供する AI 採用エージェント「Maira」
+            本規約は、株式会社Revorise(以下「当社」)が提供する AI 採用エージェント「Maira」
             (以下「本サービス」)の利用条件を定めるものです。
             本サービスを利用する全ての利用者は、本規約に同意したものとみなされます。
           </p>

@@ -23,6 +23,9 @@ export const metadata: Metadata = {
   description:
     "20-30 代の転職活動者向けの AI 採用エージェント。キャリア棚卸し、診断、書類作成、応募管理、AI 求人推薦、面接練習までを一括で。録音 → 履歴書自動生成、Zoom / Google Meet 連携にも対応。",
   applicationName: "Maira",
+  authors: [{ name: "株式会社Revorise", url: siteUrl }],
+  creator: "株式会社Revorise",
+  publisher: "株式会社Revorise",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,

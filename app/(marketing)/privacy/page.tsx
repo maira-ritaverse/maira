@@ -26,7 +26,7 @@ export default function PrivacyPolicyPage() {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">第 1 条(本ポリシーの目的)</h2>
           <p>
-            Revorise Inc.(以下「当社」)は、AI 採用エージェント「Maira」(以下「本サービス」)
+            株式会社Revorise(以下「当社」)は、AI 採用エージェント「Maira」(以下「本サービス」)
             の提供にあたり、利用者の個人情報および利用データを以下の方針で取り扱います。
             本サービスをご利用いただくにあたっては、本ポリシーへの同意を必須としています。
           </p>
@@ -124,8 +124,8 @@ export default function PrivacyPolicyPage() {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">第 9 条(お問い合わせ)</h2>
           <p>
-            本ポリシーに関するお問い合わせは、本サービス内のお問い合わせフォームまたは Revorise Inc.
-            公式サイト経由でお願いします。
+            本ポリシーに関するお問い合わせは、本サービス内のお問い合わせフォームまたは
+            株式会社Revorise の公式サイト経由でお願いします。
           </p>
         </section>
 

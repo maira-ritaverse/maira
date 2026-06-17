@@ -41,7 +41,8 @@ export function renderEmailLayout({ previewTitle, bodyHtml }: EmailLayoutArgs): 
               <hr style="border:none;border-top:1px solid #e6e6e6;margin:0 0 12px;">
               <p style="margin:0;font-size:12px;color:#888;line-height:1.6;">
                 Maira(マイラ)— 20-30代の転職活動者のための AI キャリアエージェント<br>
-                <a href="https://maira.pro" style="color:#666;text-decoration:none;">https://maira.pro</a>
+                <a href="https://maira.pro" style="color:#666;text-decoration:none;">https://maira.pro</a><br>
+                <span style="color:#aaa;">運営:株式会社Revorise</span>
               </p>
             </td>
           </tr>
