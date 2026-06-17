@@ -6,7 +6,10 @@
  *   (個別通知は in-app で十分。メールは「外出中も気付ける」用途)
  *
  * 求職者の内面情報は本文に載せない(名前 + 求人 + アクション種別のみ)。
+ *
+ * HTML は共通レイアウト(./layout)で他のメールとデザイン統一。
  */
+import { escapeHtml, infoCard, infoRow, primaryButton, renderEmailLayout } from "./layout";
 
 export type SendSeekerActionEmailArgs = {
   toEmail: string;
@@ -78,10 +81,7 @@ export async function sendSeekerActionEmail(
 
 /**
  * 求職者アクション通知メールの HTML 本文を生成する純関数。
- *
- * - インラインスタイルのみ(Gmail / iOS メール / Outlook 互換)
- * - ボタンは <a> + 背景色のシンプルな見た目
- * - ダークモード対応は省略(メールクライアント側で反転される)
+ * 共通レイアウト(renderEmailLayout)で他のメールとデザイン統一。
  */
 export function buildHtmlBody(args: {
   organizationName: string;
@@ -90,57 +90,31 @@ export function buildHtmlBody(args: {
   actionLabel: string;
   href: string;
 }): string {
-  const esc = htmlEscape;
-  return `<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="utf-8">
-<title>${esc(args.organizationName)}</title>
-</head>
-<body style="margin:0;padding:0;background-color:#f5f5f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1c1917;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f4;padding:24px 0;">
-  <tr>
-    <td align="center">
-      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background-color:#ffffff;border-radius:8px;border:1px solid #e7e5e4;padding:32px;">
-        <tr>
-          <td>
-            <p style="margin:0 0 8px;font-size:12px;color:#78716c;letter-spacing:0.04em;">MAIRA / ${esc(args.organizationName)}</p>
-            <h1 style="margin:0 0 16px;font-size:18px;line-height:1.5;color:#1c1917;">求職者からの新しいシグナルがあります</h1>
-            <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#44403c;">
-              <strong>${esc(args.clientName)}</strong> さんが <strong>${esc(args.jobLabel)}</strong> に対して<br>
-              「<strong>${esc(args.actionLabel)}</strong>」を表明しました。
-            </p>
+  const body = `
+<h2 style="margin:0 0 8px;font-size:20px;line-height:1.4;">求職者からの新しいシグナル</h2>
+<p style="margin:0 0 16px;color:#555;line-height:1.6;font-size:14px;">
+  <strong>${escapeHtml(args.clientName)}</strong> さんが
+  <strong>${escapeHtml(args.jobLabel)}</strong> に対して
+  「<strong>${escapeHtml(args.actionLabel)}</strong>」を表明しました。
+</p>
 
-            <table role="presentation" cellpadding="0" cellspacing="0">
-              <tr>
-                <td style="background-color:#10b981;border-radius:6px;">
-                  <a href="${esc(args.href)}" style="display:inline-block;padding:10px 20px;color:#ffffff;text-decoration:none;font-weight:500;font-size:14px;">
-                    詳細を開く →
-                  </a>
-                </td>
-              </tr>
-            </table>
+${infoCard(
+  infoRow("求職者", args.clientName) +
+    infoRow("求人", args.jobLabel) +
+    infoRow("アクション", args.actionLabel),
+)}
 
-            <hr style="margin:32px 0 16px;border:none;border-top:1px solid #e7e5e4;">
-            <p style="margin:0;font-size:11px;color:#a8a29e;line-height:1.5;">
-              このメールは Maira から自動送信されています。<br>
-              通知を受け取りたくない場合は、管理画面の「設定 → 通知購読設定」で OFF にできます。
-            </p>
-          </td>
-        </tr>
-      </table>
-    </td>
-  </tr>
-</table>
-</body>
-</html>`;
-}
+<div style="margin:20px 0 8px;text-align:center;">
+  ${primaryButton(args.href, "詳細を開く")}
+</div>
 
-function htmlEscape(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+<p style="margin:24px 0 0;font-size:12px;color:#888;line-height:1.6;">
+  通知を受け取りたくない場合は、管理画面の「設定 → 通知購読設定」で OFF にできます。
+</p>
+`.trim();
+
+  return renderEmailLayout({
+    previewTitle: `${args.organizationName} - 求職者アクション通知`,
+    bodyHtml: body,
+  });
 }

@@ -3,7 +3,7 @@
  *
  * 求職者宛にメールを送る:
  *   ・件名:面談予定のご案内([タイトル])
- *   ・本文:日時 / URL / パスコード / 主催者
+ *   ・本文:HTML(ボタン UI)+ プレーンテキスト両方
  *   ・添付:invite.ics(application/calendar)
  *     ※ Resend は attachments[].content に base64 を載せる仕様
  *
@@ -12,6 +12,7 @@
  *   ・添付 .ics は呼び出し側で buildIcsEvent() で組み立てて渡す
  *   ・暗号化された agenda はメールには載せない(求職者向けには title 中心)
  */
+import { escapeHtml, infoCard, infoRow, primaryButton, renderEmailLayout } from "./layout";
 
 export type SendMeetingInviteResult =
   | { sent: true; messageId: string | null }
@@ -56,6 +57,69 @@ function subjectFor(variant: SendMeetingInviteArgs["variant"], title: string): s
     default:
       return `面談予定のご案内:${title}`;
   }
+}
+
+function buildHtml(args: SendMeetingInviteArgs): string {
+  const name = args.toName ? `${args.toName} 様` : "ご担当者様";
+  const start = formatJst(args.startsAt);
+  const end = formatJst(args.endsAt);
+  const isCancel = args.variant === "cancel";
+  const isReminder = args.variant === "reminder_24h" || args.variant === "reminder_1h";
+
+  const headline = isCancel
+    ? "面談予定がキャンセルになりました"
+    : args.variant === "reminder_1h"
+      ? "まもなく面談が始まります(1 時間後)"
+      : args.variant === "reminder_24h"
+        ? "明日の面談予定のお知らせ"
+        : "面談予定のご案内";
+
+  const intro = isCancel
+    ? "以下の面談予定がキャンセルされました。お時間を確保いただいていた場合はご了承ください。"
+    : isReminder
+      ? "本メールはリマインダーです。下記の予定をご確認ください。"
+      : `${escapeHtml(args.organizationName)} の ${escapeHtml(args.advisorName)} です。面談のご予定をお送りいたします。`;
+
+  const infoRows = [infoRow("内容", args.title), infoRow("日時", `${start} 〜 ${end}`)];
+  if (args.passcode) {
+    infoRows.push(infoRow("パスコード", args.passcode));
+  }
+
+  const joinBlock = isCancel
+    ? ""
+    : `<div style="margin:20px 0;text-align:center;">
+  ${primaryButton(args.joinUrl, "会議に参加する")}
+  <p style="margin:8px 0 0;font-size:12px;color:#888;word-break:break-all;">${escapeHtml(args.joinUrl)}</p>
+</div>`;
+
+  const icsBlock = isCancel
+    ? ""
+    : `<p style="margin:16px 0 0;font-size:13px;color:#555;line-height:1.6;">
+  添付の <code>invite.ics</code> ファイルから、Google Calendar / iOS カレンダー / Outlook 等にこの予定を追加できます。
+</p>`;
+
+  const body = `
+<h2 style="margin:0 0 8px;font-size:20px;line-height:1.4;">${escapeHtml(headline)}</h2>
+<p style="margin:0 0 16px;color:#555;line-height:1.6;font-size:14px;">
+  ${escapeHtml(name)}<br>
+  ${intro}
+</p>
+
+${infoCard(infoRows.join(""))}
+
+${joinBlock}
+${icsBlock}
+
+<p style="margin:24px 0 0;font-size:13px;color:#555;line-height:1.6;">
+  ${escapeHtml(args.advisorName)}<br>
+  <span style="color:#888;">${escapeHtml(args.organizationName)}</span>
+</p>
+`.trim();
+
+  return renderEmailLayout({
+    previewTitle: subjectFor(args.variant ?? "invite", args.title),
+    bodyHtml: body,
+  });
 }
 
 function buildBody(args: SendMeetingInviteArgs): string {
@@ -110,6 +174,7 @@ export async function sendMeetingInviteEmail(
 
   const subject = subjectFor(args.variant ?? "invite", args.title);
   const text = buildBody(args);
+  const html = buildHtml(args);
 
   // .ics は base64 で attach。Resend は filename + content(base64) 形式。
   const icsBase64 = Buffer.from(args.icsContent, "utf-8").toString("base64");
@@ -126,6 +191,7 @@ export async function sendMeetingInviteEmail(
         from,
         to: [args.toEmail],
         subject,
+        html,
         text,
         attachments: [
           {
