@@ -28,6 +28,8 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const q = url.searchParams.get("q")?.trim().toLowerCase() ?? "";
+  // ?archived=true で「停止中」タブ、それ以外は現役のみ
+  const showArchived = url.searchParams.get("archived") === "true";
 
   const admin = createServiceClient();
   // page=1, perPage=200(MVP 規模での全件取得)。本番でユーザ数が増えたらページング実装。
@@ -44,10 +46,10 @@ export async function GET(request: Request) {
     : list.users;
 
   const ids = matched.map((u) => u.id);
-  // profiles を別途読む(account_type / is_maira_admin / onboarded_at)
+  // profiles を別途読む(account_type / is_maira_admin / onboarded_at / archived_at / archived_reason)
   const { data: profiles } = await admin
     .from("profiles")
-    .select("id, account_type, is_maira_admin, onboarded_at")
+    .select("id, account_type, is_maira_admin, onboarded_at, archived_at, archived_reason")
     .in("id", ids.length > 0 ? ids : ["00000000-0000-0000-0000-000000000000"]);
   const profileMap = new Map(
     (profiles ?? []).map((p) => [
@@ -57,6 +59,8 @@ export async function GET(request: Request) {
         account_type: string;
         is_maira_admin: boolean;
         onboarded_at: string | null;
+        archived_at: string | null;
+        archived_reason: string | null;
       },
     ]),
   );
@@ -71,10 +75,19 @@ export async function GET(request: Request) {
         accountType: p?.account_type ?? "unknown",
         isMairaAdmin: p?.is_maira_admin ?? false,
         onboardedAt: p?.onboarded_at ?? null,
+        archivedAt: p?.archived_at ?? null,
+        archivedReason: p?.archived_reason ?? null,
       };
     })
-    // 新しい順
-    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    // archived フィルタ(profiles が未作成のユーザは「現役」扱い)
+    .filter((u) => (showArchived ? u.archivedAt !== null : u.archivedAt === null))
+    // 新しい順(現役は createdAt、停止中はアーカイブ日が新しい順)
+    .sort((a, b) => {
+      if (showArchived) {
+        return (b.archivedAt ?? "") > (a.archivedAt ?? "") ? 1 : -1;
+      }
+      return a.createdAt < b.createdAt ? 1 : -1;
+    });
 
   return NextResponse.json({ users, total: users.length });
 }

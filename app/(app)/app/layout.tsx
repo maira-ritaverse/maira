@@ -32,10 +32,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // 招待件数を並行取得する。invited 件数は RLS により本人宛て(メール一致)の
   // 行のみ count され、件数 0 のときはサイドナビでバッジを出さない。
   const [{ data: profile }, invitedCount, policyAcceptance] = await Promise.all([
-    supabase.from("profiles").select("display_name").eq("id", user.id).single(),
+    supabase.from("profiles").select("display_name, archived_at").eq("id", user.id).single(),
     countInvitedConnections(),
     getPolicyAcceptance(user.id),
   ]);
+
+  // 運営者によってアーカイブ(停止)されたユーザはログイン不可。
+  // セッションを破棄して /login?archived=1 へ。
+  if (profile?.archived_at) {
+    await supabase.auth.signOut();
+    redirect("/login?archived=1");
+  }
 
   // プライバシーポリシー再同意が必要かを判定。古いバージョン同意済 or 完全新規で文面切替。
   const requirePolicy = needsToAccept(policyAcceptance);

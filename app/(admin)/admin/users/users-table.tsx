@@ -16,6 +16,8 @@ type AdminUserRow = {
   accountType: string;
   isMairaAdmin: boolean;
   onboardedAt: string | null;
+  archivedAt: string | null;
+  archivedReason: string | null;
 };
 
 type ListResponse = {
@@ -24,19 +26,19 @@ type ListResponse = {
 };
 
 /**
- * 運営者用のユーザ一覧テーブル。
+ * 運営者用のユーザ一覧テーブル(現役 / 停止中を archived プロップで切替)。
  *
  * - 検索:メアド部分一致(IME 入力中の連打を防ぐ 300ms debounce)
- * - 強制削除:確認ダイアログ → DELETE API → 一覧から消す
- * - 表示:メアド / 種別バッジ / 作成日 / オンボード済 / 操作
+ * - アーカイブ:profiles.archived_at に時刻を入れる(履歴は残す)
+ * - 復活:profiles.archived_at = null に戻す
  */
-export function UsersTable() {
+export function UsersTable({ archived }: { archived: boolean }) {
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [loading, setLoading] = useState(true);
   // 検索ワードを localStorage に永続化 → 画面遷移後も復元
   const [query, setQuery] = usePersistedState("admin-users-q", "");
   const [error, setError] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [actingId, setActingId] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { showToast } = useToast();
 
@@ -44,9 +46,11 @@ export function UsersTable() {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch<ListResponse>(
-        `/api/admin/users${q ? `?q=${encodeURIComponent(q)}` : ""}`,
-      );
+      const params = new URLSearchParams();
+      if (q) params.set("q", q);
+      if (archived) params.set("archived", "true");
+      const qs = params.toString();
+      const res = await apiFetch<ListResponse>(`/api/admin/users${qs ? `?${qs}` : ""}`);
       setUsers(res?.users ?? []);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -55,7 +59,7 @@ export function UsersTable() {
     }
   };
 
-  // 永続化された query を含めて debounce で取得(初回 + 変更時)
+  // 永続化された query + archived タブを含めて debounce で取得
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
@@ -64,30 +68,52 @@ export function UsersTable() {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, archived]);
 
-  const handleDelete = async (target: AdminUserRow) => {
-    if (
-      !confirm(
-        `${target.email}(${target.id})を完全に削除します。\n` +
-          `履歴書 / 応募 / 棚卸し / 通知などすべてのデータが連鎖削除され、元に戻せません。\n\n` +
-          `本当に実行しますか?`,
-      )
-    ) {
-      return;
-    }
-    setDeletingId(target.id);
+  const handleArchive = async (target: AdminUserRow) => {
+    const reason = window.prompt(
+      `${target.email || target.id} を停止中に移動します。\n` +
+        `auth.users やデータは残り、ログインはできなくなります(運営判断で復活可)。\n\n` +
+        `理由(任意・最大 500 文字):`,
+      "",
+    );
+    if (reason === null) return;
+    setActingId(target.id);
     setError(null);
     try {
-      await apiFetch(`/api/admin/users/${target.id}`, { method: "DELETE" });
+      await apiFetch(`/api/admin/users/${target.id}`, {
+        method: "PATCH",
+        json: { action: "archive", reason: reason || undefined },
+      });
       setUsers((prev) => prev.filter((u) => u.id !== target.id));
-      showToast("success", `${target.email || target.id} を削除しました`);
+      showToast("success", `${target.email || target.id} を停止しました`);
     } catch (err) {
       const msg = getErrorMessage(err);
       setError(msg);
-      showToast("error", `削除失敗:${msg}`);
+      showToast("error", `停止失敗:${msg}`);
     } finally {
-      setDeletingId(null);
+      setActingId(null);
+    }
+  };
+
+  const handleUnarchive = async (target: AdminUserRow) => {
+    if (!confirm(`${target.email || target.id} を現役に戻します。よろしいですか?`)) return;
+    setActingId(target.id);
+    setError(null);
+    try {
+      await apiFetch(`/api/admin/users/${target.id}`, {
+        method: "PATCH",
+        json: { action: "unarchive" },
+      });
+      setUsers((prev) => prev.filter((u) => u.id !== target.id));
+      showToast("success", `${target.email || target.id} を現役に戻しました`);
+    } catch (err) {
+      const msg = getErrorMessage(err);
+      setError(msg);
+      showToast("error", `復活失敗:${msg}`);
+    } finally {
+      setActingId(null);
     }
   };
 
@@ -109,7 +135,9 @@ export function UsersTable() {
       {loading ? (
         <p className="text-muted-foreground text-sm">読み込み中…</p>
       ) : users.length === 0 ? (
-        <p className="text-muted-foreground text-sm">該当ユーザがありません。</p>
+        <p className="text-muted-foreground text-sm">
+          {archived ? "停止中のユーザはいません。" : "該当ユーザがありません。"}
+        </p>
       ) : (
         <div className="overflow-x-auto rounded border">
           <table className="w-full text-left text-sm">
@@ -118,7 +146,14 @@ export function UsersTable() {
                 <th className="px-3 py-2.5">メアド</th>
                 <th className="px-3 py-2.5">種別</th>
                 <th className="px-3 py-2.5">作成日</th>
-                <th className="px-3 py-2.5">オンボ</th>
+                {archived ? (
+                  <>
+                    <th className="px-3 py-2.5">停止日</th>
+                    <th className="px-3 py-2.5">理由</th>
+                  </>
+                ) : (
+                  <th className="px-3 py-2.5">オンボ</th>
+                )}
                 <th className="px-3 py-2.5 text-right">操作</th>
               </tr>
             </thead>
@@ -145,16 +180,41 @@ export function UsersTable() {
                   <td className="px-3 py-2.5 text-xs">
                     {new Date(u.createdAt).toLocaleDateString("ja-JP")}
                   </td>
-                  <td className="px-3 py-2.5 text-xs">{u.onboardedAt ? "✓" : "—"}</td>
+                  {archived ? (
+                    <>
+                      <td className="px-3 py-2.5 text-xs">
+                        {u.archivedAt ? new Date(u.archivedAt).toLocaleDateString("ja-JP") : "—"}
+                      </td>
+                      <td
+                        className="max-w-60 truncate px-3 py-2.5 text-xs"
+                        title={u.archivedReason ?? ""}
+                      >
+                        {u.archivedReason || "—"}
+                      </td>
+                    </>
+                  ) : (
+                    <td className="px-3 py-2.5 text-xs">{u.onboardedAt ? "✓" : "—"}</td>
+                  )}
                   <td className="px-3 py-2.5 text-right">
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => void handleDelete(u)}
-                      disabled={deletingId !== null}
-                    >
-                      {deletingId === u.id ? "削除中…" : "強制削除"}
-                    </Button>
+                    {archived ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void handleUnarchive(u)}
+                        disabled={actingId !== null}
+                      >
+                        {actingId === u.id ? "復活中…" : "復活"}
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void handleArchive(u)}
+                        disabled={actingId !== null}
+                      >
+                        {actingId === u.id ? "処理中…" : "停止する"}
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}

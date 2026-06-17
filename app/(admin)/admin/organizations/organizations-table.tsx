@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { RefreshButton } from "@/components/features/admin/refresh-button";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/lib/admin/toast/store";
 import { usePersistedState } from "@/lib/admin/use-persisted-state";
 import { apiFetch, getErrorMessage } from "@/lib/api/client-fetch";
 
@@ -13,6 +15,8 @@ type OrgRow = {
   id: string;
   name: string;
   createdAt: string;
+  archivedAt: string | null;
+  archivedReason: string | null;
   memberCount: number;
   adminCount: number;
   advisorCount: number;
@@ -59,31 +63,27 @@ function compareOrgs(a: OrgRow, b: OrgRow, key: SortKey, dir: SortDir): number {
 }
 
 /**
- * 組織一覧テーブル。
+ * 組織一覧テーブル(現役 / 退会済を archived プロップで切替)。
  *
- * 表示項目:
- *   - 企業名
- *   - 作成日
- *   - メンバー数(admin / 合計)
- *   - 最終メンバー追加日(運営アクティビティの目安)
- *
- * 状態色:
- *   - admin が 0 人 → 警告色(管理不能状態の可能性)
- *   - 最終メンバー追加が 90 日以上前 → 注意色(休眠の可能性)
+ * アーカイブ操作は物理削除を行わず archived_at に時刻を入れる方式。
+ * 復活時は archived_at = null に戻す。
  */
-export function OrganizationsTable() {
+export function OrganizationsTable({ archived }: { archived: boolean }) {
   const [orgs, setOrgs] = useState<OrgRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actingId, setActingId] = useState<string | null>(null);
   // ソート状態を localStorage に永続化(画面遷移後も復元)
   const [sortKey, setSortKey] = usePersistedState<SortKey>("admin-orgs-sortKey", "createdAt");
   const [sortDir, setSortDir] = usePersistedState<SortDir>("admin-orgs-sortDir", "desc");
+  const { showToast } = useToast();
 
   const fetchOrgs = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch<ListResponse>(`/api/admin/organizations`);
+      const qs = archived ? "?archived=true" : "";
+      const res = await apiFetch<ListResponse>(`/api/admin/organizations${qs}`);
       setOrgs(res?.organizations ?? []);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -92,12 +92,16 @@ export function OrganizationsTable() {
     }
   };
 
-  const didLoadRef = useRef(false);
+  // archived タブの切替を検知して再取得。didLoadRef は使わない
+  // (初回マウントで実行 + archived 切替時にも再実行したいため)。
+  const lastTabRef = useRef<boolean | null>(null);
   useEffect(() => {
-    if (didLoadRef.current) return;
-    didLoadRef.current = true;
+    if (lastTabRef.current === archived) return;
+    lastTabRef.current = archived;
     void fetchOrgs();
-  }, []);
+    // fetchOrgs は archived に閉じている。依存に入れると毎回再実行されてしまうので意図的に省略。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [archived]);
 
   const sortedOrgs = useMemo(() => {
     return [...orgs].sort((a, b) => compareOrgs(a, b, sortKey, sortDir));
@@ -113,6 +117,44 @@ export function OrganizationsTable() {
     }
   };
 
+  const handleArchive = async (target: OrgRow) => {
+    const reason = window.prompt(
+      `「${target.name}」を退会済にします。\nメンバー / クライアント / 求人は履歴として残ります。\n\n理由(任意・最大 500 文字):`,
+      "",
+    );
+    if (reason === null) return;
+    setActingId(target.id);
+    try {
+      await apiFetch(`/api/admin/organizations/${target.id}`, {
+        method: "PATCH",
+        json: { action: "archive", reason: reason || undefined },
+      });
+      setOrgs((prev) => prev.filter((o) => o.id !== target.id));
+      showToast("success", `${target.name} を退会済に移動しました`);
+    } catch (err) {
+      showToast("error", `アーカイブ失敗:${getErrorMessage(err)}`);
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const handleUnarchive = async (target: OrgRow) => {
+    if (!confirm(`「${target.name}」を現役に戻します。よろしいですか?`)) return;
+    setActingId(target.id);
+    try {
+      await apiFetch(`/api/admin/organizations/${target.id}`, {
+        method: "PATCH",
+        json: { action: "unarchive" },
+      });
+      setOrgs((prev) => prev.filter((o) => o.id !== target.id));
+      showToast("success", `${target.name} を現役に戻しました`);
+    } catch (err) {
+      showToast("error", `復活失敗:${getErrorMessage(err)}`);
+    } finally {
+      setActingId(null);
+    }
+  };
+
   if (loading) {
     return <p className="text-muted-foreground text-sm">読み込み中…</p>;
   }
@@ -120,7 +162,11 @@ export function OrganizationsTable() {
     return <p className="text-destructive text-xs">{error}</p>;
   }
   if (orgs.length === 0) {
-    return <p className="text-muted-foreground text-sm">登録されている組織がありません。</p>;
+    return (
+      <p className="text-muted-foreground text-sm">
+        {archived ? "退会済の企業はありません。" : "登録されている組織がありません。"}
+      </p>
+    );
   }
 
   return (
@@ -147,46 +193,52 @@ export function OrganizationsTable() {
                 sortDir={sortDir}
                 onClick={toggleSort}
               />
-              <SortHeader
-                k="adminCount"
-                label="admin"
-                sortKey={sortKey}
-                sortDir={sortDir}
-                onClick={toggleSort}
-                align="right"
-              />
-              <SortHeader
-                k="advisorCount"
-                label="advisor"
-                sortKey={sortKey}
-                sortDir={sortDir}
-                onClick={toggleSort}
-                align="right"
-              />
-              <SortHeader
-                k="clientCount"
-                label="求職者(client)"
-                sortKey={sortKey}
-                sortDir={sortDir}
-                onClick={toggleSort}
-                align="right"
-              />
-              <SortHeader
-                k="linkedClientCount"
-                label="うち連携済"
-                sortKey={sortKey}
-                sortDir={sortDir}
-                onClick={toggleSort}
-                align="right"
-              />
-              <SortHeader
-                k="status"
-                label="状態"
-                sortKey={sortKey}
-                sortDir={sortDir}
-                onClick={toggleSort}
-              />
-              <th className="px-3 py-2.5 text-right">詳細</th>
+              {archived && <th className="px-3 py-2.5">退会日</th>}
+              {archived && <th className="px-3 py-2.5">理由</th>}
+              {!archived && (
+                <>
+                  <SortHeader
+                    k="adminCount"
+                    label="admin"
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onClick={toggleSort}
+                    align="right"
+                  />
+                  <SortHeader
+                    k="advisorCount"
+                    label="advisor"
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onClick={toggleSort}
+                    align="right"
+                  />
+                  <SortHeader
+                    k="clientCount"
+                    label="求職者(client)"
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onClick={toggleSort}
+                    align="right"
+                  />
+                  <SortHeader
+                    k="linkedClientCount"
+                    label="うち連携済"
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onClick={toggleSort}
+                    align="right"
+                  />
+                  <SortHeader
+                    k="status"
+                    label="状態"
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onClick={toggleSort}
+                  />
+                </>
+              )}
+              <th className="px-3 py-2.5 text-right">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -202,27 +254,69 @@ export function OrganizationsTable() {
                 <td className="px-3 py-2.5 text-xs">
                   {new Date(o.createdAt).toLocaleDateString("ja-JP")}
                 </td>
-                <td className="px-3 py-2.5 text-right text-xs">{o.adminCount}</td>
-                <td className="px-3 py-2.5 text-right text-xs font-semibold">{o.advisorCount}</td>
-                <td className="px-3 py-2.5 text-right text-xs font-semibold">{o.clientCount}</td>
-                <td className="px-3 py-2.5 text-right text-xs">
-                  {o.linkedClientCount}
-                  {o.clientCount > 0 && (
-                    <span className="text-muted-foreground ml-1 text-[10px]">
-                      ({Math.round((o.linkedClientCount / o.clientCount) * 100)}%)
-                    </span>
-                  )}
-                </td>
-                <td className="px-3 py-2.5">
-                  <StatusBadge status={o.status} />
-                </td>
-                <td className="px-3 py-2.5 text-right">
-                  <Link
-                    href={`/admin/organizations/${o.id}`}
-                    className="text-foreground text-xs font-medium hover:underline"
+                {archived && (
+                  <td className="px-3 py-2.5 text-xs">
+                    {o.archivedAt ? new Date(o.archivedAt).toLocaleDateString("ja-JP") : "—"}
+                  </td>
+                )}
+                {archived && (
+                  <td
+                    className="max-w-60 truncate px-3 py-2.5 text-xs"
+                    title={o.archivedReason ?? ""}
                   >
-                    詳細 →
-                  </Link>
+                    {o.archivedReason || "—"}
+                  </td>
+                )}
+                {!archived && (
+                  <>
+                    <td className="px-3 py-2.5 text-right text-xs">{o.adminCount}</td>
+                    <td className="px-3 py-2.5 text-right text-xs font-semibold">
+                      {o.advisorCount}
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-xs font-semibold">
+                      {o.clientCount}
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-xs">
+                      {o.linkedClientCount}
+                      {o.clientCount > 0 && (
+                        <span className="text-muted-foreground ml-1 text-[10px]">
+                          ({Math.round((o.linkedClientCount / o.clientCount) * 100)}%)
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <StatusBadge status={o.status} />
+                    </td>
+                  </>
+                )}
+                <td className="px-3 py-2.5 text-right">
+                  <div className="inline-flex items-center gap-2">
+                    <Link
+                      href={`/admin/organizations/${o.id}`}
+                      className="text-foreground text-xs font-medium hover:underline"
+                    >
+                      詳細
+                    </Link>
+                    {archived ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void handleUnarchive(o)}
+                        disabled={actingId !== null}
+                      >
+                        {actingId === o.id ? "復活中…" : "復活"}
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void handleArchive(o)}
+                        disabled={actingId !== null}
+                      >
+                        {actingId === o.id ? "処理中…" : "退会済へ"}
+                      </Button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

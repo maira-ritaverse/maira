@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import { isMairaAdmin } from "@/lib/announcements/platform-queries";
+import { readJsonBody, requireUser } from "@/lib/api/auth-guards";
+import { recordAuditLog } from "@/lib/audit/audit-log";
 import { createServiceClient } from "@/lib/supabase/service";
 
 /**
@@ -166,4 +169,77 @@ export async function GET(_request: Request, { params }: RouteParams) {
       linkedClientCount: unassignedLinked,
     },
   });
+}
+
+/**
+ * PATCH /api/admin/organizations/[id]
+ *
+ * 組織のアーカイブ / 復活操作(運営者専用)。
+ * 物理削除はせず、archived_at にタイムスタンプを記録するソフトデリート方式。
+ *
+ * Body:
+ *   { action: "archive" | "unarchive", reason?: string }
+ *
+ * archive:
+ *   ・archived_at = now()、archived_reason = body.reason ?? null
+ *   ・組織配下のクライアント / 求人 / メンバーは残す(履歴参照のため)
+ * unarchive:
+ *   ・archived_at = null、archived_reason = null
+ *
+ * 監査ログ:admin_accessed_user を流用(action 自体は organization 単位だが
+ *          audit テーブルの enum 制限を避ける目的で event_subtype で分ける)
+ */
+const patchSchema = z.object({
+  action: z.enum(["archive", "unarchive"]),
+  reason: z.string().max(500).optional(),
+});
+
+export async function PATCH(request: Request, { params }: RouteParams) {
+  const guard = await requireUser();
+  if (!guard.ok) return guard.response;
+  const { user: actor } = guard;
+
+  if (!(await isMairaAdmin())) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  const json = await readJsonBody(request);
+  if (!json.ok) return json.response;
+  const parsed = patchSchema.safeParse(json.body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "validation_failed" }, { status: 400 });
+  }
+
+  const { id } = await params;
+  const admin = createServiceClient();
+
+  const update =
+    parsed.data.action === "archive"
+      ? {
+          archived_at: new Date().toISOString(),
+          archived_reason: parsed.data.reason ?? null,
+        }
+      : { archived_at: null, archived_reason: null };
+
+  const { error } = await admin.from("organizations").update(update).eq("id", id);
+  if (error) {
+    return NextResponse.json({ error: "update_failed", message: error.message }, { status: 500 });
+  }
+
+  await recordAuditLog({
+    userId: actor.id,
+    action: "admin_accessed_user",
+    metadata: {
+      event_subtype:
+        parsed.data.action === "archive"
+          ? "admin_archived_organization"
+          : "admin_unarchived_organization",
+      organization_id: id,
+      reason: parsed.data.reason ?? null,
+    },
+    ipAddress: request.headers.get("x-forwarded-for"),
+    userAgent: request.headers.get("user-agent"),
+  });
+
+  return NextResponse.json({ ok: true });
 }

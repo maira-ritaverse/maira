@@ -23,6 +23,8 @@ type OrgRow = {
   id: string;
   name: string;
   created_at: string;
+  archived_at: string | null;
+  archived_reason: string | null;
 };
 type MemberRow = {
   organization_id: string;
@@ -34,17 +36,22 @@ type ClientRow = {
   link_status: string;
 };
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!(await isMairaAdmin())) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
+  const url = new URL(request.url);
+  // ?archived=true で退会済タブ、それ以外は現役
+  const showArchived = url.searchParams.get("archived") === "true";
 
   const admin = createServiceClient();
 
-  const { data: orgsData, error: orgsErr } = await admin
+  const baseQuery = admin
     .from("organizations")
-    .select("id, name, created_at")
-    .order("created_at", { ascending: false });
+    .select("id, name, created_at, archived_at, archived_reason");
+  const { data: orgsData, error: orgsErr } = await (showArchived
+    ? baseQuery.not("archived_at", "is", null).order("archived_at", { ascending: false })
+    : baseQuery.is("archived_at", null).order("created_at", { ascending: false }));
   if (orgsErr) {
     return NextResponse.json({ error: "list_failed", message: orgsErr.message }, { status: 500 });
   }
@@ -113,6 +120,8 @@ export async function GET() {
       id: o.id,
       name: o.name,
       createdAt: o.created_at,
+      archivedAt: o.archived_at,
+      archivedReason: o.archived_reason,
       memberCount: s.memberCount,
       adminCount: s.adminCount,
       advisorCount: s.advisorCount,

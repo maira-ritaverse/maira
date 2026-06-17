@@ -30,6 +30,7 @@ function LoginForm() {
   const nextParam = searchParams.get("next");
 
   const reasonParam = searchParams.get("reason");
+  const archivedParam = searchParams.get("archived");
 
   const [isPending, setIsPending] = useState(false);
   const [serverError, setServerError] = useState<string | null>(
@@ -37,7 +38,9 @@ function LoginForm() {
       ? "認証に失敗しました。もう一度お試しください。"
       : reasonParam === "signup_closed"
         ? "現在、自由登録は受け付けていません。エージェントからの招待メールをお持ちの方は、メール内のリンクから登録してください。"
-        : null,
+        : archivedParam === "1"
+          ? "このアカウントは現在利用を停止しています。お心当たりがない場合は運営までお問い合わせください。"
+          : null,
   );
 
   const {

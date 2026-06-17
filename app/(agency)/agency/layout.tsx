@@ -34,10 +34,18 @@ export default async function AgencyLayout({ children }: { children: React.React
   }
 
   // ヘッダー表示用 display_name + プライバシーポリシー同意状態を並行取得
-  const [{ data: profile }, policyAcceptance] = await Promise.all([
-    supabase.from("profiles").select("display_name").eq("id", user.id).single(),
+  // 同時に「ユーザ自身」「所属組織」のアーカイブ状態も確認する。
+  const [{ data: profile }, { data: orgRow }, policyAcceptance] = await Promise.all([
+    supabase.from("profiles").select("display_name, archived_at").eq("id", user.id).single(),
+    supabase.from("organizations").select("archived_at").eq("id", role.organization.id).single(),
     getPolicyAcceptance(user.id),
   ]);
+
+  // 運営者によってアーカイブされたユーザ / 組織はログイン不可。
+  if (profile?.archived_at || orgRow?.archived_at) {
+    await supabase.auth.signOut();
+    redirect("/login?archived=1");
+  }
   const requirePolicy = needsToAccept(policyAcceptance);
   const hasPriorPolicy = policyAcceptance.acceptedAt !== null;
 
