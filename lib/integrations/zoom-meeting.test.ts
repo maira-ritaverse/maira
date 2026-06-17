@@ -57,7 +57,13 @@ describe("buildCreateMeetingBody", () => {
 });
 
 describe("hasMeetingWriteScope", () => {
-  it("meeting:write を含む scope なら true", () => {
+  it("Granular の meeting:write:meeting を含む scope なら true", () => {
+    expect(hasMeetingWriteScope("user:read:user meeting:read:meeting meeting:write:meeting")).toBe(
+      true,
+    );
+  });
+
+  it("旧 Classic の meeting:write を含む scope も true(後方互換)", () => {
     expect(hasMeetingWriteScope("cloud_recording:read user:read meeting:read meeting:write")).toBe(
       true,
     );

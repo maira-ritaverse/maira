@@ -16,23 +16,34 @@ const AUTHORIZE_URL = "https://zoom.us/oauth/authorize";
 const TOKEN_URL = "https://zoom.us/oauth/token";
 
 /**
- * Zoom 認可で要求するスコープ。
+ * Zoom 認可で要求するスコープ(Granular Scopes 表記)。
+ *
+ * Zoom Marketplace は 2024 年以降 Granular Scopes に移行している。
+ * 旧 Classic 表記(meeting:read など)はサポートが終わっているため、
+ * Granular(meeting:read:meeting など)で要求する。
  *
  * 用途別の意味:
- *   - cloud_recording:read       : 録画ファイルの取得(自動取込で必須)
- *   - user:read                  : /users/me で user.id / account_id を取得
- *   - meeting:read               : 既存ミーティング一覧 / 詳細の参照
- *   - meeting:write              : 新規ミーティング作成 / 編集 / 削除
+ *   - cloud_recording:read:list_user_recordings : 録画一覧
+ *   - cloud_recording:read:recording            : 特定録画の取得
+ *   - user:read:user                            : /users/me で本人情報取得
+ *   - meeting:read:meeting                      : ミーティング詳細参照
+ *   - meeting:read:list_meetings                : ミーティング一覧参照
+ *   - meeting:write:meeting                     : 新規ミーティング作成
+ *   - meeting:update:meeting                    : ミーティング編集(再スケジュール等)
+ *   - meeting:delete:meeting                    : ミーティング削除(キャンセル)
  *
- * 既存接続済みユーザは scope に meeting:write を含まないため、設定画面で
- * 「Maira から会議を作成」機能を使うとき再認可を促す。`scopes_granted` カラム
- * (zoom_connections)を参照して UI 側でハンドリングする。
+ * 既存接続済みユーザは meeting:write:meeting が含まれない可能性があるので、
+ * 設定画面で「Maira から会議を作成」機能を使うとき再認可を促す。
  */
 export const ZOOM_SCOPES = [
-  "cloud_recording:read",
-  "user:read",
-  "meeting:read",
-  "meeting:write",
+  "cloud_recording:read:list_user_recordings",
+  "cloud_recording:read:recording",
+  "user:read:user",
+  "meeting:read:meeting",
+  "meeting:read:list_meetings",
+  "meeting:write:meeting",
+  "meeting:update:meeting",
+  "meeting:delete:meeting",
 ] as const;
 
 export type ZoomConfig = {
@@ -57,9 +68,13 @@ export function getZoomConfig(): ZoomConfig | null {
 /**
  * Zoom 認可 URL を組み立てる。
  *
- * scope は ZOOM_SCOPES の配列を半角スペース区切りで明示する。
- * Zoom App 側にも同じ scope を登録しておく必要がある(片方が欠けると認可成功
- * してもトークンに含まれない)。
+ * scope はクエリで明示しない方針:
+ *   ・Zoom Marketplace の Granular Scopes は、App 側に登録した scope が
+ *     authorize リクエストで自動的に要求される。
+ *   ・クエリの scope と App 登録 scope が完全一致しないと "invalid redirect"
+ *     エラー(4,700)が出るため、App 側の登録に委ねる。
+ *
+ * App 側で必要 scope を登録しておくこと(ZOOM_SCOPES のコメント参照)。
  */
 export function buildAuthorizeUrl(config: ZoomConfig, state: string): string {
   const u = new URL(AUTHORIZE_URL);
@@ -67,17 +82,19 @@ export function buildAuthorizeUrl(config: ZoomConfig, state: string): string {
   u.searchParams.set("client_id", config.clientId);
   u.searchParams.set("redirect_uri", config.redirectUri);
   u.searchParams.set("state", state);
-  u.searchParams.set("scope", ZOOM_SCOPES.join(" "));
+  // scope を明示しない(App 登録 scope が使われる)
   return u.toString();
 }
 
 /**
- * トークン応答の scope 文字列に meeting:write が含まれているかを判定する純関数。
+ * トークン応答の scope 文字列に「会議作成」権限が含まれているかを判定する純関数。
+ * Granular(meeting:write:meeting)と旧 Classic(meeting:write)の両方を受け入れる。
  * 設定画面で「再認可が必要です」バナーを出す判定に使う。
  */
 export function hasMeetingWriteScope(scope: string | null | undefined): boolean {
   if (!scope) return false;
-  return scope.split(/\s+/).includes("meeting:write");
+  const parts = scope.split(/\s+/);
+  return parts.includes("meeting:write:meeting") || parts.includes("meeting:write");
 }
 
 /**

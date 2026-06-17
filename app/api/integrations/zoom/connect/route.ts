@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
 
 import { requireUser } from "@/lib/api/auth-guards";
-import { hasAddon } from "@/lib/features/entitlements";
 import { buildAuthorizeUrl, getZoomConfig } from "@/lib/integrations/zoom";
 import { createOAuthState } from "@/lib/integrations/oauth-state";
 
 /**
  * GET /api/integrations/zoom/connect
  *
- * Zoom OAuth 認可フローを開始する。アドオン契約者のみ実行可能。
- * 成功時は Zoom の認可ページに 302 で飛ばす。
+ * Zoom OAuth 認可フローを開始する。
+ * 接続自体はアドオン契約不要(「会議予約」「会議作成」は無料機能)。
+ * 「Cloud Recording の自動取り込み」だけがアドオン契約者限定の挙動として、
+ * Webhook の ingest 経路で制御する(ここではゲートしない)。
  *
  * state は user_id + provider + ts を HMAC で署名して載せる(CSRF 対策)。
  * 完了後 /api/integrations/zoom/callback に code + state がコールバックされる。
@@ -17,16 +18,7 @@ import { createOAuthState } from "@/lib/integrations/oauth-state";
 export async function GET() {
   const guard = await requireUser();
   if (!guard.ok) return guard.response;
-  const { supabase, user } = guard;
-
-  // アドオン契約が必要(将来 Stripe と紐づけたら自動で is_active が落ちる)
-  const addonOk = await hasAddon(supabase, user.id, "meeting_recording_auto");
-  if (!addonOk) {
-    return NextResponse.json(
-      { error: "addon_required", addon: "meeting_recording_auto" },
-      { status: 402 },
-    );
-  }
+  const { user } = guard;
 
   const config = getZoomConfig();
   if (!config) {

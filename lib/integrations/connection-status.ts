@@ -105,12 +105,10 @@ export async function getZoomConnectionStatus(
     scope: string | null;
     scopes_granted: string[] | null;
   };
-  const meetingWriteEnabled = hasScope(
-    row.scope,
-    row.scopes_granted,
-    hasMeetingWriteScope,
-    "meeting:write",
-  );
+  // Granular(meeting:write:meeting)優先、旧 Classic(meeting:write)も受け入れる
+  const meetingWriteEnabled =
+    hasScope(row.scope, row.scopes_granted, hasMeetingWriteScope, "meeting:write:meeting") ||
+    hasScope(row.scope, row.scopes_granted, hasMeetingWriteScope, "meeting:write");
   return {
     connected: true,
     accountId: row.zoom_account_id,

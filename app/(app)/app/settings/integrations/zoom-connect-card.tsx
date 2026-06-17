@@ -63,17 +63,24 @@ export function ZoomConnectCard({ status, zoomConfigured, hasMeetingAddon }: Pro
         )}
       </div>
 
-      {/* 機能ステータス */}
+      {/* 機能ステータス
+          - 会議作成/編集:接続だけで有効(無料機能)
+          - 録画自動取込:アドオン契約必須(契約が無いと取込パイプラインがスキップされる)
+       */}
       <ul className="space-y-2 text-sm">
-        <FeatureRow
-          enabled={status.connected}
-          title="Cloud Recording の自動取り込み"
-          body="会議終了時に Webhook で通知を受け、録画ファイルを取り込みます。Whisper で文字起こしし、Claude が履歴書・職務経歴書のドラフトに反映します。"
-        />
         <FeatureRow
           enabled={status.meetingWriteEnabled}
           title="Maira からの会議作成・編集"
           body="クライアント詳細やカレンダーから 1 クリックで Zoom 会議を発行できます。待機室と自動録画が初期設定です。"
+        />
+        <FeatureRow
+          enabled={status.connected && hasMeetingAddon}
+          title={
+            hasMeetingAddon
+              ? "Cloud Recording の自動取り込み"
+              : "Cloud Recording の自動取り込み(アドオン契約が必要)"
+          }
+          body="会議終了時に Webhook で通知を受け、録画ファイルを取り込みます。Whisper で文字起こしし、Claude が履歴書・職務経歴書のドラフトに反映します。"
         />
       </ul>
 
@@ -82,10 +89,6 @@ export function ZoomConnectCard({ status, zoomConfigured, hasMeetingAddon }: Pro
         {!zoomConfigured ? (
           <Button size="sm" disabled>
             Zoom に接続(準備中)
-          </Button>
-        ) : !hasMeetingAddon ? (
-          <Button size="sm" disabled>
-            アドオン契約が必要です
           </Button>
         ) : !status.connected ? (
           <Button size="sm" render={<Link href="/api/integrations/zoom/connect" />}>
