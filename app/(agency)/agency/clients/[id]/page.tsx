@@ -51,10 +51,42 @@ import { TasksSection } from "./tasks-section";
  * 明示確認してから notFound() に倒す(他社の id を踏んだときの 404 担保)。
  */
 
-type RouteParams = { params: Promise<{ id: string }> };
+type RouteParams = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
+};
 
-export default async function ClientDetailPage({ params }: RouteParams) {
+/**
+ * クライアント詳細画面のタブ定義(7 + 履歴)
+ *
+ * 設計判断:
+ *   情報量が多いため、トップレベルを「タブ」で大分類し、その中で従来の
+ *   SectionLayoutContainer による並び替えを許す。タブ間の切替は URL の
+ *   ?tab= で持つ(シェア可能 / リロードで状態保持)。
+ *
+ *   各タブ毎に SectionLayoutContainer の localStorage キーを分けることで、
+ *   並び替え設定もタブ単位で独立する。
+ */
+const TABS = [
+  { id: "overview", label: "基本情報" },
+  { id: "crm", label: "対応・タスク" },
+  { id: "meetings", label: "面談・ヒアリング" },
+  { id: "documents", label: "書類" },
+  { id: "jobs", label: "求人・応募" },
+  { id: "seeker", label: "求職者プロフィール" },
+  { id: "audit", label: "履歴" },
+] as const;
+type TabId = (typeof TABS)[number]["id"];
+
+function normalizeTab(raw: string | undefined): TabId {
+  if (raw && TABS.some((t) => t.id === raw)) return raw as TabId;
+  return "overview";
+}
+
+export default async function ClientDetailPage({ params, searchParams }: RouteParams) {
   const { id } = await params;
+  const { tab: rawTab } = await searchParams;
+  const activeTab = normalizeTab(rawTab);
 
   const supabase = await createClient();
   const {
@@ -265,115 +297,200 @@ export default async function ClientDetailPage({ params }: RouteParams) {
         </Card>
       )}
 
-      {/* セクションは SectionLayoutContainer で並び替え可能。
-          ユーザは「レイアウト編集」をオンにして:
-            ・カードを上下にドラッグして並び替え
-            ・「2 列にする」で左右 2 列レイアウト + 列の振り分け
-          できる。設定は localStorage(per-user / per-browser)に永続化。 */}
-      <SectionLayoutContainer
-        storageKey="agency-client-detail"
-        defaultOrder={[
-          "summary",
-          "detail-form",
-          "custom-fields",
-          "timeline",
-          "disclosable",
-          "documents",
-          "meetings",
-          "intake-upload",
-          "interactions",
-          "tasks",
-          "referrals",
-          "matching",
-          "ai-matching",
-          "audit",
-        ]}
-        titles={{
-          summary: "サマリ",
-          "detail-form": "詳細編集",
-          "custom-fields": "カスタム項目",
-          timeline: "活動タイムライン",
-          disclosable: "求職者プロフィール",
-          documents: "提出書類",
-          meetings: "面談履歴",
-          "intake-upload": "AI ヒアリング",
-          interactions: "対応履歴",
-          tasks: "タスク",
-          referrals: "推薦・選考管理",
-          matching: "マッチング候補(ルールベース)",
-          "ai-matching": "AI 求人推薦",
-          audit: "変更履歴",
-        }}
-        sections={{
-          summary: <ClientSummaryCard clientId={client.id} />,
-          "detail-form": <ClientDetailForm client={client} seekerPhoto={seekerPhoto} />,
-          "custom-fields": (
-            <CustomFieldsSection
-              clientId={client.id}
-              definitions={customFieldDefs}
-              initialValues={client.customFields}
-            />
-          ),
-          timeline: <ActivityTimelineSection events={activityEvents} />,
-          disclosable:
-            (client.linkStatus === "linked" || client.linkStatus === "revoke_requested") &&
-            client.linkedUserId ? (
-              <DisclosableProfileSection clientRecordId={client.id} />
-            ) : null,
-          documents:
-            (client.linkStatus === "linked" || client.linkStatus === "revoke_requested") &&
-            client.linkedUserId ? (
-              <AgencyDocumentsSection
-                linkedUserId={client.linkedUserId}
-                clientRecordId={client.id}
+      {/* ─── タブナビ ─────────────────────────────────────────────
+          URL の ?tab= に基づいてアクティブを表示。Server Component の
+          <Link> ベース。JS なしでも動く。
+       */}
+      <div className="border-b">
+        <nav
+          className="-mb-px flex flex-wrap gap-1 overflow-x-auto"
+          aria-label="クライアント詳細タブ"
+        >
+          {TABS.map((t) => {
+            const isActive = t.id === activeTab;
+            return (
+              <Link
+                key={t.id}
+                href={`/agency/clients/${client.id}?tab=${t.id}`}
+                className={`shrink-0 border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
+                  isActive
+                    ? "border-foreground text-foreground"
+                    : "text-muted-foreground hover:text-foreground border-transparent"
+                }`}
+                aria-current={isActive ? "page" : undefined}
+              >
+                {t.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+
+      {/* ─── タブ内容 ───────────────────────────────────────────
+          各タブごとに SectionLayoutContainer を独立で持つ。
+          storageKey をタブ別にすることで、並び替え設定もタブ単位で保存。
+       */}
+      {activeTab === "overview" && (
+        <SectionLayoutContainer
+          storageKey="agency-client-detail-overview"
+          defaultOrder={["summary", "detail-form", "custom-fields"]}
+          titles={{
+            summary: "サマリ",
+            "detail-form": "詳細編集",
+            "custom-fields": "カスタム項目",
+          }}
+          sections={{
+            summary: <ClientSummaryCard clientId={client.id} />,
+            "detail-form": <ClientDetailForm client={client} seekerPhoto={seekerPhoto} />,
+            "custom-fields": (
+              <CustomFieldsSection
+                clientId={client.id}
+                definitions={customFieldDefs}
+                initialValues={client.customFields}
               />
-            ) : null,
-          meetings: <MeetingHistorySection clientRecordId={client.id} />,
-          "intake-upload": (
-            <IntakeUploadSection
-              clientRecordId={client.id}
-              clientLinked={client.linkStatus === "linked"}
-              clientName={client.name}
-            />
-          ),
-          interactions: (
-            <InteractionsSection
-              clientId={client.id}
-              interactions={interactions}
-              isAdmin={role.member.role === "admin"}
-            />
-          ),
-          tasks: (
-            <TasksSection
-              clientId={client.id}
-              tasks={tasks}
-              members={members}
-              currentMemberId={role.member.id}
-              isAdmin={role.member.role === "admin"}
-            />
-          ),
-          referrals: (
-            <ReferralSection
-              clientId={client.id}
-              referrals={referrals}
-              openJobs={openJobs}
-              placements={placements}
-              historiesByReferral={historiesByReferral}
-              latestLettersByReferral={latestLettersByReferral}
-              isAdmin={role.member.role === "admin"}
-            />
-          ),
-          matching: (
-            <MatchingSection
-              client={client}
-              openJobs={openJobs}
-              alreadyAppliedJobIds={referrals.map((r) => r.jobPostingId)}
-            />
-          ),
-          "ai-matching": <AiMatchingSection clientRecordId={client.id} openJobs={openJobs} />,
-          audit: <AuditLogSection entries={auditLog} />,
-        }}
-      />
+            ),
+          }}
+        />
+      )}
+
+      {activeTab === "crm" && (
+        <SectionLayoutContainer
+          storageKey="agency-client-detail-crm"
+          defaultOrder={["timeline", "interactions", "tasks"]}
+          titles={{
+            timeline: "活動タイムライン",
+            interactions: "対応履歴",
+            tasks: "タスク",
+          }}
+          sections={{
+            timeline: <ActivityTimelineSection events={activityEvents} />,
+            interactions: (
+              <InteractionsSection
+                clientId={client.id}
+                interactions={interactions}
+                isAdmin={role.member.role === "admin"}
+              />
+            ),
+            tasks: (
+              <TasksSection
+                clientId={client.id}
+                tasks={tasks}
+                members={members}
+                currentMemberId={role.member.id}
+                isAdmin={role.member.role === "admin"}
+              />
+            ),
+          }}
+        />
+      )}
+
+      {activeTab === "meetings" && (
+        <SectionLayoutContainer
+          storageKey="agency-client-detail-meetings"
+          defaultOrder={["meetings", "intake-upload"]}
+          titles={{
+            meetings: "面談履歴",
+            "intake-upload": "AI ヒアリング",
+          }}
+          sections={{
+            meetings: <MeetingHistorySection clientRecordId={client.id} />,
+            "intake-upload": (
+              <IntakeUploadSection
+                clientRecordId={client.id}
+                clientLinked={client.linkStatus === "linked"}
+                clientName={client.name}
+              />
+            ),
+          }}
+        />
+      )}
+
+      {activeTab === "documents" && (
+        <SectionLayoutContainer
+          storageKey="agency-client-detail-documents"
+          defaultOrder={["documents"]}
+          titles={{
+            documents: "提出書類(求職者連携時)",
+          }}
+          sections={{
+            documents:
+              (client.linkStatus === "linked" || client.linkStatus === "revoke_requested") &&
+              client.linkedUserId ? (
+                <AgencyDocumentsSection
+                  linkedUserId={client.linkedUserId}
+                  clientRecordId={client.id}
+                />
+              ) : (
+                <Card className="text-muted-foreground p-6 text-sm">
+                  求職者がまだ Maira と連携していないため、本人提出の書類は表示できません。
+                </Card>
+              ),
+          }}
+        />
+      )}
+
+      {activeTab === "jobs" && (
+        <SectionLayoutContainer
+          storageKey="agency-client-detail-jobs"
+          defaultOrder={["referrals", "matching", "ai-matching"]}
+          titles={{
+            referrals: "推薦・選考管理",
+            matching: "マッチング候補(ルールベース)",
+            "ai-matching": "AI 求人推薦",
+          }}
+          sections={{
+            referrals: (
+              <ReferralSection
+                clientId={client.id}
+                referrals={referrals}
+                openJobs={openJobs}
+                placements={placements}
+                historiesByReferral={historiesByReferral}
+                latestLettersByReferral={latestLettersByReferral}
+                isAdmin={role.member.role === "admin"}
+              />
+            ),
+            matching: (
+              <MatchingSection
+                client={client}
+                openJobs={openJobs}
+                alreadyAppliedJobIds={referrals.map((r) => r.jobPostingId)}
+              />
+            ),
+            "ai-matching": <AiMatchingSection clientRecordId={client.id} openJobs={openJobs} />,
+          }}
+        />
+      )}
+
+      {activeTab === "seeker" && (
+        <SectionLayoutContainer
+          storageKey="agency-client-detail-seeker"
+          defaultOrder={["disclosable"]}
+          titles={{
+            disclosable: "求職者プロフィール",
+          }}
+          sections={{
+            disclosable:
+              (client.linkStatus === "linked" || client.linkStatus === "revoke_requested") &&
+              client.linkedUserId ? (
+                <DisclosableProfileSection clientRecordId={client.id} />
+              ) : (
+                <Card className="text-muted-foreground p-6 text-sm">
+                  求職者本人がまだ Maira と連携していないため、求職者プロフィールは閲覧できません。
+                </Card>
+              ),
+          }}
+        />
+      )}
+
+      {activeTab === "audit" && (
+        <SectionLayoutContainer
+          storageKey="agency-client-detail-audit"
+          defaultOrder={["audit"]}
+          titles={{ audit: "変更履歴" }}
+          sections={{ audit: <AuditLogSection entries={auditLog} /> }}
+        />
+      )}
     </div>
   );
 }
