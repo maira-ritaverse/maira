@@ -104,6 +104,8 @@ export async function POST(request: Request) {
     toEmail: parsed.data.email,
     organizationName: role.organization.name,
     inviteUrl,
+    token,
+    siteUrl,
     expiresAt,
   });
 
