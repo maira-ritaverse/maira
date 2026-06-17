@@ -51,7 +51,7 @@ export function TrackAsApplicationButton({ referralId }: Props) {
         onClick={() => void handleClick()}
         disabled={busy || added}
       >
-        {added ? "✓ 応募管理に追加済み" : busy ? "追加中…" : "応募管理に追加"}
+        {added ? "応募管理に追加済み" : busy ? "追加中…" : "応募管理に追加"}
       </Button>
       {error && <p className="text-destructive text-[10px]">{error}</p>}
     </div>

@@ -211,7 +211,7 @@ export function RecordingDetailActions({ recording }: Props) {
       {error && <p className="text-destructive text-xs">{error}</p>}
       {appliedLink && (
         <p className="text-xs text-emerald-600 dark:text-emerald-300">
-          ✓ {appliedLink.kind === "resume" ? "履歴書" : "職務経歴書"}を新規作成しました。
+          {appliedLink.kind === "resume" ? "履歴書" : "職務経歴書"}を新規作成しました。
           <Link
             href={`/app/${appliedLink.kind === "resume" ? "resumes" : "cvs"}/${appliedLink.id}`}
             className="ml-1 underline-offset-4 hover:underline"

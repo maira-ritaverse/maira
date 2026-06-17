@@ -72,7 +72,7 @@ export default async function AgentDraftsPage() {
 
               {d.message && (
                 <p className="bg-muted/40 text-muted-foreground rounded-md p-2 text-xs">
-                  💬 {d.message}
+                  {d.message}
                 </p>
               )}
 

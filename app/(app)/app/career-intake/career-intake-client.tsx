@@ -16,7 +16,7 @@ const STATUS_LABEL: Record<IntakeStatus, { label: string; tone: string }> = {
   transcribed: { label: "文字起こし完了", tone: "bg-blue-100 text-blue-700" },
   failed_transcribe: { label: "文字起こし失敗", tone: "bg-red-100 text-red-700" },
   extracting: { label: "抽出中…", tone: "bg-purple-100 text-purple-700" },
-  extracted: { label: "完了 ✓", tone: "bg-emerald-100 text-emerald-700" },
+  extracted: { label: "完了", tone: "bg-emerald-100 text-emerald-700" },
   failed_extract: { label: "抽出失敗", tone: "bg-red-100 text-red-700" },
 };
 
@@ -205,7 +205,7 @@ export function CareerIntakeClient({ initialRecordings }: Props) {
         {error && <p className="text-destructive text-xs">{error}</p>}
         {appliedResumeId && (
           <p className="text-xs text-emerald-600 dark:text-emerald-300">
-            ✓ 履歴書を新規作成しました。
+            履歴書を新規作成しました。
             <Link
               href={`/app/resumes/${appliedResumeId}`}
               className="ml-1 underline-offset-4 hover:underline"
@@ -216,7 +216,7 @@ export function CareerIntakeClient({ initialRecordings }: Props) {
         )}
         {appliedCvId && (
           <p className="text-xs text-emerald-600 dark:text-emerald-300">
-            ✓ 職務経歴書を新規作成しました。
+            職務経歴書を新規作成しました。
             <Link
               href={`/app/cvs/${appliedCvId}`}
               className="ml-1 underline-offset-4 hover:underline"

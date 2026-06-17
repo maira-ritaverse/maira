@@ -86,7 +86,7 @@ export function ProfileForm({ initialDisplayName, email }: Props) {
         )}
         {successMessage && (
           <Alert>
-            <AlertDescription>✓ {successMessage}</AlertDescription>
+            <AlertDescription>{successMessage}</AlertDescription>
           </Alert>
         )}
 

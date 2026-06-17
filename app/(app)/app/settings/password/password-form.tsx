@@ -81,7 +81,7 @@ export function PasswordForm() {
         )}
         {successMessage && (
           <Alert>
-            <AlertDescription>✓ {successMessage}</AlertDescription>
+            <AlertDescription>{successMessage}</AlertDescription>
           </Alert>
         )}
 

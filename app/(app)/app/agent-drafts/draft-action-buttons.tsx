@@ -48,7 +48,7 @@ export function DraftActionButtons({ draftId }: Props) {
         {busy === "reject" ? "辞退中…" : "辞退する"}
       </Button>
       <Button size="sm" onClick={() => void submit("accept")} disabled={busy !== null}>
-        {busy === "accept" ? "受領中…" : "✓ 受領する"}
+        {busy === "accept" ? "受領中…" : "受領する"}
       </Button>
       {error && <p className="text-destructive text-[11px]">{error}</p>}
     </div>
