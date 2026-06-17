@@ -82,7 +82,7 @@ export function ResetPasswordForm() {
           <div className="bg-card space-y-4 rounded-lg border p-6">
             <Alert>
               <AlertDescription>
-                ✓ パスワードを変更しました。新しいパスワードでログインしてください。
+                パスワードを変更しました。新しいパスワードでログインしてください。
               </AlertDescription>
             </Alert>
             <Button className="w-full" render={<Link href="/login" />}>

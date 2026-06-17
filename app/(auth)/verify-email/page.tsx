@@ -1,3 +1,4 @@
+import { Mail } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
@@ -6,7 +7,9 @@ export default function VerifyEmailPage() {
     <main className="bg-background flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6 text-center">
         <div className="space-y-4">
-          <div className="text-6xl">📧</div>
+          <div className="flex justify-center">
+            <Mail className="text-muted-foreground h-16 w-16" />
+          </div>
           <h1 className="text-3xl font-bold">確認メールを送信しました</h1>
           <p className="text-muted-foreground">
             登録いただいたメールアドレスに確認用のリンクを送信しました。

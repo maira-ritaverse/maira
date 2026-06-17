@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Check, X } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -103,7 +104,9 @@ export function SignupInquiryForm() {
   if (status === "sent") {
     return (
       <div className="bg-card space-y-3 rounded-lg border p-6 text-center text-sm">
-        <div className="text-3xl text-emerald-600 dark:text-emerald-400">✓</div>
+        <div className="flex justify-center text-emerald-600 dark:text-emerald-400">
+          <Check className="h-8 w-8" />
+        </div>
         <p className="font-semibold">お問い合わせを受け付けました</p>
         <p className="text-muted-foreground text-xs">
           内容を確認のうえ、担当よりご連絡差し上げます。
@@ -141,12 +144,13 @@ export function SignupInquiryForm() {
           type="button"
           variant="ghost"
           size="sm"
+          aria-label="閉じる"
           onClick={() => {
             setExpanded(false);
             setStatus("idle");
           }}
         >
-          ✕
+          <X className="h-4 w-4" />
         </Button>
       </div>
 

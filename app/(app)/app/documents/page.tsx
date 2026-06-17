@@ -1,3 +1,4 @@
+import { FileText } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -61,7 +62,7 @@ export default async function DocumentsListPage() {
 
       {documents.length === 0 ? (
         <EmptyState
-          icon="📝"
+          icon={<FileText className="h-10 w-10" />}
           title="まだ書類がありません"
           description={
             hasProfile

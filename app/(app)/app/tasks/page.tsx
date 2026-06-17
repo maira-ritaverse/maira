@@ -1,3 +1,4 @@
+import { ListChecks } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -83,7 +84,7 @@ export default async function TasksPage() {
 
       {tasks.length === 0 ? (
         <EmptyState
-          icon="✅"
+          icon={<ListChecks className="h-10 w-10" />}
           title="タスクはありません"
           description="応募詳細画面でタスクを追加できます"
         />
@@ -152,7 +153,7 @@ function TaskSection({
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{task.title}</p>
                   <div className="text-muted-foreground mt-1 flex flex-wrap gap-2 text-xs">
-                    {companyName && <span>📋 {companyName}</span>}
+                    {companyName && <span>{companyName}</span>}
                     {task.due_at && (
                       <span>期限:{new Date(task.due_at).toLocaleString("ja-JP")}</span>
                     )}
