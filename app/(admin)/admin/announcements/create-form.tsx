@@ -191,7 +191,7 @@ export function AnnouncementCreateForm() {
               checked={isPinned}
               onChange={(e) => setIsPinned(e.target.checked)}
             />
-            <span>📌 上部に固定(pinned)</span>
+            <span>上部に固定(pinned)</span>
           </label>
           <label className="flex cursor-pointer items-center gap-2">
             <input

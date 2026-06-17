@@ -100,10 +100,10 @@ export function MatchingSection({ client, openJobs, alreadyAppliedJobIds }: Matc
                       <span className="text-muted-foreground text-xs">{job.position}</span>
                     </div>
                     <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-xs">
-                      {job.location && <span>📍 {job.location}</span>}
+                      {job.location && <span>勤務地:{job.location}</span>}
                       {(job.salaryMin !== null || job.salaryMax !== null) && (
                         <span>
-                          💰{" "}
+                          年収:
                           {job.salaryMin !== null && job.salaryMax !== null
                             ? `${job.salaryMin}-${job.salaryMax}万円`
                             : job.salaryMin !== null

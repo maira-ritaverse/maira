@@ -1,5 +1,6 @@
 "use client";
 
+import { Pin } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -166,8 +167,8 @@ export function AnnouncementsClient({ initialAnnouncements, isAdmin }: Props) {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   {a.isPinned && (
-                    <span className="text-amber-500" title="ピン留め">
-                      📌
+                    <span className="text-amber-500" title="ピン留め" aria-label="ピン留め">
+                      <Pin className="h-4 w-4" />
                     </span>
                   )}
                   <h3 className="text-sm font-medium">{a.title}</h3>

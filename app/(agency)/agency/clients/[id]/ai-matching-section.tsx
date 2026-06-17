@@ -172,7 +172,7 @@ export function AiMatchingSection({ clientRecordId, openJobs }: Props) {
             const refCount = Object.keys(refMap).length;
             return refCount > 0 ? (
               <p className="text-muted-foreground rounded-md bg-emerald-50/50 px-2 py-1 text-[11px] dark:bg-emerald-950/30">
-                📋 この求職者には現在 <strong>{refCount} 件</strong> 紹介しています
+                この求職者には現在 <strong>{refCount} 件</strong> 紹介しています
               </p>
             ) : null;
           })()}
@@ -196,12 +196,12 @@ export function AiMatchingSection({ clientRecordId, openJobs }: Props) {
                       </Link>
                       {interested && (
                         <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950 dark:text-rose-300">
-                          🙋 本人が興味あり
+                          本人が興味あり
                         </span>
                       )}
                       {refStatus && (
                         <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-                          📋 紹介中({refStatus})
+                          紹介中({refStatus})
                         </span>
                       )}
                     </div>
@@ -225,7 +225,7 @@ export function AiMatchingSection({ clientRecordId, openJobs }: Props) {
                   <div className="flex justify-end pt-1">
                     {refStatus ? (
                       <Button size="sm" variant="ghost" disabled>
-                        ✓ 紹介済み
+                        紹介済み
                       </Button>
                     ) : (
                       <Button
