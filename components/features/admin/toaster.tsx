@@ -1,5 +1,7 @@
 "use client";
 
+import { Check, Info, X } from "lucide-react";
+
 import { useToast } from "@/lib/admin/toast/store";
 
 /**
@@ -44,16 +46,12 @@ function ToastItem({
       "border-red-300 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950/80 dark:text-red-100",
     info: "border-blue-300 bg-blue-50 text-blue-900 dark:border-blue-900 dark:bg-blue-950/80 dark:text-blue-100",
   }[kind];
-  const icon = {
-    success: "✓",
-    error: "✕",
-    info: "ⓘ",
-  }[kind];
+  const IconComponent = { success: Check, error: X, info: Info }[kind];
 
   return (
     <div className={`flex items-start gap-2 rounded-lg border p-3 text-sm shadow-lg ${cls}`}>
-      <span aria-hidden className="text-base leading-none">
-        {icon}
+      <span aria-hidden className="mt-0.5">
+        <IconComponent className="h-4 w-4" />
       </span>
       <p className="flex-1 leading-snug">{message}</p>
       <button
@@ -62,7 +60,7 @@ function ToastItem({
         aria-label="閉じる"
         className="text-current opacity-60 transition-opacity hover:opacity-100"
       >
-        ✕
+        <X className="h-4 w-4" />
       </button>
     </div>
   );

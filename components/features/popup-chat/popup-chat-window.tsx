@@ -2,6 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
+import { Maximize2, MessageSquare, Minimize2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -151,7 +152,7 @@ export function PopupChatWindow() {
     >
       <div className="flex items-center justify-between border-b px-4 py-2">
         <div className="flex items-center gap-2">
-          <span className="text-lg">💬</span>
+          <MessageSquare className="h-4 w-4" />
           <span className="font-medium">Mairaに相談</span>
         </div>
         <div className="flex items-center gap-1">
@@ -161,7 +162,7 @@ export function PopupChatWindow() {
             aria-label={isMaximized ? "縮小" : "最大化"}
             className="hover:bg-accent rounded p-1"
           >
-            <span className="text-xs">{isMaximized ? "◱" : "⛶"}</span>
+            {isMaximized ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </button>
           <button
             type="button"
@@ -169,7 +170,7 @@ export function PopupChatWindow() {
             aria-label="閉じる"
             className="hover:bg-accent rounded p-1"
           >
-            <span className="text-xs">✕</span>
+            <X className="h-4 w-4" />
           </button>
         </div>
       </div>

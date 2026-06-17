@@ -1,5 +1,6 @@
 "use client";
 
+import { AlertTriangle } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Alert, AlertDescription } from "./alert";
@@ -68,9 +69,9 @@ export function ErrorState({
 
   return (
     <Card className="p-8 text-center">
-      <p className="mb-3 text-4xl" aria-hidden="true">
-        ⚠️
-      </p>
+      <div className="text-muted-foreground mb-3 flex justify-center" aria-hidden="true">
+        <AlertTriangle className="h-10 w-10" />
+      </div>
       <p className="text-lg font-medium">{displayTitle}</p>
       <p className="text-muted-foreground mt-2 text-sm">{displayDescription}</p>
 

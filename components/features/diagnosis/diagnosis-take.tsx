@@ -240,7 +240,6 @@ export function DiagnosisTake() {
 
       {phase === "done" && (
         <Card className="space-y-4 p-6 text-center">
-          <p className="text-2xl">🎉</p>
           <p className="text-base font-medium">すべての質問にお答えいただきました</p>
           <p className="text-muted-foreground text-sm">結果を確認しましょう</p>
           {submitError && <p className="text-destructive text-sm">{submitError}</p>}
