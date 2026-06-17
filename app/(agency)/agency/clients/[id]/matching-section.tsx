@@ -111,7 +111,7 @@ export function MatchingSection({ client, openJobs, alreadyAppliedJobIds }: Matc
                               : `${job.salaryMax}万円以下`}
                         </span>
                       )}
-                      {job.employmentType && <span>📝 {job.employmentType}</span>}
+                      {job.employmentType && <span>{job.employmentType}</span>}
                     </div>
                     <div className="mt-1.5 flex flex-wrap gap-1">
                       {m.reasons.map((r) => (
@@ -119,7 +119,7 @@ export function MatchingSection({ client, openJobs, alreadyAppliedJobIds }: Matc
                           key={r}
                           className={`inline-block rounded-full px-2 py-0.5 text-[10px] ${REASON_TONE[r]}`}
                         >
-                          {REASON_LABEL[r]} ✓
+                          {REASON_LABEL[r]}
                         </span>
                       ))}
                     </div>

@@ -113,12 +113,12 @@ export function JobMatchingSection({
                     </span>
                   </div>
                   <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-xs">
-                    {m.client.prefecture && <span>📍 {m.client.prefecture}</span>}
+                    {m.client.prefecture && <span>勤務地:{m.client.prefecture}</span>}
                     {m.client.desiredAnnualIncome !== null && (
-                      <span>💰 希望 {m.client.desiredAnnualIncome} 万円</span>
+                      <span>希望年収 {m.client.desiredAnnualIncome} 万円</span>
                     )}
                     {m.client.currentEmploymentType && (
-                      <span>📝 現雇用 {m.client.currentEmploymentType}</span>
+                      <span>現雇用 {m.client.currentEmploymentType}</span>
                     )}
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-1">
@@ -127,7 +127,7 @@ export function JobMatchingSection({
                         key={r}
                         className={`inline-block rounded-full px-2 py-0.5 text-[10px] ${REASON_TONE[r]}`}
                       >
-                        {REASON_LABEL[r]} ✓
+                        {REASON_LABEL[r]}
                       </span>
                     ))}
                   </div>

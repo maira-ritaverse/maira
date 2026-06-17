@@ -11,7 +11,7 @@
  * サーバーコンポーネント。接続状態は親(page.tsx)から渡される。
  */
 import Link from "next/link";
-import { Video } from "lucide-react";
+import { Check, Video } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -120,7 +120,7 @@ function FeatureRow({ enabled, title, body }: { enabled: boolean; title: string;
         }`}
         aria-hidden
       >
-        {enabled ? "✓" : "—"}
+        {enabled ? <Check className="h-3 w-3" /> : "—"}
       </span>
       <div>
         <div className="font-medium">{title}</div>

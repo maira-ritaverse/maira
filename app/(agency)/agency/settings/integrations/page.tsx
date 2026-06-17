@@ -79,12 +79,12 @@ export default async function AgencyIntegrationsPage({
       {/* バナー(コールバックからの戻り) */}
       {sp.connected && (
         <div className="rounded-md border border-emerald-200 bg-emerald-50/60 p-3 text-xs text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
-          ✓ {sp.connected === "zoom" ? "Zoom" : "Google"} に接続しました。
+          {sp.connected === "zoom" ? "Zoom" : "Google"} に接続しました。
         </div>
       )}
       {sp.addon === "success" && (
         <div className="rounded-md border border-emerald-200 bg-emerald-50/60 p-3 text-xs text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
-          ✓ アドオンの購入手続きが完了しました。反映には数分かかる場合があります。
+          アドオンの購入手続きが完了しました。反映には数分かかる場合があります。
         </div>
       )}
       {sp.addon === "canceled" && (
