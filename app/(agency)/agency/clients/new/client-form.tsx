@@ -40,6 +40,7 @@ export function ClientForm() {
     resolver: zodResolver(createClientRequestSchema),
     defaultValues: {
       name: "",
+      name_kana: "",
       email: "",
       phone: "",
       status: "initial_meeting",
@@ -85,6 +86,18 @@ export function ClientForm() {
           </Label>
           <Input id="name" {...register("name")} disabled={isPending} placeholder="例:山田 太郎" />
           {errors.name && <p className="text-sm text-red-600">{errors.name.message}</p>}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="name_kana">氏名カナ</Label>
+          <Input
+            id="name_kana"
+            {...register("name_kana")}
+            disabled={isPending}
+            placeholder="例:ヤマダ タロウ"
+            autoComplete="off"
+          />
+          {errors.name_kana && <p className="text-sm text-red-600">{errors.name_kana.message}</p>}
         </div>
 
         <div className="space-y-2">
