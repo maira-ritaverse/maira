@@ -222,7 +222,7 @@ export function ClientsTable({
                     onDrop={handleHeaderDrop(vIdx)}
                     onDragEnd={handleHeaderDragEnd}
                     onClick={sortable ? () => onToggleSort(id) : undefined}
-                    className={`text-foreground border-r font-semibold transition-colors select-none last:border-r-0 ${
+                    className={`text-foreground border-r font-semibold whitespace-nowrap transition-colors select-none last:border-r-0 ${
                       dndEnabled ? "cursor-grab active:cursor-grabbing" : ""
                     } ${sortable && !dndEnabled ? "cursor-pointer" : ""} ${
                       isDragging ? "opacity-50" : ""
@@ -286,7 +286,9 @@ export function ClientsTable({
                         className={
                           // 各セルに右罫線 + 最後の列だけ消す(枠線との二重防止)
                           // 名前列は強調(font-medium)、他は muted(罫線 + 余白の見やすさ優先)
-                          `border-r last:border-r-0 ${
+                          // whitespace-nowrap で「松田/太郎」のような途中改行を防ぐ。
+                          // 一覧は overflow-x-auto で横スクロールに切り替わる前提。
+                          `border-r whitespace-nowrap last:border-r-0 ${
                             id === "name" ? "font-medium" : "text-muted-foreground"
                           }`
                         }
