@@ -990,7 +990,7 @@ function ResumePhotoField({
             // photoPath はあるが署名URL発行に失敗したケース(滅多にない)
             <div className="text-muted-foreground flex h-full w-full flex-col items-center justify-center gap-1 px-2 text-center text-[10px]">
               <span>写真あり</span>
-              <span>(表示準備中)</span>
+              <span>(読み込み中)</span>
             </div>
           ) : (
             <div className="text-muted-foreground flex h-full w-full flex-col items-center justify-center gap-2 px-3 text-center">

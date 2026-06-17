@@ -45,13 +45,6 @@ export function DashboardEmpty() {
               応募の進捗管理 + ポップアップでいつでもMairaに相談できる
             </p>
           </Card>
-          {/* 音声面接は本格ローンチで提供。未実装である旨を明示し、透過率で抑える */}
-          <Card className="p-5 opacity-60">
-            <p className="font-medium">音声面接(準備中)</p>
-            <p className="text-muted-foreground mt-2 text-sm">
-              本格ローンチで提供予定。音声でリアルな面接練習ができる
-            </p>
-          </Card>
         </div>
       </div>
     </div>

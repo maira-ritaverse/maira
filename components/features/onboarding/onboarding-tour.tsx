@@ -160,7 +160,7 @@ export function OnboardingTour({ autoStart, forceStart = false, onClose }: Props
     {
       target: '[data-tour="nav-career-intake"]',
       placement: "right",
-      title: "AI ヒアリングで自動生成(β)",
+      title: "AI ヒアリングで自動生成",
       content: (
         <div className="space-y-2">
           <p>

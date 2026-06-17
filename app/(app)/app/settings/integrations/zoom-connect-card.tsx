@@ -5,7 +5,7 @@
  *   ・未接続      → 「Zoom に接続」CTA + 解放される機能の説明
  *   ・接続済(全部) → 接続中アカウント + 有効機能の ✓ チェックリスト + 切断ボタン
  *   ・接続済(不足) → 「再認可で機能を解放」CTA + 不足機能のグレー表示
- *   ・サーバー未設定  → 「準備中」disabled
+ *   ・サーバー未設定  → 「ご利用いただけません」disabled
  *   ・アドオン未契約  → 「アドオン契約が必要」disabled + アドオン契約導線
  *
  * サーバーコンポーネント。接続状態は親(page.tsx)から渡される。
@@ -58,7 +58,7 @@ export function ZoomConnectCard({ status, zoomConfigured, hasMeetingAddon }: Pro
         )}
         {!zoomConfigured && (
           <span className="bg-muted rounded-full px-2 py-0.5 text-[11px] whitespace-nowrap">
-            準備中
+            ご利用いただけません
           </span>
         )}
       </div>
@@ -88,7 +88,7 @@ export function ZoomConnectCard({ status, zoomConfigured, hasMeetingAddon }: Pro
       <div className="flex flex-wrap gap-2 pt-1">
         {!zoomConfigured ? (
           <Button size="sm" disabled>
-            Zoom に接続(準備中)
+            Zoom に接続(ご利用いただけません)
           </Button>
         ) : !status.connected ? (
           <Button size="sm" render={<Link href="/api/integrations/zoom/connect" />}>

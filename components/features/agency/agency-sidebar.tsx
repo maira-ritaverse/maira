@@ -75,7 +75,6 @@ export function AgencySidebar({ organizationName, memberRole }: Props) {
           </p>
         </div>
       }
-      footer="エージェント版(β)"
     />
   );
 }

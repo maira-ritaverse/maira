@@ -116,7 +116,7 @@ export function DashboardStarter({ data }: Props) {
       {/* 新機能の動線(starter 段階でも気付けるように) */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <Card className="p-4">
-          <p className="font-medium">面接練習(β)</p>
+          <p className="font-medium">面接練習</p>
           <p className="text-muted-foreground mt-1 text-xs">
             ベテラン面接官 AI による模擬面接。音声入力 / 読み上げ対応。
           </p>

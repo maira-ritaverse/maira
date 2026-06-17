@@ -151,10 +151,10 @@ export function DashboardActive({ data }: Props) {
         </div>
       </div>
 
-      {/* 新機能(β含む)への動線:面接練習 / 履歴書 AI 添削 */}
+      {/* 新機能への動線:面接練習 / 履歴書 AI 添削 */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <Card className="p-4">
-          <p className="font-medium">面接練習(β)</p>
+          <p className="font-medium">面接練習</p>
           <p className="text-muted-foreground mt-1 text-xs">
             ベテラン面接官 AI が 5〜8 問の質問 + フィードバックを返します。 音声入力 /
             読み上げ対応。

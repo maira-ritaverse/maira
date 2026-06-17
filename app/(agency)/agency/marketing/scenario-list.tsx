@@ -103,9 +103,6 @@ export function MarketingScreen({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold">Eメール(MA)</h1>
-            <span className="rounded bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
-              β版
-            </span>
           </div>
           {/* 送信履歴へのナビ。同意状態に関係なく閲覧可(advisor も含む)。 */}
           <Button variant="outline" size="sm" render={<Link href="/agency/marketing/logs" />}>

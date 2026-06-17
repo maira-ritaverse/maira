@@ -78,7 +78,7 @@ const AVAILABLE_ITEMS: ItemDescriptor[] = [
     defaultLabel: "推薦文",
     dataAttr: "nav-recommendation-letters",
   },
-  { id: "interview", href: "/app/interview", icon: "bot", defaultLabel: "面接練習(β)" },
+  { id: "interview", href: "/app/interview", icon: "bot", defaultLabel: "面接練習" },
   { id: "connections", href: "/app/connections", icon: "link", defaultLabel: "エージェント連携" },
 ];
 
@@ -126,7 +126,6 @@ export function AppSidebar({ invitedCount = 0 }: Props) {
           Maira
         </Link>
       }
-      footer="Plan: Free(開発中)"
     />
   );
 }
