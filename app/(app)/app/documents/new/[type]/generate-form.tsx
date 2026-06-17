@@ -114,7 +114,7 @@ export function DocumentGenerateForm({ documentType, requiresJobInfo }: Props) {
         )}
 
         <div className="rounded-md bg-blue-50 p-3 text-xs text-blue-900 dark:bg-blue-950 dark:text-blue-200">
-          📝 生成には30秒〜1分かかります。
+          生成には 30 秒〜1 分かかります。
         </div>
 
         <Button onClick={handleGenerate} disabled={isPending} className="w-full">

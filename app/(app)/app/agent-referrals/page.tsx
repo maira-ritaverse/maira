@@ -85,13 +85,13 @@ export default async function AgentReferralsPage() {
                   </div>
                 </div>
                 <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
-                  {r.jobLocation && <span>📍 {r.jobLocation}</span>}
+                  {r.jobLocation && <span>勤務地:{r.jobLocation}</span>}
                   {(r.jobSalaryMin || r.jobSalaryMax) && (
                     <span>
-                      💴 {r.jobSalaryMin ?? "?"}〜{r.jobSalaryMax ?? "?"} 万円
+                      年収:{r.jobSalaryMin ?? "?"}〜{r.jobSalaryMax ?? "?"} 万円
                     </span>
                   )}
-                  {r.jobEmploymentType && <span>📋 {r.jobEmploymentType}</span>}
+                  {r.jobEmploymentType && <span>雇用形態:{r.jobEmploymentType}</span>}
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-muted-foreground text-[10px]">

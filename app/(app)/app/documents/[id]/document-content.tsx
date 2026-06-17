@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -33,7 +34,17 @@ export function DocumentContent({ content }: Props) {
       <div className="mb-4 flex items-center justify-between">
         <p className="text-muted-foreground text-sm">{content.length}文字</p>
         <Button onClick={handleCopy} variant="outline" size="sm">
-          {copied ? "✓ コピーしました" : "📋 全文をコピー"}
+          {copied ? (
+            <>
+              <Check className="mr-1 h-4 w-4" />
+              コピーしました
+            </>
+          ) : (
+            <>
+              <Copy className="mr-1 h-4 w-4" />
+              全文をコピー
+            </>
+          )}
         </Button>
       </div>
       <pre className="font-sans text-sm leading-relaxed whitespace-pre-wrap">{content}</pre>

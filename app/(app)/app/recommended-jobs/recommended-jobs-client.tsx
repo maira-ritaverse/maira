@@ -214,13 +214,13 @@ export function RecommendedJobsClient() {
                 </div>
                 <p className="text-muted-foreground text-xs">{it.rationale}</p>
                 <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
-                  {it.job.location && <span>📍 {it.job.location}</span>}
+                  {it.job.location && <span>勤務地:{it.job.location}</span>}
                   {(it.job.salaryMin || it.job.salaryMax) && (
                     <span>
-                      💴 {it.job.salaryMin ?? "?"}〜{it.job.salaryMax ?? "?"} 万円
+                      年収:{it.job.salaryMin ?? "?"}〜{it.job.salaryMax ?? "?"} 万円
                     </span>
                   )}
-                  {it.job.employmentType && <span>📋 {it.job.employmentType}</span>}
+                  {it.job.employmentType && <span>雇用形態:{it.job.employmentType}</span>}
                 </div>
                 {it.job.description && (
                   <p className="text-muted-foreground line-clamp-3 text-xs whitespace-pre-wrap">
@@ -234,12 +234,12 @@ export function RecommendedJobsClient() {
                     onClick={() => void toggleInterest(it.job.id)}
                     disabled={pending}
                   >
-                    {pending ? "更新中…" : interested ? "✓ 興味あり(取り消す)" : "🙋 興味あり"}
+                    {pending ? "更新中…" : interested ? "興味あり(取り消す)" : "興味あり"}
                   </Button>
                   {requestedSet.has(it.job.id) ? (
                     <>
                       <Button size="sm" variant="outline" disabled>
-                        ✓ 依頼済み
+                        依頼済み
                       </Button>
                       <Button
                         size="sm"

@@ -1,5 +1,6 @@
 "use client";
 
+import { MessageSquare } from "lucide-react";
 import { useState } from "react";
 import { usePopupChat } from "@/components/features/popup-chat";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -41,7 +42,8 @@ export function AdvisorButton({ applicationId, hasProfile }: Props) {
         </Alert>
       )}
       <Button onClick={handleStart} disabled={!hasProfile} className="w-full">
-        💬 Mairaに相談する
+        <MessageSquare className="mr-2 h-4 w-4" />
+        Mairaに相談する
       </Button>
     </div>
   );
