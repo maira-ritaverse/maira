@@ -31,7 +31,6 @@ export function checkCronAuth(request: Request): CronAuthResult {
 
   const auth = request.headers.get("authorization");
   const xCron = request.headers.get("x-cron-secret");
-  const xVercelCron = request.headers.get("x-vercel-cron");
 
   // Authorization: Bearer <token>
   if (auth && auth.toLowerCase().startsWith("bearer ")) {
@@ -45,21 +44,6 @@ export function checkCronAuth(request: Request): CronAuthResult {
     if (intakeSecret && xCron === intakeSecret) return { ok: true };
     if (vercelSecret && xCron === vercelSecret) return { ok: true };
   }
-
-  // 失敗時に最小限の診断ログを出す(秘密自体は伏せ、有無 / 長さ / prefix のみ)。
-  // 401 が連発した際にここを読んで Vercel 側の挙動を特定する。
-  // ・auth_len:Authorization ヘッダの長さ
-  // ・auth_prefix:Authorization の先頭 7 字(Bearer 判定の確認用)
-  // ・x_vercel_cron:Vercel cron からのリクエストかどうか
-  // ・vercel_secret_len / intake_secret_len:env が runtime で見えているか
-  console.warn("[cron-auth] unauthorized", {
-    auth_len: auth?.length ?? 0,
-    auth_prefix: auth?.slice(0, 7) ?? null,
-    x_cron_len: xCron?.length ?? 0,
-    x_vercel_cron: xVercelCron,
-    vercel_secret_len: vercelSecret?.length ?? 0,
-    intake_secret_len: intakeSecret?.length ?? 0,
-  });
 
   return { ok: false, reason: "unauthorized" };
 }
