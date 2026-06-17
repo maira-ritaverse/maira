@@ -1,3 +1,4 @@
+import { Clipboard } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,7 @@ export default async function ApplicationsListPage() {
 
       {applications.length === 0 ? (
         <EmptyState
-          icon="📋"
+          icon={<Clipboard className="h-10 w-10" />}
           title="応募がまだ登録されていません"
           description="「+ 新規応募を追加」ボタンから追加できます"
         />

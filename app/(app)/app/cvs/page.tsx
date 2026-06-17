@@ -1,3 +1,4 @@
+import { Files } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -40,7 +41,7 @@ export default async function CvsListPage() {
 
       {cvs.length === 0 ? (
         <EmptyState
-          icon="📑"
+          icon={<Files className="h-10 w-10" />}
           title="まだ職務経歴書がありません"
           description="「+ 新しい職務経歴書を作成」ボタンから登録できます"
         />

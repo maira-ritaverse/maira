@@ -1,3 +1,4 @@
+import { MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CareerRediagnoseButton } from "@/components/features/career-rediagnose-button";
@@ -67,7 +68,7 @@ export default async function CareerListPage() {
 
       {conversations.length === 0 ? (
         <EmptyState
-          icon="💬"
+          icon={<MessageSquare className="h-10 w-10" />}
           title="まだ棚卸し履歴がありません"
           description="「新しく棚卸しを始める」ボタンから始められます"
         />

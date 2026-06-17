@@ -1,3 +1,4 @@
+import { FileText } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,7 @@ export default async function ResumesListPage() {
 
       {resumes.length === 0 ? (
         <EmptyState
-          icon="📄"
+          icon={<FileText className="h-10 w-10" />}
           title="まだ履歴書がありません"
           description="「+ 新しい履歴書を作成」ボタンから登録できます"
         />
