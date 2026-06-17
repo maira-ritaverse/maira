@@ -86,7 +86,8 @@ export async function PATCH(request: Request, { params }: RouteParams) {
  * 運営者用:指定ユーザを auth.users から完全削除(連鎖で profiles + 各テーブル)。
  *
  * ⚠️ これは物理削除で不可逆。管理画面のデフォルトは PATCH(アーカイブ)を使うこと。
- * 物理削除はデータ整理が本当に必要な場合のみ運営側で別途実行する。
+ * 物理削除は先に「停止中」(profiles.archived_at が NOT NULL)にしたユーザのみ可能。
+ * 現役ユーザの即時削除は誤操作を防ぐため拒否する(まずアーカイブしてから消す運用)。
  */
 export async function DELETE(request: Request, { params }: RouteParams) {
   const guard = await requireUser();
@@ -116,6 +117,25 @@ export async function DELETE(request: Request, { params }: RouteParams) {
     return NextResponse.json(
       { error: "lookup_failed", message: err instanceof Error ? err.message : "unknown" },
       { status: 500 },
+    );
+  }
+
+  // archived_at チェック:停止中ユーザのみ物理削除を許可
+  const { data: profileRow, error: profileErr } = await admin
+    .from("profiles")
+    .select("archived_at")
+    .eq("id", targetId)
+    .maybeSingle();
+  if (profileErr) {
+    return NextResponse.json(
+      { error: "lookup_failed", message: profileErr.message },
+      { status: 500 },
+    );
+  }
+  if (!(profileRow as { archived_at: string | null } | null)?.archived_at) {
+    return NextResponse.json(
+      { error: "not_archived", message: "現役ユーザは先に停止中に移動してください" },
+      { status: 400 },
     );
   }
 

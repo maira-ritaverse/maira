@@ -243,3 +243,83 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
   return NextResponse.json({ ok: true });
 }
+
+/**
+ * DELETE /api/admin/organizations/[id]
+ *
+ * 運営者用:エージェント企業を物理削除する不可逆操作。
+ *
+ * ⚠️ 履歴(client_records / referrals / job_postings / interactions / 通知等)も
+ *    すべて FK の on delete cascade で連鎖削除される。元に戻せない。
+ *    UI 側からは「退会済タブで、すでに archived の組織にのみ」表示する。
+ *
+ * 連鎖されないもの:
+ *   ・auth.users(管理者 / アドバイザー個人アカウント自体は残す。
+ *     その人が別組織で使うかもしれないため)
+ *
+ * 安全策:
+ *   ・isMairaAdmin ガード
+ *   ・archived_at が null の組織(=現役)を完全削除させない(誤操作防止)
+ *     UI 側のガードと二重で。
+ */
+export async function DELETE(request: Request, { params }: RouteParams) {
+  const guard = await requireUser();
+  if (!guard.ok) return guard.response;
+  const { user: actor } = guard;
+
+  if (!(await isMairaAdmin())) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  const { id } = await params;
+  const admin = createServiceClient();
+
+  // 対象の name と archived_at を事前取得(監査ログ + 現役チェック)
+  const { data: orgRow, error: lookupErr } = await admin
+    .from("organizations")
+    .select("id, name, archived_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (lookupErr) {
+    return NextResponse.json(
+      { error: "lookup_failed", message: lookupErr.message },
+      { status: 500 },
+    );
+  }
+  if (!orgRow) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  const org = orgRow as { id: string; name: string; archived_at: string | null };
+
+  // 現役組織の即時物理削除は禁止(まず archive してから消す運用)
+  if (!org.archived_at) {
+    return NextResponse.json(
+      { error: "not_archived", message: "現役の組織は先に退会済に移動してください" },
+      { status: 400 },
+    );
+  }
+
+  // 監査ログ(削除前)
+  await recordAuditLog({
+    userId: actor.id,
+    action: "admin_accessed_user",
+    metadata: {
+      event_subtype: "admin_hard_deleted_organization",
+      organization_id: org.id,
+      organization_name: org.name,
+      archived_at: org.archived_at,
+    },
+    ipAddress: request.headers.get("x-forwarded-for"),
+    userAgent: request.headers.get("user-agent"),
+  });
+
+  const { error: deleteErr } = await admin.from("organizations").delete().eq("id", id);
+  if (deleteErr) {
+    return NextResponse.json(
+      { error: "delete_failed", message: deleteErr.message },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ ok: true, deletedName: org.name });
+}

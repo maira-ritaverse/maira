@@ -117,6 +117,37 @@ export function UsersTable({ archived }: { archived: boolean }) {
     }
   };
 
+  // 完全削除(物理削除):停止中タブからのみ実行可。
+  // 誤操作防止にメアドのタイプ入力を要求する二段階確認。
+  const handleHardDelete = async (target: AdminUserRow) => {
+    const expected = target.email || target.id;
+    const typed = window.prompt(
+      `${expected} を完全削除します。\n\n` +
+        `この操作は取り消せません。auth.users / プロフィール / 履歴書 / 応募 / ` +
+        `棚卸し / 通知などすべての関連データが連鎖削除されます。\n\n` +
+        `実行するにはメールアドレスを正確に入力してください:`,
+      "",
+    );
+    if (typed === null) return;
+    if (typed.trim() !== expected) {
+      showToast("error", "メールアドレスが一致しなかったため中止しました");
+      return;
+    }
+    setActingId(target.id);
+    setError(null);
+    try {
+      await apiFetch(`/api/admin/users/${target.id}`, { method: "DELETE" });
+      setUsers((prev) => prev.filter((u) => u.id !== target.id));
+      showToast("success", `${expected} を完全削除しました`);
+    } catch (err) {
+      const msg = getErrorMessage(err);
+      setError(msg);
+      showToast("error", `削除失敗:${msg}`);
+    } finally {
+      setActingId(null);
+    }
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
@@ -196,25 +227,37 @@ export function UsersTable({ archived }: { archived: boolean }) {
                     <td className="px-3 py-2.5 text-xs">{u.onboardedAt ? "✓" : "—"}</td>
                   )}
                   <td className="px-3 py-2.5 text-right">
-                    {archived ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void handleUnarchive(u)}
-                        disabled={actingId !== null}
-                      >
-                        {actingId === u.id ? "復活中…" : "復活"}
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void handleArchive(u)}
-                        disabled={actingId !== null}
-                      >
-                        {actingId === u.id ? "処理中…" : "停止する"}
-                      </Button>
-                    )}
+                    <div className="inline-flex items-center gap-2">
+                      {archived ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void handleUnarchive(u)}
+                            disabled={actingId !== null}
+                          >
+                            {actingId === u.id ? "復活中…" : "復活"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => void handleHardDelete(u)}
+                            disabled={actingId !== null}
+                          >
+                            {actingId === u.id ? "削除中…" : "完全削除"}
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void handleArchive(u)}
+                          disabled={actingId !== null}
+                        >
+                          {actingId === u.id ? "処理中…" : "停止する"}
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

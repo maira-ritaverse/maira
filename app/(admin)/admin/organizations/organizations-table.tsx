@@ -155,6 +155,33 @@ export function OrganizationsTable({ archived }: { archived: boolean }) {
     }
   };
 
+  // 完全削除(物理削除):退会済タブからのみ実行可。
+  // 誤操作防止に企業名のタイプ入力を要求する二段階確認。
+  const handleHardDelete = async (target: OrgRow) => {
+    const typed = window.prompt(
+      `「${target.name}」を完全削除します。\n\n` +
+        `この操作は取り消せません。所属メンバーのアカウントは残りますが、` +
+        `クライアント / 求人 / 紹介 / 面談 / 通知などの全データが連鎖削除されます。\n\n` +
+        `実行するには企業名を正確に入力してください:`,
+      "",
+    );
+    if (typed === null) return;
+    if (typed.trim() !== target.name) {
+      showToast("error", "企業名が一致しなかったため中止しました");
+      return;
+    }
+    setActingId(target.id);
+    try {
+      await apiFetch(`/api/admin/organizations/${target.id}`, { method: "DELETE" });
+      setOrgs((prev) => prev.filter((o) => o.id !== target.id));
+      showToast("success", `${target.name} を完全削除しました`);
+    } catch (err) {
+      showToast("error", `削除失敗:${getErrorMessage(err)}`);
+    } finally {
+      setActingId(null);
+    }
+  };
+
   if (loading) {
     return <p className="text-muted-foreground text-sm">読み込み中…</p>;
   }
@@ -298,14 +325,24 @@ export function OrganizationsTable({ archived }: { archived: boolean }) {
                       詳細
                     </Link>
                     {archived ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void handleUnarchive(o)}
-                        disabled={actingId !== null}
-                      >
-                        {actingId === o.id ? "復活中…" : "復活"}
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void handleUnarchive(o)}
+                          disabled={actingId !== null}
+                        >
+                          {actingId === o.id ? "復活中…" : "復活"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => void handleHardDelete(o)}
+                          disabled={actingId !== null}
+                        >
+                          {actingId === o.id ? "削除中…" : "完全削除"}
+                        </Button>
+                      </>
                     ) : (
                       <Button
                         size="sm"
