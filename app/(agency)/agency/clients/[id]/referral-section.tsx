@@ -1,8 +1,10 @@
 "use client";
 
+import { CheckCircle2, FilePlus, PenLine } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { JobPosting } from "@/lib/jobs/types";
+import type { RecommendationLetterSummary } from "@/lib/recommendation-letters/types";
 import {
   type ReferralStatus,
   type ReferralStatusHistoryWithAuthor,
@@ -45,6 +47,8 @@ type Props = {
   // page.tsx で listReferralStatusHistoriesByReferralIds から受け取る。
   // 各値は changed_at 昇順(古い→新しい)。
   historiesByReferral: Map<string, ReferralStatusHistoryWithAuthor[]>;
+  // referral_id → 最新の推薦文(あれば)。N+1 を避けるため page.tsx で一括取得。
+  latestLettersByReferral: Map<string, RecommendationLetterSummary>;
   isAdmin: boolean;
 };
 
@@ -54,6 +58,7 @@ export function ReferralSection({
   openJobs,
   placements,
   historiesByReferral,
+  latestLettersByReferral,
   isAdmin,
 }: Props) {
   const router = useRouter();
@@ -90,6 +95,7 @@ export function ReferralSection({
         referrals={referrals}
         placementsByReferral={placementsByReferral}
         historiesByReferral={historiesByReferral}
+        latestLettersByReferral={latestLettersByReferral}
         isAdmin={isAdmin}
         onUpdated={() => router.refresh()}
       />
@@ -105,12 +111,14 @@ function ReferralList({
   referrals,
   placementsByReferral,
   historiesByReferral,
+  latestLettersByReferral,
   isAdmin,
   onUpdated,
 }: {
   referrals: ReferralWithJob[];
   placementsByReferral: Map<string, PlacementWithAuthor[]>;
   historiesByReferral: Map<string, ReferralStatusHistoryWithAuthor[]>;
+  latestLettersByReferral: Map<string, RecommendationLetterSummary>;
   isAdmin: boolean;
   onUpdated: () => void;
 }) {
@@ -132,6 +140,7 @@ function ReferralList({
             referral={r}
             placements={placementsByReferral.get(r.id) ?? []}
             histories={historiesByReferral.get(r.id) ?? []}
+            latestLetter={latestLettersByReferral.get(r.id) ?? null}
             isAdmin={isAdmin}
             onUpdated={onUpdated}
           />
@@ -145,12 +154,14 @@ function ReferralRow({
   referral,
   placements,
   histories,
+  latestLetter,
   isAdmin,
   onUpdated,
 }: {
   referral: ReferralWithJob;
   placements: PlacementWithAuthor[];
   histories: ReferralStatusHistoryWithAuthor[];
+  latestLetter: RecommendationLetterSummary | null;
   isAdmin: boolean;
   onUpdated: () => void;
 }) {
@@ -214,6 +225,8 @@ function ReferralRow({
         </Alert>
       )}
 
+      <RecommendationLetterEntry referralId={referral.id} latestLetter={latestLetter} />
+
       <StatusHistoryBlock histories={histories} />
 
       <PlacementBlock
@@ -223,6 +236,101 @@ function ReferralRow({
         onChanged={onUpdated}
       />
     </li>
+  );
+}
+
+// ============================================
+// 推薦文(求人企業提出用)の入口
+//
+// referral 行内のサブブロック。最新版が無ければ「作成」、あれば「編集 vN」を出す。
+// 「作成」を押すと空の推薦文を POST し、専用エディタへ遷移する。
+// 履歴件数が複数あれば小さくバッジで示し、編集画面の履歴ドロップダウンで切替できる。
+// ============================================
+function RecommendationLetterEntry({
+  referralId,
+  latestLetter,
+}: {
+  referralId: string;
+  latestLetter: RecommendationLetterSummary | null;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleCreate = () => {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const res = await fetch(`/api/agency/referrals/${referralId}/recommendation-letters`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ headline: "", body: "" }),
+        });
+        if (!res.ok) {
+          const errData = (await res.json().catch(() => ({}))) as {
+            error?: string;
+            message?: string;
+          };
+          throw new Error(errData.message ?? errData.error ?? "作成に失敗しました");
+        }
+        const data = (await res.json()) as { letter: { id: string } };
+        router.push(`/agency/recommendation-letters/${data.letter.id}`);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unknown error");
+      }
+    });
+  };
+
+  return (
+    <div className="border-border/60 mt-3 space-y-2 border-t pt-3">
+      <h4 className="text-muted-foreground text-xs font-medium">推薦文(求人企業提出用)</h4>
+      {latestLetter ? (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => router.push(`/agency/recommendation-letters/${latestLetter.id}`)}
+          >
+            <PenLine className="size-3.5" />
+            推薦文を編集 v{latestLetter.version}
+          </Button>
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] ${
+              latestLetter.status === "finalized"
+                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+            }`}
+          >
+            {latestLetter.status === "finalized" ? (
+              <CheckCircle2 className="size-3" />
+            ) : (
+              <PenLine className="size-3" />
+            )}
+            {latestLetter.status === "finalized" ? "確定済" : "下書き"}
+          </span>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isPending}
+            onClick={handleCreate}
+          >
+            <FilePlus className="size-3.5" />
+            {isPending ? "作成中..." : "推薦文を作成"}
+          </Button>
+          <span className="text-muted-foreground">AI 下書き生成・PDF 出力に対応</span>
+        </div>
+      )}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+    </div>
   );
 }
 

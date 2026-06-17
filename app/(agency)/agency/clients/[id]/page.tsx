@@ -15,6 +15,7 @@ import { listInteractionsByClient } from "@/lib/interactions/queries";
 import { listJobPostings } from "@/lib/jobs/queries";
 import { getUserRole } from "@/lib/organizations/queries";
 import { listPlacementsByClient } from "@/lib/placements/queries";
+import { listLatestLetterSummariesByReferralIds } from "@/lib/recommendation-letters/queries";
 import {
   listReferralsByClient,
   listReferralStatusHistoriesByReferralIds,
@@ -130,10 +131,12 @@ export default async function ClientDetailPage({ params }: RouteParams) {
   // 紹介の status 遷移履歴(referral_id でグルーピングされた Map)。
   // 必要な referralIds が referrals 取得結果に依存するので、Promise.all の後に直列で取得。
   // 履歴は referral_section.tsx 内の各紹介行に「選考の足跡」として表示する。
-  const historiesByReferral = await listReferralStatusHistoriesByReferralIds(
-    referrals.map((r) => r.id),
-    role.organization.id,
-  );
+  // 同じく referral 行に表示する「最新の推薦文サマリ」もまとめて並列取得して N+1 を避ける。
+  const referralIds = referrals.map((r) => r.id);
+  const [historiesByReferral, latestLettersByReferral] = await Promise.all([
+    listReferralStatusHistoriesByReferralIds(referralIds, role.organization.id),
+    listLatestLetterSummariesByReferralIds(referralIds, role.organization.id),
+  ]);
 
   // カスタムフィールド定義を取得(空でもセクションは描画しない条件で扱う)
   const { data: ccfdRows } = await supabase
@@ -356,6 +359,7 @@ export default async function ClientDetailPage({ params }: RouteParams) {
               openJobs={openJobs}
               placements={placements}
               historiesByReferral={historiesByReferral}
+              latestLettersByReferral={latestLettersByReferral}
               isAdmin={role.member.role === "admin"}
             />
           ),

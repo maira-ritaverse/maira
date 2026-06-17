@@ -58,6 +58,22 @@ export default async function SettingsPage() {
         </Link>
       </Card>
 
+      {/* 推薦文テンプレート(全メンバー閲覧、admin 編集) */}
+      <Card className="p-4">
+        <Link
+          href="/agency/settings/recommendation-letter-templates"
+          className="hover:bg-accent -m-4 flex items-center gap-3 rounded-md p-4 transition-colors"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">推薦文テンプレート</p>
+            <p className="text-muted-foreground text-xs">
+              求人企業に提出する推薦文の冒頭挨拶・末尾定型句を組織共通で管理
+            </p>
+          </div>
+          <span className="text-muted-foreground text-sm">→</span>
+        </Link>
+      </Card>
+
       {isAdmin && (
         <Card className="p-4">
           <Link

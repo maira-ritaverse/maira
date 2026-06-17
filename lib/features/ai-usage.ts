@@ -19,7 +19,8 @@ import { utcMonthStart, utcNextMonthStart } from "./usage-limits";
 export type AiUsageKind =
   | "photo_enhance"
   | "job_recommendation_seeker"
-  | "job_recommendation_agency";
+  | "job_recommendation_agency"
+  | "recommendation_letter_draft";
 
 export const PHOTO_ENHANCE_FREE_MONTHLY = 5;
 export const PHOTO_ENHANCE_ADDON_MONTHLY = 30;
@@ -28,6 +29,10 @@ export const JOB_RECOMMENDATION_SEEKER_ADDON_MONTHLY = 200;
 // エージェント側は BtoB 利用前提で多めに設定(同じ Claude モデルのコスト)
 export const JOB_RECOMMENDATION_AGENCY_FREE_MONTHLY = 50;
 export const JOB_RECOMMENDATION_AGENCY_ADDON_MONTHLY = 500;
+// 推薦文ドラフト生成は BtoB 業務利用で 1 案件あたり 1〜数回程度。
+// 無料枠は組織あたり月 100 件、アドオン契約で月 1000 件まで。
+export const RECOMMENDATION_LETTER_DRAFT_FREE_MONTHLY = 100;
+export const RECOMMENDATION_LETTER_DRAFT_ADDON_MONTHLY = 1000;
 
 export type AiUsageStatus = {
   allowed: boolean;
@@ -44,6 +49,11 @@ function limitsFor(kind: AiUsageKind, addon: boolean): number {
   }
   if (kind === "job_recommendation_agency") {
     return addon ? JOB_RECOMMENDATION_AGENCY_ADDON_MONTHLY : JOB_RECOMMENDATION_AGENCY_FREE_MONTHLY;
+  }
+  if (kind === "recommendation_letter_draft") {
+    return addon
+      ? RECOMMENDATION_LETTER_DRAFT_ADDON_MONTHLY
+      : RECOMMENDATION_LETTER_DRAFT_FREE_MONTHLY;
   }
   // job_recommendation_seeker
   return addon ? JOB_RECOMMENDATION_SEEKER_ADDON_MONTHLY : JOB_RECOMMENDATION_SEEKER_FREE_MONTHLY;
