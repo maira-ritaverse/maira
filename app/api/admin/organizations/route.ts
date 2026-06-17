@@ -4,6 +4,7 @@ import { z } from "zod";
 import { isMairaAdmin } from "@/lib/announcements/platform-queries";
 import { recordAuditLog } from "@/lib/audit/audit-log";
 import { readJsonBody, requireUser } from "@/lib/api/auth-guards";
+import { sendAgencyAdminInviteEmail } from "@/lib/email/agency-admin-invite";
 import { createServiceClient } from "@/lib/supabase/service";
 
 /**
@@ -227,37 +228,62 @@ export async function POST(request: Request) {
   }
   const organizationId = (orgRow as { id: string }).id;
 
-  // 5. auth invite。redirectTo はパスワード設定完了後のアプリ遷移先。
-  //    NEXT_PUBLIC_SITE_URL を基準にする。
+  // 5. 招待リンク生成 + 自前メール送信。
+  //    inviteUserByEmail は Supabase の英語デフォルトテンプレートで送られて
+  //    しまうため(UX が崩れる)、generateLink でアクションリンクだけ取り
+  //    Resend 経由で日本語 HTML を送る。
+  //    redirectTo は /auth/callback?next=/reset-password に向ける。これにより
+  //    クリック → メール確認 + セッション発行 → パスワード設定画面に着地。
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, "") ?? "";
-  const redirectTo = siteUrl ? `${siteUrl}/agency` : undefined;
+  const redirectTo = siteUrl
+    ? `${siteUrl}/auth/callback?next=${encodeURIComponent("/reset-password")}`
+    : undefined;
   let invitedUserId: string | null = null;
+  let actionLink: string | null = null;
   try {
-    const { data: inviteData, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(
-      adminEmail,
-      {
+    const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
+      type: "invite",
+      email: adminEmail,
+      options: {
         data: {
           invited_for_organization_id: organizationId,
           invited_company_name: companyName,
         },
         redirectTo,
       },
-    );
-    if (inviteErr || !inviteData?.user) {
+    });
+    if (linkErr || !linkData?.user || !linkData.properties?.action_link) {
       // 巻き戻し:organization を消す
       await admin.from("organizations").delete().eq("id", organizationId);
       return NextResponse.json(
-        { error: "invite_failed", message: inviteErr?.message ?? "unknown" },
+        { error: "invite_failed", message: linkErr?.message ?? "generate_link_failed" },
         { status: 500 },
       );
     }
-    invitedUserId = inviteData.user.id;
+    invitedUserId = linkData.user.id;
+    actionLink = linkData.properties.action_link;
   } catch (err) {
     await admin.from("organizations").delete().eq("id", organizationId);
     return NextResponse.json(
       { error: "invite_failed", message: err instanceof Error ? err.message : "unknown" },
       { status: 500 },
     );
+  }
+
+  // 5b. 自前 HTML 招待メール送信(Resend)。送信失敗は警告ログに留め、
+  //     ユーザ作成と organization 作成は維持(運営者が手動で再送できる)。
+  const emailResult = await sendAgencyAdminInviteEmail({
+    toEmail: adminEmail,
+    organizationName: companyName,
+    actionLink,
+  });
+  if (!emailResult.sent) {
+    console.warn("[admin/organizations] invite email send failed", {
+      reason: emailResult.reason,
+      error: "error" in emailResult ? emailResult.error : undefined,
+      organizationId,
+      adminEmail,
+    });
   }
 
   // 6. profiles を作る or 上書き(trigger で既に作られている可能性あり)
@@ -311,5 +337,6 @@ export async function POST(request: Request) {
     organizationId,
     invitedUserId,
     adminEmail,
+    emailSent: emailResult.sent,
   });
 }
