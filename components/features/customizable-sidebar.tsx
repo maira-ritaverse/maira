@@ -109,11 +109,21 @@ export function CustomizableSidebar({
   };
 
   // ─── DnD ────────────────────────────────────────────────
+  //
+  // 設計:
+  //   ・項目を「コンテナにポイ」だけでなく、項目間にカーソルを置いて
+  //     「ここに挿入」できるようにする
+  //   ・各項目要素自身が drop zone を兼ね、カーソル Y が item の上半分なら
+  //     その項目の前に、下半分なら後ろに挿入位置を立てる
+  //   ・コンテナ自体の余白 / 空のとき / 末尾(最後の項目の下)は「末尾追加」
+  //   ・移動元と移動先が同じリストの場合、detachItem 後にインデックスが
+  //     1 つ詰まるため、ドロップ時に補正する
   const [dragItemId, setDragItemId] = useState<string | null>(null);
-  // ドロップターゲット種別と識別子
-  const [hoverTarget, setHoverTarget] = useState<
-    { kind: "top" } | { kind: "group"; groupId: string } | { kind: "hidden" } | null
-  >(null);
+  type DropTarget =
+    | { kind: "top"; index: number }
+    | { kind: "group"; groupId: string; index: number }
+    | { kind: "hidden" };
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
 
   const handleDragStart = (id: string) => (e: React.DragEvent<HTMLDivElement>) => {
     if (!editing) return;
@@ -121,28 +131,93 @@ export function CustomizableSidebar({
     e.dataTransfer.setData("text/plain", id);
     e.dataTransfer.effectAllowed = "move";
   };
-  const handleDragOver = (target: typeof hoverTarget) => (e: React.DragEvent<HTMLDivElement>) => {
-    if (!editing || !dragItemId) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setHoverTarget(target);
+
+  /**
+   * 項目要素自身の dragover:カーソル Y を見て「この項目の前 / 後ろ」を判定。
+   * @param index 当該項目のレンダー時の index(リスト内位置)
+   * @param container どのリスト(top / group)
+   */
+  const handleItemDragOver =
+    (container: { kind: "top" } | { kind: "group"; groupId: string }, index: number) =>
+    (e: React.DragEvent<HTMLDivElement>) => {
+      if (!editing || !dragItemId) return;
+      e.preventDefault();
+      e.stopPropagation(); // コンテナの dragover(末尾追加)を打ち消す
+      e.dataTransfer.dropEffect = "move";
+      const rect = e.currentTarget.getBoundingClientRect();
+      const isBottomHalf = e.clientY - rect.top > rect.height / 2;
+      const insertionIndex = isBottomHalf ? index + 1 : index;
+      setDropTarget({ ...container, index: insertionIndex });
+    };
+
+  /**
+   * リストコンテナ(top / group / hidden)の dragover。
+   * 子の項目要素で stopPropagation していない場合のみここに来る = 末尾追加。
+   */
+  const handleContainerDragOver =
+    (
+      container:
+        | { kind: "top"; itemCount: number }
+        | { kind: "group"; groupId: string; itemCount: number }
+        | { kind: "hidden" },
+    ) =>
+    (e: React.DragEvent<HTMLDivElement>) => {
+      if (!editing || !dragItemId) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      if (container.kind === "hidden") {
+        setDropTarget({ kind: "hidden" });
+      } else if (container.kind === "top") {
+        setDropTarget({ kind: "top", index: container.itemCount });
+      } else {
+        setDropTarget({
+          kind: "group",
+          groupId: container.groupId,
+          index: container.itemCount,
+        });
+      }
+    };
+
+  /**
+   * 移動元が移動先と同じリストの場合、対象配列を detachItem した後に index が
+   * 1 つ詰まる(自身が抜けるため)。drop 時に補正する。
+   */
+  const adjustIndexForSameList = (target: DropTarget): DropTarget => {
+    if (!dragItemId) return target;
+    if (target.kind === "top") {
+      const originalIndex = layout.topLevelItemIds.indexOf(dragItemId);
+      if (originalIndex >= 0 && originalIndex < target.index) {
+        return { ...target, index: target.index - 1 };
+      }
+    } else if (target.kind === "group") {
+      const group = layout.groups.find((g) => g.id === target.groupId);
+      if (group) {
+        const originalIndex = group.itemIds.indexOf(dragItemId);
+        if (originalIndex >= 0 && originalIndex < target.index) {
+          return { ...target, index: target.index - 1 };
+        }
+      }
+    }
+    return target;
   };
+
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    if (!editing || !dragItemId || !hoverTarget) return;
+    if (!editing || !dragItemId || !dropTarget) return;
     e.preventDefault();
-    if (hoverTarget.kind === "top") {
-      setLayout((l) => moveItemToTopLevel(l, dragItemId));
-    } else if (hoverTarget.kind === "group") {
-      setLayout((l) => moveItemToGroup(l, dragItemId, hoverTarget.groupId));
-    } else if (hoverTarget.kind === "hidden") {
+    const adjusted = adjustIndexForSameList(dropTarget);
+    if (adjusted.kind === "top") {
+      setLayout((l) => moveItemToTopLevel(l, dragItemId, adjusted.index));
+    } else if (adjusted.kind === "group") {
+      setLayout((l) => moveItemToGroup(l, dragItemId, adjusted.groupId, adjusted.index));
+    } else if (adjusted.kind === "hidden") {
       setLayout((l) => hideItem(l, dragItemId));
     }
     setDragItemId(null);
-    setHoverTarget(null);
+    setDropTarget(null);
   };
   const handleDragEnd = () => {
     setDragItemId(null);
-    setHoverTarget(null);
+    setDropTarget(null);
   };
 
   // 編集 actions
@@ -191,20 +266,58 @@ export function CustomizableSidebar({
     setLayout(defaultLayout);
   };
 
+  // 描画用ヘルパー:カーソル位置に応じて、当該項目の上 / 下にハイライト線を出す
+  const insertionLineFor = (
+    container: { kind: "top" } | { kind: "group"; groupId: string },
+    index: number,
+  ): "above" | "below" | null => {
+    if (!dropTarget) return null;
+    if (container.kind === "top" && dropTarget.kind === "top") {
+      if (dropTarget.index === index) return "above";
+      if (dropTarget.index === index + 1) return "below";
+    } else if (
+      container.kind === "group" &&
+      dropTarget.kind === "group" &&
+      dropTarget.groupId === container.groupId
+    ) {
+      if (dropTarget.index === index) return "above";
+      if (dropTarget.index === index + 1) return "below";
+    }
+    return null;
+  };
+
   // 表示用ラッパ:編集モード時は draggable + ドロップ可視化
-  const renderDraggableItem = (itemId: string) => {
+  const renderDraggableItem = (
+    itemId: string,
+    container: { kind: "top" } | { kind: "group"; groupId: string },
+    index: number,
+  ) => {
     const sb = toSidebarItem(itemId);
     if (!sb) return null;
+    const line = editing ? insertionLineFor(container, index) : null;
     return (
       <div
         key={itemId}
         draggable={editing}
         onDragStart={handleDragStart(itemId)}
         onDragEnd={handleDragEnd}
+        onDragOver={handleItemDragOver(container, index)}
         className={`group/item relative ${
           editing ? "cursor-grab active:cursor-grabbing" : ""
         } ${dragItemId === itemId ? "opacity-40" : ""}`}
       >
+        {line === "above" && (
+          <div
+            className="absolute -top-0.5 right-1 left-1 h-0.5 rounded-full bg-emerald-500"
+            aria-hidden
+          />
+        )}
+        {line === "below" && (
+          <div
+            className="absolute right-1 -bottom-0.5 left-1 h-0.5 rounded-full bg-emerald-500"
+            aria-hidden
+          />
+        )}
         {editing && (
           <span
             className="text-muted-foreground absolute top-1/2 left-1 -translate-y-1/2 text-[10px]"
@@ -247,14 +360,17 @@ export function CustomizableSidebar({
       <nav className="flex-1 space-y-1.5 overflow-y-auto">
         {/* トップレベル:ドロップ受け可能なエリア */}
         <div
-          onDragOver={handleDragOver({ kind: "top" })}
+          onDragOver={handleContainerDragOver({
+            kind: "top",
+            itemCount: layout.topLevelItemIds.length,
+          })}
           className={`space-y-1 rounded-md ${
-            editing && hoverTarget?.kind === "top"
+            editing && layout.topLevelItemIds.length === 0 && dropTarget?.kind === "top"
               ? "outline-2 outline-emerald-500 outline-dashed"
               : ""
           }`}
         >
-          {layout.topLevelItemIds.map((id) => renderDraggableItem(id))}
+          {layout.topLevelItemIds.map((id, idx) => renderDraggableItem(id, { kind: "top" }, idx))}
         </div>
 
         {/* 各グループ */}
@@ -265,9 +381,16 @@ export function CustomizableSidebar({
           return (
             <div
               key={g.id}
-              onDragOver={handleDragOver({ kind: "group", groupId: g.id })}
+              onDragOver={handleContainerDragOver({
+                kind: "group",
+                groupId: g.id,
+                itemCount: g.itemIds.length,
+              })}
               className={`rounded-md ${
-                editing && hoverTarget?.kind === "group" && hoverTarget.groupId === g.id
+                editing &&
+                g.itemIds.length === 0 &&
+                dropTarget?.kind === "group" &&
+                dropTarget.groupId === g.id
                   ? "outline-2 outline-emerald-500 outline-dashed"
                   : ""
               }`}
@@ -319,7 +442,9 @@ export function CustomizableSidebar({
                     </p>
                   ) : (
                     <div className="space-y-0.5 pl-2">
-                      {g.itemIds.map((id) => renderDraggableItem(id))}
+                      {g.itemIds.map((id, idx) =>
+                        renderDraggableItem(id, { kind: "group", groupId: g.id }, idx),
+                      )}
                     </div>
                   )}
                 </div>
@@ -347,9 +472,9 @@ export function CustomizableSidebar({
             </button>
 
             <div
-              onDragOver={handleDragOver({ kind: "hidden" })}
+              onDragOver={handleContainerDragOver({ kind: "hidden" })}
               className={`bg-muted/30 mt-3 space-y-1 rounded-md p-2 ${
-                hoverTarget?.kind === "hidden" ? "outline-2 outline-emerald-500 outline-dashed" : ""
+                dropTarget?.kind === "hidden" ? "outline-2 outline-emerald-500 outline-dashed" : ""
               }`}
             >
               <p className="text-muted-foreground text-[11px] font-medium">
@@ -358,7 +483,31 @@ export function CustomizableSidebar({
               {layout.hiddenItemIds.length === 0 ? (
                 <p className="text-muted-foreground text-[10px] italic">ここにドラッグで非表示</p>
               ) : (
-                layout.hiddenItemIds.map((id) => renderDraggableItem(id))
+                /* 非表示エリアは順序を保持しない(insertion line も出さない) */
+                layout.hiddenItemIds.map((id) => {
+                  const sb = toSidebarItem(id);
+                  if (!sb) return null;
+                  return (
+                    <div
+                      key={id}
+                      draggable={editing}
+                      onDragStart={handleDragStart(id)}
+                      onDragEnd={handleDragEnd}
+                      className={`relative ${
+                        editing ? "cursor-grab active:cursor-grabbing" : ""
+                      } ${dragItemId === id ? "opacity-40" : ""}`}
+                    >
+                      <Link
+                        href={sb.href}
+                        onClick={(e) => e.preventDefault()}
+                        className="flex items-center gap-2 rounded-md px-3 py-1.5 text-xs"
+                      >
+                        <NavIcon name={sb.icon} className="size-3 shrink-0" />
+                        <span className="text-muted-foreground flex-1 truncate">{sb.label}</span>
+                      </Link>
+                    </div>
+                  );
+                })
               )}
             </div>
           </>
