@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import Image from "next/image";
 import Link from "next/link";
 import { resetPasswordSchema, type ResetPasswordInput } from "@/lib/validations/auth";
 import { updatePassword } from "@/app/auth/actions";
@@ -63,7 +64,8 @@ export function ResetPasswordForm() {
   return (
     <main className="bg-background flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
-        <div className="text-center">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <Image src="/icon-192.png" alt="" width={64} height={64} priority className="size-16" />
           <h1 className="text-3xl font-bold">新しいパスワードを設定</h1>
         </div>
 

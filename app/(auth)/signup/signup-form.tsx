@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import { signupSchema, type SignupInput } from "@/lib/validations/auth";
 import { signup } from "@/app/auth/actions";
@@ -112,9 +113,12 @@ export function SignupForm({ invitation, clientInvitation }: Props) {
   return (
     <main className="bg-background flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold">{headerTitle}</h1>
-          <p className="text-muted-foreground mt-2 text-sm">{headerSubtitle}</p>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <Image src="/icon-192.png" alt="" width={64} height={64} priority className="size-16" />
+          <div>
+            <h1 className="text-3xl font-bold">{headerTitle}</h1>
+            <p className="text-muted-foreground mt-2 text-sm">{headerSubtitle}</p>
+          </div>
         </div>
 
         {invitation && (

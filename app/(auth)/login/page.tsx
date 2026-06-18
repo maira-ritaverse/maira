@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useSearchParams } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import { loginSchema, type LoginInput } from "@/lib/validations/auth";
 import { login } from "@/app/auth/actions";
@@ -122,7 +123,8 @@ export default function LoginPage() {
   return (
     <main className="bg-background flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
-        <div className="text-center">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <Image src="/icon-192.png" alt="" width={64} height={64} priority className="size-16" />
           <h1 className="text-3xl font-bold">Mairaにログイン</h1>
         </div>
 
