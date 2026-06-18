@@ -284,9 +284,23 @@ export function SectionLayoutContainer({ storageKey, defaultOrder, sections, tit
             </div>
           </div>
         ) : (
-          <h2 className="text-foreground mb-2 px-1 text-base font-bold tracking-wide select-none">
-            {title}
-          </h2>
+          /* 通常表示のタイトル
+             ・default 色 → プレーンな見出し(従来どおり、シンプルな印象を維持)
+             ・default 以外 → ユーザがカラーピッカーで選んだ色をピル(タグ)で表示
+               外枠を出さずに「どの色を選んだか」を一目で伝える */
+          <div className="mb-2 flex items-center">
+            {color === "default" ? (
+              <h2 className="text-foreground px-1 text-base font-bold tracking-wide select-none">
+                {title}
+              </h2>
+            ) : (
+              <h2
+                className={`inline-flex items-center rounded-md px-3 py-1 text-base font-bold tracking-wide select-none ${HEADER_COLOR_CLASS[color]}`}
+              >
+                {title}
+              </h2>
+            )}
+          </div>
         )}
 
         {/* セクション本体(編集モードのみ余白を追加。通常表示は中身の Card 側に任せる) */}
