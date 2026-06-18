@@ -42,7 +42,10 @@ export function extractionToMarkdown(
         w.endMonth ?? null,
       );
       const meta = [w.industry, w.position].filter(Boolean).join(" / ");
-      lines.push(`### ${w.companyName}`);
+      // 会社名が抽出できなかった場合は明示的なフォールバック表示にする
+      // (null / 空のときに "### undefined" のような壊れた見出しになるのを防ぐ)
+      const companyLabel = w.companyName?.trim() || "(社名不明)";
+      lines.push(`### ${companyLabel}`);
       if (meta) lines.push(`- ${meta}`);
       if (period) lines.push(`- ${period}`);
       if (w.jobDescription) {

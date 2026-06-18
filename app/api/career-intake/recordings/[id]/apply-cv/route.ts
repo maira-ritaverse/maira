@@ -46,7 +46,9 @@ export async function POST(request: Request, { params }: RouteParams) {
   const ext = rec.extraction;
 
   const extractedWorks: WorkExperience[] = ext.workExperiences.map((w) => ({
-    company_name: w.companyName,
+    // AI 抽出は会社名が会話に出ていない時に null/undefined を返すことがある。
+    // CV 側の WorkExperience.company_name は string 必須なので、ここでフォールバック。
+    company_name: w.companyName?.trim() || "(社名不明)",
     industry: w.industry ?? null,
     position: w.position ?? null,
     period_start:

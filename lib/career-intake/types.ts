@@ -75,7 +75,10 @@ export const extractionResultSchema = z.object({
   workExperiences: z
     .array(
       z.object({
-        companyName: z.string().max(200),
+        // 会話の流れで「会社名が出てこない」状態(業界の話だけしている等)で AI が
+        // null を返すケースがある。required にすると スキーマ検証で 全エントリ脱落
+        // するので、nullable で受けて 表示側で フォールバック("(社名不明)")する。
+        companyName: z.string().max(200).nullable().optional(),
         industry: z.string().max(100).nullable().optional(),
         position: z.string().max(200).nullable().optional(),
         // 期間(年月で扱う、不明なら null)
