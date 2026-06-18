@@ -10,6 +10,7 @@ import {
 import { PrivacyPolicyModal } from "@/components/features/privacy-policy-modal";
 import { UserMenu } from "@/components/features/user-menu";
 import { countInvitedConnections } from "@/lib/connections/queries";
+import { getUserRole } from "@/lib/organizations/queries";
 import { getPolicyAcceptance, needsToAccept } from "@/lib/privacy/policy";
 
 /**
@@ -17,6 +18,12 @@ import { getPolicyAcceptance, needsToAccept } from "@/lib/privacy/policy";
  *
  * middlewareでも未認証ガードはしているが、Server Component側でも
  * userを取得する必要があるため、ここでも明示的にチェックする(防御的)。
+ *
+ * ロールガード:
+ *   /app(求職者領域)は organization_member の侵入を防ぐ。
+ *   /agency layout が逆向き(org member 以外 → /app)に追い返しているのと対称。
+ *   account_type が organization_member でも membership 実体が無いと
+ *   getUserRole は 'seeker' を返す(安全側)。その場合はここを素通りさせる。
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -26,6 +33,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   if (!user) {
     redirect("/login");
+  }
+
+  // エージェントメンバーは /agency に追い返す。
+  // 求職者(seeker)はそのまま通す。
+  const role = await getUserRole(user.id);
+  if (role.accountType === "organization_member" && role.organization && role.member) {
+    redirect("/agency");
   }
 
   // ヘッダー表示用 display_name と、サイドナビ「エージェント連携」のバッジ用

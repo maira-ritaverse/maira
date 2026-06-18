@@ -76,19 +76,33 @@ export async function updateSession(request: NextRequest) {
   }
 
   // 認証ページ(/login, /signup, /forgot-password, /verify-email):未認証者専用。
-  // 既ログインなら通常 /app へリダイレクトする。
+  // 既ログインなら通常デフォルト位置にリダイレクトする。
   // /auth/callback はセッション交換中なので対象外(そもそも AUTH_PAGES に入っていない)。
   //
-  // 例外:?next= が同一オリジン内パスなら、そちらを優先する。
-  //   招待リンク経由(/login?next=/invite/X)で既にログイン済みの場合に、
-  //   /app に飛ばしてしまうと招待フローから脱落するため、next を尊重して
-  //   そのまま着地ページに送り直す。open redirect は safeNextOr で阻止。
+  // デフォルト位置の決め方:
+  //   ・next= があれば最優先(招待リンク経由 /login?next=/invite/X のように、
+  //     特定ページへ戻したい意図を尊重)
+  //   ・無ければ account_type を見て /agency か /app を選ぶ
+  //     (org member を /app に送ると app layout から再リダイレクトが走るため、
+  //      最初から正しい位置に送る)
+  //   ・account_type を読めない場合は安全側で /app(seeker 想定)
+  //
+  // open redirect は safeNextOr で阻止。
   const isAuthPage = AUTH_PAGES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   if (isAuthPage && user) {
     const nextParam = request.nextUrl.searchParams.get("next");
-    const target = safeNextOr(nextParam, "/app");
-    // target はクエリを含む可能性があるため、相対 URL として origin と結合する。
-    return NextResponse.redirect(new URL(target, request.nextUrl.origin));
+    if (nextParam) {
+      const target = safeNextOr(nextParam, "/app");
+      return NextResponse.redirect(new URL(target, request.nextUrl.origin));
+    }
+    // 既ログインのデフォルト遷移先を account_type で分岐
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("account_type")
+      .eq("id", user.id)
+      .maybeSingle();
+    const defaultPath = profile?.account_type === "organization_member" ? "/agency" : "/app";
+    return NextResponse.redirect(new URL(defaultPath, request.nextUrl.origin));
   }
 
   return supabaseResponse;
