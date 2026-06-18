@@ -18,7 +18,7 @@ export default function PrivacyPolicyPage() {
       <article className="space-y-6 text-sm leading-relaxed">
         <header>
           <h1 className="text-3xl font-bold">プライバシーポリシー</h1>
-          <p className="text-muted-foreground mt-1 text-xs">最終更新日:2026 年 6 月 15 日</p>
+          <p className="text-muted-foreground mt-1 text-xs">最終更新日:2026 年 6 月 18 日</p>
         </header>
 
         <section className="space-y-3">
@@ -101,7 +101,79 @@ export default function PrivacyPolicyPage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold">第 7 条(利用者の権利)</h2>
+          <h2 className="text-lg font-semibold">第 7 条(外部サービス連携時のデータ取り扱い)</h2>
+          <p>
+            本サービスは、ユーザー本人が明示的に接続を承認した外部サービスに対してのみ、
+            限定的なアクセスを行います。連携の解除は本サービス内
+            <code className="bg-muted mx-1 rounded px-1 text-xs">設定 → 連携・アドオン</code>
+            からいつでも可能で、解除後は当社側に保管されているアクセストークンが直ちに破棄されます。
+          </p>
+
+          <div className="space-y-2">
+            <p className="font-medium">7-1. Zoom 連携</p>
+            <p>本サービスは以下の Zoom スコープを使用します。</p>
+            <ul className="ml-6 list-disc space-y-1">
+              <li>
+                <code className="text-xs">user:read:user</code>
+                :接続ユーザーの Zoom アカウントを本サービスのプロフィールと紐づけるため
+              </li>
+              <li>
+                <code className="text-xs">meeting:read:meeting</code> /{" "}
+                <code className="text-xs">meeting:read:list_meetings</code>
+                :本サービス内の予定一覧および「次の面談」表示のため
+              </li>
+              <li>
+                <code className="text-xs">meeting:write:meeting</code> /{" "}
+                <code className="text-xs">meeting:update:meeting</code> /{" "}
+                <code className="text-xs">meeting:delete:meeting</code>
+                :本サービスから 1 on 1 キャリア面談を予約・再スケジュール・キャンセルするため
+              </li>
+              <li>
+                <code className="text-xs">cloud_recording:read:list_user_recordings</code> /{" "}
+                <code className="text-xs">cloud_recording:read:recording</code>
+                :面談終了後の Cloud Recording を自動取り込みし、文字起こし および AI
+                履歴書ドラフト生成に用いるため
+              </li>
+            </ul>
+            <p>取り扱い方針:</p>
+            <ul className="ml-6 list-disc space-y-1">
+              <li>
+                取得した Zoom OAuth アクセス・リフレッシュトークンは AES-256-GCM
+                方式で暗号化してサーバーサイドに保管します
+              </li>
+              <li>
+                取得した会議メタデータ(タイトル / 開始時刻 / 参加 URL)および録画ファイルは、
+                接続したエージェント担当者と本人のみがアクセスできます
+              </li>
+              <li>
+                取り込んだ録画ファイルは、文字起こしと AI 構造化処理の完了後 90
+                日経過時点で自動削除されます(本人が明示的に保持を選択した場合を除く)
+              </li>
+              <li>
+                Zoom から取得したデータは、第三者(広告ネットワーク・データブローカー等)に
+                <strong>提供しません</strong>
+              </li>
+              <li>
+                文字起こしには OpenAI Whisper、構造化には Anthropic Claude を 利用しますが、
+                いずれも AI 学習への利用は opt-out 契約済みです
+              </li>
+            </ul>
+          </div>
+
+          <div className="space-y-2">
+            <p className="font-medium">7-2. Google 連携(Calendar / Drive)</p>
+            <p>
+              Google Calendar への面談予定作成、Google Meet 録画(Drive 保存)の取り込みを行うため、
+              本人が明示的に承認した <code className="text-xs">calendar.events</code> および{" "}
+              <code className="text-xs">drive.readonly</code> スコープのみ使用します。
+              トークンの暗号化保管、解除時の即時破棄、第三者提供の禁止、 90 日後の録画自動削除は
+              Zoom 連携と同じ方針です。
+            </p>
+          </div>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">第 8 条(利用者の権利)</h2>
           <p>利用者は以下の権利を有します。</p>
           <ul className="ml-6 list-disc space-y-1">
             <li>登録情報・保管データの閲覧・修正・削除</li>
@@ -112,7 +184,7 @@ export default function PrivacyPolicyPage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold">第 8 条(ポリシーの改定)</h2>
+          <h2 className="text-lg font-semibold">第 9 条(ポリシーの改定)</h2>
           <p>
             当社は本ポリシーを必要に応じて改定することがあります。重要な変更がある場合は、
             本サービス内またはメールで事前に通知し、利用継続をもって新ポリシーへの同意とみなします。
@@ -120,7 +192,7 @@ export default function PrivacyPolicyPage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold">第 9 条(お問い合わせ)</h2>
+          <h2 className="text-lg font-semibold">第 10 条(お問い合わせ)</h2>
           <p>
             本ポリシーに関するお問い合わせは、本サービス内のお問い合わせフォームまたは
             株式会社Revorise の公式サイト経由でお願いします。
