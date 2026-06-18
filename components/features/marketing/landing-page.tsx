@@ -6,6 +6,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
 import { ContactForm } from "@/components/features/marketing/contact-form";
@@ -139,11 +140,22 @@ function Header() {
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6 sm:h-20 lg:px-10">
         <Link
           href="/"
-          className="lp-serif-en text-[color:var(--lp-ink)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--lp-fuji)]"
+          className="lp-serif-en flex items-center gap-3 text-[color:var(--lp-ink)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--lp-fuji)]"
+          aria-label="Maira トップ"
         >
-          <span className="text-2xl font-medium tracking-[-0.01em] sm:text-[1.7rem]">Maira</span>
-          <span className="ml-2 align-middle text-[0.65rem] tracking-[0.3em] text-[color:var(--lp-ink-faint)] uppercase">
-            for agencies
+          <Image
+            src="/icon-192.png"
+            alt=""
+            width={36}
+            height={36}
+            priority
+            className="size-8 shrink-0 sm:size-9"
+          />
+          <span className="flex items-baseline">
+            <span className="text-2xl font-medium tracking-[-0.01em] sm:text-[1.7rem]">Maira</span>
+            <span className="ml-2 align-middle text-[0.65rem] tracking-[0.3em] text-[color:var(--lp-ink-faint)] uppercase">
+              for agencies
+            </span>
           </span>
         </Link>
         <nav className="flex items-center gap-2 sm:gap-6">

@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { CustomizableSidebar } from "@/components/features/customizable-sidebar";
@@ -68,8 +70,18 @@ export function AgencySidebar({ organizationName, memberRole }: Props) {
       isActive={isActive}
       header={
         <div>
-          <p className="text-muted-foreground text-xs">エージェント管理</p>
-          <p className="truncate font-bold">{organizationName}</p>
+          <Link href="/agency" className="flex items-center gap-2" aria-label="Maira エージェント">
+            <Image
+              src="/icon-192.png"
+              alt=""
+              width={24}
+              height={24}
+              priority
+              className="size-6 shrink-0"
+            />
+            <p className="text-muted-foreground text-xs">エージェント管理</p>
+          </Link>
+          <p className="mt-1 truncate font-bold">{organizationName}</p>
           <p className="text-muted-foreground mt-1 text-xs">
             {memberRole === "admin" ? "管理者" : "アドバイザー"}
           </p>

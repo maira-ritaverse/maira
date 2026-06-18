@@ -28,7 +28,14 @@ export function renderEmailLayout({ previewTitle, bodyHtml }: EmailLayoutArgs): 
         <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;width:100%;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
           <tr>
             <td style="padding:24px 28px 8px;">
-              <div style="font-size:14px;font-weight:700;letter-spacing:0.05em;color:#111;">Maira</div>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="vertical-align:middle;padding-right:10px;">
+                    <img src="https://www.maira.pro/icon-192.png" width="28" height="28" alt="Maira" style="display:block;border:0;">
+                  </td>
+                  <td style="vertical-align:middle;font-size:16px;font-weight:700;letter-spacing:0.05em;color:#111;">Maira</td>
+                </tr>
+              </table>
             </td>
           </tr>
           <tr>
