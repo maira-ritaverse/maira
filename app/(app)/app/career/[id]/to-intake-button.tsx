@@ -12,10 +12,18 @@ type Props = {
 
 /**
  * キャリア棚卸し対話を AI ヒアリングと同じ抽出パイプラインにかけ、
- * 履歴書 / 職務経歴書の下書きを自動生成するためのボタン。
+ * 履歴書下書きを自動生成して 履歴書詳細ページへ 遷移するボタン。
  *
- * 成功時:作成された intake recording の詳細ページへ遷移し、
- *   そこから「履歴書に反映」「職務経歴書に反映」できる。
+ * 旧設計では intake-recording の詳細ページに 飛ばしていたが、
+ * 求職者向けの /app/career-intake/[id] は 廃止 → /app に redirect される
+ * スタブになっているため、代わりに ここで 2 段階の API 呼び出しを 行い
+ * 履歴書を 作成してから 直接 履歴書詳細ページへ 遷移する。
+ *
+ *   1. POST /api/career/conversations/[id]/to-intake
+ *      → recording を 作成 + Claude 抽出 → recordingId を 返す
+ *   2. POST /api/career-intake/recordings/[recordingId]/apply
+ *      → 新規履歴書を 作成 → resumeId を 返す
+ *   3. router.push(`/app/resumes/${resumeId}`)
  */
 export function ToIntakeButton({ conversationId }: Props) {
   const router = useRouter();
@@ -24,22 +32,37 @@ export function ToIntakeButton({ conversationId }: Props) {
 
   const submit = async () => {
     if (
-      !confirm(
-        "この会話の内容を AI で要約し、履歴書 / 職務経歴書の下書きを生成します。\nよろしいですか?",
-      )
+      !confirm("この会話の内容を AI で要約し、履歴書の下書きを自動生成します。\nよろしいですか?")
     ) {
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
-      const res = await apiFetch<{ recordingId: string }>(
+      // 1. キャリア対話 → extraction
+      const intake = await apiFetch<{ recordingId: string }>(
         `/api/career/conversations/${conversationId}/to-intake`,
         { method: "POST" },
       );
-      if (res?.recordingId) {
-        router.push(`/app/career-intake/${res.recordingId}`);
+      if (!intake?.recordingId) {
+        throw new Error("下書き生成に失敗しました(recordingId が取得できませんでした)");
       }
+      // 2. extraction → 新規履歴書 作成
+      const apply = await apiFetch<{ resumeId: string }>(
+        `/api/career-intake/recordings/${intake.recordingId}/apply`,
+        {
+          method: "POST",
+          json: {
+            // targetResumeId 無し = 新規作成、targetTitle で 履歴書名
+            targetTitle: `キャリア棚卸しから生成 ${new Date().toLocaleDateString("ja-JP")}`,
+          },
+        },
+      );
+      if (!apply?.resumeId) {
+        throw new Error("履歴書の作成に失敗しました(resumeId が取得できませんでした)");
+      }
+      // 3. 履歴書詳細ページへ
+      router.push(`/app/resumes/${apply.resumeId}`);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
