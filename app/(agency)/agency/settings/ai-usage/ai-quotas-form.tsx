@@ -14,7 +14,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiFetch, getErrorMessage } from "@/lib/api/client-fetch";
-import { AI_KIND_LABEL } from "@/lib/agency/ai-usage-queries";
+import { AI_KIND_LABEL } from "@/lib/agency/ai-kind-labels";
 
 type Quota = {
   kind: string;

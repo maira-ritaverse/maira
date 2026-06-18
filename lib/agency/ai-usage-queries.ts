@@ -82,37 +82,18 @@ export async function getOrgAiUsageSummary(): Promise<OrgAiUsageSummary> {
   };
 }
 
-export const AI_KIND_LABEL: Record<string, string> = {
-  photo_enhance: "AI 証明写真",
-  job_recommendation_seeker: "AI 推薦(求職者)",
-  job_recommendation_agency: "AI 推薦(エージェント)",
-  recommendation_letter_draft: "推薦文 AI 下書き",
-  agency_cv_draft: "職務経歴書 AI 下書き",
-  agency_resume_draft: "履歴書 AI 下書き",
-};
-
-/** 上限設定 UI で「組織横断」「求職者 1 人あたり」を 表示する分類 */
-export const AI_KIND_SCOPE_LABEL: Record<string, "agency_org" | "seeker_per_user"> = {
-  photo_enhance: "seeker_per_user",
-  job_recommendation_seeker: "seeker_per_user",
-  job_recommendation_agency: "agency_org",
-  recommendation_letter_draft: "agency_org",
-  agency_cv_draft: "agency_org",
-  agency_resume_draft: "agency_org",
-};
-
-/**
- * 1 件あたりの概算コスト(USD)。launch 前の運用判断用、参考値。
- * 実コストは Anthropic / OpenAI の請求と突合せて確認すること。
- */
-export const AI_KIND_UNIT_COST_USD: Record<string, number> = {
-  photo_enhance: 0.04, // gpt-image-1 medium quality
-  job_recommendation_seeker: 0.0135, // Claude Sonnet 4.6, 約 2k input + 500 output
-  job_recommendation_agency: 0.0135,
-  recommendation_letter_draft: 0.075, // 推薦文は長め(5k input + 2k output 想定)
-  agency_cv_draft: 0.045, // CV 下書き(4k input + 1.5k output 想定)
-  agency_resume_draft: 0.045,
-};
+// AI_KIND_LABEL / AI_KIND_SCOPE_LABEL / AI_KIND_UNIT_COST_USD / estimateCostUsd は
+// クライアントコンポーネントからも読み込めるよう lib/agency/ai-kind-labels.ts に
+// 切り出した。本ファイルは Supabase server 依存があるので、Client Component から
+// 直接 import すると Next.js のビルドが落ちる。
+// 本ファイル内でも 使うので import + re-export の二段にする。
+import {
+  AI_KIND_LABEL,
+  AI_KIND_SCOPE_LABEL,
+  AI_KIND_UNIT_COST_USD,
+  estimateCostUsd,
+} from "./ai-kind-labels";
+export { AI_KIND_LABEL, AI_KIND_SCOPE_LABEL, AI_KIND_UNIT_COST_USD, estimateCostUsd };
 
 /** 既定値マップ(レコードが無い kind の フォールバック表示用) */
 export const AI_KIND_FREE_DEFAULT: Record<AiUsageKind, number> = {
@@ -171,15 +152,6 @@ export async function getOrganizationAiQuotas(): Promise<AiQuotaRow[]> {
       updatedAt: found?.updated_at ?? null,
     };
   });
-}
-
-export function estimateCostUsd(byKind: Record<string, number>): number {
-  let usd = 0;
-  for (const [kind, count] of Object.entries(byKind)) {
-    const unit = AI_KIND_UNIT_COST_USD[kind] ?? 0;
-    usd += unit * count;
-  }
-  return Math.round(usd * 100) / 100;
 }
 
 export type MonthlyTrendPoint = {
