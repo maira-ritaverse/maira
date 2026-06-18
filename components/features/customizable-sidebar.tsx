@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { NavIcon } from "@/lib/ui/nav-icon";
 
@@ -63,22 +63,30 @@ export function CustomizableSidebar({
 }: Props) {
   const [layout, setLayout] = useState<SidebarLayout>(defaultLayout);
   const [editing, setEditing] = useState(false);
-  const initializedRef = useRef(false);
 
-  // マウント時に localStorage から復元
-  useEffect(() => {
-    if (initializedRef.current) return;
-    initializedRef.current = true;
-    void Promise.resolve().then(() => {
-      setLayout(loadSidebarLayout(storageKey, defaultLayout, availableItems));
-    });
-  }, [storageKey, defaultLayout, availableItems]);
+  // ロード済みの storageKey を state で保持する。
+  // state(useRef ではない)にすることで、ロード完了が次のレンダーで反映され
+  // 保存 effect が走るため、「ロード前に default で上書き保存してしまう」
+  // バグを構造的に防ぐ。
+  // storageKey が変わった(例:タブ切替)場合は再ロードして、別タブのデータ
+  // を間違ったキーで保存しないようにする。
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
 
-  // 変更を永続化
+  // マウント / storageKey 変更で localStorage から復元。
+  // localStorage は SSR では参照できない外部状態なので、
+  // 同期外部ストアへの初回同期として effect 内で setState するのが正当。
   useEffect(() => {
-    if (!initializedRef.current) return;
+    if (loadedKey === storageKey) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLayout(loadSidebarLayout(storageKey, defaultLayout, availableItems));
+    setLoadedKey(storageKey);
+  }, [storageKey, defaultLayout, availableItems, loadedKey]);
+
+  // 変更を永続化(ロード済みの storageKey 配下のときだけ)
+  useEffect(() => {
+    if (loadedKey !== storageKey) return;
     saveSidebarLayout(storageKey, layout);
-  }, [storageKey, layout]);
+  }, [storageKey, layout, loadedKey]);
 
   const itemMap = useMemo(() => {
     const m = new Map<string, ItemDescriptor>();

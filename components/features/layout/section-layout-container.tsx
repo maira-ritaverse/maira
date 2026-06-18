@@ -1,7 +1,7 @@
 "use client";
 
 import { Check } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -132,19 +132,29 @@ export function SectionLayoutContainer({ storageKey, defaultOrder, sections, tit
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [colorPickerOpenFor, setColorPickerOpenFor] = useState<string | null>(null);
 
-  // マウント時に localStorage から復元
-  const loadedRef = useRef(false);
-  useEffect(() => {
-    if (loadedRef.current) return;
-    loadedRef.current = true;
-    setLayout(loadSectionLayout(storageKey, defaultOrder));
-  }, [storageKey, defaultOrder]);
+  // ロード済みの storageKey を state で保持する。
+  // ref ベースだと「同一レンダー内で先に save effect が走り、default を localStorage
+  // に上書きしてしまう」というタイミング問題が起きるため、state 化して
+  // ロード完了 → 次レンダー → 保存 effect の順に確実に並ぶようにする。
+  // また storageKey 変更(例:タブ切替)で必ず再ロードし、別タブのデータを
+  // 間違ったキーで保存しないようにする。
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
 
-  // 変更を永続化
+  // マウント / storageKey 変更で localStorage から復元。
+  // localStorage は SSR で参照不可な外部ストアなので、その初回同期として
+  // effect 内で setState するのは React 推奨の用法に沿う。
   useEffect(() => {
-    if (!loadedRef.current) return;
+    if (loadedKey === storageKey) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLayout(loadSectionLayout(storageKey, defaultOrder));
+    setLoadedKey(storageKey);
+  }, [storageKey, defaultOrder, loadedKey]);
+
+  // 変更を永続化(ロード済みの storageKey 配下のときだけ)
+  useEffect(() => {
+    if (loadedKey !== storageKey) return;
     saveSectionLayout(storageKey, layout);
-  }, [storageKey, layout]);
+  }, [storageKey, layout, loadedKey]);
 
   // ─── DnD ハンドラ ─────────────────────────────────────────
   const handleDragStart = (id: string) => (e: React.DragEvent<HTMLDivElement>) => {
