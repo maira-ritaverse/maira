@@ -205,19 +205,25 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
         </div>
         <Field label="住所" value={pii.address} onChange={(v) => updatePii({ address: v })} />
         <Field label="メールアドレス" value={pii.email} onChange={(v) => updatePii({ email: v })} />
-        <TextareaField
+        <TextareaWithAi
           label="志望動機"
           value={pii.motivation}
           onChange={(v) => updatePii({ motivation: v })}
           rows={4}
           maxLength={2000}
+          resumeId={resume.id}
+          kind="motivation"
+          pending={pending}
         />
-        <TextareaField
+        <TextareaWithAi
           label="自己 PR"
           value={pii.self_pr}
           onChange={(v) => updatePii({ self_pr: v })}
           rows={4}
           maxLength={2000}
+          resumeId={resume.id}
+          kind="self_pr"
+          pending={pending}
         />
         <TextareaField
           label="本人希望記入欄"
@@ -394,6 +400,101 @@ function TextareaField({
         rows={rows}
         maxLength={maxLength}
       />
+    </div>
+  );
+}
+
+/**
+ * 志望動機 / 自己 PR 用の Textarea + AI 生成 ボタン。
+ * AI 生成結果は確認ダイアログで Before/After を見せて、上書きするか判断できる。
+ */
+function TextareaWithAi({
+  label,
+  value,
+  onChange,
+  rows,
+  maxLength,
+  resumeId,
+  kind,
+  pending: parentPending,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  rows: number;
+  maxLength: number;
+  resumeId: string;
+  kind: "motivation" | "self_pr";
+  pending: boolean;
+}) {
+  const [aiPending, startAi] = useTransition();
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiCandidate, setAiCandidate] = useState<string | null>(null);
+
+  const isBusy = parentPending || aiPending;
+
+  const handleAi = () => {
+    setAiError(null);
+    setAiCandidate(null);
+    startAi(async () => {
+      try {
+        const res = await apiFetch<{ text: string }>(
+          `/api/agency/client-resumes/${resumeId}/ai-write`,
+          { method: "POST", json: { kind } },
+        );
+        if (!res?.text) throw new Error("response_missing_text");
+        setAiCandidate(res.text);
+      } catch (err) {
+        setAiError(getErrorMessage(err));
+      }
+    });
+  };
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between gap-2">
+        <Label>{label}</Label>
+        <Button type="button" size="sm" variant="outline" onClick={handleAi} disabled={isBusy}>
+          {aiPending ? "AI 生成中…" : "AI で生成"}
+        </Button>
+      </div>
+      <Textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={rows}
+        maxLength={maxLength}
+      />
+      {aiError && <p className="text-destructive text-xs">{aiError}</p>}
+      {aiCandidate && (
+        <div className="bg-muted/40 mt-2 space-y-2 rounded-md border p-3">
+          <p className="text-muted-foreground text-xs">AI が生成した文案(プレビュー):</p>
+          <p className="text-foreground text-sm leading-relaxed whitespace-pre-wrap">
+            {aiCandidate}
+          </p>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setAiCandidate(null)}
+              disabled={isBusy}
+            >
+              破棄
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                onChange(aiCandidate);
+                setAiCandidate(null);
+              }}
+              disabled={isBusy}
+            >
+              この文案で上書き
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
