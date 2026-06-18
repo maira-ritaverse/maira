@@ -1,0 +1,182 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { apiFetch, getErrorMessage } from "@/lib/api/client-fetch";
+import type { AgencyClientCv, CvBody } from "@/lib/agency-client-documents/types";
+
+type Props = {
+  clientRecordId: string;
+  cv: AgencyClientCv;
+  isAdmin: boolean;
+};
+
+export function AgencyCvEditor({ clientRecordId, cv, isAdmin }: Props) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+
+  const [title, setTitle] = useState(cv.title);
+  const [documentDate, setDocumentDate] = useState(cv.documentDate ?? "");
+  const [body, setBody] = useState<CvBody>(cv.body);
+
+  const updateBody = (patch: Partial<CvBody>) => setBody((prev) => ({ ...prev, ...patch }));
+
+  const handleSave = (nextStatus?: "draft" | "final") => {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await apiFetch(`/api/agency/client-cvs/${cv.id}`, {
+          method: "PATCH",
+          json: {
+            title,
+            document_date: documentDate || null,
+            body,
+            ...(nextStatus ? { status: nextStatus } : {}),
+          },
+        });
+        setSavedAt(new Date());
+        router.refresh();
+      } catch (err) {
+        setError(getErrorMessage(err));
+      }
+    });
+  };
+
+  const handleDelete = () => {
+    if (!confirm(`「${cv.title}」を削除します。元に戻せません。実行しますか?`)) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        await apiFetch(`/api/agency/client-cvs/${cv.id}`, { method: "DELETE" });
+        router.push(`/agency/clients/${clientRecordId}?tab=documents`);
+        router.refresh();
+      } catch (err) {
+        setError(getErrorMessage(err));
+      }
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      <Card className="space-y-4 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-semibold">基本情報</h2>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+              cv.status === "final"
+                ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-100"
+                : "bg-muted text-muted-foreground"
+            }`}
+          >
+            {cv.status === "final" ? "確定済" : "編集中"}
+          </span>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label htmlFor="title">タイトル</Label>
+            <Input
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={200}
+              disabled={pending}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="documentDate">日付</Label>
+            <Input
+              id="documentDate"
+              type="date"
+              value={documentDate}
+              onChange={(e) => setDocumentDate(e.target.value)}
+              disabled={pending}
+            />
+          </div>
+        </div>
+      </Card>
+
+      <Card className="space-y-4 p-6">
+        <h2 className="text-base font-semibold">本文</h2>
+        <p className="text-muted-foreground text-xs">
+          AES-256-GCM で暗号化保存します。長文(2 万字まで)に対応。
+        </p>
+        <div className="space-y-1">
+          <Label>要約(2000 字以内)</Label>
+          <Textarea
+            value={body.summary}
+            onChange={(e) => updateBody({ summary: e.target.value })}
+            rows={4}
+            maxLength={2000}
+            placeholder="冒頭の職務要約。求人企業が最初に読む 30 秒分。"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label>本文(20000 字以内)</Label>
+          <Textarea
+            value={body.body}
+            onChange={(e) => updateBody({ body: e.target.value })}
+            rows={20}
+            maxLength={20000}
+            placeholder={`【職務経歴】
+○○年○月 〜 ○○年○月 株式会社○○
+  ・担当業務
+  ・実績(数値で書く)
+
+【技術スタック】
+  ・…
+
+【自己 PR】
+  ・…`}
+          />
+        </div>
+      </Card>
+
+      <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
+        <div className="text-muted-foreground text-xs">
+          {savedAt ? `${savedAt.toLocaleTimeString("ja-JP")} に保存しました` : ""}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {isAdmin && (
+            <Button variant="destructive" onClick={handleDelete} disabled={pending}>
+              削除
+            </Button>
+          )}
+          {cv.status === "draft" ? (
+            <>
+              <Button variant="outline" onClick={() => handleSave()} disabled={pending}>
+                {pending ? "保存中…" : "下書き保存"}
+              </Button>
+              <Button onClick={() => handleSave("final")} disabled={pending}>
+                {pending ? "確定中…" : "確定する"}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => handleSave("draft")} disabled={pending}>
+                編集を再開
+              </Button>
+              <Button onClick={() => handleSave()} disabled={pending}>
+                {pending ? "保存中…" : "保存"}
+              </Button>
+            </>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}
