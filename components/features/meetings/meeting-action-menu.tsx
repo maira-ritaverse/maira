@@ -11,6 +11,7 @@
  * モーダルは内部で持つ。完了後に親へ onChanged を通知して再フェッチさせる。
  */
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Calendar, ExternalLink, MoreHorizontal, Trash2, Video } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,27 @@ export function MeetingActionMenu({ meeting, onChanged }: Props) {
   const [showReschedule, setShowReschedule] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  // メニューを document.body に portal で出すので、トリガーボタンの画面座標を
+  // 計算して fixed 配置する。Card の overflow-hidden / 後続セクションの z-index
+  // による「メニューが埋もれる」問題を回避する。
+  // open する瞬間に座標を 計算する(useLayoutEffect だと lint ルールに 引っかかる
+  // ので、トリガー click ハンドラで 同期計算 + setState する)。
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+
+  const toggleMenu = () => {
+    setMenuOpen((prev) => {
+      const next = !prev;
+      if (next && triggerRef.current) {
+        const rect = triggerRef.current.getBoundingClientRect();
+        setMenuPos({
+          top: rect.bottom + 4,
+          right: window.innerWidth - rect.right,
+        });
+      }
+      return next;
+    });
+  };
   /**
    * 現在時刻ベースの判定。
    * SSR で false 初期化 → useEffect で 60 秒ごとに更新することで
@@ -113,48 +135,59 @@ export function MeetingActionMenu({ meeting, onChanged }: Props) {
 
         {/* メニュー(再スケジュール / キャンセル) */}
         {!isPast && meeting.status === "scheduled" && (
-          <div className="relative">
+          <>
             <Button
+              ref={triggerRef}
               size="sm"
               variant="ghost"
-              onClick={() => setMenuOpen((v) => !v)}
+              onClick={toggleMenu}
               disabled={submitting}
               aria-label="メニュー"
             >
               <MoreHorizontal className="size-4" />
             </Button>
-            {menuOpen && (
-              <>
-                <button
-                  type="button"
-                  className="fixed inset-0 z-30"
-                  onClick={() => setMenuOpen(false)}
-                  aria-label="閉じる"
-                />
-                <div className="bg-popover absolute right-0 z-40 mt-1 w-48 rounded-md border shadow-md">
+            {/* メニュー本体は body に portal で出す。これで親 Card の overflow-hidden
+                / 後続セクションの z-index に 埋もれない。トリガーが画面外に出るまで
+                追従させたいなら scroll listener を 足すが、面談履歴 用途では 不要。 */}
+            {menuOpen &&
+              menuPos &&
+              typeof window !== "undefined" &&
+              createPortal(
+                <>
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowReschedule(true);
-                      setMenuOpen(false);
-                    }}
-                    className="hover:bg-accent flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
+                    className="fixed inset-0 z-60"
+                    onClick={() => setMenuOpen(false)}
+                    aria-label="閉じる"
+                  />
+                  <div
+                    className="bg-popover fixed z-61 w-48 rounded-md border shadow-md"
+                    style={{ top: menuPos.top, right: menuPos.right }}
                   >
-                    <Calendar className="size-3.5" />
-                    再スケジュール
-                  </button>
-                  <button
-                    type="button"
-                    onClick={cancel}
-                    className="hover:bg-accent text-destructive flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
-                  >
-                    <Trash2 className="size-3.5" />
-                    キャンセル
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowReschedule(true);
+                        setMenuOpen(false);
+                      }}
+                      className="hover:bg-accent flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
+                    >
+                      <Calendar className="size-3.5" />
+                      再スケジュール
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancel}
+                      className="hover:bg-accent text-destructive flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
+                    >
+                      <Trash2 className="size-3.5" />
+                      キャンセル
+                    </button>
+                  </div>
+                </>,
+                document.body,
+              )}
+          </>
         )}
       </div>
 
