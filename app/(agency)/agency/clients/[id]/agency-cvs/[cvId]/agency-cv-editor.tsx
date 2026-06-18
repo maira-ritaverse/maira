@@ -137,35 +137,28 @@ export function AgencyCvEditor({ clientRecordId, cv, isAdmin }: Props) {
         <p className="text-muted-foreground text-xs">
           AES-256-GCM で暗号化保存します。長文(2 万字まで)に対応。
         </p>
-        <div className="space-y-1">
-          <Label>要約(2000 字以内)</Label>
-          <Textarea
-            value={body.summary}
-            onChange={(e) => updateBody({ summary: e.target.value })}
-            rows={4}
-            maxLength={2000}
-            placeholder="冒頭の職務要約。求人企業が最初に読む 30 秒分。"
-          />
-        </div>
-        <div className="space-y-1">
-          <Label>本文(20000 字以内)</Label>
-          <Textarea
-            value={body.body}
-            onChange={(e) => updateBody({ body: e.target.value })}
-            rows={20}
-            maxLength={20000}
-            placeholder={`【職務経歴】
-○○年○月 〜 ○○年○月 株式会社○○
-  ・担当業務
-  ・実績(数値で書く)
-
-【技術スタック】
-  ・…
-
-【自己 PR】
-  ・…`}
-          />
-        </div>
+        <CvFieldWithAi
+          cvId={cv.id}
+          kind="cv_summary"
+          label="要約(2000 字以内)"
+          value={body.summary}
+          onChange={(v) => updateBody({ summary: v })}
+          rows={4}
+          maxLength={2000}
+          placeholder="冒頭の職務要約。求人企業が最初に読む 30 秒分。"
+          parentPending={pending}
+        />
+        <CvFieldWithAi
+          cvId={cv.id}
+          kind="cv_body"
+          label="本文(20000 字以内)"
+          value={body.body}
+          onChange={(v) => updateBody({ body: v })}
+          rows={20}
+          maxLength={20000}
+          placeholder={`【職務経歴】\n○○年○月 〜 ○○年○月 株式会社○○\n  ・担当業務\n  ・実績(数値で書く)\n\n【技術スタック】\n  ・…\n\n【自己 PR】\n  ・…`}
+          parentPending={pending}
+        />
       </Card>
 
       <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
@@ -206,6 +199,104 @@ export function AgencyCvEditor({ clientRecordId, cv, isAdmin }: Props) {
           )}
         </div>
       </Card>
+    </div>
+  );
+}
+
+/**
+ * CV 用 Textarea + AI 生成 ボタン。
+ * 履歴書の TextareaWithAi と同じパターンだが、kind を cv_summary / cv_body にする。
+ */
+function CvFieldWithAi({
+  cvId,
+  kind,
+  label,
+  value,
+  onChange,
+  rows,
+  maxLength,
+  placeholder,
+  parentPending,
+}: {
+  cvId: string;
+  kind: "cv_summary" | "cv_body";
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  rows: number;
+  maxLength: number;
+  placeholder?: string;
+  parentPending: boolean;
+}) {
+  const [aiPending, startAi] = useTransition();
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiCandidate, setAiCandidate] = useState<string | null>(null);
+
+  const isBusy = parentPending || aiPending;
+
+  const handleAi = () => {
+    setAiError(null);
+    setAiCandidate(null);
+    startAi(async () => {
+      try {
+        const res = await apiFetch<{ text: string }>(`/api/agency/client-cvs/${cvId}/ai-write`, {
+          method: "POST",
+          json: { kind },
+        });
+        if (!res?.text) throw new Error("response_missing_text");
+        setAiCandidate(res.text);
+      } catch (err) {
+        setAiError(getErrorMessage(err));
+      }
+    });
+  };
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between gap-2">
+        <Label>{label}</Label>
+        <Button type="button" size="sm" variant="outline" onClick={handleAi} disabled={isBusy}>
+          {aiPending ? "AI 生成中…" : "AI で生成"}
+        </Button>
+      </div>
+      <Textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={rows}
+        maxLength={maxLength}
+        placeholder={placeholder}
+      />
+      {aiError && <p className="text-destructive text-xs">{aiError}</p>}
+      {aiCandidate && (
+        <div className="bg-muted/40 mt-2 space-y-2 rounded-md border p-3">
+          <p className="text-muted-foreground text-xs">AI が生成した文案(プレビュー):</p>
+          <p className="text-foreground text-sm leading-relaxed whitespace-pre-wrap">
+            {aiCandidate}
+          </p>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setAiCandidate(null)}
+              disabled={isBusy}
+            >
+              破棄
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                onChange(aiCandidate);
+                setAiCandidate(null);
+              }}
+              disabled={isBusy}
+            >
+              この文案で上書き
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
