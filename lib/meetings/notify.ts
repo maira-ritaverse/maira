@@ -60,7 +60,9 @@ export async function notifyMeetingScheduled(
   };
 
   const meetingHref = buildAbsoluteUrl(`/agency/clients/${ctx.meeting.clientRecordId ?? ""}`);
-  const seekerHref = buildAbsoluteUrl(`/app/dashboard`); // Phase 2.4 で「予定セクション」へ
+  // 求職者向けのダッシュボードは /app(/app/dashboard は存在しない)。
+  // ダッシュボードに「次の面談」カードを置いているので参加 URL は そこから踏める。
+  const seekerHref = buildAbsoluteUrl(`/app`);
   const startsLabel = new Date(ctx.meeting.startsAt).toLocaleString("ja-JP", {
     timeZone: "Asia/Tokyo",
     year: "numeric",

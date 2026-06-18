@@ -1,16 +1,34 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { SeekerMeetingCard } from "@/components/features/meetings/seeker-meeting-card";
+import type { MeetingScheduleView } from "@/lib/meetings/types";
+
+type Props = {
+  /**
+   * 今後の面談予定。新規ユーザー(棚卸し未実施)でも、エージェントが
+   * 既に面談を予約していれば「参加」ボタンを最上段に出す必要があるので
+   * empty 段階のダッシュボードでも meetings を受け取る。
+   */
+  upcomingMeetings: MeetingScheduleView[];
+};
 
 /**
  * 初回ユーザー(career_profile なし)向けのダッシュボード。
  *
  * 何もデータがないので、まずキャリア棚卸しに誘導することに専念する。
  * 4 機能の説明カードはアプリ全体の理解を助けるために併記する。
+ *
+ * ただし「招待されて作ったばかりだが既に面談が組まれている」ケースが
+ * 想定されるため、面談カードは最上段に置いて 参加 URL に即アクセスできる
+ * ようにする(starter / active と同じ SeekerMeetingCard を再利用)。
  */
-export function DashboardEmpty() {
+export function DashboardEmpty({ upcomingMeetings }: Props) {
   return (
     <div className="space-y-6">
+      {/* 面談が組まれていれば最優先で表示(参加ボタン込み)*/}
+      <SeekerMeetingCard meetings={upcomingMeetings} />
+
       {/* メインCTA:棚卸し導線を強調表示 */}
       <Card className="border-primary/40 bg-primary/5 p-6">
         <h2 className="text-lg font-bold">まずはキャリア棚卸しから始めましょう</h2>

@@ -55,7 +55,7 @@ export default async function DashboardPage({
         </p>
       </div>
 
-      {data.status === "empty" && <DashboardEmpty />}
+      {data.status === "empty" && <DashboardEmpty upcomingMeetings={data.upcomingMeetings} />}
       {data.status === "starter" && <DashboardStarter data={data} />}
       {data.status === "active" && <DashboardActive data={data} />}
 

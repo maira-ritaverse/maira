@@ -135,7 +135,7 @@ export async function POST(request: Request) {
     payload: {
       kind: "meeting_invited", // 既存 payload を流用(meeting_review_request 専用は後で追加)
       title: `面談ノートのご確認: ${ms.title}`,
-      href: buildAbsoluteUrl("/app/dashboard"),
+      href: buildAbsoluteUrl("/app"),
       meetingScheduleId: ms.id,
       meetingTitle: ms.title,
       startsAtIso: new Date().toISOString(),
