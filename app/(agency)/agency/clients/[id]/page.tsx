@@ -36,6 +36,7 @@ import { AiMatchingSection } from "./ai-matching-section";
 import { MatchingSection } from "./matching-section";
 import { ScheduleMeetingDialog } from "./schedule-meeting-dialog";
 import { SendEmailDialog } from "./send-email-dialog";
+import { AgencyResumesSection } from "./agency-resumes-section";
 import { DisclosableProfileSection } from "./disclosable-profile-section";
 import { AgencyDocumentsSection } from "./documents-section";
 import { InteractionsSection } from "./interactions-section";
@@ -408,11 +409,19 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
       {activeTab === "documents" && (
         <SectionLayoutContainer
           storageKey="agency-client-detail-documents"
-          defaultOrder={["documents"]}
+          defaultOrder={["agency-resumes", "documents"]}
           titles={{
-            documents: "提出書類(求職者連携時)",
+            "agency-resumes": "履歴書(エージェント作成)",
+            documents: "求職者本人提出の書類(連携時)",
           }}
           sections={{
+            "agency-resumes": (
+              <AgencyResumesSection
+                organizationId={role.organization.id}
+                clientRecordId={client.id}
+                clientName={client.name}
+              />
+            ),
             documents:
               (client.linkStatus === "linked" || client.linkStatus === "revoke_requested") &&
               client.linkedUserId ? (
