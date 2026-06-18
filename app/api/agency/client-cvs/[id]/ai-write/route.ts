@@ -5,6 +5,8 @@ import { readJsonBody, requireOrgMember } from "@/lib/api/auth-guards";
 import { generateCvText } from "@/lib/agency-client-documents/ai-write";
 import { getAgencyClientCv, listHearingSheets } from "@/lib/agency-client-documents/queries";
 import { getClientRecord } from "@/lib/clients/queries";
+import { checkAiUsageLimit, recordAiUsage } from "@/lib/features/ai-usage";
+import { createClient } from "@/lib/supabase/server";
 
 /**
  * POST /api/agency/client-cvs/[id]/ai-write
@@ -28,7 +30,7 @@ type RouteParams = { params: Promise<{ id: string }> };
 export async function POST(request: Request, { params }: RouteParams) {
   const guard = await requireOrgMember();
   if (!guard.ok) return guard.response;
-  const { organization } = guard;
+  const { organization, user } = guard;
 
   const { id: cvId } = await params;
   const body = await readJsonBody(request);
@@ -38,6 +40,22 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json(
       { error: "validation_failed", details: parsed.error.format() },
       { status: 400 },
+    );
+  }
+
+  // 組織横断 月次上限チェック(admin が /agency/settings/ai-usage で設定)
+  const supabase = await createClient();
+  const usage = await checkAiUsageLimit(supabase, user.id, "agency_cv_draft");
+  if (!usage.allowed) {
+    return NextResponse.json(
+      {
+        error: "over_quota",
+        message: `組織の月次 AI 利用上限に達しました(${usage.current} / ${usage.limit})。来月のリセット後、または 管理者が設定変更後に再試行してください。`,
+        current: usage.current,
+        limit: usage.limit,
+        resetsAt: usage.resetsAt,
+      },
+      { status: 429 },
     );
   }
 
@@ -61,5 +79,11 @@ export async function POST(request: Request, { params }: RouteParams) {
   if (!result.ok) {
     return NextResponse.json({ error: "ai_failed", message: result.reason }, { status: 502 });
   }
+
+  await recordAiUsage(supabase, user.id, "agency_cv_draft", {
+    cv_id: cvId,
+    kind: parsed.data.kind,
+  });
+
   return NextResponse.json({ text: result.text });
 }

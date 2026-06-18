@@ -11,7 +11,7 @@ import {
 import { readJsonBody, requireOrgMember } from "@/lib/api/auth-guards";
 import { getCareerProfile } from "@/lib/career/conversations";
 import { getClientRecord } from "@/lib/clients/queries";
-import { recordAiUsage } from "@/lib/features/ai-usage";
+import { checkAiUsageLimit, recordAiUsage } from "@/lib/features/ai-usage";
 import { getJobPosting } from "@/lib/jobs/queries";
 import { getReferral } from "@/lib/referrals/queries";
 
@@ -47,6 +47,21 @@ export async function POST(request: Request) {
   const guard = await requireOrgMember();
   if (!guard.ok) return guard.response;
   const { supabase, organization, user } = guard;
+
+  // 組織横断 月次上限チェック(admin が /agency/settings/ai-usage で設定)
+  const usage = await checkAiUsageLimit(supabase, user.id, "recommendation_letter_draft");
+  if (!usage.allowed) {
+    return NextResponse.json(
+      {
+        error: "over_quota",
+        message: `組織の月次 AI 利用上限に達しました(${usage.current} / ${usage.limit})。来月のリセット後、または 管理者が設定変更後に再試行してください。`,
+        current: usage.current,
+        limit: usage.limit,
+        resetsAt: usage.resetsAt,
+      },
+      { status: 429 },
+    );
+  }
 
   const bodyResult = await readJsonBody(request);
   if (!bodyResult.ok) return bodyResult.response;

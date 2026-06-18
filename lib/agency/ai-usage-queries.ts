@@ -4,6 +4,15 @@
  */
 import { utcMonthStart } from "@/lib/features/usage-limits";
 import { createClient } from "@/lib/supabase/server";
+import {
+  AGENCY_CV_DRAFT_FREE_MONTHLY,
+  AGENCY_RESUME_DRAFT_FREE_MONTHLY,
+  JOB_RECOMMENDATION_AGENCY_FREE_MONTHLY,
+  JOB_RECOMMENDATION_SEEKER_FREE_MONTHLY,
+  PHOTO_ENHANCE_FREE_MONTHLY,
+  RECOMMENDATION_LETTER_DRAFT_FREE_MONTHLY,
+  type AiUsageKind,
+} from "@/lib/features/ai-usage";
 
 export type AiUsageMemberSummary = {
   userId: string;
@@ -77,6 +86,19 @@ export const AI_KIND_LABEL: Record<string, string> = {
   photo_enhance: "AI 証明写真",
   job_recommendation_seeker: "AI 推薦(求職者)",
   job_recommendation_agency: "AI 推薦(エージェント)",
+  recommendation_letter_draft: "推薦文 AI 下書き",
+  agency_cv_draft: "職務経歴書 AI 下書き",
+  agency_resume_draft: "履歴書 AI 下書き",
+};
+
+/** 上限設定 UI で「組織横断」「求職者 1 人あたり」を 表示する分類 */
+export const AI_KIND_SCOPE_LABEL: Record<string, "agency_org" | "seeker_per_user"> = {
+  photo_enhance: "seeker_per_user",
+  job_recommendation_seeker: "seeker_per_user",
+  job_recommendation_agency: "agency_org",
+  recommendation_letter_draft: "agency_org",
+  agency_cv_draft: "agency_org",
+  agency_resume_draft: "agency_org",
 };
 
 /**
@@ -84,10 +106,72 @@ export const AI_KIND_LABEL: Record<string, string> = {
  * 実コストは Anthropic / OpenAI の請求と突合せて確認すること。
  */
 export const AI_KIND_UNIT_COST_USD: Record<string, number> = {
-  photo_enhance: 0.07, // gpt-image-1 medium quality
-  job_recommendation_seeker: 0.02, // Claude Sonnet 1 回ぶんの目安
-  job_recommendation_agency: 0.02,
+  photo_enhance: 0.04, // gpt-image-1 medium quality
+  job_recommendation_seeker: 0.0135, // Claude Sonnet 4.6, 約 2k input + 500 output
+  job_recommendation_agency: 0.0135,
+  recommendation_letter_draft: 0.075, // 推薦文は長め(5k input + 2k output 想定)
+  agency_cv_draft: 0.045, // CV 下書き(4k input + 1.5k output 想定)
+  agency_resume_draft: 0.045,
 };
+
+/** 既定値マップ(レコードが無い kind の フォールバック表示用) */
+export const AI_KIND_FREE_DEFAULT: Record<AiUsageKind, number> = {
+  photo_enhance: PHOTO_ENHANCE_FREE_MONTHLY,
+  job_recommendation_seeker: JOB_RECOMMENDATION_SEEKER_FREE_MONTHLY,
+  job_recommendation_agency: JOB_RECOMMENDATION_AGENCY_FREE_MONTHLY,
+  recommendation_letter_draft: RECOMMENDATION_LETTER_DRAFT_FREE_MONTHLY,
+  agency_cv_draft: AGENCY_CV_DRAFT_FREE_MONTHLY,
+  agency_resume_draft: AGENCY_RESUME_DRAFT_FREE_MONTHLY,
+};
+
+export type AiQuotaRow = {
+  kind: AiUsageKind;
+  /** null = 未設定(既定値が適用) */
+  monthlyLimit: number | null;
+  /** 既定値の参考表示用 */
+  defaultLimit: number;
+  /** 上限の対象(組織横断 or 求職者 1 人あたり) */
+  scope: "agency_org" | "seeker_per_user";
+  updatedAt: string | null;
+};
+
+/**
+ * 自組織の AI quota 設定を 全 kind 分 取得する。
+ * RPC `get_organization_ai_quotas` が 返す行を ベースに、レコードが 無い kind は
+ * monthlyLimit=null として 埋める(UI 側で「既定値」表示)。
+ */
+export async function getOrganizationAiQuotas(): Promise<AiQuotaRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_organization_ai_quotas");
+  if (error) {
+    throw new Error(`get_organization_ai_quotas failed: ${error.message}`);
+  }
+  const rows = (data ?? []) as Array<{
+    kind: string;
+    monthly_limit: number | null;
+    updated_at: string;
+  }>;
+  const byKind = new Map(rows.map((r) => [r.kind, r]));
+
+  const kinds: AiUsageKind[] = [
+    "photo_enhance",
+    "job_recommendation_seeker",
+    "job_recommendation_agency",
+    "recommendation_letter_draft",
+    "agency_cv_draft",
+    "agency_resume_draft",
+  ];
+  return kinds.map((kind) => {
+    const found = byKind.get(kind);
+    return {
+      kind,
+      monthlyLimit: found ? found.monthly_limit : null,
+      defaultLimit: AI_KIND_FREE_DEFAULT[kind],
+      scope: AI_KIND_SCOPE_LABEL[kind],
+      updatedAt: found?.updated_at ?? null,
+    };
+  });
+}
 
 export function estimateCostUsd(byKind: Record<string, number>): number {
   let usd = 0;

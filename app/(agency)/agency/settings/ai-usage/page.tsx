@@ -7,9 +7,12 @@ import {
   estimateCostUsd,
   getOrgAiUsageSummary,
   getOrgAiUsageTrend,
+  getOrganizationAiQuotas,
 } from "@/lib/agency/ai-usage-queries";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient } from "@/lib/supabase/server";
+
+import { AiQuotasForm } from "./ai-quotas-form";
 
 /**
  * /agency/settings/ai-usage
@@ -36,8 +39,13 @@ export default async function AgencyAiUsagePage() {
 
   let summary;
   let trend;
+  let quotas;
   try {
-    [summary, trend] = await Promise.all([getOrgAiUsageSummary(), getOrgAiUsageTrend(6)]);
+    [summary, trend, quotas] = await Promise.all([
+      getOrgAiUsageSummary(),
+      getOrgAiUsageTrend(6),
+      getOrganizationAiQuotas(),
+    ]);
   } catch (err) {
     return (
       <div className="mx-auto max-w-3xl space-y-4 p-6">
@@ -123,6 +131,18 @@ export default async function AgencyAiUsagePage() {
           <span>合計(6 か月):{trend.reduce((s, t) => s + t.total, 0).toLocaleString()} 回</span>
           <span>概算コスト合計:約 ${trend.reduce((s, t) => s + t.costUsd, 0).toFixed(2)} USD</span>
         </div>
+      </Card>
+
+      {/* 管理者専用:AI 月次上限の編集 */}
+      <Card className="space-y-3 p-5">
+        <div>
+          <h2 className="text-base font-semibold">月次上限の設定(管理者専用)</h2>
+          <p className="text-muted-foreground mt-1 text-xs">
+            各 AI 機能の月次利用上限を設定します。空欄=既定値、0=完全停止。 連携している求職者の AI
+            上限もここで管理できます。
+          </p>
+        </div>
+        <AiQuotasForm initial={quotas} />
       </Card>
 
       {/* メンバー別 */}
