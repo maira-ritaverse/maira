@@ -1,19 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
-import { byteaToText, textToByteaInput } from "@/lib/crypto/bytea";
 import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
 import { careerProfileSchema, type CareerProfile, type StoredDiagnosis } from "./profile-schema";
 
 /**
  * キャリア棚卸し用の会話/メッセージ操作ヘルパー
  *
- * 暗号化状況(2 つの対象を別経路で扱う):
- *   - career_messages.encrypted_content (bytea):
- *       現状は AES 暗号化未適用。平文 UTF-8 を bytea にテキスト入力形式
- *       ('\xHEX')で格納する暫定状態。encryption_iv は空 bytea のダミー。
- *       会話履歴は将来的に AES に切り替える予定。
+ * 暗号化境界(2026-06-18 完了):
+ *   - messages.encrypted_content_v2 (text):
+ *       AES-256-GCM の "v{n}:base64url" 暗号文。旧 bytea カラム
+ *       encrypted_content は触らない(マイグレーションで NOT NULL 解除済)。
+ *       既存データのバックフィルは scripts/backfill-field-encryption.ts。
  *   - career_profiles.encrypted_data (text):
  *       既に AES-256-GCM 暗号化済み。v{n}:base64url 形式でテキスト列に格納。
- *       旧 bytea カラムと encryption_iv は DROP 済み(マイグレーション実施済)。
+ *       旧 bytea カラムと encryption_iv は DROP 済み。
  */
 
 export type MessageForChat = {
@@ -69,13 +68,16 @@ export async function verifyConversationOwner(
 
 /**
  * 会話の全メッセージを取得(時系列順)
+ *
+ * 復号は並列で進める(各レコード独立、I/O 待ち時間を圧縮)。
+ * decryptField は v{n}:base64url 暗号文も、バックフィル前の平文も同じ I/F で返す。
  */
 export async function getMessages(conversationId: string): Promise<MessageForChat[]> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("messages")
-    .select("role, encrypted_content")
+    .select("role, encrypted_content_v2")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true });
 
@@ -83,15 +85,16 @@ export async function getMessages(conversationId: string): Promise<MessageForCha
     throw new Error(`Failed to fetch messages: ${error.message}`);
   }
 
-  return (data ?? []).map((row) => ({
-    role: row.role as MessageForChat["role"],
-    content: byteaToText(row.encrypted_content),
-  }));
+  return await Promise.all(
+    (data ?? []).map(async (row) => ({
+      role: row.role as MessageForChat["role"],
+      content: (await decryptField(row.encrypted_content_v2 as string | null)) ?? "",
+    })),
+  );
 }
 
 /**
- * メッセージを保存
- * 暗号化なし版:UTF-8バイト列を bytea に保存
+ * メッセージを保存(AES-256-GCM 暗号化)
  */
 export async function saveMessage(params: {
   conversationId: string;
@@ -104,16 +107,13 @@ export async function saveMessage(params: {
 }): Promise<void> {
   const supabase = await createClient();
 
-  const contentBytea = textToByteaInput(params.content);
-  // 暗号化なし版のダミーIV(本実装で本物のIVに置き換える)
-  const dummyIv = textToByteaInput("");
+  const ciphertext = await encryptField(params.content);
 
   const { error: insertError } = await supabase.from("messages").insert({
     conversation_id: params.conversationId,
     user_id: params.userId,
     role: params.role,
-    encrypted_content: contentBytea,
-    encryption_iv: dummyIv,
+    encrypted_content_v2: ciphertext,
     model_used: params.modelUsed,
     input_tokens: params.inputTokens,
     output_tokens: params.outputTokens,
@@ -159,11 +159,6 @@ export async function listCareerConversations(userId: string) {
 
   return data ?? [];
 }
-
-// bytea ⇄ 文字列の相互変換は lib/crypto/bytea.ts に集約済み(本ファイル冒頭で
-// textToByteaInput / byteaToText を import)。以前は同じヘルパーがここに重複
-// 定義されていたが、テスト(lib/crypto/bytea.test.ts)を共通側に集約するため
-// 削除した。挙動は同等(supabase-js が返す \x hex / base64 / Uint8Array を吸収)。
 
 // ====================================================================
 // career_profiles の CRUD ヘルパー

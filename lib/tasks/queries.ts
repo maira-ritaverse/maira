@@ -1,13 +1,16 @@
 import { createClient } from "@/lib/supabase/server";
-import { byteaToText, textToByteaInput } from "@/lib/crypto/bytea";
+import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
 import type { CreateTaskRequest, Task, TaskPriority, TaskStatus, UpdateTaskRequest } from "./types";
 
 /**
  * tasks テーブルの CRUD ヘルパー
  *
- * encrypted_title / encrypted_description は bytea として保存する。
- * 暗号化は未実装(Week 3 で本実装)、現状は UTF-8 バイト列を \xHEX 形式で書き込む。
- * encryption_iv は暗号化前のためダミー(空 bytea)を入れる。
+ * 暗号化(2026-06-18):
+ *   ・encrypted_title_v2 / encrypted_description_v2 (text) に AES-256-GCM の
+ *     "v{n}:base64url" 暗号文を格納する。
+ *   ・旧 encrypted_title / encrypted_description (bytea) は触らない
+ *     (マイグレーションで NOT NULL 解除済み)。
+ *   ・既存データのバックフィルは scripts/backfill-field-encryption.ts で実施。
  */
 
 /**
@@ -23,7 +26,9 @@ export async function listTasksByApplication(
 
   const { data, error } = await supabase
     .from("tasks")
-    .select("*")
+    .select(
+      "id, application_id, encrypted_title_v2, encrypted_description_v2, due_at, status, priority, reminded_at, created_at, updated_at",
+    )
     .eq("user_id", userId)
     .eq("application_id", applicationId)
     .order("due_at", { ascending: true, nullsFirst: false })
@@ -33,7 +38,8 @@ export async function listTasksByApplication(
     throw new Error(`Failed to list tasks: ${error.message}`);
   }
 
-  return (data ?? []).map(mapTaskRow);
+  const rows = (data ?? []) as TaskRow[];
+  return await Promise.all(rows.map(mapTaskRow));
 }
 
 /**
@@ -46,7 +52,9 @@ export async function listAllTasks(userId: string): Promise<Task[]> {
 
   const { data, error } = await supabase
     .from("tasks")
-    .select("*")
+    .select(
+      "id, application_id, encrypted_title_v2, encrypted_description_v2, due_at, status, priority, reminded_at, created_at, updated_at",
+    )
     .eq("user_id", userId)
     .neq("status", "done")
     .order("due_at", { ascending: true, nullsFirst: false });
@@ -55,7 +63,8 @@ export async function listAllTasks(userId: string): Promise<Task[]> {
     throw new Error(`Failed to list all tasks: ${error.message}`);
   }
 
-  return (data ?? []).map(mapTaskRow);
+  const rows = (data ?? []) as TaskRow[];
+  return await Promise.all(rows.map(mapTaskRow));
 }
 
 /**
@@ -64,19 +73,17 @@ export async function listAllTasks(userId: string): Promise<Task[]> {
 export async function createTask(userId: string, input: CreateTaskRequest): Promise<string> {
   const supabase = await createClient();
 
-  const titleBytea = textToByteaInput(input.title);
-  // description は任意。空文字も「中身なし」として null を入れる。
-  const descBytea = input.description ? textToByteaInput(input.description) : null;
-  const dummyIv = textToByteaInput("");
+  const titleCipher = await encryptField(input.title);
+  // description は任意。空文字 / undefined は null として保存。
+  const descCipher = input.description ? await encryptField(input.description) : null;
 
   const { data, error } = await supabase
     .from("tasks")
     .insert({
       user_id: userId,
       application_id: input.application_id ?? null,
-      encrypted_title: titleBytea,
-      encrypted_description: descBytea,
-      encryption_iv: dummyIv,
+      encrypted_title_v2: titleCipher,
+      encrypted_description_v2: descCipher,
       due_at: input.due_at ?? null,
       priority: input.priority ?? 0,
       status: "pending",
@@ -108,10 +115,12 @@ export async function updateTask(
   };
 
   if (input.title !== undefined) {
-    updates.encrypted_title = textToByteaInput(input.title);
+    updates.encrypted_title_v2 = await encryptField(input.title);
   }
   if (input.description !== undefined) {
-    updates.encrypted_description = input.description ? textToByteaInput(input.description) : null;
+    updates.encrypted_description_v2 = input.description
+      ? await encryptField(input.description)
+      : null;
   }
   if (input.due_at !== undefined) updates.due_at = input.due_at;
   if (input.status !== undefined) updates.status = input.status;
@@ -148,8 +157,8 @@ export async function deleteTask(taskId: string, userId: string): Promise<void> 
 type TaskRow = {
   id: string;
   application_id: string | null;
-  encrypted_title: unknown;
-  encrypted_description: unknown;
+  encrypted_title_v2: string | null;
+  encrypted_description_v2: string | null;
   due_at: string | null;
   status: string;
   priority: number;
@@ -158,12 +167,22 @@ type TaskRow = {
   updated_at: string;
 };
 
-function mapTaskRow(row: TaskRow): Task {
+/**
+ * decryptField は "v{n}:..." 暗号文も バックフィル前の平文も同じ I/F で返す
+ * (プレフィックス無しはそのまま返す仕様)。title は NOT NULL の論理セマンティクス
+ * なので、null / undefined のときは空文字でフォールバック。
+ */
+async function mapTaskRow(row: TaskRow): Promise<Task> {
+  const title = (await decryptField(row.encrypted_title_v2)) ?? "";
+  const description = row.encrypted_description_v2
+    ? ((await decryptField(row.encrypted_description_v2)) ?? null)
+    : null;
+
   return {
     id: row.id,
     application_id: row.application_id,
-    title: byteaToText(row.encrypted_title),
-    description: row.encrypted_description ? byteaToText(row.encrypted_description) : null,
+    title,
+    description,
     due_at: row.due_at,
     status: row.status as TaskStatus,
     priority: row.priority as TaskPriority,

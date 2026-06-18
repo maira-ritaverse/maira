@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { byteaToText, textToByteaInput } from "@/lib/crypto/bytea";
+import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
 import {
   applicationDetailsSchema,
   type Application,
@@ -12,9 +12,10 @@ import {
 /**
  * applications テーブルの CRUD ヘルパー
  *
- * 暗号化は未実装(Week 3 で本実装)。
- * 現状は JSON 文字列を bytea のテキスト入力形式(\xHEX)で書き込む。
- * encryption_iv は暗号化前のためダミー(空 bytea)を入れる。
+ * 暗号化(2026-06-18):
+ *   ・encrypted_details_v2 (text) に AES-256-GCM の "v{n}:base64url" 暗号文を格納。
+ *   ・旧 encrypted_details (bytea) は触らない(マイグレーションで NOT NULL 解除済み)。
+ *   ・既存データのバックフィルは scripts/backfill-field-encryption.ts で実施。
  *
  * いずれの関数も userId を引数で受け取り、RLS とは別にアプリ側でも
  * 所有者一致を絞り込んで返す(防御的二重チェック)。
@@ -42,7 +43,9 @@ export async function listApplications(
 
   let query = supabase
     .from("applications")
-    .select("*")
+    .select(
+      "id, encrypted_details_v2, status, applied_at, next_action_at, is_archived, created_at, updated_at",
+    )
     .eq("user_id", userId)
     .eq("is_archived", false);
 
@@ -56,7 +59,9 @@ export async function listApplications(
     throw new Error(`Failed to list applications: ${error.message}`);
   }
 
-  return (data ?? []).map(mapApplicationRow);
+  // 復号は並列で進める(各レコード独立)
+  const rows = (data ?? []) as ApplicationRow[];
+  return await Promise.all(rows.map(mapApplicationRow));
 }
 
 /**
@@ -70,14 +75,16 @@ export async function getApplication(
 
   const { data, error } = await supabase
     .from("applications")
-    .select("*")
+    .select(
+      "id, encrypted_details_v2, status, applied_at, next_action_at, is_archived, created_at, updated_at",
+    )
     .eq("id", applicationId)
     .eq("user_id", userId)
     .maybeSingle();
 
   if (error || !data) return null;
 
-  return mapApplicationRow(data);
+  return await mapApplicationRow(data as ApplicationRow);
 }
 
 /**
@@ -91,16 +98,14 @@ export async function createApplication(
 ): Promise<string> {
   const supabase = await createClient();
 
-  // 平文 JSON を bytea のテキスト入力形式で書き込む
-  const detailsBytea = textToByteaInput(JSON.stringify(input.details));
-  const dummyIv = textToByteaInput("");
+  // 平文 JSON を AES-256-GCM で暗号化
+  const ciphertext = await encryptField(JSON.stringify(input.details));
 
   const { data, error } = await supabase
     .from("applications")
     .insert({
       user_id: userId,
-      encrypted_details: detailsBytea,
-      encryption_iv: dummyIv,
+      encrypted_details_v2: ciphertext,
       status: input.status ?? "considering",
       applied_at: input.applied_at ?? null,
       next_action_at: input.next_action_at ?? null,
@@ -133,8 +138,7 @@ export async function updateApplication(
   };
 
   if (input.details) {
-    updates.encrypted_details = textToByteaInput(JSON.stringify(input.details));
-    updates.encryption_iv = textToByteaInput("");
+    updates.encrypted_details_v2 = await encryptField(JSON.stringify(input.details));
   }
 
   if (input.status !== undefined) updates.status = input.status;
@@ -196,7 +200,7 @@ export async function verifyApplicationOwner(
 
 type ApplicationRow = {
   id: string;
-  encrypted_details: unknown;
+  encrypted_details_v2: string | null;
   status: string;
   applied_at: string | null;
   next_action_at: string | null;
@@ -208,13 +212,14 @@ type ApplicationRow = {
 /**
  * DB の行を Application 型に変換する。
  *
- * 暗号化されていない現状でも、details は JSON.parse + zod 検証で
- * 想定外データから UI を守る。
+ * 復号 → JSON.parse → zod 検証。失敗時はフォールバックを返して UI を守る。
+ * decryptField は "v{n}:..." 形式の暗号文も、バックフィル前の平文も
+ * 同じインタフェースで返してくれる(プレフィックス無しはそのまま返す仕様)。
  */
-function mapApplicationRow(row: ApplicationRow): Application {
+async function mapApplicationRow(row: ApplicationRow): Promise<Application> {
   let details: ApplicationDetails = PARSE_ERROR_DETAILS;
 
-  const detailsJson = byteaToText(row.encrypted_details);
+  const detailsJson = await decryptField(row.encrypted_details_v2);
   if (detailsJson) {
     try {
       const parsed = applicationDetailsSchema.safeParse(JSON.parse(detailsJson));
