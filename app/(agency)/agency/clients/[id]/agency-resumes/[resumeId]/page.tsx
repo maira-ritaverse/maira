@@ -2,12 +2,17 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import {
+  AGENCY_PHOTO_SIGNED_URL_PREVIEW_EXPIRES_SEC,
+  createAgencyClientPhotoSignedUrl,
+} from "@/lib/agency-client-documents/photo-signed-url";
 import { getAgencyClientResume } from "@/lib/agency-client-documents/queries";
 import { getClientRecord } from "@/lib/clients/queries";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient } from "@/lib/supabase/server";
 
 import { AgencyResumeEditor } from "./agency-resume-editor";
+import { AgencyResumePhoto } from "./agency-resume-photo";
 
 /**
  * /agency/clients/[id]/agency-resumes/[resumeId]
@@ -52,6 +57,16 @@ export default async function AgencyResumeEditPage({ params }: RouteParams) {
     notFound();
   }
 
+  // 写真の署名 URL は SSR で発行(エージェントセッションで Storage RLS を通す)。
+  // 発行失敗時はプレースホルダにフォールバック。
+  let photoSignedUrl: string | null = null;
+  if (resume.photoStoragePath) {
+    photoSignedUrl = await createAgencyClientPhotoSignedUrl(
+      resume.photoStoragePath,
+      AGENCY_PHOTO_SIGNED_URL_PREVIEW_EXPIRES_SEC,
+    );
+  }
+
   return (
     <div className="mx-auto max-w-4xl space-y-4 px-4 py-6 lg:px-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -74,6 +89,12 @@ export default async function AgencyResumeEditPage({ params }: RouteParams) {
           一覧へ戻る
         </Button>
       </div>
+
+      <AgencyResumePhoto
+        resumeId={resume.id}
+        initialPreviewUrl={photoSignedUrl}
+        hasPhoto={resume.photoStoragePath !== null}
+      />
 
       <AgencyResumeEditor
         clientRecordId={clientRecordId}
