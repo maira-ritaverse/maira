@@ -26,19 +26,37 @@ type InvitationContext = {
   role: OrganizationRole;
 };
 
-type Props = {
-  /**
-   * 招待トークン経由のサインアップであれば、招待行から取り出した
-   * 「信頼できる」コンテキスト。null の場合は通常の求職者向けサインアップ。
-   * email は招待のものに固定(readonly)し、フォーム側で書き換え不可。
-   */
-  invitation: InvitationContext | null;
+type ClientInvitationContext = {
+  token: string;
+  email: string;
+  organizationName: string;
+  seekerName: string;
 };
 
-export function SignupForm({ invitation }: Props) {
+type Props = {
+  /**
+   * エージェントメンバー招待の場合の信頼コンテキスト(null = 招待なし or 求職者招待)。
+   * email は招待のものに固定し、フォーム側で書き換え不可。
+   */
+  invitation: InvitationContext | null;
+  /**
+   * 求職者(client_record)招待の場合の信頼コンテキスト(null = 招待なし or メンバー招待)。
+   * email は招待のものに固定し、フォーム側で書き換え不可。
+   * 受諾は callback の accept_client_invitation RPC が email 一致で自動実行する
+   * (Server Action 側で /invite/[token] に next 飛ばさない)。
+   */
+  clientInvitation: ClientInvitationContext | null;
+};
+
+export function SignupForm({ invitation, clientInvitation }: Props) {
   const router = useRouter();
   const [isPending, setIsPending] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+
+  // 招待の種類に応じて 初期値 / 表示文言を切り替える。同時に両方は来ない前提。
+  const lockedEmail = invitation?.email ?? clientInvitation?.email;
+  const lockedToken = invitation?.token;
+  const lockedClientToken = clientInvitation?.token;
 
   const {
     register,
@@ -46,12 +64,11 @@ export function SignupForm({ invitation }: Props) {
     formState: { errors },
   } = useForm<SignupInput>({
     resolver: zodResolver(signupSchema),
-    defaultValues: invitation
-      ? {
-          email: invitation.email,
-          invitationToken: invitation.token,
-        }
-      : undefined,
+    defaultValues: {
+      email: lockedEmail,
+      invitationToken: lockedToken,
+      clientInvitationToken: lockedClientToken,
+    },
   });
 
   const onSubmit = async (data: SignupInput) => {
@@ -59,14 +76,13 @@ export function SignupForm({ invitation }: Props) {
     setServerError(null);
 
     // 招待経由なら email は招待のものに必ず差し替え(クライアント改ざん対策)
-    // invitationToken は招待 context にあるものを使う。
-    const payload: SignupInput = invitation
-      ? {
-          ...data,
-          email: invitation.email,
-          invitationToken: invitation.token,
-        }
-      : { ...data, invitationToken: undefined };
+    // 同様に token も招待 context のものを使う(hidden の改ざんを上書き)。
+    const payload: SignupInput = {
+      ...data,
+      email: lockedEmail ?? data.email,
+      invitationToken: lockedToken,
+      clientInvitationToken: lockedClientToken,
+    };
 
     const result = await signup(payload);
 
@@ -81,18 +97,24 @@ export function SignupForm({ invitation }: Props) {
     }
   };
 
+  const headerTitle = invitation
+    ? "招待を受けて登録"
+    : clientInvitation
+      ? "Maira を始める(招待を受けて)"
+      : "Mairaを始める";
+
+  const headerSubtitle = invitation
+    ? `${invitation.organizationName} に ${roleLabel[invitation.role]} として参加します`
+    : clientInvitation
+      ? `${clientInvitation.organizationName} からの招待を受けて Maira を始めます`
+      : "あなただけのAI転職エージェント";
+
   return (
     <main className="bg-background flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center">
-          <h1 className="text-3xl font-bold">
-            {invitation ? "招待を受けて登録" : "Mairaを始める"}
-          </h1>
-          <p className="text-muted-foreground mt-2 text-sm">
-            {invitation
-              ? `${invitation.organizationName} に ${roleLabel[invitation.role]} として参加します`
-              : "あなただけのAI転職エージェント"}
-          </p>
+          <h1 className="text-3xl font-bold">{headerTitle}</h1>
+          <p className="text-muted-foreground mt-2 text-sm">{headerSubtitle}</p>
         </div>
 
         {invitation && (
@@ -104,11 +126,22 @@ export function SignupForm({ invitation }: Props) {
           </Alert>
         )}
 
+        {clientInvitation && (
+          <Alert>
+            <AlertDescription>
+              <span className="font-medium">{clientInvitation.organizationName}</span> からの招待で
+              <span className="font-medium"> {clientInvitation.email}</span>{" "}
+              で登録します。メールアドレスは変更できません。
+            </AlertDescription>
+          </Alert>
+        )}
+
         <div className="bg-card space-y-4 rounded-lg border p-6">
           {/* Google で登録(優先導線、招待トークンも引き継ぐ) */}
           <GoogleSignInButton
-            label={invitation ? "Google で登録(招待)" : "Google で登録"}
+            label={invitation || clientInvitation ? "Google で登録(招待)" : "Google で登録"}
             invitationToken={invitation?.token}
+            clientInvitationToken={clientInvitation?.token}
           />
 
           {/* or 区切り */}
@@ -147,9 +180,9 @@ export function SignupForm({ invitation }: Props) {
                 placeholder="you@example.com"
                 {...register("email")}
                 // 招待経由は招待メール固定(変更不可)
-                readOnly={!!invitation}
+                readOnly={!!lockedEmail}
                 disabled={isPending}
-                className={invitation ? "bg-muted cursor-not-allowed" : undefined}
+                className={lockedEmail ? "bg-muted cursor-not-allowed" : undefined}
               />
               {errors.email && <p className="text-sm text-red-600">{errors.email.message}</p>}
             </div>
@@ -166,9 +199,16 @@ export function SignupForm({ invitation }: Props) {
               {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
             </div>
 
-            {/* invitationToken は hidden で保持(Server Action 側でも上書きするが、保険) */}
+            {/* トークンは hidden で保持(Server Action 側でも上書きするが、保険) */}
             {invitation && (
               <input type="hidden" {...register("invitationToken")} value={invitation.token} />
+            )}
+            {clientInvitation && (
+              <input
+                type="hidden"
+                {...register("clientInvitationToken")}
+                value={clientInvitation.token}
+              />
             )}
 
             {/* 利用規約 + プライバシーポリシー同意(ADR 0006)。
@@ -206,7 +246,13 @@ export function SignupForm({ invitation }: Props) {
             </div>
 
             <Button type="submit" className="w-full" disabled={isPending}>
-              {isPending ? "登録中..." : invitation ? "登録して参加する" : "新規登録"}
+              {isPending
+                ? "登録中..."
+                : invitation
+                  ? "登録して参加する"
+                  : clientInvitation
+                    ? "登録して始める"
+                    : "新規登録"}
             </Button>
           </form>
         </div>
@@ -214,7 +260,13 @@ export function SignupForm({ invitation }: Props) {
         <p className="text-muted-foreground text-center text-sm">
           既にアカウントをお持ちですか?{" "}
           <Link
-            href={invitation ? `/login?next=/invite/${invitation.token}` : "/login"}
+            href={
+              invitation
+                ? `/login?next=/invite/${invitation.token}`
+                : clientInvitation
+                  ? `/login?next=/app`
+                  : "/login"
+            }
             className="text-foreground font-medium underline"
           >
             ログイン

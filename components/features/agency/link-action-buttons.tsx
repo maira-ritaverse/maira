@@ -18,25 +18,35 @@ import { Button } from "@/components/ui/button";
 /**
  * エージェント側:クライアント詳細での連携アクション
  *
- * - InviteClientButton    :unlinked|revoked → invited(POST /invite)
+ * - InviteClientButton    :unlinked|revoked → invited
+ *                          POST /api/agency/clients/[id]/invite
+ *                          (RPC でトークン発行 + Resend メール送信)
+ * - ResendInvitationButton:invited のまま 新トークン発行 + メール再送
+ *                          POST /api/agency/clients/[id]/invite と同じエンドポイント
+ *                          (RPC が link_status='invited' でも 5 分クールダウンで受け付ける)
  * - CancelInvitationButton:invited → unlinked(DELETE /invite)
  * - ApproveRevokeButton   :revoke_requested → revoked(POST /revoke-approve、P4)
  *
  * 認可・遷移検証は SECURITY DEFINER RPC で完結する。本コンポーネントは
  * 「fetch して、成功で router.refresh / 失敗でメッセージ」のみ担当。
- *
- * 招待は確認なしで実行できる軽い操作にし(求職者承認まで実害なし)、取消・承認は
- * 相手側に影響する破壊的操作なので AlertDialog で確認を取る。
  */
 
-type CommonResponse = { error?: string; message?: string };
+type CommonResponse = {
+  error?: string;
+  message?: string;
+  emailStatus?: { sent: true } | { sent: false; reason: string };
+  inviteUrl?: string;
+};
 
-async function postInvite(clientRecordId: string) {
+type IssueInvitationResponse = CommonResponse;
+
+async function postInvite(clientRecordId: string): Promise<IssueInvitationResponse> {
   const r = await fetch(`/api/agency/clients/${clientRecordId}/invite`, { method: "POST" });
+  const json = (await r.json().catch(() => ({}))) as IssueInvitationResponse;
   if (!r.ok) {
-    const j = (await r.json().catch(() => ({}))) as CommonResponse;
-    throw new Error(j.message ?? j.error ?? "招待に失敗しました");
+    throw new Error(json.message ?? json.error ?? "招待に失敗しました");
   }
+  return json;
 }
 
 async function deleteInvite(clientRecordId: string) {
@@ -57,6 +67,17 @@ async function postApproveRevoke(clientRecordId: string) {
   }
 }
 
+function feedbackFromResponse(res: IssueInvitationResponse, defaultSuccess: string): string {
+  if (res.emailStatus?.sent) return defaultSuccess;
+  if (res.emailStatus && !res.emailStatus.sent) {
+    if (res.emailStatus.reason === "not_configured") {
+      return "招待は発行されました(メール送信は未設定のためスキップ)";
+    }
+    return "招待は発行されましたが、メール送信に失敗しました。少し時間をおいて再送してください。";
+  }
+  return defaultSuccess;
+}
+
 // ====================================================================
 // 招待を出す(unlinked|revoked → invited)
 // ====================================================================
@@ -64,12 +85,15 @@ export function InviteClientButton({ clientRecordId }: { clientRecordId: string 
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const handleClick = () => {
     setError(null);
+    setSuccess(null);
     startTransition(async () => {
       try {
-        await postInvite(clientRecordId);
+        const res = await postInvite(clientRecordId);
+        setSuccess(feedbackFromResponse(res, "招待メールを送信しました"));
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "通信エラーが発生しました");
@@ -85,6 +109,56 @@ export function InviteClientButton({ clientRecordId }: { clientRecordId: string 
       {error && (
         <p className="text-sm text-red-600" role="alert">
           {error}
+        </p>
+      )}
+      {success && (
+        <p className="text-sm text-emerald-700" role="status">
+          {success}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ====================================================================
+// 招待メールを再送する(invited → invited、新トークン発行 + メール再送)
+//
+// 5 分以内の再送は RPC 側でクールダウン拒否される(HTTP 429)。
+// UX としては「押せるが押すと 429 で怒られる」より「ボタン押下時に拒否表示」だけで十分。
+// ====================================================================
+export function ResendInvitationButton({ clientRecordId }: { clientRecordId: string }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const handleClick = () => {
+    setError(null);
+    setSuccess(null);
+    startTransition(async () => {
+      try {
+        const res = await postInvite(clientRecordId);
+        setSuccess(feedbackFromResponse(res, "招待メールを再送しました"));
+        router.refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "通信エラーが発生しました");
+      }
+    });
+  };
+
+  return (
+    <div className="space-y-2">
+      <Button size="sm" variant="outline" onClick={handleClick} disabled={isPending}>
+        {isPending ? "再送中..." : "招待メールを再送する"}
+      </Button>
+      {error && (
+        <p className="text-sm text-red-600" role="alert">
+          {error}
+        </p>
+      )}
+      {success && (
+        <p className="text-sm text-emerald-700" role="status">
+          {success}
         </p>
       )}
     </div>

@@ -7,6 +7,7 @@ import {
   ApproveRevokeButton,
   CancelInvitationButton,
   InviteClientButton,
+  ResendInvitationButton,
 } from "@/components/features/agency/link-action-buttons";
 import { getClientRecordWithDecrypted } from "@/lib/clients/queries";
 import { clientLinkStatusLabels, clientStatusLabels } from "@/lib/clients/types";
@@ -248,17 +249,27 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
       {client.linkStatus === "unlinked" && (
         <Card className="border-muted-foreground/20 bg-muted/30 space-y-3 p-4">
           <p className="text-sm">
-            このクライアントはまだMairaアカウントと連携していません。 求職者が{" "}
-            <span className="font-medium">{client.email}</span> でMairaに登録した後、
-            「連携を招待する」を押すと招待が届き、求職者が承諾すると共有書類を閲覧できます。
+            このクライアントはまだ Maira アカウントと連携していません。「連携を招待する」を押すと{" "}
+            <span className="font-medium">{client.email}</span>{" "}
+            に招待メールを送信します。求職者がメールから登録 + メール認証を完了すると
+            自動的に連携状態になり、共有書類を閲覧できるようになります。
           </p>
           <InviteClientButton clientRecordId={client.id} />
         </Card>
       )}
       {client.linkStatus === "invited" && (
-        <Card className="bg-muted/30 flex items-center justify-between gap-4 p-4">
-          <p className="text-sm">連携招待を送信済みです。求職者の承諾を待っています。</p>
-          <CancelInvitationButton clientRecordId={client.id} />
+        <Card className="bg-muted/30 space-y-3 p-4">
+          <p className="text-sm">
+            連携招待を <span className="font-medium">{client.email}</span> に送信済みです。
+            求職者が登録 + メール認証を完了するのを待っています。
+          </p>
+          <p className="text-muted-foreground text-xs">
+            届いていない場合は再送できます(直近 5 分以内の再送はクールダウンで拒否されます)。
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <ResendInvitationButton clientRecordId={client.id} />
+            <CancelInvitationButton clientRecordId={client.id} />
+          </div>
         </Card>
       )}
       {client.linkStatus === "linked" && (

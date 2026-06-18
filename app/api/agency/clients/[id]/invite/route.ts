@@ -1,25 +1,33 @@
 import { NextResponse } from "next/server";
+
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { sendClientInvitationEmail } from "@/lib/email/client-invitation";
 import { getUserRole } from "@/lib/organizations/queries";
+import {
+  defaultInvitationExpiresAt,
+  generateInvitationToken,
+} from "@/lib/organizations/invitations";
 
 /**
  * エージェント側:クライアント連携の招待発行 / 取消
  *
- * 設計:
- *   - POST   /api/agency/clients/[id]/invite  → invite_client_record   (unlinked|revoked → invited)
- *   - DELETE /api/agency/clients/[id]/invite  → cancel_client_invitation (invited → unlinked)
+ * - POST   /api/agency/clients/[id]/invite  → issue_client_invitation
+ *   (unlinked|revoked → invited、または invited から再送 = ResendInvitationButton)
+ * - DELETE /api/agency/clients/[id]/invite  → cancel_client_invitation
+ *   (invited → unlinked、pending な client_invitations も revoke)
  *
- * 認可・遷移検証・メール一致は SECURITY DEFINER RPC 側で完結する。
- * 本ハンドラは「認証 + organization_member ガード」と「RPC エラー → HTTP ステータス
- * マッピング」のみを担当する薄いラッパー。同じ手厚さの検証を二重に書かないため
- * 多くを RPC に寄せている。
+ * 認可・遷移検証は SECURITY DEFINER RPC 側で完結する。
+ * 本ハンドラの責務:
+ *   ・認証 + organization_member ガード
+ *   ・トークン生成(crypto.randomBytes)
+ *   ・RPC 呼び出し
+ *   ・成功時のみ Resend でメール送信
+ *   ・RPC エラー → HTTP ステータス マッピング
  */
 
 type RouteParams = { params: Promise<{ id: string }> };
 
-// RPC が raise してくる例外シンボル → HTTP ステータス + ユーザー向け文言
-// 既存 invite/[token]/actions.ts の前方一致パターンに揃える(error.message に
-// "unauthenticated" 等のシンボルが含まれる前提で includes 判定)。
 function mapRpcError(message: string): { status: number; code: string; message: string } {
   if (message.includes("unauthenticated")) {
     return { status: 401, code: "unauthenticated", message: "ログインしてください" };
@@ -29,6 +37,13 @@ function mapRpcError(message: string): { status: number; code: string; message: 
   }
   if (message.includes("not_found")) {
     return { status: 404, code: "not_found", message: "クライアントが見つかりません" };
+  }
+  if (message.includes("resend_too_soon")) {
+    return {
+      status: 429,
+      code: "resend_too_soon",
+      message: "前回の送信から 5 分以内は再送できません。少し待ってからお試しください。",
+    };
   }
   if (message.includes("invalid_state")) {
     return {
@@ -61,16 +76,23 @@ async function ensureAgencyMember() {
     };
   }
 
-  return { ok: true as const, supabase };
+  return { ok: true as const, supabase, user, role };
 }
 
-export async function POST(_request: Request, { params }: RouteParams) {
+export async function POST(request: Request, { params }: RouteParams) {
   const { id } = await params;
   const guard = await ensureAgencyMember();
   if (!guard.ok) return guard.response;
 
-  const { error } = await guard.supabase.rpc("invite_client_record", {
+  // 1. トークン + 期限を発行(7 日)
+  const token = generateInvitationToken();
+  const expiresAt = defaultInvitationExpiresAt();
+
+  // 2. RPC で 招待行 insert + client_records.link_status='invited' + 古い pending を revoke
+  const { data: invitationId, error } = await guard.supabase.rpc("issue_client_invitation", {
     p_client_record_id: id,
+    p_token: token,
+    p_expires_at: expiresAt.toISOString(),
   });
 
   if (error) {
@@ -81,7 +103,66 @@ export async function POST(_request: Request, { params }: RouteParams) {
     );
   }
 
-  return NextResponse.json({ success: true });
+  // 3. メール送信:client_records から email / name と 担当アドバイザー名 を取り出す
+  //    service_role で読む(認可は RPC で済んでいる)。
+  const service = createServiceClient();
+  const { data: clientRow } = await service
+    .from("client_records")
+    .select("name, email, assigned_member_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!clientRow) {
+    // RPC が通って client_record が見つからないのは想定外。invitation_id は発行済み。
+    return NextResponse.json(
+      { success: true, invitationId, emailStatus: { sent: false, reason: "client_not_found" } },
+      { status: 201 },
+    );
+  }
+
+  // 担当アドバイザー名(任意)
+  let advisorName: string | null = null;
+  if (clientRow.assigned_member_id) {
+    const { data: memberRow } = await service
+      .from("organization_members")
+      .select("user_id")
+      .eq("id", clientRow.assigned_member_id)
+      .maybeSingle();
+    if (memberRow?.user_id) {
+      const { data: profile } = await service
+        .from("profiles")
+        .select("display_name")
+        .eq("id", memberRow.user_id)
+        .maybeSingle();
+      advisorName = (profile?.display_name as string | undefined) ?? null;
+    }
+  }
+
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ?? new URL(request.url).origin.replace(/\/+$/, "");
+  const inviteUrl = `${siteUrl.replace(/\/+$/, "")}/signup?clientInvitationToken=${encodeURIComponent(token)}`;
+
+  const organizationName = guard.role.organization!.name;
+
+  const emailResult = await sendClientInvitationEmail({
+    toEmail: clientRow.email as string,
+    seekerName: (clientRow.name as string) ?? "",
+    organizationName,
+    advisorName,
+    inviteUrl,
+    expiresAt,
+  });
+
+  return NextResponse.json(
+    {
+      success: true,
+      invitationId,
+      inviteUrl,
+      expiresAt: expiresAt.toISOString(),
+      emailStatus: emailResult.sent ? { sent: true } : { sent: false, reason: emailResult.reason },
+    },
+    { status: 201 },
+  );
 }
 
 export async function DELETE(_request: Request, { params }: RouteParams) {

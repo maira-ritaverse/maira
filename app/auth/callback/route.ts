@@ -38,6 +38,20 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
   }
 
+  // ─── 求職者(client_record)招待の自動受諾 ─────────────────────────
+  // pending な client_invitations が「caller の email と一致」していれば
+  // accept する。トークンの受け渡し無しで成立させるため、callback で
+  // 常時呼ぶ(該当無しは no-op)。
+  // 失敗しても認証自体は成立済みなので、ログだけ残して継続する。
+  try {
+    const { error: acceptErr } = await supabase.rpc("accept_client_invitation");
+    if (acceptErr) {
+      console.error("[auth/callback] accept_client_invitation failed", acceptErr.message);
+    }
+  } catch (err) {
+    console.error("[auth/callback] accept_client_invitation threw", err);
+  }
+
   // ─── Google OAuth の戻りなら provider_token を google_connections に保存 ────
   // Supabase の session.provider_token / provider_refresh_token は
   // この exchangeCodeForSession の直後にだけ取得できる。

@@ -13,28 +13,49 @@ type InvitationRow = {
   organizations: { name: string } | { name: string }[] | null;
 };
 
+type ClientInvitationRow = {
+  email: string;
+  status: "pending" | "accepted" | "expired" | "revoked";
+  expires_at: string;
+  organization_id: string;
+  client_record_id: string;
+  organizations: { name: string } | { name: string }[] | null;
+  client_records: { name: string } | { name: string }[] | null;
+};
+
 /**
  * サインアップページ(Server Component)
  *
- * 通常の求職者向けサインアップ + 招待経由のサインアップを 1 ページで扱う。
- * - ?invitationToken=xxx が付いていれば、招待行を service_role で検証
- *   (有効・pending・期限内)し、招待メール/組織名/role を Client Form に渡す
- * - 無効な token / 期限切れ / 既受諾の招待は無視して通常のサインアップに倒す
- *   (UX:エラー画面より「普通に登録できる」方が脱落が少ない。あえて止めない)
+ * 3 系統のサインアップを 1 ページで扱う:
  *
- * email は招待のものを信頼境界として採用する。
- *   URL の ?email= は使わない(改ざんで誤誘導される余地を消す)。
- *   Client 側でも email は readonly + Server Action 側で再上書き。
+ *  A) ?invitationToken=xxx        … エージェントメンバー招待
+ *  B) ?clientInvitationToken=xxx  … 求職者(client_record)招待
+ *  C) 招待トークン無し            … 自由登録(`isOpenSignupEnabled()` でゲート)
+ *
+ * email は招待のものを信頼境界として採用する(URL の ?email= は使わない:
+ * 改ざんで誤誘導される余地を消すため)。Client 側でも email は readonly +
+ * Server Action 側で再上書き。
+ *
+ * 無効 / 期限切れトークンは:
+ *  - メンバー招待(A):無視して 自由登録 経路へ(SignupPage の従来挙動)
+ *  - 求職者招待(B):無効なら /login にフォールバック(求職者は自由登録不可)
  */
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ invitationToken?: string }>;
+  searchParams: Promise<{ invitationToken?: string; clientInvitationToken?: string }>;
 }) {
-  const { invitationToken } = await searchParams;
+  const { invitationToken, clientInvitationToken } = await searchParams;
 
   let invitation = null;
+  let clientInvitation: {
+    token: string;
+    email: string;
+    organizationName: string;
+    seekerName: string;
+  } | null = null;
 
+  // ─── A) メンバー招待(従来挙動)─────────────────────────────────
   if (invitationToken) {
     const service = createServiceClient();
     const { data } = await service
@@ -68,11 +89,52 @@ export default async function SignupPage({
     }
   }
 
-  // BtoBtoC モード:招待トークンが無い / 無効なら自由登録は許可しない。
-  // 拡張性:NEXT_PUBLIC_OPEN_SIGNUP_ENABLED="true" にすれば C 向け開放できる。
-  if (!invitation && !isOpenSignupEnabled()) {
+  // ─── B) 求職者招待 ────────────────────────────────────────────
+  // メンバー招待が優先される(両方付いていることは想定外:UI 経路で混入しない)
+  if (!invitation && clientInvitationToken) {
+    const service = createServiceClient();
+    const { data } = await service
+      .from("client_invitations")
+      .select(
+        `
+        email,
+        status,
+        expires_at,
+        organization_id,
+        client_record_id,
+        organizations ( name ),
+        client_records ( name )
+      `,
+      )
+      .eq("token", clientInvitationToken)
+      .maybeSingle<ClientInvitationRow>();
+
+    const now = new Date();
+    const isValid =
+      data && data.status === "pending" && new Date(data.expires_at).getTime() > now.getTime();
+
+    if (isValid) {
+      const orgRaw = data.organizations;
+      const organizationName =
+        (Array.isArray(orgRaw) ? orgRaw[0]?.name : orgRaw?.name) ?? "(不明な組織)";
+      const seekerRaw = data.client_records;
+      const seekerName = (Array.isArray(seekerRaw) ? seekerRaw[0]?.name : seekerRaw?.name) ?? "";
+      clientInvitation = {
+        token: clientInvitationToken,
+        email: data.email,
+        organizationName,
+        seekerName,
+      };
+    } else {
+      // 求職者招待が無効 / 期限切れ:自由登録は許可されていないので login へ。
+      redirect("/login?reason=invitation_invalid");
+    }
+  }
+
+  // ─── C) 招待無し:BtoBtoC モードなら login へ ────────────────────
+  if (!invitation && !clientInvitation && !isOpenSignupEnabled()) {
     redirect("/login?reason=signup_closed");
   }
 
-  return <SignupForm invitation={invitation} />;
+  return <SignupForm invitation={invitation} clientInvitation={clientInvitation} />;
 }

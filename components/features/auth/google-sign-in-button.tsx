@@ -20,9 +20,22 @@ type Props = {
   label: string;
   next?: string;
   invitationToken?: string;
+  /**
+   * 求職者(client_record)招待トークン。
+   * メンバー招待と違って /invite/[token] 着地は不要(callback で email 一致で
+   * 自動 accept する設計)。next の組み立てには使わず、startGoogleAuth に渡して
+   * 必要なら将来の Google 招待固有 UX(例:Google アカウント選択時の文言表示)に
+   * 拡張するためのフックとしてのみ持つ。
+   */
+  clientInvitationToken?: string;
 };
 
-export function GoogleSignInButton({ label, next, invitationToken }: Props) {
+export function GoogleSignInButton({
+  label,
+  next,
+  invitationToken,
+  clientInvitationToken: _clientInvitationToken,
+}: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

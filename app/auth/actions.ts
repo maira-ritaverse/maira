@@ -28,7 +28,9 @@ import { sendPasswordResetEmail } from "@/lib/email/password-reset";
 export async function signup(input: SignupInput) {
   // BtoBtoC モード:招待トークン無しの自由登録は API レベルでも拒否する
   // (UI でガードしていても URL を直接叩く / 古いタブからの送信を防ぐ)
-  if (!input.invitationToken && !isOpenSignupEnabled()) {
+  // 受け付けるトークン:メンバー招待 or 求職者招待 のいずれか
+  const hasAnyInvite = !!(input.invitationToken || input.clientInvitationToken);
+  if (!hasAnyInvite && !isOpenSignupEnabled()) {
     return { error: "自由登録は受け付けていません。管理者からの招待が必要です。" };
   }
 
@@ -36,6 +38,9 @@ export async function signup(input: SignupInput) {
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const callbackBase = `${siteUrl}/auth/callback`;
+  // メンバー招待は /invite/[token] 着地で accept_invitation RPC を呼ぶフロー、
+  // 求職者招待は callback で accept_client_invitation RPC を呼ぶフローなので、
+  // 求職者招待では next は付けない(/app に戻して終わり)。
   const emailRedirectTo = input.invitationToken
     ? `${callbackBase}?next=${encodeURIComponent(`/invite/${input.invitationToken}`)}`
     : callbackBase;

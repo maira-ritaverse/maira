@@ -17,12 +17,19 @@ export const signupSchema = z.object({
     .min(1, "表示名を入力してください")
     .max(50, "表示名は50文字以内で入力してください"),
   /**
-   * 招待トークン(任意)。
+   * 招待トークン(任意 / エージェントメンバー招待 = organization_invitations 用)。
    * 渡された場合、サインアップ → メール確認 → callback で
    * /invite/[token] に戻すために emailRedirectTo に埋め込む。
    * email 自体の正当性チェックは callback 後の RPC で行う。
    */
   invitationToken: z.string().min(1).max(256).optional(),
+  /**
+   * 求職者(client_record)招待トークン(任意 / client_invitations 用)。
+   * メンバー招待とは別系統。callback では token を見ずに email 一致で
+   * pending な招待を accept する設計なので、ここでの値は「BtoBtoC 門番チェック
+   * を通すための存在フラグ」+「初期表示メール固定」用途で持つ。
+   */
+  clientInvitationToken: z.string().min(1).max(256).optional(),
   /**
    * 利用規約 + プライバシーポリシーへの同意(必須)。
    * ADR 0006(サーバーサイド暗号化への方針確定)により、保管と AI 処理の範囲が
