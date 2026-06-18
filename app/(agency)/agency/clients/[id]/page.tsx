@@ -36,6 +36,7 @@ import { AiMatchingSection } from "./ai-matching-section";
 import { MatchingSection } from "./matching-section";
 import { ScheduleMeetingDialog } from "./schedule-meeting-dialog";
 import { SendEmailDialog } from "./send-email-dialog";
+import { AgencyApplicationsSection } from "./agency-applications-section";
 import { AgencyCvsSection } from "./agency-cvs-section";
 import { AgencyResumesSection } from "./agency-resumes-section";
 import { DisclosableProfileSection } from "./disclosable-profile-section";
@@ -458,9 +459,10 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
       {activeTab === "jobs" && (
         <SectionLayoutContainer
           storageKey="agency-client-detail-jobs"
-          defaultOrder={["referrals", "matching", "ai-matching"]}
+          defaultOrder={["referrals", "agency-applications", "matching", "ai-matching"]}
           titles={{
             referrals: "推薦・選考管理",
+            "agency-applications": "代行応募",
             matching: "マッチング候補(ルールベース)",
             "ai-matching": "AI 求人推薦",
           }}
@@ -474,6 +476,12 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
                 historiesByReferral={historiesByReferral}
                 latestLettersByReferral={latestLettersByReferral}
                 isAdmin={role.member.role === "admin"}
+              />
+            ),
+            "agency-applications": (
+              <AgencyApplicationsSection
+                organizationId={role.organization.id}
+                clientRecordId={client.id}
               />
             ),
             matching: (
