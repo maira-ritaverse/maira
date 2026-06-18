@@ -81,13 +81,33 @@ export default async function AgencyResumeEditPage({ params }: RouteParams) {
           </p>
           <h1 className="mt-1 text-2xl font-bold">履歴書を編集</h1>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          render={<Link href={`/agency/clients/${clientRecordId}?tab=documents`} />}
-        >
-          一覧へ戻る
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            render={
+              <Link href={`/agency/clients/${clientRecordId}/agency-resumes/${resumeId}/preview`} />
+            }
+          >
+            プレビュー
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            render={
+              <a href={`/api/agency/client-resumes/${resumeId}/pdf`} download>
+                PDF をダウンロード
+              </a>
+            }
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            render={<Link href={`/agency/clients/${clientRecordId}?tab=documents`} />}
+          >
+            一覧へ戻る
+          </Button>
+        </div>
       </div>
 
       <AgencyResumePhoto
