@@ -8,12 +8,12 @@
  * - 結果テーブルで処理状態を表示
  * - 60 秒ごとに refresh して状態を更新
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { getErrorMessage } from "@/lib/api/client-fetch";
+import { apiFetch, getErrorMessage } from "@/lib/api/client-fetch";
 
 import type { AgencyIntakeRow } from "./intake-upload-section";
 
@@ -147,25 +147,124 @@ export function IntakeUploadClient({ clientRecordId, rows }: Props) {
           <h3 className="text-muted-foreground text-xs font-semibold">アップロード履歴</h3>
           <ul className="divide-border divide-y rounded-md border">
             {rows.map((r) => (
-              <li key={r.id} className="flex items-center justify-between gap-3 p-3 text-xs">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{r.originalFilename}</div>
-                  <div className="text-muted-foreground mt-0.5">{fmt(r.createdAt)}</div>
-                  {r.statusMessage && (
-                    <div className="text-destructive mt-1 text-[11px]">{r.statusMessage}</div>
+              <li key={r.id} className="space-y-2 p-3 text-xs">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium">{r.originalFilename}</div>
+                    <div className="text-muted-foreground mt-0.5">{fmt(r.createdAt)}</div>
+                    {r.statusMessage && (
+                      <div className="text-destructive mt-1 text-[11px]">{r.statusMessage}</div>
+                    )}
+                  </div>
+                  <StatusBadge status={r.status} />
+                  {hasInProgress && (
+                    <Button size="sm" variant="ghost" onClick={() => router.refresh()} title="更新">
+                      更新
+                    </Button>
                   )}
                 </div>
-                <StatusBadge status={r.status} />
-                {hasInProgress && (
-                  <Button size="sm" variant="ghost" onClick={() => router.refresh()} title="更新">
-                    更新
-                  </Button>
+                {r.status === "extracted" && (
+                  <ExtractedActions
+                    recordingId={r.id}
+                    clientRecordId={clientRecordId}
+                    onDone={() => router.refresh()}
+                  />
                 )}
               </li>
             ))}
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * 抽出完了済の録音に対する「取り込み」アクション群。
+ *
+ * 履歴書 / 職務経歴書 / ヒアリングシート、それぞれに対して
+ *   ・新規作成
+ *   ・(将来)既存にマージ
+ * を選べる導線。今は新規作成のみ。生成後は対応する編集ページへ遷移する。
+ */
+function ExtractedActions({
+  recordingId,
+  clientRecordId,
+  onDone,
+}: {
+  recordingId: string;
+  clientRecordId: string;
+  onDone: () => void;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const run = (endpoint: string, redirectPath: (id: string) => string, successLabel: string) => {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const res = await apiFetch<{ item: { id: string } }>(endpoint, {
+          method: "POST",
+          json: {
+            recording_id: recordingId,
+            client_record_id: clientRecordId,
+          },
+        });
+        if (!res?.item) throw new Error(`${successLabel} の生成に失敗しました`);
+        router.push(redirectPath(res.item.id));
+        onDone();
+      } catch (err) {
+        setError(getErrorMessage(err));
+      }
+    });
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 pt-1">
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() =>
+          run(
+            "/api/agency/client-resumes/from-recording",
+            (id) => `/agency/clients/${clientRecordId}/agency-resumes/${id}`,
+            "履歴書",
+          )
+        }
+        disabled={pending}
+      >
+        {pending ? "生成中…" : "履歴書として取り込み"}
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() =>
+          run(
+            "/api/agency/client-cvs/from-recording",
+            (id) => `/agency/clients/${clientRecordId}/agency-cvs/${id}`,
+            "職務経歴書",
+          )
+        }
+        disabled={pending}
+      >
+        {pending ? "生成中…" : "職務経歴書として取り込み"}
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() =>
+          run(
+            "/api/agency/hearing-sheets/from-recording",
+            () => `/agency/clients/${clientRecordId}?tab=meetings`,
+            "ヒアリングシート",
+          )
+        }
+        disabled={pending}
+      >
+        {pending ? "反映中…" : "ヒアリングシートに反映"}
+      </Button>
+      {error && <span className="text-destructive text-[11px]">{error}</span>}
     </div>
   );
 }
