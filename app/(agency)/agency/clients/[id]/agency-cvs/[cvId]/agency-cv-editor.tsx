@@ -65,6 +65,28 @@ export function AgencyCvEditor({ clientRecordId, cv, isAdmin }: Props) {
     });
   };
 
+  const handlePushToSeeker = () => {
+    if (
+      !confirm(
+        "この職務経歴書を求職者本人に送付します。受領後は本人の職務経歴書に取り込まれます。実行しますか?",
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      try {
+        await apiFetch(`/api/agency/client-cvs/${cv.id}/push-to-seeker`, {
+          method: "POST",
+          json: {},
+        });
+        router.refresh();
+      } catch (err) {
+        setError(getErrorMessage(err));
+      }
+    });
+  };
+
   return (
     <div className="space-y-6">
       {error && (
@@ -170,9 +192,16 @@ export function AgencyCvEditor({ clientRecordId, cv, isAdmin }: Props) {
               <Button variant="outline" onClick={() => handleSave("draft")} disabled={pending}>
                 編集を再開
               </Button>
-              <Button onClick={() => handleSave()} disabled={pending}>
+              <Button variant="outline" onClick={() => handleSave()} disabled={pending}>
                 {pending ? "保存中…" : "保存"}
               </Button>
+              {cv.pushedToDraftId ? (
+                <Button disabled>送付済み</Button>
+              ) : (
+                <Button onClick={handlePushToSeeker} disabled={pending}>
+                  {pending ? "送付中…" : "求職者本人に送付"}
+                </Button>
+              )}
             </>
           )}
         </div>

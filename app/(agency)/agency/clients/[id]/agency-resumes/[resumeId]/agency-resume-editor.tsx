@@ -85,6 +85,28 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
     });
   };
 
+  const handlePushToSeeker = () => {
+    if (
+      !confirm(
+        "この履歴書を求職者本人に送付します。受領後は本人の履歴書に取り込まれます。実行しますか?",
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      try {
+        await apiFetch(`/api/agency/client-resumes/${resume.id}/push-to-seeker`, {
+          method: "POST",
+          json: {},
+        });
+        router.refresh();
+      } catch (err) {
+        setError(getErrorMessage(err));
+      }
+    });
+  };
+
   const addEducation = () => setEducation((prev) => [...prev, { year: "", description: "" }]);
   const updateEducation = (idx: number, patch: Partial<EducationItem>) =>
     setEducation((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
@@ -315,9 +337,16 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
               <Button variant="outline" onClick={() => handleSave("draft")} disabled={pending}>
                 編集を再開(下書きに戻す)
               </Button>
-              <Button onClick={() => handleSave()} disabled={pending}>
+              <Button variant="outline" onClick={() => handleSave()} disabled={pending}>
                 {pending ? "保存中…" : "保存"}
               </Button>
+              {resume.pushedToDraftId ? (
+                <Button disabled>送付済み</Button>
+              ) : (
+                <Button onClick={handlePushToSeeker} disabled={pending}>
+                  {pending ? "送付中…" : "求職者本人に送付"}
+                </Button>
+              )}
             </>
           )}
         </div>
