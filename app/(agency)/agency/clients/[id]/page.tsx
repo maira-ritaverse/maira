@@ -40,6 +40,7 @@ import { AgencyCvsSection } from "./agency-cvs-section";
 import { AgencyResumesSection } from "./agency-resumes-section";
 import { DisclosableProfileSection } from "./disclosable-profile-section";
 import { AgencyDocumentsSection } from "./documents-section";
+import { HearingSheetsSection } from "./hearing-sheets-section";
 import { InteractionsSection } from "./interactions-section";
 import { IntakeUploadSection } from "./intake-upload-section";
 import { MeetingHistorySection } from "./meeting-history-section";
@@ -389,13 +390,20 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
       {activeTab === "meetings" && (
         <SectionLayoutContainer
           storageKey="agency-client-detail-meetings"
-          defaultOrder={["meetings", "intake-upload"]}
+          defaultOrder={["meetings", "hearing-sheets", "intake-upload"]}
           titles={{
             meetings: "面談履歴",
+            "hearing-sheets": "ヒアリングシート",
             "intake-upload": "AI ヒアリング",
           }}
           sections={{
             meetings: <MeetingHistorySection clientRecordId={client.id} />,
+            "hearing-sheets": (
+              <HearingSheetsSection
+                organizationId={role.organization.id}
+                clientRecordId={client.id}
+              />
+            ),
             "intake-upload": (
               <IntakeUploadSection
                 clientRecordId={client.id}
