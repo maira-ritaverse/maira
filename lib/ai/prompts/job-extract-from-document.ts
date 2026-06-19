@@ -186,7 +186,35 @@ export const JOB_EXTRACTION_SYSTEM_PROMPT = `あなたは 日本の 人材紹介
     ・medium: 必須 2 項目は 読めた が、年収 / 仕事内容 / 福利厚生 などで 推測 / 換算 / 集約が 必要だった。
     ・low: 必須 2 項目の どちらかが 読めない、または ドキュメント全体が 求人票として 読みにくい。
 
-出力は 必ず ツールコールで 構造化 JSON のみを 返してください。前置きや 解説文は 不要です。`;
+# 出力フォーマット
+
+下記の フィールドを 持つ JSON オブジェクト のみ を 返してください。前置き / 解説 / コードフェンス は 不要です。
+
+\`\`\`
+{
+  "company_name": "<string>",
+  "position": "<string>",
+  "employment_type": "<string>",
+  "location": "<string>",
+  "salary_min": <number|null>,
+  "salary_max": <number|null>,
+  "description": "<string>",
+  "required_skills": "<string>",
+  "preferred_skills": "<string>",
+  "work_change_scope": "<string>",
+  "location_change_scope": "<string>",
+  "smoking_prevention_measure": "<string>",
+  "probation_period": "<string>",
+  "work_hours": "<string>",
+  "break_time": "<string>",
+  "holidays": "<string>",
+  "application_qualifications": "<string>",
+  "extraction_notes": "<string>",
+  "confidence": "high"|"medium"|"low"
+}
+\`\`\`
+
+文字列項目は 「未抽出」の 場合 空文字 "" を 返してください(salary_min / salary_max のみ null 可)。`;
 
 /**
  * 画像 / PDF と 一緒に 送る ユーザーメッセージ。

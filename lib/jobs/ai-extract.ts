@@ -7,12 +7,19 @@
  * 採用モデル: claude-sonnet-4-6(Vision 対応)
  * 対応ファイル: application/pdf, image/png, image/jpeg, image/webp
  *
+ * 実装方針:
+ *   ・Anthropic tool use (generateObject) は schema が 18 カラムを 超えると
+ *     「Schema is too complex」「too many parameters with union types」で
+ *     拒否される。これを 回避 する ため generateText で JSON 出力 を 指示し、
+ *     後段で zod 検証する アプローチ を 採用 (career-intake と 同じ パターン)。
+ *
  * 100 % 信頼できる 抽出は 不可能なので、戻り値の `confidence`(high/medium/low)を
  * 添えて 返し、UI 側で「読み取り精度」を 表示できる ようにする。
  */
-import { generateObject } from "ai";
+import { generateText } from "ai";
 
 import { getModel, MODELS } from "@/lib/ai/client";
+import { extractJsonFromText } from "@/lib/career-intake/extract-json";
 import {
   JOB_EXTRACTION_SYSTEM_PROMPT,
   JOB_EXTRACTION_USER_PROMPT,
@@ -58,10 +65,13 @@ export type ExtractJobOutput =
  * application/pdf を 受け取れる ので、サーバー側で 画像化する 必要は ない。
  */
 export async function extractJobFromDocument(input: ExtractJobInput): Promise<ExtractJobOutput> {
+  let rawText = "";
   try {
-    const result = await generateObject({
+    // generateText で JSON 出力 を 指示。schema 制約は 後段の zod で 検証する ので
+    // Anthropic 側 の tool use 制限 (union 16 個 / Schema is too complex) を 完全に
+    // 回避 できる。
+    const result = await generateText({
       model: getModel(MODELS.CONVERSATION),
-      schema: jobExtractionSchema,
       system: JOB_EXTRACTION_SYSTEM_PROMPT,
       messages: [
         {
@@ -80,55 +90,49 @@ export async function extractJobFromDocument(input: ExtractJobInput): Promise<Ex
         },
       ],
     });
+    rawText = result.text;
 
-    return { ok: true, result: result.object };
+    // ```json``` フェンス や 前置き / 末尾解説 を 落として 純粋な JSON を 取り出す
+    const jsonText = extractJsonFromText(rawText.trim());
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch (parseErr) {
+      console.error("[job-extract] JSON.parse failed", {
+        message: parseErr instanceof Error ? parseErr.message : String(parseErr),
+        rawText: rawText.slice(0, 2000),
+        jsonText: jsonText.slice(0, 2000),
+      });
+      return {
+        ok: false,
+        reason: "schema_error",
+        message: "AI 出力が 有効な JSON では ありませんでした",
+      };
+    }
+
+    const validated = jobExtractionSchema.safeParse(parsed);
+    if (!validated.success) {
+      console.error("[job-extract] zod validation failed", {
+        issues: validated.error.issues,
+        rawText: rawText.slice(0, 2000),
+      });
+      return {
+        ok: false,
+        reason: "schema_error",
+        message: `抽出結果の 検証に 失敗: ${validated.error.issues
+          .slice(0, 3)
+          .map((i) => `${i.path.join(".") || "(root)"} - ${i.message}`)
+          .join(" / ")}`,
+      };
+    }
+    return { ok: true, result: validated.data };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    // 本番運用で 原因 追跡できる ように、AI SDK が 投げる 例外の 構造を そのまま
-    // サーバーログに 残す。Vercel の Functions ログ で 「どの フィールドが
-    // schema に 引っかかったか」「AI 生 レスポンスは どんな 値だったか」を
-    // 確認できる ようにする。
-    //
-    // AI SDK v6 の AI_TypeValidationError / NoObjectGeneratedError は err.cause
-    // に zod の ZodError、err.text に 生テキスト 等を 持っている。
-    const errAny = err as Error & {
-      cause?: unknown;
-      text?: string;
-      response?: unknown;
-      issues?: unknown;
-    };
-    const cause = errAny.cause;
-    const causeAny = cause as { issues?: unknown; message?: string; name?: string };
-    console.error("[job-extract] generateObject failed", {
+    console.error("[job-extract] generateText failed", {
       name: err instanceof Error ? err.name : "unknown",
       message,
-      cause:
-        cause instanceof Error
-          ? {
-              name: cause.name,
-              message: cause.message,
-              issues: causeAny?.issues,
-            }
-          : cause,
-      issues: errAny.issues,
-      rawText: typeof errAny.text === "string" ? errAny.text.slice(0, 4000) : undefined,
+      rawText: rawText.slice(0, 2000),
     });
-    // schema_error の 判定 は 「明らかに 検証 起源」と 判る キーワード だけ に 絞る。
-    // 旧 regex で "invalid" 単独 を 含めると レート制限 等の API エラー も
-    // schema_error と 誤判定して UI に 不適切な メッセージ を 返していた。
-    const isSchemaError =
-      err instanceof Error &&
-      (err.name === "AI_TypeValidationError" ||
-        err.name === "AI_NoObjectGeneratedError" ||
-        err.name === "ZodError" ||
-        (cause instanceof Error &&
-          (cause.name === "ZodError" || cause.name === "AI_TypeValidationError")) ||
-        /AI_TypeValidationError|AI_NoObjectGeneratedError|ZodError|response did not match schema|too_big|invalid_type/i.test(
-          message,
-        ));
-    if (isSchemaError) {
-      return { ok: false, reason: "schema_error", message };
-    }
     return { ok: false, reason: "ai_error", message };
   }
 }

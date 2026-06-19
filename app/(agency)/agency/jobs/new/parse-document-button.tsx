@@ -1,7 +1,7 @@
 "use client";
 
 import { FileText, Sparkles, Upload, X } from "lucide-react";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -68,7 +68,26 @@ export function ParseDocumentButton({ onApply, disabled }: Props) {
     extractionNotes: string | null;
   } | null>(null);
   const [isPending, startTransition] = useTransition();
+  // 進捗 %(疑似)。AI 抽出は ストリーミング無し なので、平均所要時間 を 元に
+  // 線形補間 で 進捗バー を 動かす。完了 / エラー で 即時 0 に 戻す。
+  // 「2 秒で 1% 進む」 = 60 秒 で 30%、120 秒 で 60%、180 秒 で 90% を 目安。
+  // 実 完了 まで に 100% に 到達しない ように 95% で 頭打ち する。
+  const [progress, setProgress] = useState(0);
+  const [elapsedSec, setElapsedSec] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isPending) return;
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      const sec = Math.round((Date.now() - startedAt) / 1000);
+      setElapsedSec(sec);
+      // 0.4% / 秒 程度 で 進める (240 秒 で 95% 到達 → maxDuration 300 秒 と 整合)
+      const pct = Math.min(95, Math.round(sec * 0.4));
+      setProgress(pct);
+    }, 500);
+    return () => clearInterval(timer);
+  }, [isPending]);
 
   const reset = () => {
     setFile(null);
@@ -91,6 +110,8 @@ export function ParseDocumentButton({ onApply, disabled }: Props) {
   const onUpload = () => {
     if (!file) return;
     setError(null);
+    setProgress(0);
+    setElapsedSec(0);
     startTransition(async () => {
       const form = new FormData();
       form.append("file", file);
@@ -211,12 +232,27 @@ export function ParseDocumentButton({ onApply, disabled }: Props) {
               disabled={!file || isPending}
               className="flex-1"
             >
-              {isPending ? "AI 解析中..." : "AI で 読み取る"}
+              {isPending ? `AI 解析中... ${progress}%` : "AI で 読み取る"}
             </Button>
             <Button type="button" variant="outline" onClick={close} disabled={isPending}>
               キャンセル
             </Button>
           </div>
+
+          {isPending && (
+            <div className="space-y-1">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-amber-100">
+                <div
+                  className="h-full bg-amber-500 transition-all duration-500 ease-out"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-amber-900/70">
+                経過 {elapsedSec} 秒 / Claude Sonnet 4.6 で 求人票を 構造化中(媒体票で 30-120
+                秒、複雑な PDF は 最大 300 秒)
+              </p>
+            </div>
+          )}
         </div>
       )}
 
