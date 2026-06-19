@@ -19,8 +19,8 @@ export const metadata = {
 
 const COMPANY = "株式会社Revorise";
 const REPRESENTATIVE = "久保 椋矢";
-const ADDRESS_PLACEHOLDER = "(請求あり次第 遅滞なく 提示します)";
-const CONTACT_EMAIL = "info@maira.pro";
+const ADDRESS = "大阪府大阪市北区豊崎 1-8-1";
+const CONTACT_EMAIL = "maira-info@revorise.jp";
 const SERVICE_NAME = "Maira(マイラ)";
 
 export default function LegalPage() {
@@ -44,11 +44,7 @@ export default function LegalPage() {
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">所在地</h2>
-          <p>{ADDRESS_PLACEHOLDER}</p>
-          <p className="text-muted-foreground text-xs">
-            ※ 特定商取引法 第 11 条 第 1 項 第 1 号 に 基づき、消費者 から 請求 が あった 場合 は
-            遅滞なく 書面 (PDF / 電子メール 等) で 提示します。
-          </p>
+          <p>{ADDRESS}</p>
         </section>
 
         <section className="space-y-3">
