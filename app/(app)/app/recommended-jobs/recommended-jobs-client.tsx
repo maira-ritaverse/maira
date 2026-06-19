@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -199,34 +200,39 @@ export function RecommendedJobsClient() {
             const pending = interestPending.has(it.job.id);
             return (
               <Card key={it.job.id} className="space-y-2 p-4">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-medium">
-                      {it.job.companyName} ・ {it.job.position}
-                    </p>
-                    <p className="text-muted-foreground mt-0.5 text-[11px]">
-                      {it.job.organizationName} 経由
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                    {it.score} 点
-                  </span>
-                </div>
-                <p className="text-muted-foreground text-xs">{it.rationale}</p>
-                <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
-                  {it.job.location && <span>勤務地:{it.job.location}</span>}
-                  {(it.job.salaryMin || it.job.salaryMax) && (
-                    <span>
-                      年収:{it.job.salaryMin ?? "?"}〜{it.job.salaryMax ?? "?"} 万円
+                <Link href={`/app/jobs/${it.job.id}`} className="block space-y-2 hover:opacity-80">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-medium">
+                        {it.job.companyName} ・ {it.job.position}
+                      </p>
+                      <p className="text-muted-foreground mt-0.5 text-[11px]">
+                        {it.job.organizationName} 経由
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                      {it.score} 点
                     </span>
+                  </div>
+                  <p className="text-muted-foreground text-xs">{it.rationale}</p>
+                  <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+                    {it.job.location && <span>勤務地:{it.job.location}</span>}
+                    {(it.job.salaryMin || it.job.salaryMax) && (
+                      <span>
+                        年収:{it.job.salaryMin ?? "?"}〜{it.job.salaryMax ?? "?"} 万円
+                      </span>
+                    )}
+                    {it.job.employmentType && <span>雇用形態:{it.job.employmentType}</span>}
+                  </div>
+                  {it.job.description && (
+                    <p className="text-muted-foreground line-clamp-3 text-xs whitespace-pre-wrap">
+                      {it.job.description}
+                    </p>
                   )}
-                  {it.job.employmentType && <span>雇用形態:{it.job.employmentType}</span>}
-                </div>
-                {it.job.description && (
-                  <p className="text-muted-foreground line-clamp-3 text-xs whitespace-pre-wrap">
-                    {it.job.description}
+                  <p className="text-foreground text-[11px] font-medium underline-offset-2 hover:underline">
+                    詳細を見る →
                   </p>
-                )}
+                </Link>
                 <div className="flex flex-wrap justify-end gap-2 pt-1">
                   <Button
                     size="sm"

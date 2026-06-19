@@ -62,37 +62,42 @@ export default async function AgentReferralsPage() {
             const recent = isRecentlyUpdated(r.updatedAt);
             return (
               <Card key={r.referralId} className="space-y-2 p-4">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">
-                      {r.jobCompanyName} ・ {r.jobPosition}
-                    </p>
-                    <p className="text-muted-foreground mt-0.5 text-[11px]">
-                      {r.organizationName} 経由
-                    </p>
+                <Link
+                  href={`/app/jobs/${r.jobPostingId}`}
+                  className="block space-y-2 hover:opacity-80"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">
+                        {r.jobCompanyName} ・ {r.jobPosition}
+                      </p>
+                      <p className="text-muted-foreground mt-0.5 text-[11px]">
+                        {r.organizationName} 経由
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {recent && (
+                        <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+                          NEW
+                        </span>
+                      )}
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${SEEKER_REFERRAL_STATUS_TONE[r.status]}`}
+                      >
+                        {SEEKER_REFERRAL_STATUS_LABEL[r.status]}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    {recent && (
-                      <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950 dark:text-rose-300">
-                        NEW
+                  <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+                    {r.jobLocation && <span>勤務地:{r.jobLocation}</span>}
+                    {(r.jobSalaryMin || r.jobSalaryMax) && (
+                      <span>
+                        年収:{r.jobSalaryMin ?? "?"}〜{r.jobSalaryMax ?? "?"} 万円
                       </span>
                     )}
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${SEEKER_REFERRAL_STATUS_TONE[r.status]}`}
-                    >
-                      {SEEKER_REFERRAL_STATUS_LABEL[r.status]}
-                    </span>
+                    {r.jobEmploymentType && <span>雇用形態:{r.jobEmploymentType}</span>}
                   </div>
-                </div>
-                <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
-                  {r.jobLocation && <span>勤務地:{r.jobLocation}</span>}
-                  {(r.jobSalaryMin || r.jobSalaryMax) && (
-                    <span>
-                      年収:{r.jobSalaryMin ?? "?"}〜{r.jobSalaryMax ?? "?"} 万円
-                    </span>
-                  )}
-                  {r.jobEmploymentType && <span>雇用形態:{r.jobEmploymentType}</span>}
-                </div>
+                </Link>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-muted-foreground text-[10px]">
                     最終更新:{new Date(r.updatedAt).toLocaleString("ja-JP")}
