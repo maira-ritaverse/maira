@@ -35,7 +35,11 @@ import {
  */
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// Claude Sonnet 4.6 で PDF (Vision)を 集約抽出 する 場合、5-6 ページの 媒体票で
+// 60-90 秒 かかる ことが あり、デフォルト 60 秒 だと Vercel が 関数を 殺して
+// HTML エラー ページを 返してしまう (フロントで JSON.parse エラー)。
+// Vercel Pro なら 300 秒 まで 設定可能 (Hobby は 60 秒 上限なので 自動 切り詰め)。
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   const guard = await requireOrgMember();

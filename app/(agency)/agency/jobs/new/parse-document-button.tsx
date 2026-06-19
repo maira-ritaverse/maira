@@ -99,9 +99,17 @@ export function ParseDocumentButton({ onApply, disabled }: Props) {
           method: "POST",
           body: form,
         });
+        // Vercel タイムアウト / 関数 クラッシュ 時 は HTML エラーページ を 返す ため、
+        // JSON.parse で 死ぬ前 に Content-Type で 分岐する。
+        const contentType = res.headers.get("content-type") ?? "";
+        if (!contentType.includes("application/json")) {
+          const text = await res.text();
+          throw new Error(
+            `サーバが JSON を 返しませんでした (HTTP ${res.status})。PDF が 大きすぎる か、AI 呼出が タイムアウト した 可能性が あります。\n\n[詳細] ${text.slice(0, 200)}`,
+          );
+        }
         const data = (await res.json()) as ApiResponse;
         if (!res.ok || !data.defaults) {
-          // detail(AI SDK の 生エラー)が あれば 末尾に 添えて、原因 特定を 早める
           const baseMessage = data.message ?? data.error ?? "取り込みに 失敗しました";
           const fullMessage = data.detail ? `${baseMessage}\n\n[詳細] ${data.detail}` : baseMessage;
           throw new Error(fullMessage);
