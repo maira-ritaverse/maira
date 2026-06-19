@@ -211,7 +211,7 @@ export function JobForm() {
             disabled={isPending}
             rows={5}
             placeholder="業務内容、開発環境、チーム構成など"
-            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+            className="border-input bg-background field-sizing-content w-full rounded-md border px-3 py-2 text-sm"
           />
           {errors.description && (
             <p className="text-sm text-red-600">{errors.description.message}</p>
@@ -226,7 +226,7 @@ export function JobForm() {
             disabled={isPending}
             rows={3}
             placeholder="必須スキル・経験"
-            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+            className="border-input bg-background field-sizing-content w-full rounded-md border px-3 py-2 text-sm"
           />
           {errors.required_skills && (
             <p className="text-sm text-red-600">{errors.required_skills.message}</p>
@@ -241,7 +241,7 @@ export function JobForm() {
             disabled={isPending}
             rows={3}
             placeholder="歓迎スキル・経験"
-            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+            className="border-input bg-background field-sizing-content w-full rounded-md border px-3 py-2 text-sm"
           />
           {errors.preferred_skills && (
             <p className="text-sm text-red-600">{errors.preferred_skills.message}</p>
@@ -254,7 +254,7 @@ export function JobForm() {
             id="status"
             {...register("status")}
             disabled={isPending}
-            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+            className="border-input bg-background field-sizing-content w-full rounded-md border px-3 py-2 text-sm"
           >
             {Object.entries(jobStatusLabels).map(([value, label]) => (
               <option key={value} value={value}>
@@ -285,7 +285,7 @@ export function JobForm() {
               disabled={isPending}
               rows={2}
               placeholder="例:入社後に異動の可能性がある業務範囲"
-              className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+              className="border-input bg-background field-sizing-content w-full rounded-md border px-3 py-2 text-sm"
             />
           </div>
 
@@ -297,7 +297,7 @@ export function JobForm() {
               disabled={isPending}
               rows={2}
               placeholder="例:本社、東日本支社、リモートあり"
-              className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+              className="border-input bg-background field-sizing-content w-full rounded-md border px-3 py-2 text-sm"
             />
           </div>
 
@@ -350,7 +350,7 @@ export function JobForm() {
               disabled={isPending}
               rows={2}
               placeholder="例:完全週休2日、土日祝、GW、夏季、年末年始"
-              className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+              className="border-input bg-background field-sizing-content w-full rounded-md border px-3 py-2 text-sm"
             />
           </div>
 
@@ -362,7 +362,7 @@ export function JobForm() {
               disabled={isPending}
               rows={3}
               placeholder="例:Webアプリ開発経験3年以上、TypeScript 実務歴 など"
-              className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+              className="border-input bg-background field-sizing-content w-full rounded-md border px-3 py-2 text-sm"
             />
           </div>
         </div>
