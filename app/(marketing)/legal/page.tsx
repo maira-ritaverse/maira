@@ -18,7 +18,7 @@ export const metadata = {
 };
 
 const COMPANY = "株式会社Revorise";
-const REPRESENTATIVE = "新垣 ◯◯";
+const REPRESENTATIVE = "久保 椋矢";
 const ADDRESS_PLACEHOLDER = "(請求あり次第 遅滞なく 提示します)";
 const CONTACT_EMAIL = "info@maira.pro";
 const SERVICE_NAME = "Maira(マイラ)";
