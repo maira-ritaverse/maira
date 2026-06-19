@@ -12,6 +12,7 @@ import {
   JOB_RECOMMENDATION_AGENCY_FREE_MONTHLY,
   JOB_RECOMMENDATION_SEEKER_FREE_MONTHLY,
   PHOTO_ENHANCE_FREE_MONTHLY,
+  PLATFORM_AI_TOTAL_FREE_MONTHLY,
   RECOMMENDATION_LETTER_DRAFT_FREE_MONTHLY,
   type AiUsageKind,
 } from "@/lib/features/ai-usage";
@@ -81,6 +82,47 @@ export async function getOrgAiUsageSummary(): Promise<OrgAiUsageSummary> {
     members,
     byKindTotal,
     grandTotal,
+  };
+}
+
+/**
+ * 呼出元 組織 の 月次 「総量」上限 + 当月 使用回数 + 残数 を 返す。
+ *
+ * エージェント側 で 「今月 残 N 回(全体)」を 表示 するため の 読取専用ヘルパ。
+ * agency_org スコープ 6 kind 合算 のみ (求職者 利用 は 含めない)。
+ */
+export type OrgAiTotalQuotaSummary = {
+  /** 当月 使用回数 (agency_org 合算) */
+  current: number;
+  /** 月次総量 上限 (platform_ai_total_quotas または 既定 500) */
+  limit: number;
+  /** 残り 回数 (limit - current、下限 0) */
+  remaining: number;
+  /** 当月開始日 (UTC ISO) */
+  monthStart: string;
+};
+
+export async function getOrgAiTotalQuotaSummary(): Promise<OrgAiTotalQuotaSummary> {
+  const supabase = await createClient();
+  const monthStart = utcMonthStart();
+  // 上限 + 使用回数 を 並列取得
+  const [limitRes, usageRes] = await Promise.all([
+    supabase.rpc("get_platform_ai_total_quota_for_caller"),
+    supabase.rpc("count_org_ai_usage_total_this_month", {
+      p_month_start: monthStart.toISOString(),
+    }),
+  ]);
+  const rawLimit = typeof limitRes.data === "number" ? limitRes.data : Number(limitRes.data);
+  const limit =
+    Number.isFinite(rawLimit) && rawLimit !== null ? rawLimit : PLATFORM_AI_TOTAL_FREE_MONTHLY;
+  const rawCurrent = typeof usageRes.data === "number" ? usageRes.data : Number(usageRes.data);
+  const current = Number.isFinite(rawCurrent) ? rawCurrent : 0;
+  const remaining = Math.max(0, limit - current);
+  return {
+    current,
+    limit,
+    remaining,
+    monthStart: monthStart.toISOString(),
   };
 }
 

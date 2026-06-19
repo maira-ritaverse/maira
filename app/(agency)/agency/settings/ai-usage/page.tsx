@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import {
   AI_KIND_LABEL,
   estimateCostUsd,
+  getOrgAiTotalQuotaSummary,
   getOrgAiUsageSummary,
   getOrgAiUsageTrend,
   getOrganizationAiQuotas,
@@ -40,11 +41,13 @@ export default async function AgencyAiUsagePage() {
   let summary;
   let trend;
   let quotas;
+  let totalQuota;
   try {
-    [summary, trend, quotas] = await Promise.all([
+    [summary, trend, quotas, totalQuota] = await Promise.all([
       getOrgAiUsageSummary(),
       getOrgAiUsageTrend(6),
       getOrganizationAiQuotas(),
+      getOrgAiTotalQuotaSummary(),
     ]);
   } catch (err) {
     return (
@@ -74,6 +77,37 @@ export default async function AgencyAiUsagePage() {
           利用件数。 コストは概算値で、実請求は Anthropic / OpenAI の月次明細をご確認ください。
         </p>
       </div>
+
+      {/* 月次総量 残数 (運営側 設定の 強制上限) */}
+      <Card className="space-y-2 border-amber-200 bg-amber-50/40 p-5 dark:border-amber-900 dark:bg-amber-950/30">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-base font-semibold text-amber-900 dark:text-amber-100">
+            今月の 残り AI 利用回数
+          </h2>
+          <span className="text-[10px] text-amber-900/70">上限は 運営側で 管理(変更不可)</span>
+        </div>
+        <div className="flex items-baseline gap-3">
+          <span className="text-3xl font-bold text-amber-900 dark:text-amber-50">
+            {totalQuota.remaining.toLocaleString()}
+          </span>
+          <span className="text-sm text-amber-900/70">
+            回 / 月次上限 {totalQuota.limit.toLocaleString()} 回 (使用済み{" "}
+            {totalQuota.current.toLocaleString()} 回)
+          </span>
+        </div>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-amber-100 dark:bg-amber-950">
+          <div
+            className="h-full bg-amber-500 transition-all"
+            style={{
+              width: `${totalQuota.limit > 0 ? Math.min(100, (totalQuota.current / totalQuota.limit) * 100) : 0}%`,
+            }}
+          />
+        </div>
+        <p className="text-[11px] text-amber-900/70">
+          エージェント職員の 利用 合計 で カウント (求職者の AI 利用は 別計算)。 上限に 達すると 全
+          AI 機能が 一時停止します。
+        </p>
+      </Card>
 
       {/* 組織横断サマリ */}
       <Card className="space-y-3 p-5">

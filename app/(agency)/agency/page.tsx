@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { SectionLayoutContainer } from "@/components/features/layout/section-layout-container";
 
 import { AnnouncementsSection } from "./announcements-section";
+import { getOrgAiTotalQuotaSummary } from "@/lib/agency/ai-usage-queries";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import {
@@ -54,8 +55,8 @@ export default async function AgencyDashboardPage() {
   const orgId = role.organization.id;
   const memberId = role.member.id;
 
-  // 並列取得:クライアント / 自分のタスク / 直近の対応履歴 / 総件数 / 次の面談
-  const [clients, myTasksRes, recentInteractionsRes, totalClientCount, nextMeeting] =
+  // 並列取得:クライアント / 自分のタスク / 直近の対応履歴 / 総件数 / 次の面談 / AI 残数
+  const [clients, myTasksRes, recentInteractionsRes, totalClientCount, nextMeeting, aiTotalQuota] =
     await Promise.all([
       listClientRecordsWithUpdateBadge(orgId, user.id),
       supabase
@@ -74,6 +75,7 @@ export default async function AgencyDashboardPage() {
         .limit(6),
       getClientRecordsTotalCount(orgId),
       getNextMeetingForHost(supabase, user.id, { withinHours: 24 }),
+      getOrgAiTotalQuotaSummary(),
     ]);
 
   // ────────────────────────────────────────────
@@ -155,6 +157,48 @@ export default async function AgencyDashboardPage() {
           一覧の読み込みが遅くなる場合は、サーバーページネーションへの切替を検討してください。
         </Card>
       )}
+
+      {/* AI 月次残数(運営側 設定の 強制上限、変更不可) */}
+      <Card className="flex flex-wrap items-center justify-between gap-3 p-3">
+        <div className="space-y-1">
+          <p className="text-muted-foreground text-[10px]">今月の AI 利用可能 残数 (組織全体)</p>
+          <div className="flex items-baseline gap-2">
+            <span className="text-xl font-bold">{aiTotalQuota.remaining.toLocaleString()}</span>
+            <span className="text-muted-foreground text-xs">
+              / {aiTotalQuota.limit.toLocaleString()} 回(使用済み{" "}
+              {aiTotalQuota.current.toLocaleString()})
+            </span>
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <div className="h-2 w-40 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+            <div
+              className={`h-full transition-all ${
+                aiTotalQuota.remaining === 0
+                  ? "bg-red-500"
+                  : aiTotalQuota.remaining < aiTotalQuota.limit * 0.1
+                    ? "bg-amber-500"
+                    : "bg-emerald-500"
+              }`}
+              style={{
+                width: `${
+                  aiTotalQuota.limit > 0
+                    ? Math.min(100, (aiTotalQuota.current / aiTotalQuota.limit) * 100)
+                    : 0
+                }%`,
+              }}
+            />
+          </div>
+          {role.member.role === "admin" && (
+            <Link
+              href="/agency/settings/ai-usage"
+              className="text-muted-foreground text-[10px] hover:underline"
+            >
+              詳細を見る →
+            </Link>
+          )}
+        </div>
+      </Card>
 
       <SectionLayoutContainer
         storageKey="agency-dashboard"
