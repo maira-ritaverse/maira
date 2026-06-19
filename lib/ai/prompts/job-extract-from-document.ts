@@ -19,22 +19,27 @@ import { z } from "zod";
 /**
  * AI 出力用 zod schema(generateObject に そのまま 渡す)
  *
- * createJobRequestSchema との 違い:
+ * Anthropic tool use の 制約: union 型(nullable / optional)を 持つ パラメータは
+ * 16 個まで。それを 超えると 「Schemas contains too many parameters with union types」
+ * で API が 拒否する。
+ *
+ * 対策:文字列フィールドは すべて `.default("")` で 通し、null では なく 空文字 で
+ * 「未抽出」を 表現する(union 型に しない)。AI には プロンプトで 「未抽出 は 空文字」
+ * を 明示する。salary_min / salary_max のみ 数値 必須の ため null と 区別する 必要が
+ * あり nullable を 保つ(union 数 = 2 で 制限内)。
+ *
+ * createJobRequestSchema との 関係:
  *   ・status は AI が 判断する 領域 ではないので 出力させない(常に "open" にする)
- *   ・各フィールドは `.nullable()` に している:AI が 「読めなかった」場合に 明示的に
- *     null を 返せる ようにし、空文字との 違いを 表現できる ように する
- *   ・salary_min / salary_max は 万円単位の 整数 だが、AI 都合で 文字列を 返して
- *     しまった ケースに 備え preprocess で 数値化する
- *   ・必須項目(company_name / position)が 読み取れない 場合は 「不明」と 返す
- *     ことを 許容(POST 側で 空文字 / 「不明」を null 相当に 正規化)
+ *   ・salary_min / salary_max は 万円単位の 整数。AI が 文字列を 返した 場合に
+ *     備え preprocess で 数値化する。
+ *   ・必須項目(company_name / position)が 読み取れない 場合は 「不明」を 入れる
+ *     ことを 許容(POST 側で 「不明」を null 相当に 正規化 / UI 側で 修正)。
  */
 // 上限は createJobRequestSchema と 揃えること(lib/jobs/types.ts)。
-// AI 抽出は ★ 区切りで 集約する 設計なので、description は 大きく 取る。
-// 過剰に 緩い 数値 でも DB は text 型 (無制限) で 副作用 なし。
-// 「AI 出力の 構造が 不正でした」を 抑制 する ため、運用余裕を 最大化。
-const nullableShortText = z.string().max(500).nullable();
-const nullableLongText = z.string().max(20000).nullable();
-const nullableLabourField = z.string().max(6000).nullable();
+// DB は text 型 (無制限) で 副作用 なし、運用余裕を 最大化 する。
+const optionalShortText = z.string().max(500).default("");
+const optionalLongText = z.string().max(20000).default("");
+const optionalLabourField = z.string().max(6000).default("");
 
 const nullableSalary = z.preprocess((val) => {
   if (val === "" || val === null || val === undefined) return null;
@@ -48,27 +53,27 @@ const nullableSalary = z.preprocess((val) => {
 }, z.number().int().min(0).max(100000).nullable());
 
 export const jobExtractionSchema = z.object({
-  company_name: nullableShortText,
-  position: nullableShortText,
-  employment_type: nullableShortText,
-  location: nullableShortText,
+  company_name: optionalShortText,
+  position: optionalShortText,
+  employment_type: optionalShortText,
+  location: optionalShortText,
   salary_min: nullableSalary,
   salary_max: nullableSalary,
-  description: nullableLongText,
-  required_skills: nullableLabourField,
-  preferred_skills: nullableLabourField,
+  description: optionalLongText,
+  required_skills: optionalLabourField,
+  preferred_skills: optionalLabourField,
   // 法定明示事項 8 列(2024 年改正労基法対応)
-  work_change_scope: nullableLabourField,
-  location_change_scope: nullableLabourField,
-  smoking_prevention_measure: nullableLabourField,
-  probation_period: nullableLabourField,
-  work_hours: nullableLabourField,
-  break_time: nullableLabourField,
-  holidays: nullableLabourField,
-  application_qualifications: nullableLabourField,
+  work_change_scope: optionalLabourField,
+  location_change_scope: optionalLabourField,
+  smoking_prevention_measure: optionalLabourField,
+  probation_period: optionalLabourField,
+  work_hours: optionalLabourField,
+  break_time: optionalLabourField,
+  holidays: optionalLabourField,
+  application_qualifications: optionalLabourField,
   // 抽出メタ:何を 根拠に 抜いたか / 自信度。UI で「読み取り精度」表示用。
   // AI が 換算 / 統一表記 / 取れなかった 価値項目 を 5-10 行 列挙する 想定で 拡張。
-  extraction_notes: z.string().max(5000).nullable(),
+  extraction_notes: z.string().max(5000).default(""),
   confidence: z.enum(["high", "medium", "low"]).default("medium"),
 });
 
@@ -90,7 +95,7 @@ export const JOB_EXTRACTION_SYSTEM_PROMPT = `あなたは 日本の 人材紹介
 # 絶対に 守る ルール
 
 1. **書かれていない 情報は 推測しない**。
-   ・読み取れない / 書かれていない 項目は その まま **null** を 返す。
+   ・読み取れない / 書かれていない 項目は **空文字 ""** を 返す(salary_min / salary_max のみ null 可)。
    ・「だいたい こうだろう」で 空白を 埋めない。後で 担当者が 訂正する コストが 大きい。
 
 2. **数値は 単位を 揃える**(年収)。
@@ -102,7 +107,7 @@ export const JOB_EXTRACTION_SYSTEM_PROMPT = `あなたは 日本の 人材紹介
    ・固定残業代(みなし残業)の 内訳(時間数 / 金額)は extraction_notes に 必ず 記載。年収値そのものは 内訳を 加味した 公表値を 採用。
 
 3. **必須項目(company_name / position)が 読み取れない 場合**。
-   ・公開求人票の 体を なしていない 画像(目次・カバーページ・空白ページ 等)は、 company_name / position を null に し、extraction_notes に「求人票として 読み取れる 情報が ありません」と 明記。confidence は "low"。
+   ・公開求人票の 体を なしていない 画像(目次・カバーページ・空白ページ 等)は、 company_name / position を 空文字 "" に し、extraction_notes に「求人票として 読み取れる 情報が ありません」と 明記。confidence は "low"。
 
 4. **employment_type の 表記揺れ を 統一する**。
    ・「正社員(無期契約) / 無期雇用 / 正規雇用 / 直接雇用」→ "正社員"
@@ -150,12 +155,12 @@ export const JOB_EXTRACTION_SYSTEM_PROMPT = `あなたは 日本の 人材紹介
    ・媒体側の 求人ID (例: "求人ID: 00058473-1a5") を 1 行で 末尾に 残す(担当者が 媒体 側で 突合できる ように)。
 
 7. **法定明示事項 8 列の 抽出 + 寄せ方**。
-   ・**work_change_scope** / **location_change_scope**: 「仕事内容(変更の 範囲)」「勤務地(変更の 範囲)」セクションを 抽出。空欄なら null。
+   ・**work_change_scope** / **location_change_scope**: 「仕事内容(変更の 範囲)」「勤務地(変更の 範囲)」セクションを 抽出。空欄なら 空文字 ""。
      - 「転勤の 可能性 = 当面なし / なし / 転勤なし」も location_change_scope に "転勤なし(当面なし)" のように 寄せて 良い。
    ・**smoking_prevention_measure**: 「受動喫煙対策」セクション + 「禁煙」「分煙」「屋内原則禁煙(喫煙専門室設置)」など。
    ・**probation_period**: 「試用期間 + 詳細」を まとめて 1 行 (例: "あり / 5 ヶ月 / 給与・待遇に 変動なし")。
    ・**work_hours**: 「勤務時間」を 中心に、「フレックス制 / スーパーフレックス / コアタイム なし / 所定労働時間 / リモート(フル / 一部 / なし) / 月平均残業時間」を 1 つに まとめる。例: "9:00〜18:00(休憩60分)、所定 8 時間 / 月平均残業 20 時間 以下 / スーパーフレックス / リモート主体"。
-   ・**break_time**: 「休憩時間」が 単独で 明記されていれば "60 分" のように 出す。 work_hours に 含めた 場合は null で 良い。
+   ・**break_time**: 「休憩時間」が 単独で 明記されていれば "60 分" のように 出す。 work_hours に 含めた 場合は 空文字 "" で 良い。
    ・**holidays**: 「休日 / 休日詳細 / 休暇制度 / 年間休日」を 集約。例: "完全週休 2 日 (土日) / 年間休日 120 日 / 祝日・夏季・年末年始・有給・慶弔・産休育休"。年間休日 日数 は 必ず 拾う。
    ・**application_qualifications**: 「応募条件 / 必須条件 / 最終学歴 / 経験業界 / 求める経験」を 集約。学歴 (大学卒以上 等) / 業界経験 / 職種未経験 OK か どうか を 1 か所 で 把握 できる ように。
      - スキル系の 必須項目 (例: "VLOOKUP / SUMIF") は required_skills 側 に 寄せる。
@@ -174,7 +179,7 @@ export const JOB_EXTRACTION_SYSTEM_PROMPT = `あなたは 日本の 人材紹介
      - "媒体側 求人ID: 00058473-1a5(description 末尾にも 記載)"
      - "勤務地は 東京本社 のみ 抽出。地方支店は description に 補記"
    ・読み取れなかった 主要項目 (年間休日 / 賞与回数 / リモート可否 / 残業時間 等) で 「あれば 価値が ある のに 取れなかった」ものは 「年間休日 数値が 不明」のように 残す。
-   ・なければ null。
+   ・なければ 空文字 ""。
 
 10. **confidence の 基準**。
     ・high: 必須 2 項目 + 年収 + 仕事内容 + 雇用形態 + 勤務地 + 休日 が 明確に 読めた。
@@ -189,7 +194,7 @@ export const JOB_EXTRACTION_SYSTEM_PROMPT = `あなたは 日本の 人材紹介
  */
 export const JOB_EXTRACTION_USER_PROMPT = `添付の 求人票を 読み取り、構造化求人情報を 返してください。
 
-・書かれていない 項目は 推測せず null を 返してください。
+・書かれていない 項目は 推測せず 空文字 "" を 返してください(salary_min / salary_max のみ null 可)。
 ・年収は 万円単位の 整数で 統一してください(月給 / 時給 表記は 年収換算)。
 ・description には 仕事内容 だけでなく、募集背景 / 配属先 / ポイント / 特徴 / 給与備考 / 福利厚生 / 会社情報 / 求人ID も ★ 見出しで 区切って 集約してください(12000 字以内)。
 ・転勤の 可能性 / リモート / フレックス / 年間休日 / 賞与回数 / 固定残業代 / 学歴要件 は 確実に 拾ってください。寄せ先は システムプロンプトの ルールに 従ってください。
