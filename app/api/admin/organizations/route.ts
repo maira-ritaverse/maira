@@ -6,6 +6,7 @@ import { recordAuditLog } from "@/lib/audit/audit-log";
 import { readJsonBody, requireUser } from "@/lib/api/auth-guards";
 import { getSiteUrl } from "@/lib/config/site-url";
 import { sendAgencyAdminInviteEmail } from "@/lib/email/agency-admin-invite";
+import { PLATFORM_AI_TOTAL_FREE_MONTHLY } from "@/lib/features/ai-usage";
 import { createServiceClient } from "@/lib/supabase/service";
 
 /**
@@ -36,6 +37,11 @@ type MemberRow = {
 type ClientRow = {
   organization_id: string;
   link_status: string;
+};
+type AiTotalQuotaRow = {
+  organization_id: string;
+  monthly_limit: number;
+  notes: string | null;
 };
 
 export async function GET(request: Request) {
@@ -69,6 +75,15 @@ export async function GET(request: Request) {
     .from("client_records")
     .select("organization_id, link_status");
   const clients = (clientsData ?? []) as ClientRow[];
+
+  // 月次総量 AI 上限 (運営側 設定値、未設定の 場合は 既定 500)
+  const { data: aiTotalsData } = await admin
+    .from("platform_ai_total_quotas")
+    .select("organization_id, monthly_limit, notes");
+  const aiTotals = new Map<string, { limit: number; notes: string | null }>();
+  for (const row of (aiTotalsData ?? []) as AiTotalQuotaRow[]) {
+    aiTotals.set(row.organization_id, { limit: row.monthly_limit, notes: row.notes });
+  }
 
   // 集計:メンバー = admin / advisor、クライアント = 総数 / linked 数
   const stats = new Map<
@@ -118,6 +133,7 @@ export async function GET(request: Request) {
       !noAdmin &&
       (s.lastMemberAt === null || now - new Date(s.lastMemberAt).getTime() > ninetyDaysMs);
     const status = noAdmin ? "no_admin" : dormant ? "dormant" : "active";
+    const aiTotal = aiTotals.get(o.id);
     return {
       id: o.id,
       name: o.name,
@@ -131,6 +147,12 @@ export async function GET(request: Request) {
       linkedClientCount: s.linkedClientCount,
       lastMemberAt: s.lastMemberAt,
       status,
+      // AI 月次総量上限 (未設定 は 既定 500 / notes は プラン名 メモ)
+      aiMonthlyTotal: {
+        limit: aiTotal?.limit ?? PLATFORM_AI_TOTAL_FREE_MONTHLY,
+        notes: aiTotal?.notes ?? null,
+        isDefault: aiTotal === undefined,
+      },
     };
   });
 

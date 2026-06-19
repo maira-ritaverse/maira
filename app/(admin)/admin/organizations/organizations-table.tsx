@@ -24,6 +24,11 @@ type OrgRow = {
   linkedClientCount: number;
   lastMemberAt: string | null;
   status: OrgStatus;
+  aiMonthlyTotal: {
+    limit: number;
+    notes: string | null;
+    isDefault: boolean;
+  };
 };
 
 type SortKey =
@@ -263,6 +268,7 @@ export function OrganizationsTable({ archived }: { archived: boolean }) {
                     sortDir={sortDir}
                     onClick={toggleSort}
                   />
+                  <th className="px-3 py-2.5 text-right">AI 月次上限</th>
                 </>
               )}
               <th className="px-3 py-2.5 text-right">操作</th>
@@ -313,6 +319,21 @@ export function OrganizationsTable({ archived }: { archived: boolean }) {
                     </td>
                     <td className="px-3 py-2.5">
                       <StatusBadge status={o.status} />
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      <AiQuotaEditor
+                        orgId={o.id}
+                        initialLimit={o.aiMonthlyTotal.limit}
+                        initialNotes={o.aiMonthlyTotal.notes}
+                        isDefault={o.aiMonthlyTotal.isDefault}
+                        onSaved={(next) =>
+                          setOrgs((prev) =>
+                            prev.map((row) =>
+                              row.id === o.id ? { ...row, aiMonthlyTotal: next } : row,
+                            ),
+                          )
+                        }
+                      />
                     </td>
                   </>
                 )}
@@ -395,6 +416,146 @@ function SortHeader({
         </span>
       </button>
     </th>
+  );
+}
+
+/**
+ * AI 月次総量上限 の インライン編集 セル
+ *
+ * デフォルト 500 (運営側 設定が ない場合) → クリックで 編集 モード。
+ * 数字 + メモ (Pro プラン 等) を 同時 編集 / 保存。空欄で 「既定に 戻す」。
+ *
+ * 既存 PUT /api/admin/organizations/[id]/ai-quotas を 使用 (total フィールド)。
+ */
+function AiQuotaEditor({
+  orgId,
+  initialLimit,
+  initialNotes,
+  isDefault,
+  onSaved,
+}: {
+  orgId: string;
+  initialLimit: number;
+  initialNotes: string | null;
+  isDefault: boolean;
+  onSaved: (next: { limit: number; notes: string | null; isDefault: boolean }) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [limit, setLimit] = useState(String(initialLimit));
+  const [notes, setNotes] = useState(initialNotes ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    setError(null);
+    const trimmed = limit.trim();
+    let parsed: number | null;
+    if (trimmed === "") {
+      // 空欄 = 既定 (500) に 戻す
+      parsed = null;
+    } else {
+      const n = Number(trimmed);
+      if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n) || n > 1_000_000) {
+        setError("0〜1,000,000 の 整数 で 入力");
+        return;
+      }
+      parsed = n;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/organizations/${orgId}/ai-quotas`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quotas: [],
+          total: {
+            monthlyLimit: parsed,
+            notes: notes.trim() ? notes.trim() : undefined,
+          },
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as {
+        total: { monthlyLimit: number; notes: string | null } | null;
+      };
+      if (data.total) {
+        onSaved({ limit: data.total.monthlyLimit, notes: data.total.notes, isDefault: false });
+      } else {
+        // 既定に 戻った
+        onSaved({ limit: 500, notes: null, isDefault: true });
+      }
+      setEditing(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "保存に 失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="hover:bg-accent group inline-flex flex-col items-end gap-0.5 rounded px-2 py-1 text-xs"
+        title="クリックで 編集"
+      >
+        <span className="font-semibold">{initialLimit.toLocaleString()}</span>
+        {initialNotes ? (
+          <span className="text-muted-foreground text-[9px]">{initialNotes}</span>
+        ) : (
+          <span className="text-muted-foreground text-[9px]">{isDefault ? "既定" : "—"}</span>
+        )}
+      </button>
+    );
+  }
+
+  return (
+    <div className="bg-card flex flex-col items-end gap-1 rounded border p-2">
+      <input
+        type="number"
+        min={0}
+        max={1_000_000}
+        value={limit}
+        onChange={(e) => setLimit(e.target.value)}
+        placeholder="既定 500"
+        disabled={saving}
+        className="border-input w-24 rounded border bg-transparent px-1.5 py-0.5 text-right text-xs"
+      />
+      <input
+        type="text"
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        placeholder="プラン名 / メモ"
+        maxLength={200}
+        disabled={saving}
+        className="border-input w-32 rounded border bg-transparent px-1.5 py-0.5 text-right text-[10px]"
+      />
+      {error && <span className="text-[9px] text-red-600">{error}</span>}
+      <div className="flex gap-1">
+        <button
+          type="button"
+          onClick={() => {
+            setEditing(false);
+            setLimit(String(initialLimit));
+            setNotes(initialNotes ?? "");
+            setError(null);
+          }}
+          disabled={saving}
+          className="text-muted-foreground hover:text-foreground text-[10px]"
+        >
+          取消
+        </button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className="bg-foreground text-background rounded px-2 py-0.5 text-[10px] font-semibold"
+        >
+          {saving ? "..." : "保存"}
+        </button>
+      </div>
+    </div>
   );
 }
 
