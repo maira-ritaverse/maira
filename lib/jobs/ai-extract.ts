@@ -84,9 +84,21 @@ export async function extractJobFromDocument(input: ExtractJobInput): Promise<Ex
     return { ok: true, result: result.object };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    // 本番運用で 原因 追跡できる ように、AI SDK が 投げる 例外の 構造を そのまま
+    // サーバーログに 残す。Vercel の Functions ログ で 「どの フィールドが
+    // schema に 引っかかったか」を 確認できる ようにする。
+    // err.cause に zod の ZodError が 入る ケースが あるので そこ も 出す。
+    const cause = err instanceof Error ? (err as Error & { cause?: unknown }).cause : undefined;
+    console.error("[job-extract] generateObject failed", {
+      name: err instanceof Error ? err.name : "unknown",
+      message,
+      cause: cause instanceof Error ? { name: cause.name, message: cause.message } : cause,
+    });
     // zod での schema 不一致は 例外メッセージに "schema" などが 含まれる ので、
     // ヒューリスティックで 分類して UI 側の リトライ判断を しやすくする。
-    if (/schema|validation|parse/i.test(message)) {
+    if (
+      /schema|validation|too[_ ]big|invalid|type[_ ]validation|NoObjectGenerated/i.test(message)
+    ) {
       return { ok: false, reason: "schema_error", message };
     }
     return { ok: false, reason: "ai_error", message };
