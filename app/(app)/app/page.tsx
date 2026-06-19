@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getDashboardData } from "@/lib/dashboard/queries";
 import { isOnboardingCompleted } from "@/lib/onboarding/queries";
+import { getPolicyAcceptance, needsToAccept } from "@/lib/privacy/policy";
 import { DashboardEmpty } from "./dashboard-empty";
 import { DashboardStarter } from "./dashboard-starter";
 import { DashboardActive } from "./dashboard-active";
@@ -34,14 +35,17 @@ export default async function DashboardPage({
     redirect("/login");
   }
 
-  // ダッシュボードデータと onboarded_at 判定を並行取得。
-  // それぞれ独立した SELECT なので待ち時間を圧縮する。
-  const [data, onboardingDone, sp] = await Promise.all([
+  // ダッシュボードデータと onboarded_at 判定 + プライバシーポリシー同意状態 を 並行取得。
+  // ポリシー未同意 の 場合、layout 側で PrivacyPolicyModal が 表示される ため、
+  // ツアー自動起動 を 抑止する(同意 → router.refresh → ツアー起動 の 順番に する)。
+  const [data, onboardingDone, policyAcceptance, sp] = await Promise.all([
     getDashboardData(user.id),
     isOnboardingCompleted(user.id),
+    getPolicyAcceptance(user.id),
     searchParams,
   ]);
 
+  const requirePolicy = needsToAccept(policyAcceptance);
   const replay = sp.replay === "tour";
 
   return (
@@ -59,8 +63,11 @@ export default async function DashboardPage({
       {data.status === "starter" && <DashboardStarter data={data} />}
       {data.status === "active" && <DashboardActive data={data} />}
 
-      {/* オンボーディングツアー(未完了の時の自動起動 + 再表示クエリでの強制起動) */}
-      <OnboardingTourMount autoStart={!onboardingDone} replay={replay} />
+      {/* オンボーディングツアー
+            ・autoStart は 「未完了」かつ 「ポリシー同意済」の 時 のみ
+            ・未同意 の 場合 は layout 側 PrivacyPolicyModal が 表示中なので
+              ツアー を 抑止 し、同意後 の router.refresh で 起動 させる */}
+      <OnboardingTourMount autoStart={!onboardingDone && !requirePolicy} replay={replay} />
     </div>
   );
 }
