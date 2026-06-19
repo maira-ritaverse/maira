@@ -2,6 +2,7 @@ import { generateObject, generateText } from "ai";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCareerProfile } from "@/lib/career/conversations";
+import { checkAiUsageLimit, recordAiUsage } from "@/lib/features/ai-usage";
 import { getModel, MODELS } from "@/lib/ai/client";
 import { aiErrorToStatusCode, categorizeAIError } from "@/lib/ai/error-handler";
 import {
@@ -90,6 +91,20 @@ export async function POST(request: Request) {
     );
   }
 
+  // 月次 AI 下書き 上限 (職務経歴書系: 月 20 回 ハード)
+  const usage = await checkAiUsageLimit(supabase, user.id, "seeker_cv_ai_draft");
+  if (!usage.allowed) {
+    return NextResponse.json(
+      {
+        error: "quota_exceeded",
+        message: `今月の 職務経歴書 AI 下書き 枠 (${usage.limit} 回) を 使い切りました。 翌月 1 日に リセット されます。`,
+        current: usage.current,
+        limit: usage.limit,
+      },
+      { status: 429 },
+    );
+  }
+
   // career_profile を取得(下書き生成の元データ)
   const profileData = await getCareerProfile(user.id);
   if (!profileData) {
@@ -119,6 +134,7 @@ export async function POST(request: Request) {
         prompt,
       });
 
+      await recordAiUsage(supabase, user.id, "seeker_cv_ai_draft", { field: "skills" });
       return NextResponse.json({
         field: "skills",
         candidates: result.object.candidates,
@@ -141,6 +157,7 @@ export async function POST(request: Request) {
         prompt,
       });
 
+      await recordAiUsage(supabase, user.id, "seeker_cv_ai_draft", { field: "work_experience" });
       return NextResponse.json({
         field: "work_experience",
         content: result.object,
@@ -160,6 +177,7 @@ export async function POST(request: Request) {
       prompt,
     });
 
+    await recordAiUsage(supabase, user.id, "seeker_cv_ai_draft", { field: parsed.data.field });
     return NextResponse.json({
       field: parsed.data.field,
       content: result.text,

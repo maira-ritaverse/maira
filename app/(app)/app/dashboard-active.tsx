@@ -234,6 +234,30 @@ export function DashboardActive({ data }: Props) {
             limit={data.aiUsageSummary.intake.limit}
             unit="件"
           />
+          <UsageBar
+            label="履歴書 作成"
+            current={data.aiUsageSummary.resumeCreate.current}
+            limit={data.aiUsageSummary.resumeCreate.limit}
+            unit="件"
+          />
+          <UsageBar
+            label="職務経歴書 作成"
+            current={data.aiUsageSummary.cvCreate.current}
+            limit={data.aiUsageSummary.cvCreate.limit}
+            unit="件"
+          />
+          <UsageBar
+            label="AI 下書き (履歴書)"
+            current={data.aiUsageSummary.resumeAiDraft.current}
+            limit={data.aiUsageSummary.resumeAiDraft.limit}
+            unit="回"
+          />
+          <UsageBar
+            label="AI 下書き (職務経歴書)"
+            current={data.aiUsageSummary.cvAiDraft.current}
+            limit={data.aiUsageSummary.cvAiDraft.limit}
+            unit="回"
+          />
         </div>
       </Card>
 

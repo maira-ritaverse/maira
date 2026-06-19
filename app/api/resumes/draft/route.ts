@@ -5,6 +5,7 @@ import { getCareerProfile } from "@/lib/career/conversations";
 import { getModel, MODELS } from "@/lib/ai/client";
 import { aiErrorToStatusCode, categorizeAIError } from "@/lib/ai/error-handler";
 import { buildResumeDraftPrompt } from "@/lib/ai/prompts/resume-draft";
+import { checkAiUsageLimit, recordAiUsage } from "@/lib/features/ai-usage";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -60,6 +61,20 @@ export async function POST(request: Request) {
 
   const { field } = parsed.data;
 
+  // 月次 AI 下書き 上限 (履歴書系: 月 20 回 ハード)
+  const usage = await checkAiUsageLimit(supabase, user.id, "seeker_resume_ai_draft");
+  if (!usage.allowed) {
+    return NextResponse.json(
+      {
+        error: "quota_exceeded",
+        message: `今月の 履歴書 AI 下書き 枠 (${usage.limit} 回) を 使い切りました。 翌月 1 日に リセット されます。`,
+        current: usage.current,
+        limit: usage.limit,
+      },
+      { status: 429 },
+    );
+  }
+
   // career_profile を取得(下書き生成の元データ)
   const profileData = await getCareerProfile(user.id);
   if (!profileData) {
@@ -85,6 +100,9 @@ export async function POST(request: Request) {
       system,
       prompt,
     });
+
+    // 利用ログ (失敗 しても 本処理 は 止めない)
+    await recordAiUsage(supabase, user.id, "seeker_resume_ai_draft", { field });
 
     return NextResponse.json({
       field,

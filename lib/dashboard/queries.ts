@@ -66,11 +66,17 @@ export type DashboardData = {
     /** 連携エージェンシーが 1 件以上あって、open 求人もありそうか(粗い目安) */
     hasLinkedAgencyJobs: boolean;
   };
-  /** 今月の AI 利用量サマリ(残量見える化用、3 機能の現在 / 上限) */
+  /** 今月の AI 利用量サマリ(残量見える化用) */
   aiUsageSummary: {
     photo: { current: number; limit: number };
     recommendation: { current: number; limit: number };
     intake: { current: number; limit: number };
+    // 履歴書 / 職務経歴書 作成数 (月 5 + ブースト × 10)
+    resumeCreate: { current: number; limit: number };
+    cvCreate: { current: number; limit: number };
+    // AI 下書き 月 20 ハード (ブースト対象外)
+    resumeAiDraft: { current: number; limit: number };
+    cvAiDraft: { current: number; limit: number };
     /** 残量警告(80% 以上で表示)が必要なものが 1 つでもあるか */
     hasWarning: boolean;
   };
@@ -127,6 +133,10 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
     photoUsage,
     recUsage,
     intakeUsage,
+    resumeCreateUsage,
+    cvCreateUsage,
+    resumeAiDraftUsage,
+    cvAiDraftUsage,
     { count: unreadCount },
     upcomingMeetings,
     pendingInterviewShares,
@@ -155,6 +165,10 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
     checkAiUsageLimit(supabase, userId, "photo_enhance"),
     checkAiUsageLimit(supabase, userId, "job_recommendation_seeker"),
     checkIntakeLimit(supabase, userId),
+    checkAiUsageLimit(supabase, userId, "seeker_resume_create"),
+    checkAiUsageLimit(supabase, userId, "seeker_cv_create"),
+    checkAiUsageLimit(supabase, userId, "seeker_resume_ai_draft"),
+    checkAiUsageLimit(supabase, userId, "seeker_cv_ai_draft"),
     supabase
       .from("notifications")
       .select("*", { count: "exact", head: true })
@@ -169,7 +183,11 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
   const hasWarning =
     ratio(photoUsage.current, photoUsage.limit) >= 0.8 ||
     ratio(recUsage.current, recUsage.limit) >= 0.8 ||
-    ratio(intakeUsage.current, intakeUsage.limit) >= 0.8;
+    ratio(intakeUsage.current, intakeUsage.limit) >= 0.8 ||
+    ratio(resumeCreateUsage.current, resumeCreateUsage.limit) >= 0.8 ||
+    ratio(cvCreateUsage.current, cvCreateUsage.limit) >= 0.8 ||
+    ratio(resumeAiDraftUsage.current, resumeAiDraftUsage.limit) >= 0.8 ||
+    ratio(cvAiDraftUsage.current, cvAiDraftUsage.limit) >= 0.8;
 
   // 応募のステータス別カウント。
   // enum の全キーをゼロで初期化してから集計し、UI 側で `?? 0` を書かなくて済むようにする。
@@ -298,6 +316,10 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
       photo: { current: photoUsage.current, limit: photoUsage.limit },
       recommendation: { current: recUsage.current, limit: recUsage.limit },
       intake: { current: intakeUsage.current, limit: intakeUsage.limit },
+      resumeCreate: { current: resumeCreateUsage.current, limit: resumeCreateUsage.limit },
+      cvCreate: { current: cvCreateUsage.current, limit: cvCreateUsage.limit },
+      resumeAiDraft: { current: resumeAiDraftUsage.current, limit: resumeAiDraftUsage.limit },
+      cvAiDraft: { current: cvAiDraftUsage.current, limit: cvAiDraftUsage.limit },
       hasWarning,
     },
     unreadNotificationCount: unreadCount ?? 0,
