@@ -53,6 +53,7 @@ const SECTIONS: NavSection[] = [
     title: "データ分析",
     items: [
       { href: "/admin/ai-usage", icon: "⚡", label: "AI 利用量", prefix: true },
+      { href: "/admin/payments", icon: "💴", label: "課金 / 売上", prefix: true },
       { href: "/admin/kpi", icon: "📊", label: "KPI", prefix: true },
     ],
   },
