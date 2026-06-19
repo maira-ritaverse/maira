@@ -4,16 +4,12 @@ import { redirect } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import {
   AI_KIND_LABEL,
-  estimateCostUsd,
   getOrgAiTotalQuotaSummary,
   getOrgAiUsageSummary,
   getOrgAiUsageTrend,
-  getOrganizationAiQuotas,
 } from "@/lib/agency/ai-usage-queries";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient } from "@/lib/supabase/server";
-
-import { AiQuotasForm } from "./ai-quotas-form";
 
 /**
  * /agency/settings/ai-usage
@@ -40,13 +36,11 @@ export default async function AgencyAiUsagePage() {
 
   let summary;
   let trend;
-  let quotas;
   let totalQuota;
   try {
-    [summary, trend, quotas, totalQuota] = await Promise.all([
+    [summary, trend, totalQuota] = await Promise.all([
       getOrgAiUsageSummary(),
       getOrgAiUsageTrend(6),
-      getOrganizationAiQuotas(),
       getOrgAiTotalQuotaSummary(),
     ]);
   } catch (err) {
@@ -60,7 +54,6 @@ export default async function AgencyAiUsagePage() {
     );
   }
 
-  const grandCost = estimateCostUsd(summary.byKindTotal);
   const trendMax = trend.length > 0 ? Math.max(...trend.map((t) => t.total), 1) : 1;
 
   return (
@@ -74,7 +67,7 @@ export default async function AgencyAiUsagePage() {
         <h1 className="mt-1 text-2xl font-bold">AI 利用状況</h1>
         <p className="text-muted-foreground mt-1 text-sm">
           今月({new Date(summary.monthStart).toLocaleDateString("ja-JP")} 以降)の組織内 AI
-          利用件数。 コストは概算値で、実請求は Anthropic / OpenAI の月次明細をご確認ください。
+          利用件数。
         </p>
       </div>
 
@@ -126,9 +119,7 @@ export default async function AgencyAiUsagePage() {
         </div>
         <div className="flex flex-wrap items-baseline justify-between gap-2 border-t pt-2">
           <span className="text-xs">合計</span>
-          <span className="text-base font-medium">
-            {summary.grandTotal.toLocaleString()} 回 / 約 ${grandCost.toFixed(2)} USD
-          </span>
+          <span className="text-base font-medium">{summary.grandTotal.toLocaleString()} 回</span>
         </div>
       </Card>
 
@@ -163,20 +154,7 @@ export default async function AgencyAiUsagePage() {
         </div>
         <div className="text-muted-foreground flex justify-between text-[10px]">
           <span>合計(6 か月):{trend.reduce((s, t) => s + t.total, 0).toLocaleString()} 回</span>
-          <span>概算コスト合計:約 ${trend.reduce((s, t) => s + t.costUsd, 0).toFixed(2)} USD</span>
         </div>
-      </Card>
-
-      {/* 管理者専用:AI 月次上限の編集 */}
-      <Card className="space-y-3 p-5">
-        <div>
-          <h2 className="text-base font-semibold">月次上限の設定(管理者専用)</h2>
-          <p className="text-muted-foreground mt-1 text-xs">
-            各 AI 機能の月次利用上限を設定します。空欄=既定値、0=完全停止。 連携している求職者の AI
-            上限もここで管理できます。
-          </p>
-        </div>
-        <AiQuotasForm initial={quotas} />
       </Card>
 
       {/* メンバー別 */}
@@ -187,7 +165,6 @@ export default async function AgencyAiUsagePage() {
         ) : (
           <ul className="divide-foreground/10 divide-y">
             {summary.members.map((m) => {
-              const cost = estimateCostUsd(m.byKind);
               return (
                 <li key={m.userId} className="space-y-1 py-2">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -195,14 +172,7 @@ export default async function AgencyAiUsagePage() {
                       <p className="text-sm font-medium">{m.displayName}</p>
                       <p className="text-muted-foreground text-[11px]">{m.email}</p>
                     </div>
-                    <p className="text-sm font-medium">
-                      {m.total.toLocaleString()} 回
-                      {cost > 0 && (
-                        <span className="text-muted-foreground ml-1 text-[11px]">
-                          (約 ${cost.toFixed(2)})
-                        </span>
-                      )}
-                    </p>
+                    <p className="text-sm font-medium">{m.total.toLocaleString()} 回</p>
                   </div>
                   {m.total > 0 && (
                     <div className="text-muted-foreground flex flex-wrap gap-x-3 text-[11px]">
