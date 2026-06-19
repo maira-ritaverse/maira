@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { AgencySidebar } from "@/components/features/agency/agency-sidebar";
 import { NotificationBell } from "@/components/features/notifications/notification-bell";
@@ -19,14 +19,9 @@ import { getPolicyAcceptance, needsToAccept } from "@/lib/privacy/policy";
  *      Phase 1 の getUserRole は member 未存在時に seeker 扱いで返す)
  */
 export default async function AgencyLayout({ children }: { children: React.ReactNode }) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
 
   // getUserRole + profile + policyAcceptance を 並列化。
   // organizations.archived_at は role.organization.id に 依存 する ため 後段。

@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { createClient } from "@/lib/supabase/server";
 import { emptyPermissionFlags, type PermissionKey } from "@/lib/permissions/types";
 import { PERMISSION_KEYS } from "@/lib/permissions/types";
@@ -28,7 +30,7 @@ const KNOWN_PERMISSION_KEYS = new Set<string>(Object.values(PERMISSION_KEYS));
  *   admin の特例(常に許可)はここでは適用しない。判定側で
  *   `role === 'admin' || permissions[key]` のように扱う。
  */
-export async function getUserRole(userId: string): Promise<UserRole> {
+export const getUserRole = cache(async (userId: string): Promise<UserRole> => {
   const supabase = await createClient();
 
   const { data: profile } = await supabase
@@ -120,7 +122,7 @@ export async function getUserRole(userId: string): Promise<UserRole> {
       permissions,
     },
   };
-}
+});
 
 /**
  * ユーザーが企業メンバーかどうかの簡易判定

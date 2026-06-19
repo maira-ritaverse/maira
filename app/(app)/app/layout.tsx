@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { AppSidebar } from "@/components/features/app-sidebar";
 import { NotificationBell } from "@/components/features/notifications/notification-bell";
 import {
@@ -26,14 +26,9 @@ import { getPolicyAcceptance, needsToAccept } from "@/lib/privacy/policy";
  *   getUserRole は 'seeker' を返す(安全側)。その場合はここを素通りさせる。
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
 
   // getUserRole + 共通レイアウト 用 4 クエリ を 1 段の Promise.all で 並列化。
   // どれも user.id にしか 依存せず、互いに 独立 して いる ので 待ち合わせ不要。
