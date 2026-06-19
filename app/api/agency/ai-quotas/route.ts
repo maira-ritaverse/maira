@@ -26,6 +26,7 @@ const KIND_VALUES = [
   "agency_cv_draft",
   "agency_resume_draft",
   "job_extract_from_document",
+  "csv_column_mapping",
 ] as const;
 
 const updateSchema = z.object({

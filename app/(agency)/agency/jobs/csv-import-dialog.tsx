@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { AiColumnMapperPanel } from "@/components/features/agency/ai-column-mapper-panel";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { parseCsvAsObjects } from "@/lib/csv/parse";
@@ -35,6 +36,9 @@ export function JobsCsvImportDialog() {
   const [open, setOpen] = useState(false);
   const [parsedHeaders, setParsedHeaders] = useState<string[]>([]);
   const [parsedRows, setParsedRows] = useState<Record<string, string>[]>([]);
+  // AI マッピング 適用後の canonical キーに 揃った 行(これを 既存 import API に 送る)
+  const [mappedRows, setMappedRows] = useState<Record<string, string>[] | null>(null);
+  const [mapping, setMapping] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<ImportResponse | null>(null);
@@ -42,6 +46,8 @@ export function JobsCsvImportDialog() {
   const reset = () => {
     setParsedHeaders([]);
     setParsedRows([]);
+    setMappedRows(null);
+    setMapping(false);
     setParseError(null);
     setResult(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -74,6 +80,10 @@ export function JobsCsvImportDialog() {
       }
       setParsedHeaders(headers);
       setParsedRows(rows);
+      // パース成功 → AI マッピング パネルを 即時 起動。
+      // 既存 HEADER_ALIASES だけで 全件 解決できる ケースも 同じ UI を 通す方が UX が ブレない。
+      setMapping(true);
+      setMappedRows(null);
     } catch (err) {
       setParseError(
         `CSV のパースに失敗しました: ${err instanceof Error ? err.message : "不明なエラー"}`,
@@ -82,13 +92,14 @@ export function JobsCsvImportDialog() {
   };
 
   const submit = async () => {
-    if (parsedRows.length === 0) return;
+    const rowsToPost = mappedRows ?? parsedRows;
+    if (rowsToPost.length === 0) return;
     setSubmitting(true);
     try {
       const res = await fetch("/api/agency/import/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: parsedRows }),
+        body: JSON.stringify({ rows: rowsToPost }),
       });
       const json = (await res.json()) as Partial<ImportResponse> & { error?: string };
       if (!res.ok) {
@@ -136,7 +147,9 @@ export function JobsCsvImportDialog() {
 
             <section className="text-muted-foreground space-y-1 text-xs">
               <p>
-                対応ヘッダー(日本語):会社名・職種・勤務地・雇用形態・年収下限/上限・仕事内容・必須/歓迎スキル・応募資格・試用期間・勤務時間・休憩時間・休日休暇・業務変更範囲・勤務地変更範囲・受動喫煙対策・ステータス
+                任意の フォーマットの CSV を 取り込めます。ヘッダー名が 不揃いでも、AI が
+                標準カラム(会社名・職種・勤務地・雇用形態・年収・仕事内容 …)への 対応付けを
+                提案します。
               </p>
               <p>
                 必須:<span className="font-medium">会社名 / 職種</span>。
@@ -162,11 +175,37 @@ export function JobsCsvImportDialog() {
               </div>
             )}
 
-            {parsedRows.length > 0 && !result && (
+            {parsedRows.length > 0 && !result && mapping && (
+              <AiColumnMapperPanel
+                target="jobs"
+                csvHeaders={parsedHeaders}
+                parsedRows={parsedRows}
+                onApply={(canonicalRows) => {
+                  setMappedRows(canonicalRows);
+                  setMapping(false);
+                }}
+                onCancel={() => setMapping(false)}
+              />
+            )}
+
+            {parsedRows.length > 0 && !result && !mapping && (
               <section className="space-y-2">
-                <div className="text-muted-foreground text-xs">
-                  検出:{parsedRows.length} 行(プレビュー先頭{" "}
-                  {Math.min(PREVIEW_ROWS, parsedRows.length)} 行)
+                <div className="flex items-center justify-between">
+                  <div className="text-muted-foreground text-xs">
+                    検出:{parsedRows.length} 行(プレビュー先頭{" "}
+                    {Math.min(PREVIEW_ROWS, parsedRows.length)} 行)
+                    {mappedRows && (
+                      <span className="ml-2 text-emerald-700">・AI マッピング 適用済み</span>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setMapping(true)}
+                  >
+                    {mappedRows ? "マッピングを やり直す" : "AI カラム マッピング"}
+                  </Button>
                 </div>
                 <div className="ring-foreground/10 overflow-x-auto rounded-lg ring-1">
                   <table className="min-w-full text-xs">
@@ -234,8 +273,16 @@ export function JobsCsvImportDialog() {
                 閉じる
               </Button>
               {!result && (
-                <Button onClick={submit} disabled={parsedRows.length === 0 || submitting}>
-                  {submitting ? "取り込み中…" : `取り込む(${parsedRows.length} 行)`}
+                <Button
+                  onClick={submit}
+                  disabled={parsedRows.length === 0 || mapping || submitting || !mappedRows}
+                  title={
+                    !mappedRows && parsedRows.length > 0
+                      ? "AI マッピングを 適用してから 取り込みできます"
+                      : undefined
+                  }
+                >
+                  {submitting ? "取り込み中…" : `取り込む(${(mappedRows ?? parsedRows).length} 行)`}
                 </Button>
               )}
             </div>
