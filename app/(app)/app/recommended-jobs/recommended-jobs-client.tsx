@@ -1,5 +1,6 @@
 "use client";
 
+import { Send } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -263,7 +264,8 @@ export function RecommendedJobsClient() {
                       onClick={() => void requestApply(it.job.id)}
                       disabled={applyPending.has(it.job.id)}
                     >
-                      {applyPending.has(it.job.id) ? "依頼中…" : "📨 応募を依頼"}
+                      <Send className="mr-1 h-3.5 w-3.5" />
+                      {applyPending.has(it.job.id) ? "依頼中…" : "応募を依頼"}
                     </Button>
                   )}
                 </div>

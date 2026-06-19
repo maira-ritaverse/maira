@@ -56,7 +56,23 @@ const SECTION_TITLE_ALIASES: Record<string, string> = {
   求人ID: "求人ID",
 };
 
-const HEADING_PATTERN = /^\s*★\s*(.+?)\s*$/;
+// 見出しは「★ + 空白 + 既知タイトル」のみ。
+// AI には 「原文の ★ や ◎ は 残して OK」と 指示している ため、本文中に
+// "★コツコツ丁寧に..." のような 行が 入る。空白の 有無 + 既知タイトル の
+// ホワイトリストで 見出しと 本文を 明確に 区別する。
+const HEADING_PATTERN = /^\s*★\s+(.+?)\s*$/;
+
+function isKnownHeading(raw: string): string | null {
+  const aliased = SECTION_TITLE_ALIASES[raw];
+  if (aliased) return aliased;
+  // タイトル末尾の "(必須)" "(任意、ある場合のみ)" を 落として 再判定
+  const stripped = raw.replace(/[((].*?[))]\s*$/u, "").trim();
+  if (stripped && stripped !== raw) {
+    const aliased2 = SECTION_TITLE_ALIASES[stripped];
+    if (aliased2) return aliased2;
+  }
+  return null;
+}
 
 export function parseJobDescription(description: string | null | undefined): DescriptionSection[] {
   if (!description) return [];
@@ -73,12 +89,12 @@ export function parseJobDescription(description: string | null | undefined): Des
 
   for (const line of lines) {
     const m = line.match(HEADING_PATTERN);
-    if (m) {
+    const known = m ? isKnownHeading(m[1].trim()) : null;
+    if (m && known) {
       flush();
-      const raw = m[1].trim();
-      const normalized = SECTION_TITLE_ALIASES[raw] ?? raw;
-      current = { title: normalized, body: "" };
+      current = { title: known, body: "" };
     } else {
+      // ★ 始まりでも 既知 タイトル に 該当しなければ 本文として 扱う
       current.body += (current.body ? "\n" : "") + line;
     }
   }
