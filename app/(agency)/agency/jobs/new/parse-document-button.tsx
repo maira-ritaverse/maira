@@ -47,6 +47,8 @@ type ApiResponse = {
   extractionNotes?: string | null;
   error?: string;
   message?: string;
+  /** AI SDK 由来の 生エラーメッセージ。表示すると 原因特定が 速い。 */
+  detail?: string;
 };
 
 type Props = {
@@ -99,7 +101,10 @@ export function ParseDocumentButton({ onApply, disabled }: Props) {
         });
         const data = (await res.json()) as ApiResponse;
         if (!res.ok || !data.defaults) {
-          throw new Error(data.message ?? data.error ?? "取り込みに 失敗しました");
+          // detail(AI SDK の 生エラー)が あれば 末尾に 添えて、原因 特定を 早める
+          const baseMessage = data.message ?? data.error ?? "取り込みに 失敗しました";
+          const fullMessage = data.detail ? `${baseMessage}\n\n[詳細] ${data.detail}` : baseMessage;
+          throw new Error(fullMessage);
         }
         setPreview({
           defaults: data.defaults,
@@ -185,7 +190,9 @@ export function ParseDocumentButton({ onApply, disabled }: Props) {
 
           {error && (
             <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>
+                <pre className="text-xs whitespace-pre-wrap">{error}</pre>
+              </AlertDescription>
             </Alert>
           )}
 
