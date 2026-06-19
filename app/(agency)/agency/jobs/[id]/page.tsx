@@ -80,9 +80,18 @@ export default async function JobDetailPage({ params }: RouteParams) {
             </span>
           </div>
         </div>
-        <Button render={<Link href="/agency/jobs" />} variant="outline" size="sm">
-          一覧に戻る
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            render={<a href={`/api/agency/jobs/${job.id}/pdf`} download />}
+            variant="outline"
+            size="sm"
+          >
+            求人票 PDF
+          </Button>
+          <Button render={<Link href="/agency/jobs" />} variant="outline" size="sm">
+            一覧に戻る
+          </Button>
+        </div>
       </div>
 
       <JobDetailForm job={job} />
