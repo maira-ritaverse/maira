@@ -1,19 +1,21 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
+
 import { createClient } from "@/lib/supabase/server";
-import { createCv } from "@/lib/cvs/queries";
+import { createCv, CvQuotaExceededError } from "@/lib/cvs/queries";
 import { saveCvRequestSchema } from "@/lib/cvs/types";
 
 /**
  * 職務経歴書 新規作成 API
  *
  * POST /api/cvs
- * - 認証チェック
- * - saveCvRequestSchema でバリデーション
- * - user_id は auth.uid()(本人のみ)
- * - 戻り値:作成した cv の id
- *
- * 暗号化は queries 層(createCv)で透過的に行われる。ルート層は body をそのまま渡す。
+ * - 拡張: sourceCvId (UUID) — 複製元 指定 で 月次クォータ 消費なし
+ * - 上限超過時:HTTP 429
  */
+const requestSchema = saveCvRequestSchema.extend({
+  sourceCvId: z.string().uuid().optional(),
+});
+
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
@@ -31,7 +33,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const parsed = saveCvRequestSchema.safeParse(body);
+  const parsed = requestSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Invalid request", details: parsed.error.format() },
@@ -39,10 +41,23 @@ export async function POST(request: Request) {
     );
   }
 
+  const { sourceCvId, ...input } = parsed.data;
+
   try {
-    const id = await createCv(user.id, parsed.data);
+    const id = await createCv(user.id, input, sourceCvId ?? null);
     return NextResponse.json({ id });
   } catch (error) {
+    if (error instanceof CvQuotaExceededError) {
+      return NextResponse.json(
+        {
+          error: "quota_exceeded",
+          message: `今月の 職務経歴書 作成枠 (${error.limit} 件) を 使い切りました。 翌月 1 日に リセット されます。`,
+          current: error.current,
+          limit: error.limit,
+        },
+        { status: 429 },
+      );
+    }
     return NextResponse.json(
       {
         error: "Failed to create",
