@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   AGENCY_CV_DRAFT_FREE_MONTHLY,
   AGENCY_RESUME_DRAFT_FREE_MONTHLY,
+  JOB_EXTRACT_FROM_DOCUMENT_FREE_MONTHLY,
   JOB_RECOMMENDATION_AGENCY_FREE_MONTHLY,
   JOB_RECOMMENDATION_SEEKER_FREE_MONTHLY,
   PHOTO_ENHANCE_FREE_MONTHLY,
@@ -103,6 +104,7 @@ export const AI_KIND_FREE_DEFAULT: Record<AiUsageKind, number> = {
   recommendation_letter_draft: RECOMMENDATION_LETTER_DRAFT_FREE_MONTHLY,
   agency_cv_draft: AGENCY_CV_DRAFT_FREE_MONTHLY,
   agency_resume_draft: AGENCY_RESUME_DRAFT_FREE_MONTHLY,
+  job_extract_from_document: JOB_EXTRACT_FROM_DOCUMENT_FREE_MONTHLY,
 };
 
 export type AiQuotaRow = {
@@ -141,6 +143,7 @@ export async function getOrganizationAiQuotas(): Promise<AiQuotaRow[]> {
     "recommendation_letter_draft",
     "agency_cv_draft",
     "agency_resume_draft",
+    "job_extract_from_document",
   ];
   return kinds.map((kind) => {
     const found = byKind.get(kind);

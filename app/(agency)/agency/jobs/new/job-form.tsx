@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ParseDocumentButton } from "./parse-document-button";
 
 /**
  * 求人新規登録フォーム
@@ -34,6 +35,7 @@ export function JobForm() {
     register,
     handleSubmit,
     control,
+    reset: resetForm,
     formState: { errors },
   } = useForm<CreateJobFormInput, unknown, CreateJobRequest>({
     resolver: zodResolver(createJobRequestSchema),
@@ -88,6 +90,33 @@ export function JobForm() {
             <AlertDescription>エラー: {serverError}</AlertDescription>
           </Alert>
         )}
+
+        <ParseDocumentButton
+          disabled={isPending}
+          onApply={(d) => {
+            // AI 抽出結果で フォームを 上書き(salary は number | "" → number | null に 寄せる)
+            resetForm({
+              company_name: d.company_name,
+              position: d.position,
+              employment_type: d.employment_type,
+              location: d.location,
+              salary_min: d.salary_min === "" ? null : d.salary_min,
+              salary_max: d.salary_max === "" ? null : d.salary_max,
+              description: d.description,
+              required_skills: d.required_skills,
+              preferred_skills: d.preferred_skills,
+              status: "open",
+              work_change_scope: d.work_change_scope,
+              location_change_scope: d.location_change_scope,
+              smoking_prevention_measure: d.smoking_prevention_measure,
+              probation_period: d.probation_period,
+              work_hours: d.work_hours,
+              break_time: d.break_time,
+              holidays: d.holidays,
+              application_qualifications: d.application_qualifications,
+            });
+          }}
+        />
 
         <div className="space-y-2">
           <Label htmlFor="company_name">

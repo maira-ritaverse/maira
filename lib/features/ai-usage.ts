@@ -22,7 +22,8 @@ export type AiUsageKind =
   | "job_recommendation_agency"
   | "recommendation_letter_draft"
   | "agency_cv_draft"
-  | "agency_resume_draft";
+  | "agency_resume_draft"
+  | "job_extract_from_document";
 
 /** kind の scope:組織側(全メンバー合算上限)/ 求職者側(1 人あたり上限) */
 type KindScope = "agency_org" | "seeker_per_user";
@@ -34,6 +35,7 @@ const KIND_SCOPE: Record<AiUsageKind, KindScope> = {
   recommendation_letter_draft: "agency_org",
   agency_cv_draft: "agency_org",
   agency_resume_draft: "agency_org",
+  job_extract_from_document: "agency_org",
 };
 
 // 既定値(組織が 何も 設定していない 状態の フォールバック)
@@ -51,6 +53,9 @@ export const AGENCY_CV_DRAFT_FREE_MONTHLY = 100;
 export const AGENCY_CV_DRAFT_ADDON_MONTHLY = 1000;
 export const AGENCY_RESUME_DRAFT_FREE_MONTHLY = 100;
 export const AGENCY_RESUME_DRAFT_ADDON_MONTHLY = 1000;
+// PDF / 画像 から AI で 求人情報を 抽出(Vision 経由、1 回あたり ¥10-30 程度)
+export const JOB_EXTRACT_FROM_DOCUMENT_FREE_MONTHLY = 30;
+export const JOB_EXTRACT_FROM_DOCUMENT_ADDON_MONTHLY = 300;
 
 export type AiUsageStatus = {
   allowed: boolean;
@@ -83,6 +88,10 @@ function defaultLimitFor(kind: AiUsageKind, addon: boolean): number {
       return addon ? AGENCY_CV_DRAFT_ADDON_MONTHLY : AGENCY_CV_DRAFT_FREE_MONTHLY;
     case "agency_resume_draft":
       return addon ? AGENCY_RESUME_DRAFT_ADDON_MONTHLY : AGENCY_RESUME_DRAFT_FREE_MONTHLY;
+    case "job_extract_from_document":
+      return addon
+        ? JOB_EXTRACT_FROM_DOCUMENT_ADDON_MONTHLY
+        : JOB_EXTRACT_FROM_DOCUMENT_FREE_MONTHLY;
   }
 }
 
