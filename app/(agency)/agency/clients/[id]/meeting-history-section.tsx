@@ -40,7 +40,9 @@ export async function MeetingHistorySection({ clientRecordId }: Props) {
     );
   }
 
-  // 録画 ID の集合を作って、対応する文字起こしを並列復号する
+  // 録画 ID の 集合を 作って、対応する 文字起こしを 並列復号 する。
+  // 旧 実装は コメントに「並列復号」と あったが 実際は for-loop で 直列 await
+  // していた。面談履歴 10 件 以上 だと 顕著に 遅かった ため Promise.all 化。
   const recordingIds = meetings.map((m) => m.recordingId).filter((v): v is string => v !== null);
   const transcriptByRecording = new Map<string, string>();
   if (recordingIds.length > 0) {
@@ -49,13 +51,16 @@ export async function MeetingHistorySection({ clientRecordId }: Props) {
       .select("id, encrypted_transcript")
       .in("id", recordingIds);
     if (recs) {
-      for (const r of recs as Array<{ id: string; encrypted_transcript: string | null }>) {
-        if (r.encrypted_transcript) {
-          const decoded = await decryptField(r.encrypted_transcript);
-          if (decoded) {
-            transcriptByRecording.set(r.id, decoded);
-          }
-        }
+      const typed = recs as Array<{ id: string; encrypted_transcript: string | null }>;
+      const decoded = await Promise.all(
+        typed.map(async (r) => {
+          if (!r.encrypted_transcript) return null;
+          const text = await decryptField(r.encrypted_transcript);
+          return text ? ([r.id, text] as const) : null;
+        }),
+      );
+      for (const pair of decoded) {
+        if (pair) transcriptByRecording.set(pair[0], pair[1]);
       }
     }
   }

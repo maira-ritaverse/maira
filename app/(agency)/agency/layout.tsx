@@ -28,18 +28,25 @@ export default async function AgencyLayout({ children }: { children: React.React
     redirect("/login");
   }
 
-  const role = await getUserRole(user.id);
+  // getUserRole + profile + policyAcceptance を 並列化。
+  // organizations.archived_at は role.organization.id に 依存 する ため 後段。
+  // (旧:getUserRole 直列 → 3 並列 で 2 段 構成 だった)
+  const [role, { data: profile }, policyAcceptance] = await Promise.all([
+    getUserRole(user.id),
+    supabase.from("profiles").select("display_name, archived_at").eq("id", user.id).single(),
+    getPolicyAcceptance(user.id),
+  ]);
+
   if (role.accountType !== "organization_member" || !role.organization || !role.member) {
     redirect("/app");
   }
 
-  // ヘッダー表示用 display_name + プライバシーポリシー同意状態を並行取得
-  // 同時に「ユーザ自身」「所属組織」のアーカイブ状態も確認する。
-  const [{ data: profile }, { data: orgRow }, policyAcceptance] = await Promise.all([
-    supabase.from("profiles").select("display_name, archived_at").eq("id", user.id).single(),
-    supabase.from("organizations").select("archived_at").eq("id", role.organization.id).single(),
-    getPolicyAcceptance(user.id),
-  ]);
+  // 組織アーカイブ チェック(role が 揃ってから)
+  const { data: orgRow } = await supabase
+    .from("organizations")
+    .select("archived_at")
+    .eq("id", role.organization.id)
+    .single();
 
   // 運営者によってアーカイブされたユーザ / 組織はログイン不可。
   if (profile?.archived_at || orgRow?.archived_at) {

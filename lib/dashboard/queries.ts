@@ -106,7 +106,11 @@ export type DashboardData = {
 export async function getDashboardData(userId: string): Promise<DashboardData> {
   const supabase = await createClient();
 
-  // 7 つのクエリを並行に投げ、いずれかが失敗すれば throw する。
+  // 全 15 クエリ を 1 段の Promise.all で 並列実行 する。
+  // 第 2 段(AI 利用量 / 通知 / 面談 / レビュー)も userId と supabase のみ に
+  // 依存して 第 1 段 結果は 使わない ので、2 段に 分ける 必要が ない。
+  // 旧 2 段 直列は 一段目 完了 (DB 最遅クエリ ≒ 80-150ms) を 待ってから
+  // 二段目 が 始まる ため、無駄に レイテンシを 倍増していた。
   // ダッシュボードはどれか 1 つ欠けても全体が成立しないため fail-fast でよい。
   const [
     { data: profileRow },
@@ -120,6 +124,12 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
     allTasks,
     { data: recRow },
     { data: linkedRow },
+    photoUsage,
+    recUsage,
+    intakeUsage,
+    { count: unreadCount },
+    upcomingMeetings,
+    pendingInterviewShares,
   ] = await Promise.all([
     supabase.from("profiles").select("display_name").eq("id", userId).maybeSingle(),
     supabase.auth.getUser(),
@@ -142,17 +152,6 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
       .eq("link_status", "linked")
       .limit(1)
       .maybeSingle(),
-  ]);
-
-  // AI 利用量サマリ + 未読通知数 + 今後の面談予定 + 承認待ちレビュー(6 並列)
-  const [
-    photoUsage,
-    recUsage,
-    intakeUsage,
-    { count: unreadCount },
-    upcomingMeetings,
-    pendingInterviewShares,
-  ] = await Promise.all([
     checkAiUsageLimit(supabase, userId, "photo_enhance"),
     checkAiUsageLimit(supabase, userId, "job_recommendation_seeker"),
     checkIntakeLimit(supabase, userId),

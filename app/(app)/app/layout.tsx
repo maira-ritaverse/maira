@@ -35,21 +35,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect("/login");
   }
 
-  // エージェントメンバーは /agency に追い返す。
-  // 求職者(seeker)はそのまま通す。
-  const role = await getUserRole(user.id);
-  if (role.accountType === "organization_member" && role.organization && role.member) {
-    redirect("/agency");
-  }
-
-  // ヘッダー表示用 display_name と、サイドナビ「エージェント連携」のバッジ用
-  // 招待件数を並行取得する。invited 件数は RLS により本人宛て(メール一致)の
-  // 行のみ count され、件数 0 のときはサイドナビでバッジを出さない。
-  const [{ data: profile }, invitedCount, policyAcceptance] = await Promise.all([
+  // getUserRole + 共通レイアウト 用 4 クエリ を 1 段の Promise.all で 並列化。
+  // どれも user.id にしか 依存せず、互いに 独立 して いる ので 待ち合わせ不要。
+  // (旧:getUserRole を 直列 await して から 残り 3 並列 → 1 回 余計な round-trip)
+  // 後段で role が organization_member だった 場合は redirect で 捨てる が、
+  // /app は 求職者 主導線 で 大半 は seeker なので 平均 では 大幅 速化。
+  const [role, { data: profile }, invitedCount, policyAcceptance] = await Promise.all([
+    getUserRole(user.id),
     supabase.from("profiles").select("display_name, archived_at").eq("id", user.id).single(),
     countInvitedConnections(),
     getPolicyAcceptance(user.id),
   ]);
+
+  // エージェントメンバーは /agency に追い返す(求職者は そのまま 通す)
+  if (role.accountType === "organization_member" && role.organization && role.member) {
+    redirect("/agency");
+  }
 
   // 運営者によってアーカイブ(停止)されたユーザはログイン不可。
   // セッションを破棄して /login?archived=1 へ。
