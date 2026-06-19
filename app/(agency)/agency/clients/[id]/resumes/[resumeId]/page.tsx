@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ResumePreview } from "@/components/features/resume/resume-preview";
 import { getClientRecord } from "@/lib/clients/queries";
@@ -94,6 +95,15 @@ export default async function AgencyResumeViewPage({ params }: PageProps) {
             {client.name} さんが共有した履歴書(閲覧のみ)
           </p>
         </div>
+        <Button
+          render={
+            <a href={`/api/agency/clients/${clientRecordId}/resumes/${resumeId}/pdf`} download />
+          }
+          variant="outline"
+          size="sm"
+        >
+          PDF ダウンロード
+        </Button>
       </div>
 
       <Card className="bg-muted/20 p-3">
