@@ -33,7 +33,8 @@ export type AuditAction =
   | "admin_force_deleted_user"
   | "account_export_requested"
   | "privacy_policy_accepted"
-  | "admin_accessed_user";
+  | "admin_accessed_user"
+  | "platform_ai_quota_changed";
 
 export type RecordAuditLogInput = {
   /** 操作対象ユーザ。NULL の場合は metadata に追跡情報を入れる */

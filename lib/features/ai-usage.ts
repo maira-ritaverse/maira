@@ -146,11 +146,29 @@ async function countOrgAiUsageThisMonth(
 
 /**
  * 組織の カスタム上限を 1 件取得(レコードが無ければ null)。
+ *
+ * 優先順位:
+ *   1) platform_ai_quotas (Maira 運営 が 強制設定 / 料金プラン強制)
+ *   2) organization_ai_quotas (エージェント admin の 自主設定)
+ *   3) null (呼び出し側で defaultLimitFor に フォールバック)
+ *
+ * platform 設定が ある場合は 「上書き優先」の 設計判断により エージェント側
+ * 設定 を 完全に 無視 する。
  */
 async function getOrgQuotaForKind(
   supabase: SupabaseClient,
   kind: AiUsageKind,
 ): Promise<number | null> {
+  // 1) platform 強制設定 を 先に 確認(SECURITY DEFINER RPC 経由 で 呼出元
+  //    メンバー の 組織 の レコード を 1 件返す)
+  const { data: platformLimit } = await supabase.rpc("get_platform_ai_quota_for_caller", {
+    p_kind: kind,
+  });
+  if (typeof platformLimit === "number" && Number.isFinite(platformLimit)) {
+    return platformLimit;
+  }
+
+  // 2) エージェント admin による カスタム設定
   const { data, error } = await supabase
     .from("organization_ai_quotas")
     .select("monthly_limit")

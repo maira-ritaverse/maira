@@ -21,6 +21,8 @@ type MakeArgs = {
   seekerQuota?: number | null;
   /** 組織の カスタム quota(organization_ai_quotas.monthly_limit) */
   orgQuota?: number | null;
+  /** Maira admin の 強制 quota(get_platform_ai_quota_for_caller RPC の返値) */
+  platformQuota?: number | null;
 };
 
 function makeSupabase(args: MakeArgs) {
@@ -73,6 +75,11 @@ function makeSupabase(args: MakeArgs) {
     }
     if (name === "count_org_ai_usage_this_month") {
       return Promise.resolve({ data: args.usageCount, error: null });
+    }
+    if (name === "get_platform_ai_quota_for_caller") {
+      // テスト では platform 強制 上限 は 未設定 と 仮定 (null = 未設定)
+      // ※ 個別ケース で 上限あり を 検証 したい 場合は args.platformQuota を 渡す
+      return Promise.resolve({ data: args.platformQuota ?? null, error: null });
     }
     throw new Error(`unexpected rpc: ${name}`);
   });
@@ -217,6 +224,35 @@ describe("checkAiUsageLimit: agency_org scope", () => {
     });
     const r = await checkAiUsageLimit(s, "u", "job_recommendation_agency", now);
     expect(r.limit).toBe(10);
+    expect(r.allowed).toBe(false);
+  });
+
+  it("Maira admin の 強制上限 (platformQuota) が org / 既定値 より 優先 される", async () => {
+    // platform=3, org=50, 既定=100 でも platform 3 が 採用される
+    const s = makeSupabase({
+      addons: [],
+      usageCount: 0,
+      accountType: "organization_member",
+      hasMembership: true,
+      platformQuota: 3,
+      orgQuota: 50,
+    });
+    const r = await checkAiUsageLimit(s, "u", "job_recommendation_agency", now);
+    expect(r.limit).toBe(3);
+    expect(r.allowed).toBe(true);
+  });
+
+  it("Maira admin の 強制上限 が 0 (完全停止) なら allowed=false", async () => {
+    const s = makeSupabase({
+      addons: [],
+      usageCount: 0,
+      accountType: "organization_member",
+      hasMembership: true,
+      platformQuota: 0,
+      orgQuota: 100,
+    });
+    const r = await checkAiUsageLimit(s, "u", "job_recommendation_agency", now);
+    expect(r.limit).toBe(0);
     expect(r.allowed).toBe(false);
   });
 });
