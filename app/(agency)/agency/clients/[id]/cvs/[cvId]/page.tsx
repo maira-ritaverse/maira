@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CvPreview } from "@/components/features/cv/cv-preview";
 import { getClientRecord } from "@/lib/clients/queries";
@@ -78,6 +79,13 @@ export default async function AgencyCvViewPage({ params }: PageProps) {
             {client.name} さんが共有した職務経歴書(閲覧のみ)
           </p>
         </div>
+        <Button
+          render={<a href={`/api/agency/clients/${clientRecordId}/cvs/${cvId}/pdf`} download />}
+          variant="outline"
+          size="sm"
+        >
+          PDF ダウンロード
+        </Button>
       </div>
 
       <Card className="bg-muted/20 p-3">
