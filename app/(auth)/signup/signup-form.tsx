@@ -12,6 +12,7 @@ import { GoogleSignInButton } from "@/components/features/auth/google-sign-in-bu
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { OrganizationRole } from "@/lib/organizations/types";
 
@@ -193,10 +194,10 @@ export function SignupForm({ invitation, clientInvitation }: Props) {
 
             <div className="space-y-2">
               <Label htmlFor="password">パスワード</Label>
-              <Input
+              <PasswordInput
                 id="password"
-                type="password"
                 placeholder="8文字以上"
+                autoComplete="new-password"
                 {...register("password")}
                 disabled={isPending}
               />

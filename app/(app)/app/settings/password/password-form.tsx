@@ -7,8 +7,8 @@ import { changePasswordRequestSchema, type ChangePasswordRequest } from "@/lib/s
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 
 /**
  * パスワード変更フォーム
@@ -89,12 +89,11 @@ export function PasswordForm() {
           <Label htmlFor="current_password">
             現在のパスワード <span className="text-red-600">*</span>
           </Label>
-          <Input
+          <PasswordInput
             id="current_password"
-            type="password"
+            autoComplete="current-password"
             {...register("current_password")}
             disabled={isPending}
-            autoComplete="current-password"
           />
           {errors.current_password && (
             <p className="text-sm text-red-600">{errors.current_password.message}</p>
@@ -105,12 +104,11 @@ export function PasswordForm() {
           <Label htmlFor="new_password">
             新しいパスワード <span className="text-red-600">*</span>
           </Label>
-          <Input
+          <PasswordInput
             id="new_password"
-            type="password"
+            autoComplete="new-password"
             {...register("new_password")}
             disabled={isPending}
-            autoComplete="new-password"
           />
           {errors.new_password && (
             <p className="text-sm text-red-600">{errors.new_password.message}</p>
@@ -122,12 +120,11 @@ export function PasswordForm() {
           <Label htmlFor="confirm_password">
             新しいパスワード(確認) <span className="text-red-600">*</span>
           </Label>
-          <Input
+          <PasswordInput
             id="confirm_password"
-            type="password"
+            autoComplete="new-password"
             {...register("confirm_password")}
             disabled={isPending}
-            autoComplete="new-password"
           />
           {errors.confirm_password && (
             <p className="text-sm text-red-600">{errors.confirm_password.message}</p>

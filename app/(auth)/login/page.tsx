@@ -1,6 +1,5 @@
 "use client";
 
-import { Eye, EyeOff } from "lucide-react";
 import { Suspense, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -14,6 +13,7 @@ import { SignupInquiryForm } from "@/components/features/auth/signup-inquiry-for
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { isOpenSignupEnabled } from "@/lib/config/signup-mode";
 
@@ -35,7 +35,6 @@ function LoginForm() {
   const archivedParam = searchParams.get("archived");
 
   const [isPending, setIsPending] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(
     errorParam === "auth_callback_failed"
       ? "認証に失敗しました。もう一度お試しください。"
@@ -100,25 +99,12 @@ function LoginForm() {
 
         <div className="space-y-2">
           <Label htmlFor="password">パスワード</Label>
-          <div className="relative">
-            <Input
-              id="password"
-              type={showPassword ? "text" : "password"}
-              {...register("password")}
-              disabled={isPending}
-              className="pr-10"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              disabled={isPending}
-              aria-label={showPassword ? "パスワードを隠す" : "パスワードを表示"}
-              aria-pressed={showPassword}
-              className="text-muted-foreground hover:text-foreground absolute inset-y-0 right-0 flex items-center px-3 disabled:opacity-50"
-            >
-              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
-          </div>
+          <PasswordInput
+            id="password"
+            autoComplete="current-password"
+            {...register("password")}
+            disabled={isPending}
+          />
           {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
         </div>
 

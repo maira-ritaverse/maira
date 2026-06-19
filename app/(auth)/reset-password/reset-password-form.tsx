@@ -8,8 +8,8 @@ import Link from "next/link";
 import { resetPasswordSchema, type ResetPasswordInput } from "@/lib/validations/auth";
 import { updatePassword } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 /**
@@ -106,9 +106,8 @@ export function ResetPasswordForm() {
               <Label htmlFor="new_password">
                 新しいパスワード <span className="text-red-600">*</span>
               </Label>
-              <Input
+              <PasswordInput
                 id="new_password"
-                type="password"
                 autoComplete="new-password"
                 {...register("new_password")}
                 disabled={isPending}
@@ -123,9 +122,8 @@ export function ResetPasswordForm() {
               <Label htmlFor="confirm_password">
                 新しいパスワード(確認) <span className="text-red-600">*</span>
               </Label>
-              <Input
+              <PasswordInput
                 id="confirm_password"
-                type="password"
                 autoComplete="new-password"
                 {...register("confirm_password")}
                 disabled={isPending}
