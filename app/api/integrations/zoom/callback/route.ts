@@ -33,17 +33,24 @@ export async function GET(request: Request) {
       new URL(`/agency/settings/integrations?error=${encodeURIComponent(errorParam)}`, request.url),
     );
   }
-  if (!code || !state) {
-    return NextResponse.json({ error: "missing_code_or_state" }, { status: 400 });
+  if (!code) {
+    return NextResponse.json({ error: "missing_code" }, { status: 400 });
   }
 
-  const verified = verifyOAuthState(state);
-  if (!verified.ok) {
-    return NextResponse.json({ error: "bad_state", reason: verified.reason }, { status: 400 });
-  }
-  // session すり替え対策:state の uid と現在のログインユーザが一致しないと拒否
-  if (verified.payload.uid !== user.id || verified.payload.provider !== "zoom") {
-    return NextResponse.json({ error: "state_user_mismatch" }, { status: 400 });
+  // state は Maira 内から /connect を 起点に した 場合に 発行される CSRF トークン。
+  // Zoom Marketplace の install / Beta Test ボタン経由で OAuth が 開始 された 場合は
+  // state が 付与されない(Zoom 側仕様)。その 場合は state 無しでも 受け入れるが、
+  // ログイン中の ユーザー の セッションを CSRF 防御として 信頼する
+  //   ・既にログイン済(requireUser で 保証)= 攻撃者の セッションで 強制連携 不可
+  //   ・連携先 user_id は 現在の ログインユーザー で 確定
+  if (state) {
+    const verified = verifyOAuthState(state);
+    if (!verified.ok) {
+      return NextResponse.json({ error: "bad_state", reason: verified.reason }, { status: 400 });
+    }
+    if (verified.payload.uid !== user.id || verified.payload.provider !== "zoom") {
+      return NextResponse.json({ error: "state_user_mismatch" }, { status: 400 });
+    }
   }
 
   const config = getZoomConfig();
