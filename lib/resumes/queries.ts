@@ -1,3 +1,4 @@
+import { checkAiUsageLimit, recordAiUsage } from "@/lib/features/ai-usage";
 import { createClient } from "@/lib/supabase/server";
 import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
 import {
@@ -77,13 +78,55 @@ export async function getResume(resumeId: string, userId: string): Promise<Resum
 // carryOver.photo_url:
 //   既存履歴書を「応募ごとの履歴書」として複製するケースで、写真パスを引き継ぐために使う。
 //   通常の新規作成時は省略してよい(updateResume と違って必須ではない)。
+//
+// sourceResumeId:
+//   非 null の 場合 「複製」扱い。 月次 作成 クォータ を 消費しない。
+//   サーバ側で 自分の 履歴書 か どうか を 検証する。
+//   null の 場合 (新規作成) は seeker_resume_create を 1 回 カウント。
 // ============================================
+export class ResumeQuotaExceededError extends Error {
+  current: number;
+  limit: number;
+  constructor(current: number, limit: number) {
+    super(`Resume creation quota exceeded: ${current} / ${limit}`);
+    this.name = "ResumeQuotaExceededError";
+    this.current = current;
+    this.limit = limit;
+  }
+}
+
 export async function createResume(
   userId: string,
   input: SaveResumeRequest,
   carryOver?: { photo_url?: string | null },
+  sourceResumeId?: string | null,
 ): Promise<string> {
   const supabase = await createClient();
+
+  // 複製の 場合 source が 自分の 履歴書 か を 確認 (他人の id を 偽装 して
+  // クォータ回避 する 抜け道 を 塞ぐ)。
+  const isDuplicate = !!sourceResumeId;
+  if (isDuplicate) {
+    const { data: src } = await supabase
+      .from("resumes")
+      .select("id")
+      .eq("id", sourceResumeId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!src) {
+      // 自分の もので ない or 存在しない id → 安全側で 新規作成 として 扱う
+      // (=クォータ カウント)
+    }
+  }
+
+  // 新規作成の 場合 のみ クォータ check
+  const shouldCountQuota = !isDuplicate;
+  if (shouldCountQuota) {
+    const usage = await checkAiUsageLimit(supabase, userId, "seeker_resume_create");
+    if (!usage.allowed) {
+      throw new ResumeQuotaExceededError(usage.current, usage.limit);
+    }
+  }
 
   const encryptedPii = await buildEncryptedPii(input, carryOver);
 
@@ -98,6 +141,13 @@ export async function createResume(
 
   if (error || !data) {
     throw new Error(`Failed to create resume: ${error?.message ?? "unknown"}`);
+  }
+
+  // クォータ消費の 記録 (複製は カウント しない)
+  if (shouldCountQuota) {
+    await recordAiUsage(supabase, userId, "seeker_resume_create", {
+      resume_id: data.id as string,
+    });
   }
 
   return data.id as string;

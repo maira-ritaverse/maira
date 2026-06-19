@@ -1,3 +1,4 @@
+import { checkAiUsageLimit, recordAiUsage } from "@/lib/features/ai-usage";
 import { createClient } from "@/lib/supabase/server";
 import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
 import { getResume } from "@/lib/resumes/queries";
@@ -71,9 +72,51 @@ export async function getCv(cvId: string, userId: string): Promise<Cv | null> {
 // 新規作成
 //
 // 平文 body は DB に渡さない。encrypted_body に JSON 暗号文だけを書く。
+//
+// sourceCvId:
+//   非 null の 場合 「複製」扱い。 月次 作成 クォータ を 消費しない。
+//   サーバ側で 自分の 職務経歴書 か どうか を 検証する。
+//   null の 場合 (新規作成) は seeker_cv_create を 1 回 カウント。
 // ============================================
-export async function createCv(userId: string, input: SaveCvRequest): Promise<string> {
+export class CvQuotaExceededError extends Error {
+  current: number;
+  limit: number;
+  constructor(current: number, limit: number) {
+    super(`CV creation quota exceeded: ${current} / ${limit}`);
+    this.name = "CvQuotaExceededError";
+    this.current = current;
+    this.limit = limit;
+  }
+}
+
+export async function createCv(
+  userId: string,
+  input: SaveCvRequest,
+  sourceCvId?: string | null,
+): Promise<string> {
   const supabase = await createClient();
+
+  const isDuplicate = !!sourceCvId;
+  if (isDuplicate) {
+    // 自分の CV か 検証
+    const { data: src } = await supabase
+      .from("cvs")
+      .select("id")
+      .eq("id", sourceCvId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!src) {
+      // 自分の もので ない or 存在しない id → 安全側で 新規作成扱い (=クォータ カウント)
+    }
+  }
+
+  const shouldCountQuota = !isDuplicate;
+  if (shouldCountQuota) {
+    const usage = await checkAiUsageLimit(supabase, userId, "seeker_cv_create");
+    if (!usage.allowed) {
+      throw new CvQuotaExceededError(usage.current, usage.limit);
+    }
+  }
 
   const encryptedBody = await buildEncryptedBody(input.body);
 
@@ -89,6 +132,10 @@ export async function createCv(userId: string, input: SaveCvRequest): Promise<st
 
   if (error || !data) {
     throw new Error(`Failed to create cv: ${error?.message ?? "unknown"}`);
+  }
+
+  if (shouldCountQuota) {
+    await recordAiUsage(supabase, userId, "seeker_cv_create", { cv_id: data.id as string });
   }
 
   return data.id as string;

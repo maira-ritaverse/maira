@@ -46,6 +46,20 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({ from: fromMock })),
 }));
 
+// 新規作成 時の クォータ check / 記録 は 単体テスト の 関心外。 常に 通過させる。
+vi.mock("@/lib/features/ai-usage", () => ({
+  checkAiUsageLimit: vi.fn(async () => ({
+    allowed: true,
+    current: 0,
+    limit: 100,
+    addon: false,
+    kind: "seeker_resume_create",
+    resetsAt: "2099-01-01T00:00:00Z",
+    callerScope: "seeker",
+  })),
+  recordAiUsage: vi.fn(async () => {}),
+}));
+
 function generateTestKey(seed: number): string {
   const bytes = new Uint8Array(32);
   for (let i = 0; i < 32; i++) bytes[i] = (seed + i) % 256;

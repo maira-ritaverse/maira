@@ -14,6 +14,10 @@ import {
   PHOTO_ENHANCE_FREE_MONTHLY,
   PLATFORM_AI_TOTAL_FREE_MONTHLY,
   RECOMMENDATION_LETTER_DRAFT_FREE_MONTHLY,
+  SEEKER_CV_AI_DRAFT_HARD_MONTHLY,
+  SEEKER_CV_CREATE_FREE_MONTHLY,
+  SEEKER_RESUME_AI_DRAFT_HARD_MONTHLY,
+  SEEKER_RESUME_CREATE_FREE_MONTHLY,
   type AiUsageKind,
 } from "@/lib/features/ai-usage";
 
@@ -149,6 +153,10 @@ export const AI_KIND_FREE_DEFAULT: Record<AiUsageKind, number> = {
   agency_resume_draft: AGENCY_RESUME_DRAFT_FREE_MONTHLY,
   job_extract_from_document: JOB_EXTRACT_FROM_DOCUMENT_FREE_MONTHLY,
   csv_column_mapping: CSV_COLUMN_MAPPING_FREE_MONTHLY,
+  seeker_resume_create: SEEKER_RESUME_CREATE_FREE_MONTHLY,
+  seeker_cv_create: SEEKER_CV_CREATE_FREE_MONTHLY,
+  seeker_resume_ai_draft: SEEKER_RESUME_AI_DRAFT_HARD_MONTHLY,
+  seeker_cv_ai_draft: SEEKER_CV_AI_DRAFT_HARD_MONTHLY,
 };
 
 export type AiQuotaRow = {

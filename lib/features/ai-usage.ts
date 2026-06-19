@@ -24,7 +24,13 @@ export type AiUsageKind =
   | "agency_cv_draft"
   | "agency_resume_draft"
   | "job_extract_from_document"
-  | "csv_column_mapping";
+  | "csv_column_mapping"
+  // 求職者 ドキュメント 作成系 (月次リセット + ブーストチケット で +10 件 × 3 ヶ月)
+  | "seeker_resume_create"
+  | "seeker_cv_create"
+  // 求職者 AI 下書き系 (月次リセット、 ブースト対象外 ハード上限)
+  | "seeker_resume_ai_draft"
+  | "seeker_cv_ai_draft";
 
 /** kind の scope:組織側(全メンバー合算上限)/ 求職者側(1 人あたり上限) */
 type KindScope = "agency_org" | "seeker_per_user";
@@ -38,6 +44,10 @@ const KIND_SCOPE: Record<AiUsageKind, KindScope> = {
   agency_resume_draft: "agency_org",
   job_extract_from_document: "agency_org",
   csv_column_mapping: "agency_org",
+  seeker_resume_create: "seeker_per_user",
+  seeker_cv_create: "seeker_per_user",
+  seeker_resume_ai_draft: "seeker_per_user",
+  seeker_cv_ai_draft: "seeker_per_user",
 };
 
 // 既定値(組織が 何も 設定していない 状態の フォールバック)
@@ -62,6 +72,17 @@ export const JOB_EXTRACT_FROM_DOCUMENT_ADDON_MONTHLY = 300;
 // CSV 1 つの 取り込みで 1 回 だけ 呼ばれる ので、ファイル数 上限 = 月次回数 上限。
 export const CSV_COLUMN_MAPPING_FREE_MONTHLY = 100;
 export const CSV_COLUMN_MAPPING_ADDON_MONTHLY = 1000;
+
+// 求職者 ドキュメント 作成数 制限 (月次リセット)
+// 5 件 を 超える 作成は seeker_doc_create_boosts チケット で +10 件 × 3 ヶ月。
+export const SEEKER_RESUME_CREATE_FREE_MONTHLY = 5;
+export const SEEKER_CV_CREATE_FREE_MONTHLY = 5;
+export const SEEKER_DOC_CREATE_BOOST_DELTA = 10;
+
+// 求職者 AI 下書き 上限 (月次リセット、 ブースト対象外 の ハード上限)
+// 履歴書系 と 職務経歴書系 で それぞれ 別カウント。
+export const SEEKER_RESUME_AI_DRAFT_HARD_MONTHLY = 20;
+export const SEEKER_CV_AI_DRAFT_HARD_MONTHLY = 20;
 
 /**
  * 企業 ごと の 月次 「総量」既定値。
@@ -109,6 +130,14 @@ function defaultLimitFor(kind: AiUsageKind, addon: boolean): number {
         : JOB_EXTRACT_FROM_DOCUMENT_FREE_MONTHLY;
     case "csv_column_mapping":
       return addon ? CSV_COLUMN_MAPPING_ADDON_MONTHLY : CSV_COLUMN_MAPPING_FREE_MONTHLY;
+    case "seeker_resume_create":
+      return SEEKER_RESUME_CREATE_FREE_MONTHLY;
+    case "seeker_cv_create":
+      return SEEKER_CV_CREATE_FREE_MONTHLY;
+    case "seeker_resume_ai_draft":
+      return SEEKER_RESUME_AI_DRAFT_HARD_MONTHLY;
+    case "seeker_cv_ai_draft":
+      return SEEKER_CV_AI_DRAFT_HARD_MONTHLY;
   }
 }
 
@@ -240,6 +269,27 @@ async function getSeekerQuotaForKind(
 }
 
 /**
+ * 求職者の 当月 アクティブ ブーストチケット 件数 を 取得。
+ *
+ * ブースト 1 枚 = 履歴書 + 職務経歴書 両方 に +10 件 / 月、3 ヶ月有効、スタック可。
+ * 例えば 1 月 と 3 月 に 1 枚 ずつ 購入 → 3 月 は アクティブ 2 枚 で +20 件。
+ *
+ * SECURITY DEFINER RPC 経由 で 呼出元 ユーザー の チケットだけを 数える。
+ */
+async function getSeekerDocCreateBoostCount(
+  supabase: SupabaseClient,
+  now: Date = new Date(),
+): Promise<number> {
+  const monthStart = utcMonthStart(now);
+  const { data, error } = await supabase.rpc("get_seeker_doc_create_boost_count", {
+    p_month_start: monthStart.toISOString(),
+  });
+  if (error) return 0;
+  const n = typeof data === "number" ? data : Number(data);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
  * 呼び出し元の account_type / member ロールを ざっくり判定。
  * profiles.account_type を 直接見る(getUserRole のような重いクエリは 避ける)。
  */
@@ -300,6 +350,14 @@ export async function checkAiUsageLimit(
   } else {
     const custom = await getSeekerQuotaForKind(supabase, kind);
     limit = custom ?? defaultLimitFor(kind, addon);
+  }
+
+  // 求職者 ドキュメント 作成系 (resume / cv_create) は ブーストチケット で
+  // 当月 のみ +10 件 / 枚 加算 する (3 ヶ月有効、スタック可)。
+  // AI 下書き系 (resume / cv_ai_draft) は ブースト対象外 (ハード上限)。
+  if (kind === "seeker_resume_create" || kind === "seeker_cv_create") {
+    const boostCount = await getSeekerDocCreateBoostCount(supabase, now);
+    limit += boostCount * SEEKER_DOC_CREATE_BOOST_DELTA;
   }
 
   // 利用数の集計:組織横断 or 個人 で 切り替え
