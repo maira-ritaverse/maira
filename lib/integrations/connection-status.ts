@@ -68,6 +68,9 @@ export async function getGoogleConnectionStatus(
     hasCalendarEventsScope,
     "https://www.googleapis.com/auth/calendar.events",
   );
+  // drive.readonly は 撤去済(2026-06-19、Google Restricted scope CASA 監査 回避のため)。
+  // 既存接続は そのまま 動く(scope に drive.readonly が 含まれて いても 害は ない)。
+  // needsReauth は calendar.events だけ で 判断する。
   const driveEnabled = hasScope(
     row.scope,
     row.scopes_granted,
@@ -79,7 +82,7 @@ export async function getGoogleConnectionStatus(
     email: row.google_email,
     calendarEnabled,
     driveEnabled,
-    needsReauth: !calendarEnabled || !driveEnabled,
+    needsReauth: !calendarEnabled,
   };
 }
 

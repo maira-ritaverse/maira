@@ -1,16 +1,16 @@
 /**
- * Google OAuth 2.0 ヘルパ(Drive 経由 Meet 録画取込用)
+ * Google OAuth 2.0 ヘルパ(Meet ミーティング作成用)
  *
- * Workspace の「Meet 録画 → Drive 自動保存」機能で Drive に置かれた録画
- * ファイルを Maira が読みに行く構成。Drive 全体は要求せず、Maira が作成
- * したフォルダ配下だけを読む drive.file スコープを基本にする。
+ * Google Calendar API で Meet 付き イベントを 作成 する 構成。
+ *
+ * 2026-06-19 変更:
+ *   ・drive.readonly スコープを 撤去。Google の Restricted scope(CASA 監査 必須)を
+ *     回避するため、Meet 録画の Drive 自動取込は 廃止。
+ *   ・Meet 録画は ユーザーが Maira に 手動で アップロード する 運用に 切替え。
  *
  * 必要 scope:
- *   - openid email(本人特定)
- *   - https://www.googleapis.com/auth/drive.readonly
- *     ※ Meet 録画は Workspace 管理者の Drive(録画作成者)に保存されるため、
- *        最小権限としては readonly 全体になる。後で drive.file + 共有フォルダ
- *        運用に絞れるか検討。
+ *   - openid email             : 本人特定(google_sub / google_email)
+ *   - calendar.events          : Maira からカレンダーイベント(= Meet URL 付き)の作成 / 編集 / 削除
  */
 
 const AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -19,16 +19,14 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
  * 認可で要求するスコープ。
  *
  * - openid email             : 本人特定(google_sub / google_email)
- * - drive.readonly           : Meet 録画 → Drive 自動保存ファイルの読取(既存)
  * - calendar.events          : Maira からカレンダーイベント(= Meet URL 付き)の作成 / 編集 / 削除
  *
- * 既存接続済みユーザは calendar.events が含まれていないので、
- * 「Maira から会議を作成」操作時に再認可を促す(scopes_granted で UI 判定)。
+ * Sensitive scope(calendar.events)のみで構成し、Restricted scope は使わない。
+ * Tier 2 OAuth verification(CASA 不要)で 公開可能。
  */
 export const GOOGLE_SCOPES = [
   "openid",
   "email",
-  "https://www.googleapis.com/auth/drive.readonly",
   "https://www.googleapis.com/auth/calendar.events",
 ] as const;
 

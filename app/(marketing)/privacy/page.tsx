@@ -161,13 +161,15 @@ export default function PrivacyPolicyPage() {
           </div>
 
           <div className="space-y-2">
-            <p className="font-medium">7-2. Google 連携(Calendar / Drive)</p>
+            <p className="font-medium">7-2. Google 連携(Calendar)</p>
             <p>
-              Google Calendar への面談予定作成、Google Meet 録画(Drive 保存)の取り込みを行うため、
-              本人が明示的に承認した <code className="text-xs">calendar.events</code> および{" "}
-              <code className="text-xs">drive.readonly</code> スコープのみ使用します。
-              トークンの暗号化保管、解除時の即時破棄、第三者提供の禁止、 90 日後の録画自動削除は
-              Zoom 連携と同じ方針です。
+              Google Calendar への面談予定作成(Meet URL 付き)を行うため、本人が明示的に承認した{" "}
+              <code className="text-xs">calendar.events</code> スコープのみ使用します。
+              <br />
+              2026 年 6 月 19 日に <code className="text-xs">drive.readonly</code>{" "}
+              スコープは撤去しました(Google Restricted scope の運用負荷回避のため)。Google Meet
+              録画は ユーザーが Maira に 手動アップロードする 運用に 切り替えています。
+              トークンの暗号化保管、解除時の即時破棄、第三者提供の禁止は Zoom 連携と同じ方針です。
             </p>
           </div>
         </section>

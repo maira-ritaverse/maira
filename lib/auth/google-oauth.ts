@@ -3,8 +3,7 @@
  *
  * 1 度の同意で以下を一括取得する:
  *   - openid / email / profile       … ログイン認証
- *   - calendar.events                … Maira からカレンダーイベントの作成・編集・削除
- *   - drive.readonly                 … Meet 録画(Drive 保存)の自動取込
+ *   - calendar.events                … Maira からカレンダーイベント(Meet URL 付)の作成・編集・削除
  *
  * Maira の方針:
  *   ・「Google でログイン」と「Google を連携」を 1 回の同意で完結させる(分けない)
@@ -12,6 +11,11 @@
  *     ※ Google の仕様で、prompt=consent を付けないと 2 回目以降 refresh_token が来ない
  *   ・redirectTo は /auth/callback に集約。next クエリで「招待トークン」「サインアップ後」
  *     の遷移先を引き継ぐ
+ *
+ * 2026-06-19 変更:
+ *   ・drive.readonly スコープを 撤去(Google の Restricted scope = CASA 必須 を 回避)。
+ *   ・Meet 録画は ユーザーが Maira に 手動アップロード する 運用に 切替え。
+ *   ・Tier 2 OAuth verification(Sensitive scope のみ)で 公開可能に なる。
  *
  * 戻り値:
  *   ・error → 呼び出し側で UI 表示
@@ -25,7 +29,6 @@ export const GOOGLE_AUTH_SCOPES = [
   "email",
   "profile",
   "https://www.googleapis.com/auth/calendar.events",
-  "https://www.googleapis.com/auth/drive.readonly",
 ].join(" ");
 
 export type StartGoogleAuthOptions = {
