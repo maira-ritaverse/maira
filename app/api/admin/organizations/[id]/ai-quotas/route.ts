@@ -48,8 +48,15 @@ const updateSchema = z.object({
         notes: z.string().max(200).optional(),
       }),
     )
-    .min(1)
-    .max(KIND_VALUES.length),
+    .max(KIND_VALUES.length)
+    .default([]),
+  // 総量月次上限 (agency_org 合算)。null = 既定 (500) に 戻す、0 = 完全停止
+  total: z
+    .object({
+      monthlyLimit: z.number().int().min(0).max(1_000_000).nullable(),
+      notes: z.string().max(200).optional(),
+    })
+    .optional(),
 });
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -63,25 +70,45 @@ export async function GET(_req: Request, { params }: RouteParams) {
   const { id: organizationId } = await params;
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc("admin_list_platform_ai_quotas", {
-    p_org_id: organizationId,
-  });
-  if (error) {
-    return NextResponse.json({ error: "fetch_failed", message: error.message }, { status: 500 });
+  // 個別 kind 上限 + 総量上限 を 並列取得
+  const [{ data: kindData, error: kindErr }, { data: totalData, error: totalErr }] =
+    await Promise.all([
+      supabase.rpc("admin_list_platform_ai_quotas", { p_org_id: organizationId }),
+      supabase.rpc("admin_get_platform_ai_total_quota", { p_org_id: organizationId }),
+    ]);
+  if (kindErr || totalErr) {
+    return NextResponse.json(
+      { error: "fetch_failed", message: (kindErr ?? totalErr)?.message ?? "unknown" },
+      { status: 500 },
+    );
   }
-  const rows = (data ?? []) as Array<{
+  const kindRows = (kindData ?? []) as Array<{
     kind: string;
     monthly_limit: number;
     notes: string | null;
     updated_at: string;
   }>;
+  const totalRow = (
+    (totalData ?? []) as Array<{
+      monthly_limit: number;
+      notes: string | null;
+      updated_at: string;
+    }>
+  )[0];
   return NextResponse.json({
-    quotas: rows.map((r) => ({
+    quotas: kindRows.map((r) => ({
       kind: r.kind,
       monthlyLimit: r.monthly_limit,
       notes: r.notes,
       updatedAt: r.updated_at,
     })),
+    total: totalRow
+      ? {
+          monthlyLimit: totalRow.monthly_limit,
+          notes: totalRow.notes,
+          updatedAt: totalRow.updated_at,
+        }
+      : null,
   });
 }
 
@@ -133,6 +160,34 @@ export async function PUT(req: Request, { params }: RouteParams) {
     }
   }
 
+  // 総量月次上限 (任意 / agency_org 合算 で 効く)
+  if (parsed.data.total) {
+    const { monthlyLimit, notes } = parsed.data.total;
+    if (monthlyLimit === null) {
+      const { error } = await supabase.rpc("admin_delete_platform_ai_total_quota", {
+        p_org_id: organizationId,
+      });
+      if (error) {
+        return NextResponse.json(
+          { error: "total_delete_failed", message: error.message },
+          { status: 500 },
+        );
+      }
+    } else {
+      const { error } = await supabase.rpc("admin_upsert_platform_ai_total_quota", {
+        p_org_id: organizationId,
+        p_monthly_limit: monthlyLimit,
+        p_notes: notes ?? null,
+      });
+      if (error) {
+        return NextResponse.json(
+          { error: "total_upsert_failed", message: error.message },
+          { status: 500 },
+        );
+      }
+    }
+  }
+
   // 監査ログ:プラン強制 / 緊急介入の 証跡
   await recordAuditLog({
     userId: guard.user.id,
@@ -140,22 +195,37 @@ export async function PUT(req: Request, { params }: RouteParams) {
     metadata: { organizationId, quotas: parsed.data.quotas },
   }).catch((e) => console.warn("[admin ai-quotas] audit log failed", e));
 
-  // 反映後の 状態 を 返す
-  const { data } = await supabase.rpc("admin_list_platform_ai_quotas", {
-    p_org_id: organizationId,
-  });
-  const rows = (data ?? []) as Array<{
+  // 反映後の 状態 を 返す (kind + total の 並列再取得)
+  const [{ data: kindData2 }, { data: totalData2 }] = await Promise.all([
+    supabase.rpc("admin_list_platform_ai_quotas", { p_org_id: organizationId }),
+    supabase.rpc("admin_get_platform_ai_total_quota", { p_org_id: organizationId }),
+  ]);
+  const kindRows2 = (kindData2 ?? []) as Array<{
     kind: string;
     monthly_limit: number;
     notes: string | null;
     updated_at: string;
   }>;
+  const totalRow2 = (
+    (totalData2 ?? []) as Array<{
+      monthly_limit: number;
+      notes: string | null;
+      updated_at: string;
+    }>
+  )[0];
   return NextResponse.json({
-    quotas: rows.map((r) => ({
+    quotas: kindRows2.map((r) => ({
       kind: r.kind,
       monthlyLimit: r.monthly_limit,
       notes: r.notes,
       updatedAt: r.updated_at,
     })),
+    total: totalRow2
+      ? {
+          monthlyLimit: totalRow2.monthly_limit,
+          notes: totalRow2.notes,
+          updatedAt: totalRow2.updated_at,
+        }
+      : null,
   });
 }

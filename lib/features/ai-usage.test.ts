@@ -23,6 +23,10 @@ type MakeArgs = {
   orgQuota?: number | null;
   /** Maira admin の 強制 quota(get_platform_ai_quota_for_caller RPC の返値) */
   platformQuota?: number | null;
+  /** Maira admin の 月次 総量上限 (get_platform_ai_total_quota_for_caller) */
+  platformTotalQuota?: number | null;
+  /** 当月 の 組織 agency_org 総使用回数 (count_org_ai_usage_total_this_month) */
+  orgTotalUsage?: number;
 };
 
 function makeSupabase(args: MakeArgs) {
@@ -80,6 +84,17 @@ function makeSupabase(args: MakeArgs) {
       // テスト では platform 強制 上限 は 未設定 と 仮定 (null = 未設定)
       // ※ 個別ケース で 上限あり を 検証 したい 場合は args.platformQuota を 渡す
       return Promise.resolve({ data: args.platformQuota ?? null, error: null });
+    }
+    if (name === "get_platform_ai_total_quota_for_caller") {
+      // 既定 500 を 既存テスト に 影響させない ため、明示指定 が なければ
+      // 十分 大きな 数 (Infinity 相当) を 返して 総量チェック を 通過させる
+      return Promise.resolve({
+        data: args.platformTotalQuota ?? Number.MAX_SAFE_INTEGER,
+        error: null,
+      });
+    }
+    if (name === "count_org_ai_usage_total_this_month") {
+      return Promise.resolve({ data: args.orgTotalUsage ?? 0, error: null });
     }
     throw new Error(`unexpected rpc: ${name}`);
   });
@@ -254,5 +269,32 @@ describe("checkAiUsageLimit: agency_org scope", () => {
     const r = await checkAiUsageLimit(s, "u", "job_recommendation_agency", now);
     expect(r.limit).toBe(0);
     expect(r.allowed).toBe(false);
+  });
+
+  it("総量上限 500 を 超えていれば 個別 kind に 余裕が あっても 拒否される", async () => {
+    const s = makeSupabase({
+      addons: [],
+      usageCount: 10, // 個別 kind は まだ 余裕
+      accountType: "organization_member",
+      hasMembership: true,
+      platformTotalQuota: 500,
+      orgTotalUsage: 500, // 既に 総量 上限 到達
+    });
+    const r = await checkAiUsageLimit(s, "u", "job_recommendation_agency", now);
+    expect(r.allowed).toBe(false);
+    expect(r.limit).toBe(0); // 総量 拒否時は limit=0 を 報告
+  });
+
+  it("総量上限 に 余裕 + 個別 kind にも 余裕 なら allowed", async () => {
+    const s = makeSupabase({
+      addons: [],
+      usageCount: 10,
+      accountType: "organization_member",
+      hasMembership: true,
+      platformTotalQuota: 500,
+      orgTotalUsage: 100, // 総量 余裕あり
+    });
+    const r = await checkAiUsageLimit(s, "u", "job_recommendation_agency", now);
+    expect(r.allowed).toBe(true);
   });
 });

@@ -63,6 +63,15 @@ export const JOB_EXTRACT_FROM_DOCUMENT_ADDON_MONTHLY = 300;
 export const CSV_COLUMN_MAPPING_FREE_MONTHLY = 100;
 export const CSV_COLUMN_MAPPING_ADDON_MONTHLY = 1000;
 
+/**
+ * 企業 ごと の 月次 「総量」既定値。
+ *
+ * platform_ai_total_quotas に レコードが ない 場合 の フォールバック。
+ * agency_org scope kinds の 合計 で この 値 を 超えたら 全 AI を 停止 する。
+ * Maira admin が /admin/organizations/[id] で 上書き 可能。
+ */
+export const PLATFORM_AI_TOTAL_FREE_MONTHLY = 500;
+
 export type AiUsageStatus = {
   allowed: boolean;
   current: number;
@@ -180,6 +189,41 @@ async function getOrgQuotaForKind(
 }
 
 /**
+ * 呼出元 組織 の 月次 「総量」上限 を 取得。
+ *
+ * platform_ai_total_quotas に 設定があれば それ、無ければ 既定値
+ * PLATFORM_AI_TOTAL_FREE_MONTHLY (= 500)。
+ *
+ * 求職者 (organization_members レコードなし) は 関知しない (呼出側で
+ * scope=agency_org に 限って 呼ぶ)。
+ */
+async function getOrgTotalQuota(supabase: SupabaseClient): Promise<number> {
+  const { data, error } = await supabase.rpc("get_platform_ai_total_quota_for_caller");
+  if (error) return PLATFORM_AI_TOTAL_FREE_MONTHLY;
+  const v = typeof data === "number" ? data : Number(data);
+  return Number.isFinite(v) ? v : PLATFORM_AI_TOTAL_FREE_MONTHLY;
+}
+
+/**
+ * 呼出元 組織 の 月次 「総量」利用回数 を 取得。
+ *
+ * agency_org scope kinds の 合算 (seeker_per_user kinds は 除外)。
+ * 失敗時は MAX_SAFE_INTEGER で 安全側 (=必ず 拒否側に 寄る)。
+ */
+async function countOrgTotalAiUsageThisMonth(
+  supabase: SupabaseClient,
+  now: Date = new Date(),
+): Promise<number> {
+  const startIso = utcMonthStart(now).toISOString();
+  const { data, error } = await supabase.rpc("count_org_ai_usage_total_this_month", {
+    p_month_start: startIso,
+  });
+  if (error) return Number.MAX_SAFE_INTEGER;
+  const n = typeof data === "number" ? data : Number(data);
+  return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+}
+
+/**
  * 求職者の 紐づき先組織で 設定されている 上限の 最大値(複数組織なら寛大な方)。
  * SECURITY DEFINER RPC で 取得。
  */
@@ -263,6 +307,26 @@ export async function checkAiUsageLimit(
     scopeOfKind === "agency_org"
       ? await countOrgAiUsageThisMonth(supabase, kind, now)
       : await countAiUsageThisMonth(supabase, userId, kind, now);
+
+  // 総量チェック (agency_org のみ):企業全体の月次合計が 総量上限を 超えたら 拒否
+  // platform_ai_total_quotas で 個別設定があれば それ、無ければ 既定 500
+  if (scopeOfKind === "agency_org") {
+    const total = await getOrgTotalQuota(supabase);
+    const totalUsage = await countOrgTotalAiUsageThisMonth(supabase, now);
+    if (totalUsage >= total) {
+      // 総量超過時:limit を 0 と 報告して allowed=false
+      // current は 「現在 の kind の 使用回数」を 維持 (UI 表示用)
+      return {
+        allowed: false,
+        current,
+        limit: 0,
+        addon,
+        kind,
+        resetsAt: utcNextMonthStart(now).toISOString(),
+        callerScope,
+      };
+    }
+  }
 
   return {
     allowed: current < limit,
