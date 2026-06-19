@@ -29,13 +29,12 @@ import { z } from "zod";
  *     ことを 許容(POST 側で 空文字 / 「不明」を null 相当に 正規化)
  */
 // 上限は createJobRequestSchema と 揃えること(lib/jobs/types.ts)。
-// AI 抽出は ★ 区切りで 集約する 設計なので、description は 12000 字 まで 許容。
-// 法定明示事項(holidays / application_qualifications)も 集約 結果が 入る ので
-// 4000 字 まで 緩める(従来 2000 だった ため、AI 集約 が 不足側に 押し込まれ
-// schema 違反 が 起きていた)。
-const nullableShortText = z.string().max(300).nullable();
-const nullableLongText = z.string().max(12000).nullable();
-const nullableLabourField = z.string().max(4000).nullable();
+// AI 抽出は ★ 区切りで 集約する 設計なので、description は 大きく 取る。
+// 過剰に 緩い 数値 でも DB は text 型 (無制限) で 副作用 なし。
+// 「AI 出力の 構造が 不正でした」を 抑制 する ため、運用余裕を 最大化。
+const nullableShortText = z.string().max(500).nullable();
+const nullableLongText = z.string().max(20000).nullable();
+const nullableLabourField = z.string().max(6000).nullable();
 
 const nullableSalary = z.preprocess((val) => {
   if (val === "" || val === null || val === undefined) return null;
@@ -68,7 +67,8 @@ export const jobExtractionSchema = z.object({
   holidays: nullableLabourField,
   application_qualifications: nullableLabourField,
   // 抽出メタ:何を 根拠に 抜いたか / 自信度。UI で「読み取り精度」表示用。
-  extraction_notes: z.string().max(1000).nullable(),
+  // AI が 換算 / 統一表記 / 取れなかった 価値項目 を 5-10 行 列挙する 想定で 拡張。
+  extraction_notes: z.string().max(5000).nullable(),
   confidence: z.enum(["high", "medium", "low"]).default("medium"),
 });
 

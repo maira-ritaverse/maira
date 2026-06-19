@@ -86,19 +86,47 @@ export async function extractJobFromDocument(input: ExtractJobInput): Promise<Ex
     const message = err instanceof Error ? err.message : String(err);
     // 本番運用で 原因 追跡できる ように、AI SDK が 投げる 例外の 構造を そのまま
     // サーバーログに 残す。Vercel の Functions ログ で 「どの フィールドが
-    // schema に 引っかかったか」を 確認できる ようにする。
-    // err.cause に zod の ZodError が 入る ケースが あるので そこ も 出す。
-    const cause = err instanceof Error ? (err as Error & { cause?: unknown }).cause : undefined;
+    // schema に 引っかかったか」「AI 生 レスポンスは どんな 値だったか」を
+    // 確認できる ようにする。
+    //
+    // AI SDK v6 の AI_TypeValidationError / NoObjectGeneratedError は err.cause
+    // に zod の ZodError、err.text に 生テキスト 等を 持っている。
+    const errAny = err as Error & {
+      cause?: unknown;
+      text?: string;
+      response?: unknown;
+      issues?: unknown;
+    };
+    const cause = errAny.cause;
+    const causeAny = cause as { issues?: unknown; message?: string; name?: string };
     console.error("[job-extract] generateObject failed", {
       name: err instanceof Error ? err.name : "unknown",
       message,
-      cause: cause instanceof Error ? { name: cause.name, message: cause.message } : cause,
+      cause:
+        cause instanceof Error
+          ? {
+              name: cause.name,
+              message: cause.message,
+              issues: causeAny?.issues,
+            }
+          : cause,
+      issues: errAny.issues,
+      rawText: typeof errAny.text === "string" ? errAny.text.slice(0, 4000) : undefined,
     });
-    // zod での schema 不一致は 例外メッセージに "schema" などが 含まれる ので、
-    // ヒューリスティックで 分類して UI 側の リトライ判断を しやすくする。
-    if (
-      /schema|validation|too[_ ]big|invalid|type[_ ]validation|NoObjectGenerated/i.test(message)
-    ) {
+    // schema_error の 判定 は 「明らかに 検証 起源」と 判る キーワード だけ に 絞る。
+    // 旧 regex で "invalid" 単独 を 含めると レート制限 等の API エラー も
+    // schema_error と 誤判定して UI に 不適切な メッセージ を 返していた。
+    const isSchemaError =
+      err instanceof Error &&
+      (err.name === "AI_TypeValidationError" ||
+        err.name === "AI_NoObjectGeneratedError" ||
+        err.name === "ZodError" ||
+        (cause instanceof Error &&
+          (cause.name === "ZodError" || cause.name === "AI_TypeValidationError")) ||
+        /AI_TypeValidationError|AI_NoObjectGeneratedError|ZodError|response did not match schema|too_big|invalid_type/i.test(
+          message,
+        ));
+    if (isSchemaError) {
       return { ok: false, reason: "schema_error", message };
     }
     return { ok: false, reason: "ai_error", message };

@@ -56,25 +56,17 @@ const salaryField = z.preprocess((val) => {
   return val;
 }, z.number().int().min(0).max(100000).nullable());
 
-// マイグレーション 20260615000004 で 追加された 自由入力項目用の 共通バリデーション。
 // 上限は AI 抽出 schema (lib/ai/prompts/job-extract-from-document.ts) と 揃えること。
-// AI が ★ 区切りで 集約する 設計に した 結果、従来 2000 字 では 入りきらない
-// ケースが 出た ため 4000 字 に 緩める。
-const labourField = z.string().max(4000).optional().or(z.literal(""));
-
-// AI 抽出は ★ 区切りで 仕事内容 / 募集背景 / 配属先 / ポイント / 特徴 /
-// 給与備考 / 福利厚生 / 会社情報 / 求人ID を まとめて 入れる ため、description は
-// 旧 5000 字 から 12000 字 に 拡張(エス・エム・エス 求人 等の 媒体票で 顕在化)。
-const descriptionField = z.string().max(12000).optional().or(z.literal(""));
-
-// 短いテキスト(会社名 / 職種 / 雇用形態 / 勤務地)も AI 抽出時に
-// 「東京都中央区銀座 6-10-1 GINZA SIX 11階」級の 文字列が 入る ので
-// 多少 緩める(従来 100 → 300)。
-const shortTextField = z.string().max(300).optional().or(z.literal(""));
+// AI が ★ 区切りで 集約する 設計に した 結果、従来の 2000/5000 字 では 媒体票が
+// 入りきらず「AI 出力の 構造が 不正でした」が 出ていた。DB は text 型 で 無制限
+// なので、運用余裕を 最大化 した 数値に 設定する。
+const labourField = z.string().max(6000).optional().or(z.literal(""));
+const descriptionField = z.string().max(20000).optional().or(z.literal(""));
+const shortTextField = z.string().max(500).optional().or(z.literal(""));
 
 export const createJobRequestSchema = z.object({
-  company_name: z.string().min(1, "求人企業名を入力してください").max(300),
-  position: z.string().min(1, "職種を入力してください").max(300),
+  company_name: z.string().min(1, "求人企業名を入力してください").max(500),
+  position: z.string().min(1, "職種を入力してください").max(500),
   employment_type: shortTextField,
   location: shortTextField,
   salary_min: salaryField.optional(),
@@ -96,8 +88,8 @@ export const createJobRequestSchema = z.object({
 export type CreateJobRequest = z.infer<typeof createJobRequestSchema>;
 
 export const updateJobRequestSchema = z.object({
-  company_name: z.string().min(1).max(300).optional(),
-  position: z.string().min(1).max(300).optional(),
+  company_name: z.string().min(1).max(500).optional(),
+  position: z.string().min(1).max(500).optional(),
   employment_type: shortTextField,
   location: shortTextField,
   salary_min: salaryField.optional(),

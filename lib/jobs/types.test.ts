@@ -193,25 +193,24 @@ describe("createJobRequestSchema", () => {
     expect(createJobRequestSchema.safeParse({ ...base, status: "archived" }).success).toBe(false);
   });
 
-  it("description は 12000 文字までは OK / 12001 文字で失敗", () => {
-    // AI 抽出が ★ 区切りで 集約する 設計に した ため 5000 → 12000 に 拡張。
+  it("description は 20000 文字までは OK / 20001 文字で失敗", () => {
+    // AI 抽出が ★ 区切りで 集約する 設計に した ため 大きく 拡張。
     expect(
-      createJobRequestSchema.safeParse({ ...base, description: "a".repeat(12000) }).success,
+      createJobRequestSchema.safeParse({ ...base, description: "a".repeat(20000) }).success,
     ).toBe(true);
     expect(
-      createJobRequestSchema.safeParse({ ...base, description: "a".repeat(12001) }).success,
+      createJobRequestSchema.safeParse({ ...base, description: "a".repeat(20001) }).success,
     ).toBe(false);
   });
 
-  it("法定明示事項 8 列は空文字 OK / 4000 文字までは OK / 4001 で失敗", () => {
-    // AI 抽出時に 集約 した holidays / application_qualifications 等が 2000 字 を
-    // 超える ケースが あった ため 4000 字 に 拡張。
+  it("法定明示事項 8 列は空文字 OK / 6000 文字までは OK / 6001 で失敗", () => {
+    // AI 抽出時に 集約 した holidays / application_qualifications 等が 入る ため拡張。
     expect(createJobRequestSchema.safeParse({ ...base, work_hours: "" }).success).toBe(true);
     expect(
-      createJobRequestSchema.safeParse({ ...base, work_hours: "a".repeat(4000) }).success,
+      createJobRequestSchema.safeParse({ ...base, work_hours: "a".repeat(6000) }).success,
     ).toBe(true);
     expect(
-      createJobRequestSchema.safeParse({ ...base, work_hours: "a".repeat(4001) }).success,
+      createJobRequestSchema.safeParse({ ...base, work_hours: "a".repeat(6001) }).success,
     ).toBe(false);
   });
 });
