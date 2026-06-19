@@ -199,33 +199,43 @@ export function DashboardActive({ data }: Props) {
         </Card>
       )}
 
-      {/* AI 利用量サマリ(残量警告がある場合のみ表示) */}
-      {data.aiUsageSummary.hasWarning && (
-        <Card className="border-amber-300 bg-amber-50/40 p-4 dark:border-amber-900 dark:bg-amber-950/20">
-          <p className="font-medium">今月の AI 利用が上限に近づいています</p>
-          <ul className="text-muted-foreground mt-2 ml-4 list-disc text-xs">
-            <li>
-              AI 写真: {data.aiUsageSummary.photo.current} / {data.aiUsageSummary.photo.limit} 回
-            </li>
-            <li>
-              AI 推薦: {data.aiUsageSummary.recommendation.current} /{" "}
-              {data.aiUsageSummary.recommendation.limit} 回
-            </li>
-            <li>
-              AI ヒアリング: {data.aiUsageSummary.intake.current} /{" "}
-              {data.aiUsageSummary.intake.limit} 件
-            </li>
-          </ul>
-          <Button
-            render={<Link href="/app/settings/integrations" />}
-            size="sm"
-            variant="outline"
-            className="mt-3"
-          >
-            設定で詳細を見る
-          </Button>
-        </Card>
-      )}
+      {/* AI 利用量サマリ(常時表示。残量が 80% 以上 で 警告色) */}
+      <Card
+        className={`p-4 ${
+          data.aiUsageSummary.hasWarning
+            ? "border-amber-300 bg-amber-50/40 dark:border-amber-900 dark:bg-amber-950/20"
+            : ""
+        }`}
+      >
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="text-sm font-medium">今月の AI 利用残数</p>
+          {data.aiUsageSummary.hasWarning && (
+            <span className="text-[10px] font-medium text-amber-700 dark:text-amber-300">
+              上限に近づいています
+            </span>
+          )}
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <UsageBar
+            label="AI 写真"
+            current={data.aiUsageSummary.photo.current}
+            limit={data.aiUsageSummary.photo.limit}
+            unit="回"
+          />
+          <UsageBar
+            label="AI 求人推薦"
+            current={data.aiUsageSummary.recommendation.current}
+            limit={data.aiUsageSummary.recommendation.limit}
+            unit="回"
+          />
+          <UsageBar
+            label="AI ヒアリング"
+            current={data.aiUsageSummary.intake.current}
+            limit={data.aiUsageSummary.intake.limit}
+            unit="件"
+          />
+        </div>
+      </Card>
 
       {/* エージェントが進めている推薦の進捗(linked クライアントのみ) */}
       {data.jobRecommendations.hasLinkedAgencyJobs && (
@@ -272,6 +282,42 @@ export function DashboardActive({ data }: Props) {
           </Button>
         </Card>
       )}
+    </div>
+  );
+}
+
+/**
+ * 各 AI 機能 の 残数 + プログレスバー (求職者 ダッシュボード用)
+ */
+function UsageBar({
+  label,
+  current,
+  limit,
+  unit,
+}: {
+  label: string;
+  current: number;
+  limit: number;
+  unit: string;
+}) {
+  const remaining = Math.max(0, limit - current);
+  const pct = limit > 0 ? Math.min(100, (current / limit) * 100) : 0;
+  const tone =
+    remaining === 0 ? "bg-red-500" : remaining < limit * 0.2 ? "bg-amber-500" : "bg-emerald-500";
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline justify-between gap-1">
+        <span className="text-muted-foreground text-[11px]">{label}</span>
+        <span className="text-[10px]">
+          残 <strong>{remaining}</strong>
+          <span className="text-muted-foreground ml-0.5">
+            / {limit} {unit}
+          </span>
+        </span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+        <div className={`h-full transition-all ${tone}`} style={{ width: `${pct}%` }} />
+      </div>
     </div>
   );
 }
