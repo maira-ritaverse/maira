@@ -1,3 +1,4 @@
+import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -9,4 +10,22 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@sparticuz/chromium-min", "puppeteer-core"],
 };
 
-export default nextConfig;
+/**
+ * Sentry ラッパ:
+ *   ・source-maps を Sentry に アップロード (本番 ビルドのみ)
+ *   ・トンネル経由で Ad-blocker を回避 (/monitoring へ プロキシ)
+ *   ・SENTRY_AUTH_TOKEN / SENTRY_ORG / SENTRY_PROJECT 環境変数で 認証
+ *     (未設定なら 単に ラッパが no-op、ローカルでも 壊れない)
+ */
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  silent: !process.env.CI,
+  // Source maps の アップロードは 本番のみ で OK
+  widenClientFileUpload: true,
+  tunnelRoute: "/monitoring",
+  // Source maps を 公開せず、Sentry 側でのみ 参照可能 にする
+  sourcemaps: { disable: false },
+  disableLogger: true,
+  automaticVercelMonitors: true,
+});
