@@ -17,7 +17,7 @@ import {
   calculateDeliveryRate,
   type ScenarioSendStatsMap,
 } from "@/lib/ma/kpi";
-import type { LineMaKpi } from "@/lib/ma/line-kpi";
+import type { KpiPeriod, LineMaKpi } from "@/lib/ma/line-kpi";
 import { ConsentModal } from "./consent-modal";
 import { LineMaScreen } from "./line-ma-screen";
 import { TestSendModal } from "./test-send-modal";
@@ -54,6 +54,7 @@ export type MarketingScreenProps = {
    */
   lastSentAtByScenarioId: Record<string, string>;
   lineKpi: LineMaKpi;
+  period: KpiPeriod;
 };
 
 export function MarketingScreen({
@@ -66,6 +67,7 @@ export function MarketingScreen({
   sendStatsByScenarioId,
   lastSentAtByScenarioId,
   lineKpi,
+  period,
 }: MarketingScreenProps) {
   const router = useRouter();
   // channel タブ 切替。 デフォルト は Eメール (歴史的)。
@@ -152,6 +154,7 @@ export function MarketingScreen({
           sendStatsByScenarioId={sendStatsByScenarioId}
           lastSentAtByScenarioId={lastSentAtByScenarioId}
           kpi={lineKpi}
+          period={period}
         />
       ) : (
         <EmailMaSection

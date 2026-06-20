@@ -6,7 +6,7 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import type { LineMaKpi } from "@/lib/ma/line-kpi";
+import type { KpiPeriod, LineMaKpi } from "@/lib/ma/line-kpi";
 import type { ScenarioSendStatsMap } from "@/lib/ma/kpi";
 import {
   isScenarioImplemented,
@@ -38,6 +38,7 @@ export type LineMaScreenProps = {
   sendStatsByScenarioId: ScenarioSendStatsMap;
   lastSentAtByScenarioId: Record<string, string>;
   kpi: LineMaKpi;
+  period: KpiPeriod;
 };
 
 export function LineMaScreen({
@@ -48,6 +49,7 @@ export function LineMaScreen({
   sendStatsByScenarioId,
   lastSentAtByScenarioId,
   kpi,
+  period,
 }: LineMaScreenProps) {
   const router = useRouter();
   const [showConsent, setShowConsent] = useState(false);
@@ -140,10 +142,34 @@ export function LineMaScreen({
 
       {/* 期間 + アクション バー */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 rounded-md border bg-white px-3 py-1.5 text-xs">
-          <span className="text-slate-500">📅</span>
-          <span>{kpi.periodLabel}</span>
-          <span className="text-muted-foreground text-[10px]">(今月)</span>
+        <div className="flex items-center gap-2">
+          {/* 期間 セレクト (今月 / 先月) */}
+          <div className="inline-flex rounded-md ring-1 ring-slate-200">
+            <Link
+              href="/agency/marketing"
+              className={`rounded-l-md px-3 py-1 text-xs font-medium ${
+                period === "current"
+                  ? "bg-slate-900 text-white"
+                  : "bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              今月
+            </Link>
+            <Link
+              href="/agency/marketing?period=prev"
+              className={`rounded-r-md px-3 py-1 text-xs font-medium ${
+                period === "prev"
+                  ? "bg-slate-900 text-white"
+                  : "bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              先月
+            </Link>
+          </div>
+          <div className="flex items-center gap-1 rounded-md border bg-white px-3 py-1.5 text-xs">
+            <span className="text-slate-500">📅</span>
+            <span>{kpi.periodLabel}</span>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" render={<Link href="/agency/marketing/logs" />}>

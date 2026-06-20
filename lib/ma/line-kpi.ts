@@ -28,15 +28,23 @@ export type LineMaKpi = {
   periodLabel: string;
 };
 
-export async function getLineMaKpi(organizationId: string): Promise<LineMaKpi> {
+export type KpiPeriod = "current" | "prev";
+
+export async function getLineMaKpi(
+  organizationId: string,
+  period: KpiPeriod = "current",
+): Promise<LineMaKpi> {
   const supabase = await createClient();
 
-  // 今月 の 開始 / 終了 を ISO で 計算 (UTC で 切り出し、 日本 時刻 と は ±9h ずれる が
-  // 月次 KPI の 集計 用 と して は 実用上 問題 ない)。
+  // 期間 切り出し。 月 単位 で 「今月」 か 「先月」 を 選ぶ。
   const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
-  const periodLabel = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const offset = period === "prev" ? -1 : 0;
+  const targetYear = now.getFullYear();
+  const targetMonth = now.getMonth() + offset;
+  const start = new Date(targetYear, targetMonth, 1).toISOString();
+  const end = new Date(targetYear, targetMonth + 1, 1).toISOString();
+  const labelDate = new Date(targetYear, targetMonth, 1);
+  const periodLabel = `${labelDate.getFullYear()}-${String(labelDate.getMonth() + 1).padStart(2, "0")}`;
 
   type CountResult = { count: number | null };
 

@@ -7,7 +7,7 @@ import {
   getScenarioSendStats,
   listScenarioViews,
 } from "@/lib/ma/queries";
-import { getLineMaKpi } from "@/lib/ma/line-kpi";
+import { getLineMaKpi, type KpiPeriod } from "@/lib/ma/line-kpi";
 import { CURRENT_EMAIL_MA_CONSENT_VERSION, CURRENT_LINE_MA_CONSENT_VERSION } from "@/lib/ma/types";
 import { MarketingScreen } from "./scenario-list";
 
@@ -32,7 +32,13 @@ import { MarketingScreen } from "./scenario-list";
 // キャッシュ で 古い 表示 が 残る の を 防ぐ ため force-dynamic を 明示。
 export const dynamic = "force-dynamic";
 
-export default async function MarketingPage() {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+export default async function MarketingPage({ searchParams }: { searchParams?: SearchParams }) {
+  const sp = searchParams ? await searchParams : {};
+  const periodRaw = sp.period;
+  const period: KpiPeriod = periodRaw === "prev" ? "prev" : "current";
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -53,7 +59,7 @@ export default async function MarketingPage() {
       getActiveConsent(role.organization.id, "line_ma"),
       getScenarioSendStats(role.organization.id, 30),
       getScenarioLastSentAt(role.organization.id),
-      getLineMaKpi(role.organization.id),
+      getLineMaKpi(role.organization.id, period),
     ]);
 
   // クライアント側で scenario_id → stats の O(1) lookup ができるよう Record にする。
@@ -97,6 +103,7 @@ export default async function MarketingPage() {
         sendStatsByScenarioId={sendStatsByScenarioId}
         lastSentAtByScenarioId={lastSentAtByScenarioId}
         lineKpi={lineKpi}
+        period={period}
       />
     </div>
   );
