@@ -37,9 +37,6 @@ export function LineChannelForm({ initialChannel }: Props) {
         autoSetup: {
           webhookSet: boolean;
           webhookError?: string;
-          liffCreated: boolean;
-          liffId?: string;
-          liffError?: string;
         };
       }
     | { ok: false; error: string }
@@ -76,9 +73,6 @@ export function LineChannelForm({ initialChannel }: Props) {
             autoSetup: {
               webhookSet: boolean;
               webhookError?: string;
-              liffCreated: boolean;
-              liffId?: string;
-              liffError?: string;
             };
           }
         | { error: string; message?: string };
@@ -217,18 +211,11 @@ export function LineChannelForm({ initialChannel }: Props) {
                   {result.autoSetup.webhookError && ` (${result.autoSetup.webhookError})`}
                 </span>
               </li>
-              <li
-                className={`flex items-start gap-1 ${result.autoSetup.liffCreated ? "text-emerald-700" : "text-amber-700"}`}
-              >
-                {result.autoSetup.liffCreated ? (
-                  <Check className="size-3.5 shrink-0" aria-hidden />
-                ) : (
-                  <AlertCircle className="size-3.5 shrink-0" aria-hidden />
-                )}
+              <li className="flex items-start gap-1 text-slate-600">
+                <AlertCircle className="size-3.5 shrink-0" aria-hidden />
                 <span>
-                  LIFF アプリ を 自動作成
-                  {result.autoSetup.liffId && ` (LIFF ID: ${result.autoSetup.liffId})`}
-                  {result.autoSetup.liffError && ` (${result.autoSetup.liffError})`}
+                  LIFF を 使う 場合 は LINE Login チャネル を 別途 作成 → 下記 LIFF フォーム に LIFF
+                  ID を 貼り付け
                 </span>
               </li>
             </ul>

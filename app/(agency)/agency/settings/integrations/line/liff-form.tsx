@@ -105,9 +105,46 @@ export function LiffForm({ organizationId }: Props) {
         <h2 className="text-base font-semibold">LIFF (LINE 内 ブラウザ)</h2>
         <p className="text-muted-foreground mt-1 text-xs">
           {liffId
-            ? "Channel 接続時 に Maira が 自動 作成 済み。 手動上書き が 必要な 場合 のみ 触って ください。"
-            : "Channel 接続時 に 自動作成 されます。 既存 の LIFF アプリ を 流用 する 場合 は LIFF ID を 入力 して ください。"}
+            ? "LIFF アプリ が 設定 されて います。 別 LIFF に 切り替える 場合 のみ 上書き して ください。"
+            : "LIFF は LINE Login チャネル で 作成 する 必要 が あり (LINE 2019/11/11 仕様)、 自動作成 できません。 下記 手順 で 作って ID を 入力 して ください。 (任意 機能)"}
         </p>
+      </div>
+
+      <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-900">
+        <p className="font-semibold">LIFF アプリ の 作成 手順 (5 分)</p>
+        <ol className="mt-1 ml-4 list-decimal space-y-0.5">
+          <li>
+            <a
+              href="https://developers.line.biz/console/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+            >
+              LINE Developers コンソール
+            </a>{" "}
+            を 開く
+          </li>
+          <li>
+            Messaging API チャネル と <strong>同じ プロバイダ</strong> 配下 で 「新規チャネル作成」
+            → <strong>LINE ログイン</strong> を 選択
+          </li>
+          <li>アプリタイプ:「ウェブアプリ」 を 選択 (モバイルアプリ は チェック不要)</li>
+          <li>作成 後、 「LIFF」 タブ → 「追加」 ボタン</li>
+          <li>
+            設定 値:
+            <ul className="mt-0.5 ml-4 list-disc">
+              <li>LIFF アプリ 名:任意 (例: Maira 求人 詳細)</li>
+              <li>サイズ:Full</li>
+              <li>エンドポイント URL:下記 を コピー し 貼り付け</li>
+              <li>Scope:profile, openid を チェック</li>
+              <li>ボット連携機能:On (Aggressive)</li>
+            </ul>
+          </li>
+          <li>
+            作成 後 の <strong>LIFF ID</strong> (例: 1234567890-AbCdEfGh) を 下記 フォーム に
+            貼り付け
+          </li>
+        </ol>
       </div>
 
       <div className="rounded-md border border-slate-200 bg-slate-50 p-3">

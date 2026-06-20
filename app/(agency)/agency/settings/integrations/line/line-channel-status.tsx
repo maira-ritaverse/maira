@@ -40,12 +40,7 @@ export function LineChannelStatus({ channel }: Props) {
       reason: string;
       detail: string;
     } | null;
-    liff: {
-      ok: boolean;
-      liffId: string | null;
-      created: boolean;
-      message?: string;
-    };
+    liffId: string | null;
   };
   const [setupResult, setSetupResult] = useState<SetupResult | null>(null);
   const [setupRunning, setSetupRunning] = useState(false);
@@ -192,13 +187,13 @@ export function LineChannelStatus({ channel }: Props) {
                 />
               )}
               <SetupItem
-                ok={setupResult.liff.ok}
+                ok={setupResult.liffId !== null}
                 label={
-                  setupResult.liff.created
-                    ? `LIFF 自動作成 (LIFF ID: ${setupResult.liff.liffId})`
-                    : `LIFF 既存 (LIFF ID: ${setupResult.liff.liffId ?? "未設定"})`
+                  setupResult.liffId
+                    ? `LIFF 設定済 (LIFF ID: ${setupResult.liffId})`
+                    : "LIFF 未設定 (LINE Login チャネル で 作成 → 下記 LIFF セクション で 設定)"
                 }
-                detail={setupResult.liff.message ?? null}
+                detail={null}
               />
             </ul>
           </AlertDescription>

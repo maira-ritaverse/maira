@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { requireOrgAdmin } from "@/lib/api/auth-guards";
 import { getSiteUrl } from "@/lib/config/site-url";
 import {
-  createLiffApp,
   getBotInfo,
   getWebhookEndpoint,
   setWebhookEndpoint,
@@ -32,7 +31,6 @@ export async function POST() {
 
   const siteUrl = getSiteUrl();
   const webhookUrl = `${siteUrl}/api/webhooks/line/${channel.webhookToken}`;
-  const liffEndpointUrl = `${siteUrl}/liff/${guard.organization.id}`;
 
   const result: {
     botInfo: { displayName: string; basicId: string } | null;
@@ -49,17 +47,12 @@ export async function POST() {
       reason: string;
       detail: string;
     } | null;
-    liff: {
-      ok: boolean;
-      liffId: string | null;
-      created: boolean;
-      message?: string;
-    };
+    liffId: string | null;
   } = {
     botInfo: null,
     webhook: { ok: false, url: webhookUrl, registeredEndpoint: null, active: false },
     webhookTest: null,
-    liff: { ok: false, liffId: channel.liffId, created: false },
+    liffId: channel.liffId,
   };
 
   // 1) Bot 情報
@@ -76,7 +69,6 @@ export async function POST() {
     result.webhook.message = setResult.message;
   }
 
-  // 現状 取得
   const endpointInfo = await getWebhookEndpoint(channel.channelAccessToken);
   if (endpointInfo.ok) {
     result.webhook.registeredEndpoint = endpointInfo.data.endpoint;
@@ -94,26 +86,9 @@ export async function POST() {
     };
   }
 
-  // 4) LIFF アプリ (未作成 なら 自動作成)
-  if (!channel.liffId) {
-    const liffResult = await createLiffApp(channel.channelAccessToken, liffEndpointUrl);
-    if (liffResult.ok) {
-      result.liff.ok = true;
-      result.liff.liffId = liffResult.data.liffId;
-      result.liff.created = true;
-      await admin
-        .from("line_channels")
-        .update({ liff_id: liffResult.data.liffId })
-        .eq("organization_id", guard.organization.id);
-    } else {
-      result.liff.message = liffResult.message;
-    }
-  } else {
-    result.liff.ok = true;
-    result.liff.liffId = channel.liffId;
-  }
+  // LIFF は LINE Login チャネル で 別途 作成 する 必要 が あり、 Messaging API 経由 で
+  // 自動 作成 不可。 LIFF ID は 手動 で 設定 してもらう (LiffForm)。
 
-  // last_verified_at 更新
   await admin
     .from("line_channels")
     .update({ last_verified_at: new Date().toISOString() })

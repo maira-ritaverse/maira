@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { requireOrgAdmin, requireOrgMember } from "@/lib/api/auth-guards";
 import { getSiteUrl } from "@/lib/config/site-url";
-import { createLiffApp, getBotInfo, setWebhookEndpoint } from "@/lib/line/api";
+import { getBotInfo, setWebhookEndpoint } from "@/lib/line/api";
 import { getMyLineChannel, upsertLineChannel } from "@/lib/line/queries";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -82,24 +82,20 @@ export async function POST(request: Request) {
     );
   }
 
-  // 3) 自動セットアップ: Webhook URL を LINE 側 に PUT + LIFF アプリ を 作成
+  // 3) 自動セットアップ:Webhook URL を LINE 側 に PUT。
+  //    LIFF は LINE 仕様 (2019/11/11〜) で Messaging API チャネル の Token で 作成
+  //    できない ため、 別途 LINE Login チャネル で 作って 貼り付けて もらう。
   //    失敗 しても DB 保存 は 巻き戻さない (後で 個別 ボタン で 再試行 可能)。
   const siteUrl = getSiteUrl();
   const webhookUrl = `${siteUrl}/api/webhooks/line/${channel.webhookToken}`;
-  const liffEndpointUrl = `${siteUrl}/liff/${guard.organization.id}`;
 
   const autoSetup: {
     webhookSet: boolean;
     webhookError?: string;
-    liffCreated: boolean;
-    liffId?: string;
-    liffError?: string;
   } = {
     webhookSet: false,
-    liffCreated: false,
   };
 
-  // Webhook 設定
   const webhookResult = await setWebhookEndpoint(input.channelAccessToken, webhookUrl);
   if (webhookResult.ok) {
     autoSetup.webhookSet = true;
@@ -107,27 +103,9 @@ export async function POST(request: Request) {
     autoSetup.webhookError = webhookResult.message;
   }
 
-  // LIFF 自動 作成 (新規 接続時 のみ、 既存 LIFF が ある なら スキップ)
-  if (!channel.liffId) {
-    const liffResult = await createLiffApp(input.channelAccessToken, liffEndpointUrl);
-    if (liffResult.ok) {
-      autoSetup.liffCreated = true;
-      autoSetup.liffId = liffResult.data.liffId;
-      await admin
-        .from("line_channels")
-        .update({ liff_id: liffResult.data.liffId })
-        .eq("organization_id", guard.organization.id);
-    } else {
-      autoSetup.liffError = liffResult.message;
-    }
-  } else {
-    autoSetup.liffCreated = true;
-    autoSetup.liffId = channel.liffId;
-  }
-
   return NextResponse.json({
     ok: true,
-    channel: { ...channel, liffId: autoSetup.liffId ?? channel.liffId },
+    channel,
     botInfo: {
       displayName: botInfo.displayName,
       basicId: botInfo.basicId,

@@ -27,9 +27,6 @@ type StepResult = {
   autoSetup?: {
     webhookSet: boolean;
     webhookError?: string;
-    liffCreated: boolean;
-    liffId?: string;
-    liffError?: string;
   };
   error?: string;
 };
@@ -74,9 +71,6 @@ export function SetupWizard() {
             autoSetup: {
               webhookSet: boolean;
               webhookError?: string;
-              liffCreated: boolean;
-              liffId?: string;
-              liffError?: string;
             };
           }
         | { error: string; message?: string };
@@ -346,9 +340,12 @@ function Step3({
         <p className="font-semibold text-emerald-900">接続 後 自動 で 行われる こと:</p>
         <ul className="mt-1 space-y-0.5">
           <li className="text-emerald-800">・Webhook URL を LINE 側 に 設定</li>
-          <li className="text-emerald-800">・LIFF アプリ (求人詳細 / 応募 用) を 作成</li>
           <li className="text-emerald-800">・接続 疎通テスト</li>
         </ul>
+        <p className="text-muted-foreground mt-2 text-[10px]">
+          ※ LIFF (求人詳細 / 応募 用) は LINE の 仕様 上、 別途 LINE Login チャネル を 作成 する
+          必要 が あります。 接続後 の LIFF 設定 セクション で 案内 します。
+        </p>
       </div>
 
       {result && !result.ok && (
@@ -367,12 +364,11 @@ function Step3({
                 label="Webhook 自動設定"
                 detail={result.autoSetup.webhookError}
               />
-              <ResultItem
-                ok={result.autoSetup.liffCreated}
-                label={`LIFF 自動作成${result.autoSetup.liffId ? ` (${result.autoSetup.liffId})` : ""}`}
-                detail={result.autoSetup.liffError}
-              />
             </ul>
+            <p className="text-muted-foreground mt-2 text-[10px]">
+              ※ LIFF を 使う なら 接続後 の 「LIFF (LINE 内 ブラウザ)」 セクション で 設定 して
+              ください (任意)。
+            </p>
             <p className="mt-3 text-xs text-slate-600">4 秒後 に ページを 再読み込み します...</p>
           </AlertDescription>
         </Alert>

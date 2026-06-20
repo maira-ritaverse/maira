@@ -268,58 +268,9 @@ export async function testWebhookEndpoint(accessToken: string): Promise<Result<W
   }
 }
 
-/**
- * LIFF アプリ を 自動 作成。
- * POST /liff/v1/apps
- *
- * 引数 endpoint = LIFF Endpoint URL (= Maira 側 /liff/{orgId})。
- * 戻り値 の liffId を line_channels.liff_id に 保存 して すぐ 使える。
- */
-export type LiffAppCreated = {
-  liffId: string;
-};
-
-export async function createLiffApp(
-  accessToken: string,
-  endpointUrl: string,
-): Promise<Result<LiffAppCreated>> {
-  try {
-    const res = await fetch("https://api.line.me/liff/v1/apps", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        view: {
-          type: "full",
-          url: endpointUrl,
-        },
-        features: {
-          ble: false,
-          qrCode: false,
-        },
-        scope: ["profile", "openid"],
-        botPrompt: "normal",
-      }),
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      return { ok: false, status: res.status, message: body.slice(0, 500) };
-    }
-    const json = (await res.json()) as { liffId?: string };
-    if (!json.liffId) {
-      return { ok: false, status: 0, message: "no_liff_id_in_response" };
-    }
-    return { ok: true, data: { liffId: json.liffId } };
-  } catch (err) {
-    return {
-      ok: false,
-      status: 0,
-      message: err instanceof Error ? err.message : "network_error",
-    };
-  }
-}
+// LIFF アプリ 自動作成 は LINE 2019/11/11 仕様 で Messaging API チャネル 経由 不可。
+// LINE Login チャネル の Access Token が 必要 だが、 Maira では それ を 預からない 設計。
+// → 手動 で LIFF ID を 設定 してもらう (LiffForm)。
 
 /**
  * Rich Menu を デフォルト として 設定 (全 未個別設定 ユーザー に 適用)。
