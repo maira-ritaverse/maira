@@ -149,17 +149,23 @@ export function MeetingProposePanel({ lineUserId, onSent, onClose, unfollowed }:
           </div>
         </div>
         <div className="space-y-1">
-          <Label htmlFor="propose-duration" className="text-xs">
-            所要時間 (分)
-          </Label>
-          <Input
-            id="propose-duration"
-            type="number"
-            min={5}
-            max={480}
-            value={durationMinutes}
-            onChange={(e) => setDurationMinutes(Math.max(5, Math.min(480, Number(e.target.value))))}
-          />
+          <Label className="text-xs">所要時間</Label>
+          <div className="inline-flex flex-wrap gap-1.5">
+            {[15, 30, 45, 60, 90, 120].map((min) => (
+              <button
+                type="button"
+                key={min}
+                onClick={() => setDurationMinutes(min)}
+                className={`rounded-md border px-3 py-1 text-xs ${
+                  durationMinutes === min
+                    ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                }`}
+              >
+                {min} 分
+              </button>
+            ))}
+          </div>
         </div>
         <div className="col-span-2 space-y-1">
           <Label htmlFor="propose-agenda" className="text-xs">

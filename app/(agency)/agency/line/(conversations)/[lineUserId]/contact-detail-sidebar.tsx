@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { ActivitySection } from "./activity-section";
 import { AssigneeSection } from "./assignee-section";
+import { DisplayNameEditor } from "./display-name-editor";
 import { NotesSection } from "./notes-section";
 import { ProfileRefreshButton } from "./profile-refresh-button";
 import { TagsSection } from "./tags-section";
@@ -23,6 +24,8 @@ import { TagsSection } from "./tags-section";
 type Props = {
   lineUserId: string;
   displayName: string | null;
+  /** エージェント が 上書き した 名前 (null なら displayName を 使う) */
+  customName: string | null;
   pictureUrl: string | null;
   clientRecordId: string | null;
   clientName: string | null;
@@ -36,6 +39,7 @@ type Props = {
 export function ContactDetailSidebar({
   lineUserId,
   displayName,
+  customName,
   pictureUrl,
   clientRecordId,
   clientName,
@@ -59,7 +63,13 @@ export function ContactDetailSidebar({
         ) : (
           <div className="mx-auto h-20 w-20 rounded-full bg-slate-200" />
         )}
-        <p className="mt-3 text-sm font-semibold">{displayName ?? "(名前なし)"}</p>
+        <div className="mt-3">
+          <DisplayNameEditor
+            lineUserId={lineUserId}
+            displayName={displayName}
+            customName={customName}
+          />
+        </div>
         <p className="text-muted-foreground mt-0.5 font-mono text-[10px]">
           {lineUserId.slice(0, 16)}...
         </p>

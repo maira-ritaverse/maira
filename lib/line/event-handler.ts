@@ -620,6 +620,18 @@ async function confirmMeetingProposal(
     return { ok: false, type: "postback", reason: "meeting_create_failed" };
   }
 
+  // 招待者 名 を line_user_links.display_name / nickname から 取得
+  // (カレンダー / ICS / 一覧 で 「誰 と の 面談 か」が 見える ように)
+  const { data: linkRowForName } = await ctx.service
+    .from("line_user_links")
+    .select("display_name, custom_name")
+    .eq("organization_id", ctx.organizationId)
+    .eq("line_user_id", lineUserId)
+    .maybeSingle();
+  type LinkNameRow = { display_name: string | null; custom_name: string | null };
+  const linkName = linkRowForName as LinkNameRow | null;
+  const inviteeName = linkName?.custom_name ?? linkName?.display_name ?? null;
+
   // meeting_schedules INSERT
   const { data: msRow, error: msErr } = await ctx.service
     .from("meeting_schedules")
@@ -637,6 +649,7 @@ async function confirmMeetingProposal(
       starts_at: slot.startsAt,
       ends_at: slot.endsAt,
       status: "scheduled",
+      invitee_name: inviteeName,
     })
     .select("id")
     .single();

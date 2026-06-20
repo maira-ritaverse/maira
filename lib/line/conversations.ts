@@ -62,12 +62,15 @@ export type ConversationMessage = {
 export async function listConversations(supabase: SupabaseClient): Promise<ConversationListItem[]> {
   const { data: linkData } = await supabase
     .from("line_user_links")
-    .select("line_user_id, client_record_id, display_name, picture_url, unfollowed_at, handled_at");
+    .select(
+      "line_user_id, client_record_id, display_name, custom_name, picture_url, unfollowed_at, handled_at",
+    );
 
   type LinkRow = {
     line_user_id: string;
     client_record_id: string | null;
     display_name: string | null;
+    custom_name: string | null;
     picture_url: string | null;
     unfollowed_at: string | null;
     handled_at: string | null;
@@ -118,7 +121,8 @@ export async function listConversations(supabase: SupabaseClient): Promise<Conve
       return {
         lineUserId: link.line_user_id,
         clientRecordId: link.client_record_id,
-        displayName: link.display_name,
+        // 一覧 表示 は エージェント カスタム名 > LINE プロフィール名
+        displayName: link.custom_name ?? link.display_name,
         pictureUrl: link.picture_url,
         unfollowedAt: link.unfollowed_at,
         handledAt: link.handled_at,

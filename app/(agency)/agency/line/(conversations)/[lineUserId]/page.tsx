@@ -48,7 +48,7 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
   const { data: linkRow } = await supabase
     .from("line_user_links")
     .select(
-      "line_user_id, client_record_id, display_name, picture_url, unfollowed_at, link_method, created_at, assigned_to_user_id",
+      "line_user_id, client_record_id, display_name, custom_name, picture_url, unfollowed_at, link_method, created_at, assigned_to_user_id",
     )
     .eq("line_user_id", lineUserId)
     .maybeSingle();
@@ -56,6 +56,7 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
     line_user_id: string;
     client_record_id: string | null;
     display_name: string | null;
+    custom_name: string | null;
     picture_url: string | null;
     unfollowed_at: string | null;
     link_method: "manual" | "code" | "liff_login" | null;
@@ -213,6 +214,7 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
       <ContactDetailSidebar
         lineUserId={lineUserId}
         displayName={link.display_name}
+        customName={link.custom_name}
         pictureUrl={link.picture_url}
         clientRecordId={link.client_record_id}
         clientName={clientName}

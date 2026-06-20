@@ -62,7 +62,9 @@ export async function listCalendarEvents(
     // meeting_schedules:Zoom/Meet 経由で予約した面談(キャンセル以外)
     supabase
       .from("meeting_schedules")
-      .select("id, title, starts_at, ends_at, status, provider, join_url, client_record_id")
+      .select(
+        "id, title, starts_at, ends_at, status, provider, join_url, client_record_id, invitee_name",
+      )
       .eq("organization_id", opts.organizationId)
       .gte("starts_at", opts.rangeStart)
       .lte("starts_at", opts.rangeEnd + "T23:59:59")
@@ -207,9 +209,17 @@ export async function listCalendarEvents(
       provider: "zoom" | "google_meet";
       join_url: string;
       client_record_id: string | null;
+      invitee_name: string | null;
     }>) {
       const dateKey = isoDateOnly(m.starts_at);
       if (!dateKey) continue;
+      // 表示 名 の 優先 順:
+      //   1. client_records 連携 済 → 顧客名
+      //   2. invitee_name (LINE 友達 名 等) が ある → それ
+      //   3. fallback → provider 名 ("Zoom" / "Google Meet")
+      const displayName = m.client_record_id
+        ? (clientNameMap.get(m.client_record_id) ?? "(顧客名未取得)")
+        : (m.invitee_name ?? (m.provider === "zoom" ? "Zoom" : "Google Meet"));
       events.push({
         id: `meeting:${m.id}`,
         kind: "meeting",
@@ -217,11 +227,7 @@ export async function listCalendarEvents(
         occurredAt: m.starts_at,
         title: m.title,
         clientRecordId: m.client_record_id,
-        clientName: m.client_record_id
-          ? (clientNameMap.get(m.client_record_id) ?? "(顧客名未取得)")
-          : m.provider === "zoom"
-            ? "Zoom"
-            : "Google Meet",
+        clientName: displayName,
         meetingScheduleId: m.id,
         joinUrl: m.join_url,
         endsAt: m.ends_at,
