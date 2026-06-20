@@ -1,13 +1,14 @@
 /**
- * シナリオ判定ロジック(Phase C-3 MVP では 2 シナリオ)
+ * シナリオ判定ロジック
  *
- *   register_meeting_promotion: 求職者が登録されてから N 日経過したが、
- *                               まだ一度も対応履歴(client_interactions)が無いケース
- *   dormant_outreach:           最新の対応履歴から N 日以上経過したケース(再アプローチ)
- *
- * 残り 5 シナリオは interviews / job_wants / candidate_birthdays が無いため
- * 現状の DB スキーマでは判定不能 → IMPLEMENTED_SCENARIO_KEYS から外して
- * UI で「準備中」バッジを出している(Turn 1 で対応済み)。
+ * 実装済 シナリオ:
+ *   register_meeting_promotion: 求職者 登録 から N 日 経過 で interactions 0 件
+ *   dormant_outreach:           最終 interaction から N 日 以上 経過
+ *   meeting_reminder:           interviews.scheduled_at が 今 から |N| 日 後 (N が 負)
+ *   job_introduction:           面談 完了 (interview 'first' result='done') から N 日 経過 で referrals 0 件
+ *   after_interview_followup:   interviews 'second'/'final' 実施 から N 日 経過
+ *   post_placement_followup:    referrals.status='joined' から N 日 経過
+ *   birthday_greeting:          client_records.birthday が 今日 の MM-DD と 一致
  *
  * 設計方針:
  *   - 全クエリは service_role キー(RLS bypass)で実行する想定
@@ -156,6 +157,300 @@ export async function findDormantOutreachCandidates(
       return latest <= cutoff;
     })
     .filter((c) => !recentlySentSet.has(c.id))
+    .map((c) => ({
+      clientRecordId: c.id,
+      clientName: c.name,
+      clientEmail: c.email,
+      assignedMemberId: c.assigned_member_id,
+    }));
+}
+
+// ============================================================
+// 共通 ヘルパー
+// ============================================================
+
+/**
+ * 同 シナリオ で 既送信 (status='sent') の client_record_id を 集合 で 返す。
+ * 重複 送信 防止 の 共通 処理。
+ */
+async function loadSentClientIds(
+  supabase: SupabaseClient,
+  scenarioId: string,
+): Promise<Set<string>> {
+  const { data } = await supabase
+    .from("ma_send_logs")
+    .select("recipient_client_record_id")
+    .eq("scenario_id", scenarioId)
+    .eq("status", "sent");
+  return new Set(
+    ((data ?? []) as Array<{ recipient_client_record_id: string | null }>)
+      .map((r) => r.recipient_client_record_id)
+      .filter((id): id is string => !!id),
+  );
+}
+
+async function loadClientRows(
+  supabase: SupabaseClient,
+  organizationId: string,
+  clientIds: string[],
+): Promise<
+  Array<{
+    id: string;
+    name: string;
+    email: string;
+    assigned_member_id: string | null;
+  }>
+> {
+  if (clientIds.length === 0) return [];
+  const { data } = await supabase
+    .from("client_records")
+    .select("id, name, email, assigned_member_id")
+    .eq("organization_id", organizationId)
+    .eq("email_distribution_enabled", true)
+    .in("id", clientIds);
+  return (data ?? []) as Array<{
+    id: string;
+    name: string;
+    email: string;
+    assigned_member_id: string | null;
+  }>;
+}
+
+// ============================================================
+// meeting_reminder:面談 予定 日 の N 日 前 (N は 負 値、 例 -1)
+// ============================================================
+/**
+ * interviews.scheduled_at が
+ *   [now() + |days| 日 - 12h, now() + |days| 日 + 12h] の 範囲 (= 当日 ± 半日)
+ * かつ result='scheduled' な 行 を 対象 とする。
+ *
+ * 同 client に 1 度 だけ 送信 (再送 防止)。
+ */
+export async function findMeetingReminderCandidates(
+  supabase: SupabaseClient,
+  params: { organizationId: string; scenarioId: string; days: number },
+): Promise<CandidateRow[]> {
+  // days は 起点 (= 面談 日) から 何 日 後 か。 通常 -1 (1 日 前 リマインド)。
+  const targetTime = Date.now() + params.days * 86400 * 1000;
+  const windowMs = 12 * 3600 * 1000;
+  const lower = new Date(targetTime - windowMs).toISOString();
+  const upper = new Date(targetTime + windowMs).toISOString();
+
+  const { data: interviews, error } = await supabase
+    .from("interviews")
+    .select("id, referral_id, scheduled_at, result, referrals!inner(client_record_id)")
+    .eq("organization_id", params.organizationId)
+    .eq("result", "scheduled")
+    .gte("scheduled_at", lower)
+    .lte("scheduled_at", upper);
+  if (error) throw new Error(`interviews 取得失敗: ${error.message}`);
+  type IVRow = {
+    id: string;
+    referral_id: string;
+    referrals: { client_record_id: string } | { client_record_id: string }[] | null;
+  };
+  const rows = ((interviews ?? []) as IVRow[])
+    .map((r) => {
+      const ref = Array.isArray(r.referrals) ? r.referrals[0] : r.referrals;
+      return ref ? { interviewId: r.id, clientRecordId: ref.client_record_id } : null;
+    })
+    .filter((x): x is { interviewId: string; clientRecordId: string } => !!x);
+  if (rows.length === 0) return [];
+
+  const sentSet = await loadSentClientIds(supabase, params.scenarioId);
+  const targetIds = Array.from(
+    new Set(rows.map((r) => r.clientRecordId).filter((id) => !sentSet.has(id))),
+  );
+  const clients = await loadClientRows(supabase, params.organizationId, targetIds);
+  return clients.map((c) => ({
+    clientRecordId: c.id,
+    clientName: c.name,
+    clientEmail: c.email,
+    assignedMemberId: c.assigned_member_id,
+  }));
+}
+
+// ============================================================
+// job_introduction:1 次 面談 完了 から N 日 経過、 referrals 0 件
+// ============================================================
+export async function findJobIntroductionCandidates(
+  supabase: SupabaseClient,
+  params: { organizationId: string; scenarioId: string; days: number },
+): Promise<CandidateRow[]> {
+  const cutoff = new Date(Date.now() - params.days * 86400 * 1000).toISOString();
+
+  // 1) result='done' な 「first」 interview が cutoff より 古い
+  const { data: interviews, error } = await supabase
+    .from("interviews")
+    .select("referral_id, scheduled_at, referrals!inner(client_record_id)")
+    .eq("organization_id", params.organizationId)
+    .eq("kind", "first")
+    .eq("result", "done")
+    .lte("scheduled_at", cutoff);
+  if (error) throw new Error(`interviews 取得失敗: ${error.message}`);
+  type IVRow = {
+    referrals: { client_record_id: string } | { client_record_id: string }[] | null;
+  };
+  const clientIds = Array.from(
+    new Set(
+      ((interviews ?? []) as IVRow[])
+        .map((r) => {
+          const ref = Array.isArray(r.referrals) ? r.referrals[0] : r.referrals;
+          return ref?.client_record_id;
+        })
+        .filter((id): id is string => !!id),
+    ),
+  );
+  if (clientIds.length === 0) return [];
+
+  // 2) referrals が 0 件 の client_record_id だけ 残す
+  const { data: refs } = await supabase
+    .from("referrals")
+    .select("client_record_id")
+    .eq("organization_id", params.organizationId)
+    .in("client_record_id", clientIds);
+  const refSet = new Set(
+    ((refs ?? []) as Array<{ client_record_id: string }>).map((r) => r.client_record_id),
+  );
+  const noRefsClientIds = clientIds.filter((id) => !refSet.has(id));
+
+  const sentSet = await loadSentClientIds(supabase, params.scenarioId);
+  const targetIds = noRefsClientIds.filter((id) => !sentSet.has(id));
+  const clients = await loadClientRows(supabase, params.organizationId, targetIds);
+  return clients.map((c) => ({
+    clientRecordId: c.id,
+    clientName: c.name,
+    clientEmail: c.email,
+    assignedMemberId: c.assigned_member_id,
+  }));
+}
+
+// ============================================================
+// after_interview_followup:second / final 面接 done から N 日 経過
+// ============================================================
+export async function findAfterInterviewFollowupCandidates(
+  supabase: SupabaseClient,
+  params: { organizationId: string; scenarioId: string; days: number },
+): Promise<CandidateRow[]> {
+  const cutoff = new Date(Date.now() - params.days * 86400 * 1000).toISOString();
+  const { data: interviews, error } = await supabase
+    .from("interviews")
+    .select("referral_id, scheduled_at, referrals!inner(client_record_id)")
+    .eq("organization_id", params.organizationId)
+    .in("kind", ["second", "final", "company"])
+    .eq("result", "done")
+    .lte("scheduled_at", cutoff);
+  if (error) throw new Error(`interviews 取得失敗: ${error.message}`);
+  type IVRow = {
+    referrals: { client_record_id: string } | { client_record_id: string }[] | null;
+  };
+  const clientIds = Array.from(
+    new Set(
+      ((interviews ?? []) as IVRow[])
+        .map((r) => {
+          const ref = Array.isArray(r.referrals) ? r.referrals[0] : r.referrals;
+          return ref?.client_record_id;
+        })
+        .filter((id): id is string => !!id),
+    ),
+  );
+  if (clientIds.length === 0) return [];
+
+  const sentSet = await loadSentClientIds(supabase, params.scenarioId);
+  const targetIds = clientIds.filter((id) => !sentSet.has(id));
+  const clients = await loadClientRows(supabase, params.organizationId, targetIds);
+  return clients.map((c) => ({
+    clientRecordId: c.id,
+    clientName: c.name,
+    clientEmail: c.email,
+    assignedMemberId: c.assigned_member_id,
+  }));
+}
+
+// ============================================================
+// post_placement_followup:referrals.status='joined' から N 日 経過
+// ============================================================
+export async function findPostPlacementFollowupCandidates(
+  supabase: SupabaseClient,
+  params: { organizationId: string; scenarioId: string; days: number },
+): Promise<CandidateRow[]> {
+  const cutoff = new Date(Date.now() - params.days * 86400 * 1000).toISOString();
+  const { data: refs, error } = await supabase
+    .from("referrals")
+    .select("client_record_id, status, updated_at")
+    .eq("organization_id", params.organizationId)
+    .eq("status", "joined")
+    .lte("updated_at", cutoff);
+  if (error) throw new Error(`referrals 取得失敗: ${error.message}`);
+  const clientIds = Array.from(
+    new Set(
+      ((refs ?? []) as Array<{ client_record_id: string }>)
+        .map((r) => r.client_record_id)
+        .filter((id): id is string => !!id),
+    ),
+  );
+  if (clientIds.length === 0) return [];
+
+  const sentSet = await loadSentClientIds(supabase, params.scenarioId);
+  const targetIds = clientIds.filter((id) => !sentSet.has(id));
+  const clients = await loadClientRows(supabase, params.organizationId, targetIds);
+  return clients.map((c) => ({
+    clientRecordId: c.id,
+    clientName: c.name,
+    clientEmail: c.email,
+    assignedMemberId: c.assigned_member_id,
+  }));
+}
+
+// ============================================================
+// birthday_greeting:client_records.birth_date の MM-DD が 今日 と 一致
+//
+// 既存 EMPRO 拡張 (20260615100001) で birth_date date 列 が ある ので 流用。
+// (誕生日 列 を 新規 追加 する 必要 が ない こと が 開発 中 に 判明)
+// ============================================================
+export async function findBirthdayGreetingCandidates(
+  supabase: SupabaseClient,
+  params: { organizationId: string; scenarioId: string },
+): Promise<CandidateRow[]> {
+  // 重複 送信 防止: 過去 1 年 以内 に 同 シナリオ で 送信 済 の client を 除外
+  const oneYearAgo = new Date(Date.now() - 365 * 86400 * 1000).toISOString();
+  const { data: recentLogs } = await supabase
+    .from("ma_send_logs")
+    .select("recipient_client_record_id")
+    .eq("scenario_id", params.scenarioId)
+    .eq("status", "sent")
+    .gte("sent_at", oneYearAgo);
+  const recentlySent = new Set(
+    ((recentLogs ?? []) as Array<{ recipient_client_record_id: string | null }>)
+      .map((r) => r.recipient_client_record_id)
+      .filter((id): id is string => !!id),
+  );
+
+  // 今日 の MM-DD で 抽出
+  const today = new Date();
+  const month = today.getMonth() + 1;
+  const day = today.getDate();
+  const { data: clients, error } = await supabase
+    .from("client_records")
+    .select("id, name, email, assigned_member_id, birth_date")
+    .eq("organization_id", params.organizationId)
+    .eq("email_distribution_enabled", true)
+    .not("birth_date", "is", null);
+  if (error) throw new Error(`client_records 取得失敗: ${error.message}`);
+  type CRow = {
+    id: string;
+    name: string;
+    email: string;
+    assigned_member_id: string | null;
+    birth_date: string | null;
+  };
+  return ((clients ?? []) as CRow[])
+    .filter((c) => {
+      if (!c.birth_date) return false;
+      const d = new Date(c.birth_date);
+      return d.getMonth() + 1 === month && d.getDate() === day;
+    })
+    .filter((c) => !recentlySent.has(c.id))
     .map((c) => ({
       clientRecordId: c.id,
       clientName: c.name,

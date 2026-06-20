@@ -291,6 +291,12 @@ export const IMPLEMENTED_SCENARIO_KEYS = [
   // ── Phase C-4 (LINE MA) ──
   "line_welcome_after_friend", // 公式 LINE 友達 追加 から N 日 経過
   "line_dormant_outreach", // 最終 LINE inbound から N 日 経過
+  // ── Phase C-5 (interviews / birthday テーブル 前提) ──
+  "meeting_reminder", // interviews.scheduled_at の |N| 日 前
+  "job_introduction", // 1 次 面談 done から N 日 経過、 referrals 0 件
+  "after_interview_followup", // 2 次 / 最終 面接 done から N 日 経過
+  "post_placement_followup", // referrals.status='joined' から N 日 経過
+  "birthday_greeting", // client_records.birthday の MM-DD が 今日 と 一致
 ] as const;
 
 export type ImplementedScenarioKey = (typeof IMPLEMENTED_SCENARIO_KEYS)[number];

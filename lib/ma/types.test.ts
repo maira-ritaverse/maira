@@ -10,30 +10,41 @@ import { IMPLEMENTED_SCENARIO_KEYS, isScenarioImplemented } from "./types";
  */
 
 describe("IMPLEMENTED_SCENARIO_KEYS", () => {
-  it("現状の実装済みシナリオキーは Email 2 件 + LINE 2 件", () => {
+  it("現状の実装済みシナリオキーは Email 7 件 + LINE 2 件 = 9 件", () => {
     // この件数を増やすときは Edge Function / cron route 側 にも 対応 ロジック を 追加 して から 更新 する。
     expect(IMPLEMENTED_SCENARIO_KEYS).toEqual([
       "register_meeting_promotion",
       "dormant_outreach",
       "line_welcome_after_friend",
       "line_dormant_outreach",
+      "meeting_reminder",
+      "job_introduction",
+      "after_interview_followup",
+      "post_placement_followup",
+      "birthday_greeting",
     ]);
   });
 });
 
 describe("isScenarioImplemented", () => {
-  it("実装済みキーには true を返す(型ガードとしても機能する)", () => {
+  it("実装済みキー (Email 7 件 + LINE 2 件) には true を返す(型ガードとしても機能)", () => {
+    // Phase C-3
     expect(isScenarioImplemented("register_meeting_promotion")).toBe(true);
     expect(isScenarioImplemented("dormant_outreach")).toBe(true);
+    // Phase C-4 (LINE)
+    expect(isScenarioImplemented("line_welcome_after_friend")).toBe(true);
+    expect(isScenarioImplemented("line_dormant_outreach")).toBe(true);
+    // Phase C-5 (interviews / birth_date 前提)
+    expect(isScenarioImplemented("meeting_reminder")).toBe(true);
+    expect(isScenarioImplemented("job_introduction")).toBe(true);
+    expect(isScenarioImplemented("after_interview_followup")).toBe(true);
+    expect(isScenarioImplemented("post_placement_followup")).toBe(true);
+    expect(isScenarioImplemented("birthday_greeting")).toBe(true);
   });
 
-  it("未実装のプリセットキーには false を返す", () => {
-    // ma_scenario_presets に投入されているが、判定ロジックが未実装のシナリオ。
-    expect(isScenarioImplemented("meeting_reminder")).toBe(false);
-    expect(isScenarioImplemented("job_introduction")).toBe(false);
-    expect(isScenarioImplemented("after_interview_followup")).toBe(false);
-    expect(isScenarioImplemented("post_placement_followup")).toBe(false);
-    expect(isScenarioImplemented("birthday_greeting")).toBe(false);
+  it("未投入 / タイポ の プリセット キー には false を返す", () => {
+    // ma_scenario_presets に 投入 されて いない 想定 の キー。
+    expect(isScenarioImplemented("never_existed_scenario")).toBe(false);
   });
 
   it("全く別の文字列(タイポ・無関係)にも false を返す", () => {

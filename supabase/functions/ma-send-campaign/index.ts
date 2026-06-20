@@ -33,14 +33,27 @@ import { decryptField, encryptField } from "./field-encryption.ts";
 import { sendViaResend } from "./resend.ts";
 import { expandSubjectAndBody, type VariableContext } from "./template-expander.ts";
 import {
+  findAfterInterviewFollowupCandidates,
+  findBirthdayGreetingCandidates,
   findDormantOutreachCandidates,
+  findJobIntroductionCandidates,
+  findMeetingReminderCandidates,
+  findPostPlacementFollowupCandidates,
   findRegisterMeetingPromotionCandidates,
   type CandidateRow,
 } from "./scenarios.ts";
 
 // Edge Function 側で「判定ロジックを実装済み」のシナリオキー。
 // Web 側 `lib/ma/types.ts` の IMPLEMENTED_SCENARIO_KEYS と同期させる。
-const IMPLEMENTED_SCENARIO_KEYS = ["register_meeting_promotion", "dormant_outreach"] as const;
+const IMPLEMENTED_SCENARIO_KEYS = [
+  "register_meeting_promotion",
+  "dormant_outreach",
+  "meeting_reminder",
+  "job_introduction",
+  "after_interview_followup",
+  "post_placement_followup",
+  "birthday_greeting",
+] as const;
 type ImplementedKey = (typeof IMPLEMENTED_SCENARIO_KEYS)[number];
 
 type ScenarioRow = {
@@ -180,6 +193,36 @@ Deno.serve(async (req) => {
             organizationId: scenario.organization_id,
             scenarioId: scenario.id,
             days: triggerDays,
+          });
+        } else if (presetKey === "meeting_reminder") {
+          candidates = await findMeetingReminderCandidates(supabase, {
+            organizationId: scenario.organization_id,
+            scenarioId: scenario.id,
+            days: triggerDays,
+          });
+        } else if (presetKey === "job_introduction") {
+          candidates = await findJobIntroductionCandidates(supabase, {
+            organizationId: scenario.organization_id,
+            scenarioId: scenario.id,
+            days: triggerDays,
+          });
+        } else if (presetKey === "after_interview_followup") {
+          candidates = await findAfterInterviewFollowupCandidates(supabase, {
+            organizationId: scenario.organization_id,
+            scenarioId: scenario.id,
+            days: triggerDays,
+          });
+        } else if (presetKey === "post_placement_followup") {
+          candidates = await findPostPlacementFollowupCandidates(supabase, {
+            organizationId: scenario.organization_id,
+            scenarioId: scenario.id,
+            days: triggerDays,
+          });
+        } else if (presetKey === "birthday_greeting") {
+          // 起点 は MM-DD なので triggerDays は 無視 (誕生日 当日 のみ)
+          candidates = await findBirthdayGreetingCandidates(supabase, {
+            organizationId: scenario.organization_id,
+            scenarioId: scenario.id,
           });
         }
       } catch (err) {
