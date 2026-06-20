@@ -19,6 +19,9 @@ import { JobRecommendationsSection } from "./job-recommendations-section";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
+// 画像 アップロード 後 に 即時 反映 さ せる ため force-dynamic。
+export const dynamic = "force-dynamic";
+
 export default async function JobDetailPage({ params }: RouteParams) {
   const { id } = await params;
 

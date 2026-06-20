@@ -28,6 +28,10 @@ import { MarketingScreen } from "./scenario-list";
  * advisor も閲覧は可能だが、ON/OFF や同意操作は admin のみ
  * (UI 側でも disable し、API 側でも 403 で弾く二重防御)。
  */
+// 認証 ユーザー の 組織 単位 で 変動 する 動的 ページ。 CDN / Vercel の RSC
+// キャッシュ で 古い 表示 が 残る の を 防ぐ ため force-dynamic を 明示。
+export const dynamic = "force-dynamic";
+
 export default async function MarketingPage() {
   const supabase = await createClient();
   const {
