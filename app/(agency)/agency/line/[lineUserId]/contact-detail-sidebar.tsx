@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ActivitySection } from "./activity-section";
 import { AssigneeSection } from "./assignee-section";
 import { NotesSection } from "./notes-section";
+import { ProfileRefreshButton } from "./profile-refresh-button";
 import { TagsSection } from "./tags-section";
 
 /**
@@ -62,6 +63,7 @@ export function ContactDetailSidebar({
         <p className="text-muted-foreground mt-0.5 font-mono text-[10px]">
           {lineUserId.slice(0, 16)}...
         </p>
+        <ProfileRefreshButton lineUserId={lineUserId} />
       </div>
 
       {/* メタ 情報 */}

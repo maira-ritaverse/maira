@@ -1,5 +1,6 @@
 "use client";
 
+import { RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -104,7 +105,7 @@ export function LineUsersClient({ clientOptions }: Props) {
 
   return (
     <div className="space-y-3">
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <TabButton active={tab === "unlinked"} onClick={() => setTab("unlinked")}>
           未紐付け ({unlinkedCount})
         </TabButton>
@@ -114,6 +115,7 @@ export function LineUsersClient({ clientOptions }: Props) {
         <TabButton active={tab === "unfollowed"} onClick={() => setTab("unfollowed")}>
           解除 ({unfollowedCount})
         </TabButton>
+        <BulkRefreshButton onDone={reload} />
       </div>
 
       {filtered.length === 0 ? (
@@ -335,4 +337,60 @@ function LinkRowItem({
 
 function linkMethodLabel(m: "manual" | "code" | "liff_login"): string {
   return m === "manual" ? "手動紐付け" : m === "code" ? "連携コード" : "LIFF ログイン";
+}
+
+/**
+ * 一括 プロフィール 再取得 ボタン。
+ * 「(連携前 友達)」 等 プレースホルダ 名前 の 友達 を 全部 LINE API で 取り直す。
+ */
+function BulkRefreshButton({ onDone }: { onDone: () => void }) {
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<{ target: number; updated: number; failed: number } | null>(
+    null,
+  );
+  const [error, setError] = useState<string | null>(null);
+
+  const onClick = async () => {
+    if (
+      !window.confirm(
+        "プレースホルダ 名前 の 友達 を 全部 LINE API で 取り直します。 数秒 かかります。",
+      )
+    )
+      return;
+    setRunning(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await fetch("/api/agency/line/refresh-profile/all", { method: "POST" });
+      const body = (await res.json().catch(() => null)) as
+        | { ok: true; target: number; updated: number; failed: number }
+        | { error: string; message?: string };
+      if (!res.ok || !("ok" in body && body.ok)) {
+        const msg =
+          "message" in body && body.message ? body.message : "error" in body ? body.error : "失敗";
+        throw new Error(msg);
+      }
+      setResult({ target: body.target, updated: body.updated, failed: body.failed });
+      onDone();
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div className="ml-auto flex items-center gap-2">
+      {result && (
+        <span className="text-[10px] text-emerald-700">
+          対象 {result.target} 件 → 更新 {result.updated} / 失敗 {result.failed}
+        </span>
+      )}
+      {error && <span className="text-[10px] text-red-600">{error}</span>}
+      <Button size="sm" variant="outline" onClick={onClick} disabled={running}>
+        <RefreshCw className={`mr-1 size-3 ${running ? "animate-spin" : ""}`} aria-hidden />
+        {running ? "取得中..." : "プロフィール 一括 取得"}
+      </Button>
+    </div>
+  );
 }

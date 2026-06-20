@@ -740,20 +740,34 @@ function extensionFor(
 }
 
 /**
- * line_user_links に 行 が 無ければ 作成 (連携前 友達 / follow 取り逃がし に 対応)。
+ * line_user_links に 行 が 無ければ 作成、 既存 でも プロフィール 未取得 なら 更新。
  *
- * 既存 行 が あれば 何 も しない (display_name 上書き で プロフィール 取得 を 走らせる
- * 余分な API call を 避ける)。 新規 のみ プロフィール を 取得 する。
+ * 連携前 友達 / follow 取り逃がし + バックフィル ダミー 名前 を 自動 リカバリ。
+ * - 行 が ない → 作成 + LINE API で プロフィール 取得
+ * - 行 が ある が display_name が NULL / プレースホルダ → プロフィール 更新
+ * - 行 が ある + 正常 → no-op (余分な API call を 避ける)
  */
+const PLACEHOLDER_NAMES = new Set(["(連携前 友達)", "(連携前友達)", "(名前なし)"]);
+
 async function ensureLineUserLink(ctx: HandlerContext, lineUserId: string): Promise<void> {
   try {
     const { data: existing } = await ctx.service
       .from("line_user_links")
-      .select("id")
+      .select("id, display_name, picture_url")
       .eq("organization_id", ctx.organizationId)
       .eq("line_user_id", lineUserId)
       .maybeSingle();
-    if (existing) return;
+
+    const row = existing as {
+      id: string;
+      display_name: string | null;
+      picture_url: string | null;
+    } | null;
+
+    // 正常 = display_name が ある + プレースホルダ で ない
+    const isHealthy =
+      row !== null && row.display_name !== null && !PLACEHOLDER_NAMES.has(row.display_name);
+    if (isHealthy) return;
 
     const profileResult = await getUserProfile(ctx.accessToken, lineUserId);
     const display = profileResult.ok ? profileResult.data : null;
@@ -762,8 +776,8 @@ async function ensureLineUserLink(ctx: HandlerContext, lineUserId: string): Prom
       {
         organization_id: ctx.organizationId,
         line_user_id: lineUserId,
-        display_name: display?.displayName ?? null,
-        picture_url: display?.pictureUrl ?? null,
+        display_name: display?.displayName ?? row?.display_name ?? null,
+        picture_url: display?.pictureUrl ?? row?.picture_url ?? null,
         status_message: display?.statusMessage ?? null,
       },
       { onConflict: "organization_id,line_user_id" },
