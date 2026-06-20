@@ -71,10 +71,11 @@ export default async function LineSettingsPage() {
       .is("unfollowed_at", null)
       .is("client_record_id", null)
       .then((r) => (r as unknown as CountResult).count ?? 0),
+    // job_postings.status enum は ('open','paused','closed')。 'open' = 募集中。
     supabase
       .from("job_postings")
       .select("id, company_name, position, status, created_at")
-      .eq("status", "published")
+      .eq("status", "open")
       .order("created_at", { ascending: false })
       .limit(50),
   ]);
