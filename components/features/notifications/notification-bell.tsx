@@ -147,6 +147,25 @@ export function NotificationBell() {
     }
   }, []);
 
+  // 全既読化(楽観的更新 + 失敗時は再取得で整合性回復)
+  const markAllAsRead = useCallback(async () => {
+    // 楽観的:すべての 行 を 既読 に + バッジ 0 へ
+    const nowIso = new Date().toISOString();
+    setList((current) => ({
+      items: current.items.map((it) => (it.readAt ? it : { ...it, readAt: nowIso })),
+      hasLoaded: current.hasLoaded,
+    }));
+    setUnreadCount(0);
+
+    try {
+      const res = await fetch("/api/notifications/mark-all-read", { method: "POST" });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+    } catch {
+      // 失敗時は サーバ から 整合性 を 取り直す
+      void refreshUnreadCount();
+    }
+  }, [refreshUnreadCount]);
+
   // 個別既読化(楽観的更新 + 失敗時は再取得で整合性回復)
   const markAsRead = useCallback(
     async (id: string) => {
@@ -206,10 +225,21 @@ export function NotificationBell() {
       />
 
       <DropdownMenuContent align="end" sideOffset={6} className="w-80 max-w-[calc(100vw-2rem)] p-0">
-        <div className="flex items-center justify-between border-b px-3 py-2">
-          <p className="text-sm font-semibold">通知</p>
+        <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+          <div className="flex items-baseline gap-2">
+            <p className="text-sm font-semibold">通知</p>
+            {unreadCount > 0 && (
+              <span className="text-muted-foreground text-xs">未読 {unreadCount} 件</span>
+            )}
+          </div>
           {unreadCount > 0 && (
-            <span className="text-muted-foreground text-xs">未読 {unreadCount} 件</span>
+            <button
+              type="button"
+              onClick={() => void markAllAsRead()}
+              className="text-primary hover:text-primary/80 text-xs font-medium underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
+            >
+              すべて 既読
+            </button>
           )}
         </div>
 
