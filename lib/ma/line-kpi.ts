@@ -21,8 +21,8 @@ export type LineMaKpi = {
   /** ma_click_links の click_count を 月 単位 で 合算。 値 0 と null は 別 概念 */
   clickCount: number;
   replyCount: number;
-  /** LINE MA 由来 attribution 未実装 の ため 参考 値 (準備中)。 */
-  applicationCount: number | null;
+  /** LINE MA 配信 後 7 日 以内 に referrals 作成 された 一意 client 数 */
+  applicationCount: number;
   limit: number;
   /** 集計 対象 期間 の 月 (YYYY-MM)、 UI 表示 用 */
   periodLabel: string;
@@ -40,7 +40,7 @@ export async function getLineMaKpi(organizationId: string): Promise<LineMaKpi> {
 
   type CountResult = { count: number | null };
 
-  const [sentRes, replyRes, clickAggRes] = await Promise.all([
+  const [sentRes, replyRes, clickAggRes, sentLogsForAttr] = await Promise.all([
     supabase
       .from("ma_send_logs")
       .select("id", { count: "exact", head: true })
@@ -65,6 +65,16 @@ export async function getLineMaKpi(organizationId: string): Promise<LineMaKpi> {
       .eq("organization_id", organizationId)
       .gte("created_at", start)
       .lt("created_at", end),
+    // 応募 attribution 用: 今月 配信 した client_record_id と sent_at を 取得
+    supabase
+      .from("ma_send_logs")
+      .select("recipient_client_record_id, sent_at")
+      .eq("organization_id", organizationId)
+      .eq("status", "sent")
+      .not("recipient_line_user_id", "is", null)
+      .not("recipient_client_record_id", "is", null)
+      .gte("sent_at", start)
+      .lt("sent_at", end),
   ]);
 
   type ClickRow = { click_count: number };
@@ -73,12 +83,63 @@ export async function getLineMaKpi(organizationId: string): Promise<LineMaKpi> {
     0,
   );
 
+  // 応募 attribution: 配信 後 ATTRIBUTION_WINDOW_DAYS 日 以内 に referrals が
+  // 作られた client_record_id の 一意 数 を カウント。
+  type SentLogRow = { recipient_client_record_id: string | null; sent_at: string };
+  const sentLogs = (sentLogsForAttr.data ?? []) as SentLogRow[];
+  const applicationCount = await computeAttributedApplications(supabase, organizationId, sentLogs);
+
   return {
     sentCount: sentRes,
     clickCount,
     replyCount: replyRes,
-    applicationCount: null, // attribution 未実装 (Phase B で 実装)
+    applicationCount,
     limit: DEFAULT_LINE_MONTHLY_LIMIT,
     periodLabel,
   };
+}
+
+// 配信 後 何 日 以内 の 応募 を MA 起因 と 見なす か
+const ATTRIBUTION_WINDOW_DAYS = 7;
+
+async function computeAttributedApplications(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  organizationId: string,
+  sentLogs: Array<{ recipient_client_record_id: string | null; sent_at: string }>,
+): Promise<number> {
+  if (sentLogs.length === 0) return 0;
+
+  // 各 client の **最古** の sent_at を 採用 (= 一番 早く 配信 した タイミング
+  // から window を 取る ほう が attribution に 寛容)
+  const clientToEarliestSentAt = new Map<string, Date>();
+  for (const log of sentLogs) {
+    const cid = log.recipient_client_record_id;
+    if (!cid) continue;
+    const t = new Date(log.sent_at);
+    const cur = clientToEarliestSentAt.get(cid);
+    if (!cur || t < cur) clientToEarliestSentAt.set(cid, t);
+  }
+  const clientIds = Array.from(clientToEarliestSentAt.keys());
+  if (clientIds.length === 0) return 0;
+
+  // 該当 client の referrals を 一括 取得
+  const { data: refsData } = await supabase
+    .from("referrals")
+    .select("client_record_id, created_at")
+    .eq("organization_id", organizationId)
+    .in("client_record_id", clientIds);
+  type RefRow = { client_record_id: string; created_at: string };
+  const refs = (refsData ?? []) as RefRow[];
+
+  const windowMs = ATTRIBUTION_WINDOW_DAYS * 86400 * 1000;
+  const attributed = new Set<string>();
+  for (const r of refs) {
+    const sentAt = clientToEarliestSentAt.get(r.client_record_id);
+    if (!sentAt) continue;
+    const refAt = new Date(r.created_at);
+    if (refAt >= sentAt && refAt.getTime() <= sentAt.getTime() + windowMs) {
+      attributed.add(r.client_record_id);
+    }
+  }
+  return attributed.size;
 }

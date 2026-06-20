@@ -197,7 +197,8 @@ export function LineMaScreen({
           label="応募"
           value={kpi.applicationCount}
           tone="strong"
-          hint="LINE MA 由来 attribution 準備中"
+          hint="配信 後 7 日 以内 に referrals 作成 さ れた 一意 客 数"
+          rate={kpi.sentCount > 0 ? kpi.applicationCount / kpi.sentCount : null}
         />
       </div>
 
