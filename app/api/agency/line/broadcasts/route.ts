@@ -155,13 +155,22 @@ export async function POST(request: Request) {
     message = { type: "text", text };
     messageType = "text";
   } else {
-    const { data: jobsData } = await admin
+    // 求人 取得 は user-auth で RLS に 任せる (自組織 のみ 自動 フィルタ)。
+    // service_role + .eq("organization_id", ...) の 二重 防御 だ と、 organization_id
+    // 列 が 何 らか の 理由 で 値 不一致 (古い シード / 重複 org 等) で 0 件 に なる
+    // ケース が 切り分け にくい ため、 RLS 任せ で 一本 化 する。
+    const { data: jobsData, error: jobsErr } = await guard.supabase
       .from("job_postings")
       .select(
         "id, company_name, position, location, salary_min, salary_max, hero_image_path, line_share_image_path",
       )
-      .in("id", parsed.data.jobIds)
-      .eq("organization_id", guard.organization.id);
+      .in("id", parsed.data.jobIds);
+    if (jobsErr) {
+      return NextResponse.json(
+        { error: "jobs_query_failed", message: jobsErr.message },
+        { status: 500 },
+      );
+    }
     type JobRow = {
       id: string;
       company_name: string;
@@ -174,7 +183,25 @@ export async function POST(request: Request) {
     };
     const jobs = (jobsData ?? []) as JobRow[];
     if (jobs.length === 0) {
-      return NextResponse.json({ error: "no_jobs_found" }, { status: 404 });
+      // 詳細 メッセージ で 原因 切り分け を 助ける。
+      // - jobIds の 中身 を 隠さ ず 返す (組織 内 情報 な ので 安全)
+      // - RLS で 自組織 外 の 求人 は 取れ ない の で 「他 組織 の 求人 を 渡 した」
+      //   「求人 が 削除 済」 「ID 形式 間違い」 等 が 主な 原因
+      return NextResponse.json(
+        {
+          error: "no_jobs_found",
+          message:
+            "選択 した 求人 が 自組織 で 見つかりません。 求人 が 削除 されて いる か、 別 組織 の 求人 ID が 含まれて いる 可能性 が あります。",
+          requestedJobIds: parsed.data.jobIds,
+        },
+        { status: 404 },
+      );
+    }
+    // 一部 だけ 取れた 場合 (削除 中 等) も 警告 と して 通知
+    if (jobs.length < parsed.data.jobIds.length) {
+      const foundIds = new Set(jobs.map((j) => j.id));
+      const missing = parsed.data.jobIds.filter((id) => !foundIds.has(id));
+      console.warn("[line/broadcasts] 一部 求人 が 見つかりません", { missing });
     }
     const jobMap = new Map(jobs.map((j) => [j.id, j]));
     const orderedJobs = parsed.data.jobIds

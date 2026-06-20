@@ -94,7 +94,15 @@ export async function POST(request: Request) {
   };
   const jobs = (jobsData ?? []) as JobRow[];
   if (jobs.length === 0) {
-    return NextResponse.json({ error: "no_jobs_found" }, { status: 404 });
+    return NextResponse.json(
+      {
+        error: "no_jobs_found",
+        message:
+          "選択 した 求人 が 自組織 で 見つかりません。 求人 が 削除 されて いる か、 別 組織 の 求人 ID が 含まれて いる 可能性 が あります。",
+        requestedJobIds: jobIds,
+      },
+      { status: 404 },
+    );
   }
 
   // jobIds の 順序 を 維持

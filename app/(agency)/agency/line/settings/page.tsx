@@ -72,9 +72,12 @@ export default async function LineSettingsPage() {
       .is("client_record_id", null)
       .then((r) => (r as unknown as CountResult).count ?? 0),
     // job_postings.status enum は ('open','paused','closed')。 'open' = 募集中。
+    // 自組織 で 絞り込む (RLS でも 効く が、 複数 org 所属 の 万一 の ケース を
+    // 明示 排除 + broadcasts POST 側 と 同じ org スコープ に 揃える)。
     supabase
       .from("job_postings")
       .select("id, company_name, position, status, created_at")
+      .eq("organization_id", role.organization.id)
       .eq("status", "open")
       .order("created_at", { ascending: false })
       .limit(50),
