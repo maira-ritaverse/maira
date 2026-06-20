@@ -12,6 +12,9 @@ import { requireOrgMember } from "@/lib/api/auth-guards";
  *
  * 認可: requireOrgMember + RLS で 自組織 のみ 更新 可。
  */
+// PATCH ルート は 静的化 不可 だ が、 念のため 明示 (Vercel ビルド での 解釈 安定 化)
+export const dynamic = "force-dynamic";
+
 type RouteContext = { params: Promise<{ lineUserId: string }> };
 
 const bodySchema = z.object({
