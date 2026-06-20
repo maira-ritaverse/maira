@@ -10,7 +10,7 @@ import { SeekerBoostsSection } from "./seeker-boosts-section";
  *
  * 表示する セクション:
  *   1. 求職者 ドキュメント作成 ブーストチケット (¥2,000 / 3 ヶ月有効)
- *   2. エージェント企業 Pro プラン 契約一覧 (機能 未実装 のため プレースホルダ)
+ *   2. エージェント企業 プラン 契約一覧 (Standard / 録音 / Pro / Premium の 4 ティア)
  *   3. サブスクリプション アドオン (meeting_recording_auto 等)
  *   4. 返金 / 失効 履歴
  *
