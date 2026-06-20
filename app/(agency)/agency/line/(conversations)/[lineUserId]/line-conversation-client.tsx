@@ -50,7 +50,9 @@ type Props = {
   }>;
 };
 
-const POLL_INTERVAL_MS = 10_000;
+// 受信 メッセージ 反映 の レイテンシー。 3 秒 = 1 分 で 20 回 = Vercel
+// Function 呼び出し は 小規模 で 余裕 が ある。 体感 を 大幅 改善。
+const POLL_INTERVAL_MS = 3_000;
 const STICKER_CDN = "https://stickershop.line-scdn.net/stickershop/v1/sticker";
 
 export function LineConversationClient({
@@ -75,7 +77,7 @@ export function LineConversationClient({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
 
-  // ポーリング
+  // ポーリング + 復帰 時 即時 取得
   useEffect(() => {
     const ctrl = new AbortController();
     let active = true;
@@ -95,8 +97,19 @@ export function LineConversationClient({
     };
 
     const interval = setInterval(poll, POLL_INTERVAL_MS);
+
+    // タブ が フォアグラウンド に 戻った とき に 即時 ポーリング
+    // (バック グラウンド 中 に 受信 した メッセージ を 体感 即時 で 反映)
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void poll();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onVisibility);
+
     return () => {
       clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onVisibility);
       active = false;
       ctrl.abort();
     };

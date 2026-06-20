@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
 import type { ConversationListItem } from "@/lib/line/conversations";
@@ -10,18 +11,52 @@ import { ConversationListSidebar } from "./conversation-list-sidebar";
  * pathname を 読み取って アクティブ な lineUserId を 抽出 し、
  * Conversation サイドバー に props 経由 で 渡す Client ラッパー。
  *
- * Server Layout から 直接 pathname を 知る 手段 が ない ため、 この 1 階層 だけ
- * Client Component を 挟む。 サイドバー 自体 は SSR の HTML を 受け取る。
+ * 加えて 5 秒 ごと の ポーリング + visibilitychange で 会話 一覧 を 更新
+ * (新着 / 既読 / 並び替え を リアルタイム 風 に 反映)。
  */
 type Props = { conversations: ConversationListItem[] };
 
-export function ActiveSync({ conversations }: Props) {
-  const pathname = usePathname();
-  // /agency/line/[lineUserId] から ID を 抽出
-  const m = pathname.match(/^\/agency\/line\/([^/]+)/);
-  const activeLineUserId = m ? decodeURIComponent(m[1]) : null;
+const POLL_INTERVAL_MS = 5_000;
 
-  // 設定 / 一斉配信 / 友達一覧 ページ は active ID を 持たない (null) ので 全て 非選択
+export function ActiveSync({ conversations: initial }: Props) {
+  const pathname = usePathname();
+  const m = pathname.match(/^\/agency\/line\/([^/]+)/);
+  // route group "(conversations)" 等 の () 入り セグメント は active ID で ない
+  const seg = m ? decodeURIComponent(m[1]) : null;
+  const activeLineUserId = seg && !seg.startsWith("(") ? seg : null;
+
+  const [conversations, setConversations] = useState<ConversationListItem[]>(initial);
+
+  useEffect(() => {
+    let active = true;
+    const ctrl = new AbortController();
+
+    const poll = async () => {
+      try {
+        const res = await fetch("/api/agency/line/conversations", { signal: ctrl.signal });
+        if (!res.ok) return;
+        const json = (await res.json()) as { conversations: ConversationListItem[] };
+        if (active) setConversations(json.conversations);
+      } catch {
+        // 失敗 は サイレント (次回 試行)
+      }
+    };
+
+    const interval = setInterval(poll, POLL_INTERVAL_MS);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void poll();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onVisibility);
+      active = false;
+      ctrl.abort();
+    };
+  }, []);
 
   return (
     <ConversationListSidebar conversations={conversations} activeLineUserId={activeLineUserId} />
