@@ -18,8 +18,8 @@ const DEFAULT_LINE_MONTHLY_LIMIT = 5000;
 
 export type LineMaKpi = {
   sentCount: number;
-  /** クリック 計測 未実装 の 場合 は null。 UI で 「準備中」 と 出す。 */
-  clickCount: number | null;
+  /** ma_click_links の click_count を 月 単位 で 合算。 値 0 と null は 別 概念 */
+  clickCount: number;
   replyCount: number;
   /** LINE MA 由来 attribution 未実装 の ため 参考 値 (準備中)。 */
   applicationCount: number | null;
@@ -40,7 +40,7 @@ export async function getLineMaKpi(organizationId: string): Promise<LineMaKpi> {
 
   type CountResult = { count: number | null };
 
-  const [sentRes, replyRes] = await Promise.all([
+  const [sentRes, replyRes, clickAggRes] = await Promise.all([
     supabase
       .from("ma_send_logs")
       .select("id", { count: "exact", head: true })
@@ -58,13 +58,26 @@ export async function getLineMaKpi(organizationId: string): Promise<LineMaKpi> {
       .gte("created_at", start)
       .lt("created_at", end)
       .then((r) => (r as unknown as CountResult).count ?? 0),
+    // クリック 集計: 今月 作成 された ma_click_links の click_count を 合計
+    supabase
+      .from("ma_click_links")
+      .select("click_count")
+      .eq("organization_id", organizationId)
+      .gte("created_at", start)
+      .lt("created_at", end),
   ]);
+
+  type ClickRow = { click_count: number };
+  const clickCount = ((clickAggRes.data ?? []) as ClickRow[]).reduce(
+    (sum, r) => sum + (r.click_count ?? 0),
+    0,
+  );
 
   return {
     sentCount: sentRes,
-    clickCount: null, // 未実装 (= UI で 「準備中」 表示)
+    clickCount,
     replyCount: replyRes,
-    applicationCount: null, // attribution 未実装
+    applicationCount: null, // attribution 未実装 (Phase B で 実装)
     limit: DEFAULT_LINE_MONTHLY_LIMIT,
     periodLabel,
   };

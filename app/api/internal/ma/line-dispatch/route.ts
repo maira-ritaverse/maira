@@ -5,6 +5,7 @@ import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
 import { pushMessage } from "@/lib/line/api";
 import { classifyLineError } from "@/lib/line/errors";
 import { getLineChannelByOrgId } from "@/lib/line/queries";
+import { wrapBodyUrls } from "@/lib/ma/click-tracking";
 import { expandTemplate, type TemplateVariableValues } from "@/lib/ma/test-send";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -159,14 +160,20 @@ export async function POST(request: Request) {
       };
       const expandedBody = expandTemplate(body, ctx);
 
+      // 本文 内 の URL を トラッキング 短縮 URL に 置換 (クリック 計測 用)
+      const trackedBody = await wrapBodyUrls(admin, {
+        organizationId: scenario.organization_id,
+        body: expandedBody,
+      });
+
       // LINE push 送信
       const sendResult = await pushMessage(channel.channelAccessToken, cand.lineUserId, [
-        { type: "text", text: expandedBody },
+        { type: "text", text: trackedBody },
       ]);
 
-      // ma_send_logs へ 1 行 記録
+      // ma_send_logs へ 1 行 記録 (本文 は トラッキング 済 を 保存)
       const encSubj = (await encryptField(subject)) ?? "";
-      const encBody = (await encryptField(expandedBody)) ?? "";
+      const encBody = (await encryptField(trackedBody)) ?? "";
       if (sendResult.ok) {
         totalSent++;
         await admin.from("ma_send_logs").insert({

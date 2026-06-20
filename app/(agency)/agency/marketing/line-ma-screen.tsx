@@ -181,8 +181,18 @@ export function LineMaScreen({
       {/* KPI じょうご */}
       <div className="grid grid-cols-2 gap-2 rounded-md border bg-slate-50/40 p-3 md:grid-cols-4">
         <KpiCell label="配信数" value={kpi.sentCount} tone="primary" />
-        <KpiCell label="クリック" value={kpi.clickCount} tone="muted" hint="計測 準備中" />
-        <KpiCell label="返信" value={kpi.replyCount} tone="muted" />
+        <KpiCell
+          label="クリック"
+          value={kpi.clickCount}
+          tone="muted"
+          rate={kpi.sentCount > 0 ? kpi.clickCount / kpi.sentCount : null}
+        />
+        <KpiCell
+          label="返信"
+          value={kpi.replyCount}
+          tone="muted"
+          rate={kpi.sentCount > 0 ? kpi.replyCount / kpi.sentCount : null}
+        />
         <KpiCell
           label="応募"
           value={kpi.applicationCount}
@@ -237,11 +247,14 @@ function KpiCell({
   value,
   tone,
   hint,
+  rate,
 }: {
   label: string;
   value: number | null;
   tone: "primary" | "strong" | "muted";
   hint?: string;
+  /** 配信数 比 率 (0..1)。 null なら 表示 しない */
+  rate?: number | null;
 }) {
   const cls =
     tone === "primary"
@@ -249,6 +262,7 @@ function KpiCell({
       : tone === "strong"
         ? "text-emerald-800"
         : "text-slate-700";
+  const ratePct = rate === null || rate === undefined ? null : Math.round(rate * 1000) / 10;
   return (
     <div className="space-y-0.5">
       <p className="text-muted-foreground flex items-center gap-1 text-[10px]">
@@ -261,8 +275,8 @@ function KpiCell({
       </p>
       <p className={`text-lg font-bold ${cls}`}>
         {value === null ? <span className="text-muted-foreground text-sm">準備中</span> : value}
-        {value !== null && hint && (
-          <span className="text-muted-foreground ml-1 text-[10px]">(0%)</span>
+        {value !== null && ratePct !== null && (
+          <span className="text-muted-foreground ml-1 text-[10px]">({ratePct}%)</span>
         )}
       </p>
     </div>
