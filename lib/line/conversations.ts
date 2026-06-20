@@ -38,6 +38,15 @@ export type ConversationMessage = {
   sendMethod: "reply" | "push" | "multicast" | null;
   sendStatus: "queued" | "sent" | "failed" | null;
   createdAt: string;
+  /** 構造化 system メッセージ の 種別 (例: "job_interest") */
+  systemKind: string | null;
+  /** 構造化 system メッセージ の メタ (UI で 色付き カード を 描画 する 際 に 使う) */
+  systemMeta: {
+    jobId?: string;
+    companyName?: string;
+    position?: string;
+    senderDisplayName?: string;
+  } | null;
 };
 
 /**
@@ -193,6 +202,13 @@ export async function listConversationMessages(
       // テキスト として 復号 した 結果 を JSON parse して 表示用 に 整形 する
       let displayText: string | null = decryptedText;
       let fileName: string | null = null;
+      let systemKind: string | null = null;
+      let systemMeta: {
+        jobId?: string;
+        companyName?: string;
+        position?: string;
+        senderDisplayName?: string;
+      } | null = null;
       if (
         decryptedText &&
         (r.message_type === "image" ||
@@ -208,6 +224,31 @@ export async function listConversationMessages(
         } catch {
           // JSON でない なら そのまま 表示
         }
+      } else if (decryptedText && r.message_type === "system") {
+        // 構造化 system メッセージ (例: "job_interest") を JSON parse 試行。
+        // 失敗 (旧形式 の プレーン テキスト) なら そのまま 表示。
+        try {
+          const meta = JSON.parse(decryptedText) as {
+            kind?: string;
+            jobId?: string;
+            companyName?: string;
+            position?: string;
+            senderDisplayName?: string;
+            text?: string;
+          };
+          if (meta && typeof meta === "object" && meta.kind) {
+            systemKind = meta.kind;
+            systemMeta = {
+              jobId: meta.jobId,
+              companyName: meta.companyName,
+              position: meta.position,
+              senderDisplayName: meta.senderDisplayName,
+            };
+            displayText = meta.text ?? null;
+          }
+        } catch {
+          // プレーン テキスト の system メッセージ
+        }
       }
       return {
         id: r.id,
@@ -221,6 +262,8 @@ export async function listConversationMessages(
         sendMethod: r.send_method,
         sendStatus: r.send_status,
         createdAt: r.created_at,
+        systemKind,
+        systemMeta,
       };
     }),
   );
@@ -277,10 +320,22 @@ async function previewFor(row: {
     case "flex":
     case "template":
       return "[リッチメッセージ]";
-    case "system":
-      return row.encrypted_content
-        ? ((await decryptField(row.encrypted_content)) ?? "[システム]")
-        : "[システム]";
+    case "system": {
+      if (!row.encrypted_content) return "[システム]";
+      const decoded = (await decryptField(row.encrypted_content)) ?? "[システム]";
+      // 構造化 system (kind:"job_interest" 等) は text 部分 を 抜き出し、 ★ で 強調
+      try {
+        const parsed = JSON.parse(decoded) as { kind?: string; text?: string };
+        if (parsed.kind === "job_interest") {
+          const txt = parsed.text ?? "興味あり";
+          return `★ ${txt.length > 38 ? txt.slice(0, 38) + "..." : txt}`;
+        }
+        if (parsed.text) return parsed.text;
+      } catch {
+        // プレーン テキスト の system
+      }
+      return decoded;
+    }
     default:
       return `[${row.message_type}]`;
   }

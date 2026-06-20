@@ -381,22 +381,97 @@ async function handlePostback(
     return await confirmMeetingProposal(ctx, event, lineUserId, data);
   }
 
-  // その他 の postback (求人 興味あり 等)
+  // 求人 興味あり (LINE Flex の 「興味あり」 ボタン タップ)
   if (data.startsWith("job_interest:")) {
     const jobId = data.slice("job_interest:".length);
+
+    // 求人 と 友達 の 情報 を 並列 取得
+    const [{ data: jobRow }, { data: linkRow }] = await Promise.all([
+      ctx.service
+        .from("job_postings")
+        .select("id, company_name, position, client_record_id")
+        .eq("id", jobId)
+        .maybeSingle(),
+      ctx.service
+        .from("line_user_links")
+        .select("display_name, client_record_id")
+        .eq("organization_id", ctx.organizationId)
+        .eq("line_user_id", lineUserId)
+        .maybeSingle(),
+    ]);
+    const job = jobRow as {
+      id: string;
+      company_name: string;
+      position: string;
+      client_record_id: string | null;
+    } | null;
+    const friend = linkRow as {
+      display_name: string | null;
+      client_record_id: string | null;
+    } | null;
+
+    const seekerName = friend?.display_name ?? "求職者";
+    const jobLabel = job ? `${job.position} / ${job.company_name}` : "求人 (取得失敗)";
+
+    // 1) 履歴 に 残す system メッセージ (構造化 内容 で UI が 色付き 表示 でき る)
+    const summaryText = `${seekerName} さん が 「${jobLabel}」 に 興味あり`;
+    const encryptedContent =
+      (await encryptField(
+        JSON.stringify({
+          kind: "job_interest",
+          jobId,
+          companyName: job?.company_name ?? null,
+          position: job?.position ?? null,
+          senderDisplayName: friend?.display_name ?? null,
+          text: summaryText,
+        }),
+      )) ?? null;
+
     await ctx.service.from("line_messages").insert({
       organization_id: ctx.organizationId,
       line_user_id: lineUserId,
       direction: "inbound",
       message_type: "system",
-      encrypted_content:
-        (await encryptField(`求職者 が 求人 (${jobId.slice(0, 8)}...) に 「興味あり」`)) ?? null,
+      encrypted_content: encryptedContent,
       related_job_id: jobId,
+      client_record_id: friend?.client_record_id ?? null,
     });
+
+    // 2) 要対応 に 戻す (handled_at = NULL) — 求職者 アクション = 対応 必要
+    await ctx.service
+      .from("line_user_links")
+      .update({ handled_at: null, handled_by_user_id: null })
+      .eq("organization_id", ctx.organizationId)
+      .eq("line_user_id", lineUserId);
+
+    // 3) 通知 fan-out (in-app + Slack + メール) — 担当 エージェント に 即時通知
+    try {
+      let clientName: string | null = null;
+      if (friend?.client_record_id) {
+        const { data: cr } = await ctx.service
+          .from("client_records")
+          .select("name")
+          .eq("id", friend.client_record_id)
+          .maybeSingle();
+        clientName = (cr as { name?: string } | null)?.name ?? null;
+      }
+      await notifyAgencyOfLineMessage({
+        organizationId: ctx.organizationId,
+        lineUserId,
+        senderDisplayName: friend?.display_name ?? null,
+        clientName,
+        preview: `★ 興味あり: ${jobLabel}`,
+        messageType: "system",
+      });
+    } catch (err) {
+      console.warn("[line/job_interest] notify failed", err);
+    }
+
+    // 4) LINE 側 に Reply で 受領 通知 (求職者 体験)
     await replyMessage(ctx.accessToken, event.replyToken, [
       {
         type: "text",
-        text: "「興味あり」 を 受け付け ました。 担当 から ご連絡 します。",
+        text: `「${jobLabel}」 への 興味あり を 受け付けました。 担当 から 改めて ご連絡 します。`,
       },
     ]);
     return { ok: true, type: "postback", reason: "job_interest" };

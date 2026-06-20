@@ -1,6 +1,13 @@
 "use client";
 
-import { Briefcase, CalendarClock, Image as ImageIcon, Paperclip, Smile } from "lucide-react";
+import {
+  Briefcase,
+  CalendarClock,
+  Heart,
+  Image as ImageIcon,
+  Paperclip,
+  Smile,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -514,6 +521,36 @@ function DateSeparator({ iso }: { iso: string }) {
 
 function MessageBubble({ message }: { message: ConversationMessage }) {
   if (message.messageType === "system") {
+    // 「興味あり」 等 の 構造化 system は 目立つ カード で 表示
+    if (message.systemKind === "job_interest") {
+      const meta = message.systemMeta;
+      const jobLabel =
+        meta?.position && meta?.companyName
+          ? `${meta.position} / ${meta.companyName}`
+          : meta?.position || meta?.companyName || "(求人 情報 取得失敗)";
+      const sender = meta?.senderDisplayName ?? "求職者";
+      return (
+        <div className="my-3 flex justify-center">
+          <div className="flex max-w-md items-start gap-2 rounded-lg border-2 border-pink-200 bg-pink-50 px-3 py-2 shadow-sm">
+            <Heart className="size-4 shrink-0 fill-pink-500 text-pink-500" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold text-pink-800">
+                {sender} さん が 興味あり と 回答
+              </p>
+              <p className="mt-0.5 text-xs font-medium text-slate-800">{jobLabel}</p>
+              {meta?.jobId && (
+                <a
+                  href={`/agency/jobs/${meta.jobId}`}
+                  className="mt-1 inline-block text-[10px] text-pink-700 underline hover:text-pink-900"
+                >
+                  求人 詳細 を 開く →
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="my-2 flex justify-center">
         <span className="rounded-full bg-slate-300/70 px-3 py-1 text-[10px] font-medium text-slate-700">
