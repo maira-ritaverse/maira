@@ -306,21 +306,48 @@ export async function listClientRecords(organizationId: string): Promise<ClientR
  * unique タグ 数 は 通常 数十 件 以内 と 想定 されて いる ため、 全 行 SELECT で 集計。
  */
 export async function listOrganizationCrmTags(organizationId: string): Promise<string[]> {
+  const stats = await getOrganizationCrmTagsStats(organizationId);
+  return stats.tags;
+}
+
+/**
+ * 上記 を 包む 統計 付き 版。 UI で 「クライアント数 / タグ付き 数 / unique タグ 数」 を
+ * 表示 する ため に 使う (タグ ピッカー が 空 の 時 の 原因 切り分け に 有用)。
+ */
+export async function getOrganizationCrmTagsStats(organizationId: string): Promise<{
+  tags: string[];
+  totalClients: number;
+  withTagsClients: number;
+}> {
   const supabase = await createClient();
-  const { data } = await supabase
+  // crm_tags 列 は NOT NULL DEFAULT '{}' な ので IS NULL で 弾く 必要 は ない。
+  // 全 行 取って クライアント 数 と タグ有 数 も 同時 に 集計 する。
+  const { data, error } = await supabase
     .from("client_records")
     .select("crm_tags")
-    .eq("organization_id", organizationId)
-    .not("crm_tags", "is", null);
+    .eq("organization_id", organizationId);
+  if (error) {
+    console.error("[clients/queries] tags select failed", error.message);
+    return { tags: [], totalClients: 0, withTagsClients: 0 };
+  }
   type Row = { crm_tags: string[] | null };
+  const rows = (data ?? []) as Row[];
   const set = new Set<string>();
-  for (const r of (data ?? []) as Row[]) {
-    for (const t of r.crm_tags ?? []) {
+  let withTags = 0;
+  for (const r of rows) {
+    const arr = r.crm_tags ?? [];
+    const hasAny = arr.some((t) => t.trim().length > 0);
+    if (hasAny) withTags++;
+    for (const t of arr) {
       const trimmed = t.trim();
       if (trimmed) set.add(trimmed);
     }
   }
-  return Array.from(set).sort((a, b) => a.localeCompare(b, "ja"));
+  return {
+    tags: Array.from(set).sort((a, b) => a.localeCompare(b, "ja")),
+    totalClients: rows.length,
+    withTagsClients: withTags,
+  };
 }
 
 /**

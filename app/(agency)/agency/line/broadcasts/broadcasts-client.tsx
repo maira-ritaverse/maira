@@ -48,6 +48,11 @@ type FormProps = {
   jobs: JobOption[];
   /** 自組織 で 使われて いる crm_tags 一覧 (タグ ピッカー 用) */
   availableTags: string[];
+  /** タグ ピッカー が 空 の 時 の 原因 切り分け 用 統計 */
+  tagsDiagnostics?: {
+    totalClients: number;
+    withTagsClients: number;
+  };
 };
 
 type MessageKind = "text" | "job";
@@ -61,6 +66,7 @@ export function BroadcastForm({
   unlinkedCount,
   jobs,
   availableTags,
+  tagsDiagnostics,
 }: FormProps) {
   const [kind, setKind] = useState<MessageKind>("text");
   const [text, setText] = useState("");
@@ -269,10 +275,19 @@ export function BroadcastForm({
       <div className="space-y-1.5">
         <Label className="text-xs">タグ で 絞り込む (任意)</Label>
         {availableTags.length === 0 ? (
-          <p className="text-muted-foreground text-[10px]">
-            まだ タグ が ありません。 クライアント 詳細 で タグ を 設定 する と、 ここ で 絞り込み
-            に 使え ます。
-          </p>
+          <div className="space-y-1">
+            <p className="text-muted-foreground text-[10px]">
+              まだ タグ が ありません。 クライアント 詳細 で タグ を 設定 する と、 ここ で 絞り込み
+              に 使え ます。
+            </p>
+            {tagsDiagnostics && (
+              <p className="text-[10px] text-amber-700">
+                (自組織 の クライアント:{tagsDiagnostics.totalClients} 件、 うち タグ 設定 済:
+                {tagsDiagnostics.withTagsClients} 件 — 「タグ 設定 済」が 1 以上 な のに 表示
+                されない 場合 は 保存 失敗 の 可能性 が ある ので 詳しい 状況 を 教えて ください)
+              </p>
+            )}
+          </div>
         ) : (
           <>
             <div className="flex flex-wrap gap-1.5">

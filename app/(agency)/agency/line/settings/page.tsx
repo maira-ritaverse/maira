@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Card } from "@/components/ui/card";
-import { listOrganizationCrmTags } from "@/lib/clients/queries";
+import { getOrganizationCrmTagsStats } from "@/lib/clients/queries";
 import { getMyLineChannel } from "@/lib/line/queries";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient } from "@/lib/supabase/server";
@@ -52,9 +52,9 @@ export default async function LineSettingsPage() {
     );
   }
 
-  // 友達 数 + 配信 候補 求人 + タグ 一覧 を 並列 取得
+  // 友達 数 + 配信 候補 求人 + タグ 統計 を 並列 取得
   type CountResult = { count: number | null };
-  const [allCount, linkedCount, unlinkedCount, jobsResult, availableTags] = await Promise.all([
+  const [allCount, linkedCount, unlinkedCount, jobsResult, tagsStats] = await Promise.all([
     supabase
       .from("line_user_links")
       .select("id", { count: "exact", head: true })
@@ -82,7 +82,7 @@ export default async function LineSettingsPage() {
       .eq("status", "open")
       .order("created_at", { ascending: false })
       .limit(50),
-    listOrganizationCrmTags(role.organization.id),
+    getOrganizationCrmTagsStats(role.organization.id),
   ]);
 
   type JobPickerRow = {
@@ -120,7 +120,11 @@ export default async function LineSettingsPage() {
         linkedCount={linkedCount}
         unlinkedCount={unlinkedCount}
         jobs={jobs}
-        availableTags={availableTags}
+        availableTags={tagsStats.tags}
+        tagsDiagnostics={{
+          totalClients: tagsStats.totalClients,
+          withTagsClients: tagsStats.withTagsClients,
+        }}
       />
     </div>
   );
