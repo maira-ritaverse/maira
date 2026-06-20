@@ -55,8 +55,11 @@ export default async function AgencyLineLayout({ children }: { children: React.R
 
   const conversations = await listConversations(supabase);
 
+  // 親 (agency layout) は h-screen overflow-hidden で、 main は flex-1 overflow-auto p-6。
+  // ここ は main の 残り 領域 を 縁無し で 100% 使う ため、 -m-6 で padding を 打消し、
+  // 高さ は h-[calc(100%+3rem)] (= padding 分 を 足し戻す) で 100% を 取り戻す。
   return (
-    <div className="flex h-[calc(100vh-72px)] overflow-hidden border-t bg-slate-100">
+    <div className="-m-6 flex h-[calc(100%+3rem)] overflow-hidden border-t bg-slate-100">
       {/* 左:会話一覧 */}
       <div className="w-72 shrink-0">
         <ActiveSync conversations={conversations} />
