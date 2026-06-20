@@ -80,6 +80,11 @@ async function handleMessage(
 
   const msg = event.message;
 
+  // メッセージ 受信 = 「友達 状態」が 確定 している と 見なし、 line_user_links に
+  // 行 が 無ければ 自動作成 (連携前 に 友達追加 して いて follow event を 取り逃がした
+  // ケース に 対応)。 プロフィール は LINE API から 取得 し、 失敗 しても 続行。
+  await ensureLineUserLink(ctx, lineUserId);
+
   // text かつ 連携コード パターン に 一致 した 場合、 自動 消費 を 試みる。
   // 成功 すれば 「連携完了」system メッセージ を 残し、 元 の text は 保存しない
   // (機密 = コード 自体 は DB に 残さない)。
@@ -725,6 +730,40 @@ function extensionFor(
     "application/pdf": ".pdf",
   };
   return map[ct] ?? "";
+}
+
+/**
+ * line_user_links に 行 が 無ければ 作成 (連携前 友達 / follow 取り逃がし に 対応)。
+ *
+ * 既存 行 が あれば 何 も しない (display_name 上書き で プロフィール 取得 を 走らせる
+ * 余分な API call を 避ける)。 新規 のみ プロフィール を 取得 する。
+ */
+async function ensureLineUserLink(ctx: HandlerContext, lineUserId: string): Promise<void> {
+  try {
+    const { data: existing } = await ctx.service
+      .from("line_user_links")
+      .select("id")
+      .eq("organization_id", ctx.organizationId)
+      .eq("line_user_id", lineUserId)
+      .maybeSingle();
+    if (existing) return;
+
+    const profileResult = await getUserProfile(ctx.accessToken, lineUserId);
+    const display = profileResult.ok ? profileResult.data : null;
+
+    await ctx.service.from("line_user_links").upsert(
+      {
+        organization_id: ctx.organizationId,
+        line_user_id: lineUserId,
+        display_name: display?.displayName ?? null,
+        picture_url: display?.pictureUrl ?? null,
+        status_message: display?.statusMessage ?? null,
+      },
+      { onConflict: "organization_id,line_user_id" },
+    );
+  } catch (err) {
+    console.warn("[line/ensure-link] failed", err);
+  }
 }
 
 /**
