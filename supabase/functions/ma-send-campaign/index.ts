@@ -29,6 +29,7 @@
  */
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { wrapBodyUrls } from "./click-tracking.ts";
 import { decryptField, encryptField } from "./field-encryption.ts";
 import { sendViaResend } from "./resend.ts";
 import { expandSubjectAndBody, type VariableContext } from "./template-expander.ts";
@@ -303,10 +304,21 @@ Deno.serve(async (req) => {
         };
         const { subject, body } = expandSubjectAndBody(subjectTemplate, bodyTemplate, ctx);
 
+        // 本文 内 URL を トラッキング 短縮 URL に 置換 (クリック 計測)
+        const siteUrl = (Deno.env.get("NEXT_PUBLIC_SITE_URL") ?? "https://www.maira.pro").replace(
+          /\/$/,
+          "",
+        );
+        const trackedBody = await wrapBodyUrls(supabase, {
+          organizationId: scenario.organization_id,
+          body,
+          siteUrl,
+        });
+
         const sendResult = await sendViaResend({
           toEmail: c.clientEmail,
           subject,
-          body,
+          body: trackedBody,
           tags: [{ name: "scenario", value: presetKey }],
         });
 
@@ -317,7 +329,7 @@ Deno.serve(async (req) => {
             recipientClientRecordId: c.clientRecordId,
             recipientEmail: c.clientEmail,
             subject,
-            body,
+            body: trackedBody,
             status: "sent",
             resendMessageId: sendResult.messageId,
           });
