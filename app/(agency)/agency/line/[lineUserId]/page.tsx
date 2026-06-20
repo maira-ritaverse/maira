@@ -1,23 +1,22 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { Card } from "@/components/ui/card";
 import { listConversationMessages, markConversationRead } from "@/lib/line/conversations";
 import { getMyLineChannel } from "@/lib/line/queries";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
+import { ContactDetailSidebar } from "./contact-detail-sidebar";
 import { LineConversationClient } from "./line-conversation-client";
 
 /**
  * /agency/line/[lineUserId]
  *
- * 個別 LINE 会話 ページ (LINE風 バブル UI)。
+ * 個別 LINE 会話 ページ。 layout で 3 カラム の 左 (会話一覧) が 描画 され、
+ * ここ は **中央 (チャット) + 右 (連絡先 詳細)** を 出力 する。
  *
  * - サーバ側 で メッセージ 履歴 を 復号 し クライアント に 渡す
  * - 「会話 を 開いた」段階 で inbound メッセージ を 既読化
- * - 送信 / ポーリング は クライアント Component (LineConversationClient)
  */
 export const dynamic = "force-dynamic";
 
@@ -46,7 +45,9 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
   // line_user_links を 引いて 友達 情報 を 取得
   const { data: linkRow } = await supabase
     .from("line_user_links")
-    .select("line_user_id, client_record_id, display_name, picture_url, unfollowed_at, link_method")
+    .select(
+      "line_user_id, client_record_id, display_name, picture_url, unfollowed_at, link_method, created_at",
+    )
     .eq("line_user_id", lineUserId)
     .maybeSingle();
   const link = linkRow as {
@@ -55,7 +56,8 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
     display_name: string | null;
     picture_url: string | null;
     unfollowed_at: string | null;
-    link_method: string | null;
+    link_method: "manual" | "code" | "liff_login" | null;
+    created_at: string;
   } | null;
 
   if (!link) notFound();
@@ -74,7 +76,7 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
   // メッセージ 履歴 取得 (古い順)
   const messages = await listConversationMessages(supabase, lineUserId, 200);
 
-  // 求人共有 用 の 自組織 active 求人 一覧 (UI セレクタ で 使う)
+  // 求人共有 用 の 自組織 active 求人 一覧
   const { data: jobsData } = await supabase
     .from("job_postings")
     .select("id, position, company_name")
@@ -92,7 +94,7 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
     label: `${j.position} (${j.company_name})`,
   }));
 
-  // 確定済 面談 (キャンセル / リスケ 用) - client_record 経由
+  // 確定済 面談
   let scheduledMeetings: Array<{
     id: string;
     title: string;
@@ -132,42 +134,49 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-180px)] max-w-3xl flex-col gap-2">
-      {/* ヘッダー (相手 情報) */}
-      <Card className="flex items-center gap-3 px-4 py-2">
-        <Link
-          href="/agency/line"
-          className="text-muted-foreground hover:text-foreground text-xs"
-          aria-label="一覧に戻る"
-        >
-          ←
-        </Link>
-        {link.picture_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={link.picture_url}
-            alt=""
-            className="h-9 w-9 shrink-0 rounded-full bg-slate-200 object-cover"
-          />
-        ) : (
-          <div className="h-9 w-9 shrink-0 rounded-full bg-slate-200" />
-        )}
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{link.display_name ?? "(名前なし)"}</p>
-          <p className="text-muted-foreground truncate text-[10px]">
-            {clientName ? `紐付け: ${clientName}` : "未紐付け"}
-            {link.unfollowed_at && " · 解除済"}
-          </p>
-        </div>
-      </Card>
+    <>
+      {/* 中央: ヘッダー + チャット + 入力欄 */}
+      <div className="flex min-w-0 flex-1 flex-col bg-slate-100">
+        <header className="flex items-center gap-3 border-b bg-white px-4 py-2.5">
+          {link.picture_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={link.picture_url}
+              alt=""
+              className="h-9 w-9 shrink-0 rounded-full bg-slate-200 object-cover"
+            />
+          ) : (
+            <div className="h-9 w-9 shrink-0 rounded-full bg-slate-200" />
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold">{link.display_name ?? "(名前なし)"}</p>
+            <p className="text-muted-foreground truncate text-[10px]">
+              {clientName ? `紐付け: ${clientName}` : "未紐付け"}
+              {link.unfollowed_at && " · 解除済"}
+            </p>
+          </div>
+        </header>
 
-      <LineConversationClient
+        <LineConversationClient
+          lineUserId={lineUserId}
+          initialMessages={messages}
+          unfollowed={link.unfollowed_at !== null}
+          jobOptions={jobOptions}
+          scheduledMeetings={scheduledMeetings}
+        />
+      </div>
+
+      {/* 右: 連絡先 詳細 */}
+      <ContactDetailSidebar
         lineUserId={lineUserId}
-        initialMessages={messages}
-        unfollowed={link.unfollowed_at !== null}
-        jobOptions={jobOptions}
-        scheduledMeetings={scheduledMeetings}
+        displayName={link.display_name}
+        pictureUrl={link.picture_url}
+        clientRecordId={link.client_record_id}
+        clientName={clientName}
+        linkMethod={link.link_method}
+        unfollowedAt={link.unfollowed_at}
+        createdAt={link.created_at}
       />
-    </div>
+    </>
   );
 }

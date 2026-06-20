@@ -273,19 +273,24 @@ export function LineConversationClient({
         />
       )}
 
-      {/* メッセージ リスト */}
-      <div
-        ref={scrollRef}
-        className="bg-line-bg flex-1 overflow-y-auto rounded-md border bg-[#7295A8] px-3 py-4"
-        style={{ backgroundImage: "linear-gradient(180deg, #7295A8 0%, #8AABBE 100%)" }}
-      >
+      {/* メッセージ リスト (LINE OA Manager 風 = 薄グレー 背景) */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto bg-slate-100 px-4 py-4">
         {messages.length === 0 ? (
-          <p className="text-center text-xs text-white/70">まだ メッセージ が ありません。</p>
+          <p className="text-muted-foreground text-center text-xs">
+            まだ メッセージ が ありません。
+          </p>
         ) : (
-          <div className="space-y-2">
-            {messages.map((m) => (
-              <MessageBubble key={m.id} message={m} />
-            ))}
+          <div className="mx-auto max-w-2xl space-y-2">
+            {messages.map((m, i) => {
+              const prev = i > 0 ? messages[i - 1] : null;
+              const showDateSep = !prev || !isSameDay(prev.createdAt, m.createdAt);
+              return (
+                <div key={m.id}>
+                  {showDateSep && <DateSeparator iso={m.createdAt} />}
+                  <MessageBubble message={m} />
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -468,11 +473,50 @@ export function LineConversationClient({
   );
 }
 
+/** 同日 か 判定 (ISO 文字列 同士)。 日付 区切り 用 */
+function isSameDay(aIso: string, bIso: string): boolean {
+  const a = new Date(aIso);
+  const b = new Date(bIso);
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function DateSeparator({ iso }: { iso: string }) {
+  const d = new Date(iso);
+  const today = new Date();
+  let label: string;
+  if (isSameDay(iso, today.toISOString())) {
+    label = "今日";
+  } else {
+    const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+    if (isSameDay(iso, yesterday.toISOString())) {
+      label = "昨日";
+    } else {
+      label = d.toLocaleDateString("ja-JP", {
+        year: d.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
+        month: "long",
+        day: "numeric",
+        weekday: "short",
+      });
+    }
+  }
+  return (
+    <div className="my-4 flex justify-center">
+      <span className="rounded-full bg-slate-300/70 px-3 py-1 text-[10px] font-medium text-slate-700">
+        {label}
+      </span>
+    </div>
+  );
+}
+
 function MessageBubble({ message }: { message: ConversationMessage }) {
   if (message.messageType === "system") {
     return (
       <div className="my-2 flex justify-center">
-        <span className="rounded-full bg-black/30 px-3 py-1 text-[10px] text-white">
+        <span className="rounded-full bg-slate-300/70 px-3 py-1 text-[10px] font-medium text-slate-700">
           {message.text ?? "[システム]"}
         </span>
       </div>
@@ -481,32 +525,30 @@ function MessageBubble({ message }: { message: ConversationMessage }) {
 
   const isOutbound = message.direction === "outbound";
   return (
-    <div className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}>
+    <div className={`flex ${isOutbound ? "justify-end" : "justify-start"} gap-2`}>
       <div className="flex max-w-[75%] flex-col gap-0.5">
         <div
           className={`rounded-2xl px-3 py-2 text-sm wrap-break-word ${
-            isOutbound ? "bg-[#06C755] text-white" : "text-foreground bg-white"
+            isOutbound
+              ? "bg-[#06C755] text-white"
+              : "border border-slate-200 bg-white text-slate-900"
           }`}
         >
           {renderContent(message)}
         </div>
-        <div
-          className={`text-[10px] ${
-            isOutbound ? "self-end text-white/80" : "self-start text-white/80"
-          }`}
-        >
+        <div className={`text-[10px] text-slate-500 ${isOutbound ? "self-end" : "self-start"}`}>
           {new Date(message.createdAt).toLocaleTimeString("ja-JP", {
             hour: "2-digit",
             minute: "2-digit",
           })}
           {isOutbound && message.sendStatus === "failed" && (
-            <span className="ml-1 text-red-200">送信失敗</span>
+            <span className="ml-1 text-red-600">送信失敗</span>
           )}
           {isOutbound && message.sendStatus === "queued" && (
-            <span className="ml-1 text-yellow-200">送信中...</span>
+            <span className="ml-1 text-amber-600">送信中...</span>
           )}
           {isOutbound && message.sendMethod === "reply" && (
-            <span className="ml-1 text-yellow-200">Reply</span>
+            <span className="ml-1 text-emerald-700">Reply</span>
           )}
         </div>
       </div>

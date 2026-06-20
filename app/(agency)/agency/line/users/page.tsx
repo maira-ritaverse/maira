@@ -65,16 +65,18 @@ export default async function LineUsersPage() {
   }));
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">LINE 友達 / 紐付け</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          公式LINE の 友達 と Maira の クライアント (求職者) を 紐付けます。 紐付け 済みの 求職者 と
-          は LINE で やり取り が 可能 に なります。
-        </p>
-      </div>
+    <div className="flex-1 overflow-y-auto p-6">
+      <div className="mx-auto max-w-3xl space-y-4">
+        <div>
+          <h1 className="text-2xl font-bold">LINE 友達 / 紐付け</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            公式LINE の 友達 と Maira の クライアント (求職者) を 紐付けます。 紐付け 済みの 求職者
+            と は LINE で やり取り が 可能 に なります。
+          </p>
+        </div>
 
-      <LineUsersClient clientOptions={clientOptions} />
+        <LineUsersClient clientOptions={clientOptions} />
+      </div>
     </div>
   );
 }

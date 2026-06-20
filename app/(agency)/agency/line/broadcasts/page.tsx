@@ -71,22 +71,24 @@ export default async function LineBroadcastsPage() {
   ]);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
-      <div className="flex items-baseline justify-between gap-2">
-        <h1 className="text-2xl font-bold">LINE 一斉配信</h1>
-        <Link
-          href="/agency/line"
-          className="text-muted-foreground hover:text-foreground text-xs underline"
-        >
-          ← トーク 一覧
-        </Link>
-      </div>
+    <div className="flex-1 overflow-y-auto p-6">
+      <div className="mx-auto max-w-3xl space-y-4">
+        <div className="flex items-baseline justify-between gap-2">
+          <h1 className="text-2xl font-bold">LINE 一斉配信</h1>
+          <Link
+            href="/agency/line"
+            className="text-muted-foreground hover:text-foreground text-xs underline"
+          >
+            ← トーク 一覧
+          </Link>
+        </div>
 
-      <BroadcastsClient
-        allCount={allCount}
-        linkedCount={linkedCount}
-        unlinkedCount={unlinkedCount}
-      />
+        <BroadcastsClient
+          allCount={allCount}
+          linkedCount={linkedCount}
+          unlinkedCount={unlinkedCount}
+        />
+      </div>
     </div>
   );
 }
