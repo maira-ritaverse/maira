@@ -10,9 +10,14 @@ import { IMPLEMENTED_SCENARIO_KEYS, isScenarioImplemented } from "./types";
  */
 
 describe("IMPLEMENTED_SCENARIO_KEYS", () => {
-  it("現状の実装済みシナリオキーは 2 種類(register_meeting_promotion / dormant_outreach)", () => {
-    // この件数を増やすときは Edge Function 側にも対応ロジックを追加してから更新する。
-    expect(IMPLEMENTED_SCENARIO_KEYS).toEqual(["register_meeting_promotion", "dormant_outreach"]);
+  it("現状の実装済みシナリオキーは Email 2 件 + LINE 2 件", () => {
+    // この件数を増やすときは Edge Function / cron route 側 にも 対応 ロジック を 追加 して から 更新 する。
+    expect(IMPLEMENTED_SCENARIO_KEYS).toEqual([
+      "register_meeting_promotion",
+      "dormant_outreach",
+      "line_welcome_after_friend",
+      "line_dormant_outreach",
+    ]);
   });
 });
 

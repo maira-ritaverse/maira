@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button";
  */
 export type ConsentModalProps = {
   open: boolean;
-  feature: "email_ma";
+  feature: "email_ma" | "line_ma";
   consentVersion: string;
   onClose: () => void;
 };

@@ -17,8 +17,8 @@ import { z } from "zod";
 // Phase C-1 では candidate のみ実装し、recruiter は将来追加。
 export type MAAudience = "candidate" | "recruiter";
 
-// 配信チャネル。Phase C-1 ではメールのみ。
-export type MAChannel = "email";
+// 配信チャネル。 Phase C-4 で line を 追加。
+export type MAChannel = "email" | "line";
 
 // 同意ログの機能識別子。Phase C-1 では email_ma のみ運用。
 export type MAFeature = "email_ma" | "line_ma";
@@ -26,6 +26,17 @@ export type MAFeature = "email_ma" | "line_ma";
 // 配信特約のバージョン。UI 側で同意モーダルに表示する。
 // バージョンを上げた場合は、既存組織は「再同意」が必要(古い consent では送信させない)。
 export const CURRENT_EMAIL_MA_CONSENT_VERSION = "1.0";
+export const CURRENT_LINE_MA_CONSENT_VERSION = "1.0";
+
+/**
+ * feature ごと の 現行 同意 バージョン を 返す ヘルパー。
+ * consent route で 「最新 バージョン と 一致 する か」検証 する 時 に 使う。
+ */
+export function currentConsentVersion(feature: MAFeature): string {
+  return feature === "email_ma"
+    ? CURRENT_EMAIL_MA_CONSENT_VERSION
+    : CURRENT_LINE_MA_CONSENT_VERSION;
+}
 
 /**
  * ma_scenario_presets 行の型
@@ -277,6 +288,9 @@ export type UpsertTemplateRequest = z.infer<typeof upsertTemplateSchema>;
 export const IMPLEMENTED_SCENARIO_KEYS = [
   "register_meeting_promotion", // client_records 作成 N 日後、interactions が 0 件
   "dormant_outreach", // 最終 interaction から N 日経過
+  // ── Phase C-4 (LINE MA) ──
+  "line_welcome_after_friend", // 公式 LINE 友達 追加 から N 日 経過
+  "line_dormant_outreach", // 最終 LINE inbound から N 日 経過
 ] as const;
 
 export type ImplementedScenarioKey = (typeof IMPLEMENTED_SCENARIO_KEYS)[number];

@@ -7,7 +7,7 @@ import {
   getScenarioSendStats,
   listScenarioViews,
 } from "@/lib/ma/queries";
-import { CURRENT_EMAIL_MA_CONSENT_VERSION } from "@/lib/ma/types";
+import { CURRENT_EMAIL_MA_CONSENT_VERSION, CURRENT_LINE_MA_CONSENT_VERSION } from "@/lib/ma/types";
 import { MarketingScreen } from "./scenario-list";
 
 /**
@@ -41,12 +41,14 @@ export default async function MarketingPage() {
   }
 
   // 並列に取得して TTFB を短くする(全て自組織分のみ、依存関係なし)
-  const [scenarios, consent, sendStats, lastSentAtByScenarioId] = await Promise.all([
-    listScenarioViews(role.organization.id),
-    getActiveConsent(role.organization.id, "email_ma"),
-    getScenarioSendStats(role.organization.id, 30),
-    getScenarioLastSentAt(role.organization.id),
-  ]);
+  const [scenarios, emailConsent, lineConsent, sendStats, lastSentAtByScenarioId] =
+    await Promise.all([
+      listScenarioViews(role.organization.id),
+      getActiveConsent(role.organization.id, "email_ma"),
+      getActiveConsent(role.organization.id, "line_ma"),
+      getScenarioSendStats(role.organization.id, 30),
+      getScenarioLastSentAt(role.organization.id),
+    ]);
 
   // クライアント側で scenario_id → stats の O(1) lookup ができるよう Record にする。
   // 値が無い scenario_id は「表示しない」ではなく「0/0/0 として表示」を期待する。
@@ -81,8 +83,10 @@ export default async function MarketingPage() {
 
       <MarketingScreen
         scenarios={scenarios}
-        consent={consent}
-        consentVersion={CURRENT_EMAIL_MA_CONSENT_VERSION}
+        emailConsent={emailConsent}
+        lineConsent={lineConsent}
+        emailConsentVersion={CURRENT_EMAIL_MA_CONSENT_VERSION}
+        lineConsentVersion={CURRENT_LINE_MA_CONSENT_VERSION}
         isAdmin={role.member.role === "admin"}
         sendStatsByScenarioId={sendStatsByScenarioId}
         lastSentAtByScenarioId={lastSentAtByScenarioId}

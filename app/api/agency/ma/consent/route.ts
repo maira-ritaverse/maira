@@ -18,11 +18,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { recordConsent, revokeConsent } from "@/lib/ma/queries";
-import {
-  CURRENT_EMAIL_MA_CONSENT_VERSION,
-  recordConsentSchema,
-  revokeConsentSchema,
-} from "@/lib/ma/types";
+import { currentConsentVersion, recordConsentSchema, revokeConsentSchema } from "@/lib/ma/types";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -59,23 +55,16 @@ export async function POST(request: Request) {
     );
   }
 
-  // 特約バージョンの検証。クライアントから送られた値が最新でなければ拒否する。
-  // 将来 line_ma 用の定数も追加されたら feature 分岐で参照を変える。
-  if (parsed.data.feature === "email_ma") {
-    if (parsed.data.consentVersion !== CURRENT_EMAIL_MA_CONSENT_VERSION) {
-      return NextResponse.json(
-        {
-          error: "Outdated consent version",
-          message: `現在の特約バージョンは ${CURRENT_EMAIL_MA_CONSENT_VERSION} です。`,
-        },
-        { status: 400 },
-      );
-    }
-  } else {
-    // line_ma は Phase C-4 で実装予定。今は 501 で明示。
+  // 特約 バージョン の 検証。 クライアント から 送られた 値 が 最新 で なければ 拒否。
+  // email_ma / line_ma それぞれ の 現行 バージョン と 一致 する か 確認 する。
+  const expectedVersion = currentConsentVersion(parsed.data.feature);
+  if (parsed.data.consentVersion !== expectedVersion) {
     return NextResponse.json(
-      { error: "Not implemented", message: `feature=${parsed.data.feature} は未実装です。` },
-      { status: 501 },
+      {
+        error: "Outdated consent version",
+        message: `現在 の ${parsed.data.feature} 特約 バージョン は ${expectedVersion} です。`,
+      },
+      { status: 400 },
     );
   }
 
