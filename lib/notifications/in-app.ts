@@ -35,7 +35,9 @@ export type InAppPayload =
   | MeetingInvitedPayload
   | MeetingReminderPayload
   | MeetingCanceledPayload
-  | LineMessageReceivedPayload;
+  | LineMessageReceivedPayload
+  | AdvisorMessageToAgencyPayload
+  | AdvisorMessageToSeekerPayload;
 
 export type ReferralStatusChangePayload = {
   kind: "referral_status_change";
@@ -150,6 +152,27 @@ export type MeetingCanceledPayload = {
   startsAtIso: string;
 };
 
+/** 求職者 が advisor チャット に メッセージ を 投稿 → エージェント に 通知 */
+export type AdvisorMessageToAgencyPayload = {
+  kind: "advisor_message_to_agency";
+  title: string;
+  href: string;
+  threadId: string;
+  clientRecordId: string;
+  clientName: string;
+  preview: string;
+};
+
+/** エージェント が advisor チャット に メッセージ を 投稿 → 求職者 に 通知 */
+export type AdvisorMessageToSeekerPayload = {
+  kind: "advisor_message_to_seeker";
+  title: string;
+  href: string;
+  threadId: string;
+  organizationName: string;
+  preview: string;
+};
+
 /** LINE 公式アカウント に 求職者から 新着 メッセージ が 届いた 時 */
 export type LineMessageReceivedPayload = {
   kind: "line_message_received";
@@ -217,6 +240,10 @@ export async function fireInAppNotification(params: FireParams): Promise<void> {
     meeting_canceled: null,
     // LINE 新着 は 全 org メンバー が 知る べき (担当 分担 で 対応 する 想定)
     line_message_received: null,
+    // advisor チャット の 新着 も 全 org メンバー が 知る (担当 分担 で 対応)
+    advisor_message_to_agency: null,
+    // 求職者 本人 向け は prefs gate 不要
+    advisor_message_to_seeker: null,
   };
   const notificationKey = KIND_TO_KEY[params.payload.kind] as keyof NotificationPrefs | null;
 
