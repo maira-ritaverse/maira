@@ -8,13 +8,25 @@ import { createServiceClient } from "@/lib/supabase/service";
  * GET /api/admin/billing-overview
  *
  * /admin/payments で 使う 集約 API。 3 セクション 用の データを 1 リクエストで 返す:
- *   ・proPlans:エージェント企業 Pro プラン 契約一覧 (現状 機能未実装 → 0 件)
+ *   ・proPlans:エージェント企業 Pro / Premium / 録音 プラン 契約一覧
  *   ・addons:サブスクリプション アドオン (meeting_recording_auto 等)
  *   ・refundsAndExpiries:返金 / 失効 履歴 (ブースト返金 + addon canceled)
  *
- * Pro プラン は organizations.plan カラム 未設置 のため、 当面 0 件 を 返す。
- * 実装後 (docs/agency-pro-plan-design.md Phase 1) に SELECT を 切替える。
+ * organization_plans テーブル (docs/agency-billing-design.md 仕様) を 直接 読む。
+ * Stripe 連携 前 は trial / 手動切替 の 行 だけ 並ぶ。
  */
+type OrganizationPlanRow = {
+  organization_id: string;
+  tier: "standard" | "standard_rec" | "standard_pro" | "standard_premium";
+  cycle: "monthly" | "yearly";
+  status: "trialing" | "active" | "past_due" | "canceled" | "incomplete";
+  trial_ends_at: string | null;
+  current_period_end: string | null;
+  canceled_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type AddonRow = {
   id: string;
   user_id: string;
@@ -99,13 +111,60 @@ export async function GET() {
     return { displayName: p.displayName, email: p.email };
   };
 
+  // ─────────────────────────────────────────
+  // 3. エージェント企業 プラン 契約一覧
+  // ─────────────────────────────────────────
+  const { data: plansData } = await admin
+    .from("organization_plans")
+    .select(
+      "organization_id, tier, cycle, status, trial_ends_at, current_period_end, canceled_at, created_at, updated_at",
+    )
+    .order("updated_at", { ascending: false })
+    .limit(200);
+  const plans = (plansData ?? []) as OrganizationPlanRow[];
+
+  // organization 名 引き
+  const orgIds = plans.map((p) => p.organization_id);
+  const orgNameMap = new Map<string, string>();
+  if (orgIds.length > 0) {
+    const { data: orgRows } = await admin.from("organizations").select("id, name").in("id", orgIds);
+    for (const o of (orgRows ?? []) as Array<{ id: string; name: string }>) {
+      orgNameMap.set(o.id, o.name);
+    }
+  }
+
+  // 統計 (プラン)
+  const planStats = {
+    trialing: plans.filter((p) => p.status === "trialing").length,
+    active: plans.filter((p) => p.status === "active").length,
+    pastDue: plans.filter((p) => p.status === "past_due").length,
+    canceled: plans.filter((p) => p.status === "canceled").length,
+    // tier 別 (active のみ で 集計、 課金売上 換算 の 元データ)
+    byTier: {
+      standard: plans.filter((p) => p.tier === "standard" && p.status === "active").length,
+      standard_rec: plans.filter((p) => p.tier === "standard_rec" && p.status === "active").length,
+      standard_pro: plans.filter((p) => p.tier === "standard_pro" && p.status === "active").length,
+      standard_premium: plans.filter((p) => p.tier === "standard_premium" && p.status === "active")
+        .length,
+    },
+  };
+
   return NextResponse.json({
     proPlans: {
-      // Pro プラン 機能 未実装 (docs/agency-pro-plan-design.md Phase 1 着手後 に
-      // organizations.plan カラム を 追加 して ここで SELECT する)
-      implemented: false,
-      contracts: [],
-      stats: { active: 0, expired: 0 },
+      implemented: true,
+      contracts: plans.map((p) => ({
+        organizationId: p.organization_id,
+        organizationName: orgNameMap.get(p.organization_id) ?? null,
+        tier: p.tier,
+        cycle: p.cycle,
+        status: p.status,
+        trialEndsAt: p.trial_ends_at,
+        currentPeriodEnd: p.current_period_end,
+        canceledAt: p.canceled_at,
+        createdAt: p.created_at,
+        updatedAt: p.updated_at,
+      })),
+      stats: planStats,
     },
     addons: {
       recent: addons.map((a) => ({

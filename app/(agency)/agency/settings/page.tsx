@@ -88,6 +88,23 @@ export default async function SettingsPage() {
           </Link>
         </Card>
       )}
+
+      {isAdmin && (
+        <Card className="p-4">
+          <Link
+            href="/agency/settings/billing"
+            className="hover:bg-accent -m-4 flex items-center gap-3 rounded-md p-4 transition-colors"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="font-medium">課金プラン(管理者向け)</p>
+              <p className="text-muted-foreground text-xs">
+                現プラン / 無料期間の残日数 / アップグレード選択
+              </p>
+            </div>
+            <span className="text-muted-foreground text-sm">→</span>
+          </Link>
+        </Card>
+      )}
     </div>
   );
 }

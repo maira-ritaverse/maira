@@ -9,6 +9,14 @@
     {
       "path": "/api/internal/meetings/reminders",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/internal/billing/trial-notifications",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/internal/billing/trial-expire",
+      "schedule": "*/30 * * * *"
     }
   ]
 }

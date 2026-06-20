@@ -66,3 +66,42 @@ export async function hasAddon(
   const actives = await getActiveAddons(supabase, userId, now);
   return actives.includes(key);
 }
+
+/**
+ * 「録音 機能 が 利用可能 か」を、 個人 アドオン と 組織プラン の 両方から 判定。
+ *
+ * 有効になる 条件 (いずれか):
+ *   1. 個人 subscription_addons.meeting_recording_auto が active
+ *   2. 組織 plan tier が standard_rec / standard_premium
+ *   3. 組織が トライアル 中 (全機能 試せる)
+ *
+ * 求職者 個人課金 ルート と、 エージェント組織 課金 ルート の 両方を 受ける。
+ */
+export async function hasRecordingAccess(
+  supabase: SupabaseClient,
+  userId: string,
+  now: Date = new Date(),
+): Promise<boolean> {
+  // 1. 個人 アドオン (既存ルート)
+  if (await hasAddon(supabase, userId, "meeting_recording_auto", now)) {
+    return true;
+  }
+
+  // 2. 組織プラン (録音 / Premium) または トライアル中
+  const { data, error } = await supabase.rpc("get_my_organization_plan");
+  if (error || !data || (Array.isArray(data) && data.length === 0)) return false;
+
+  const row = (Array.isArray(data) ? data[0] : data) as {
+    tier?: string;
+    status?: string;
+    trial_ends_at?: string | null;
+  };
+
+  if (row.status === "trialing" && row.trial_ends_at) {
+    if (new Date(row.trial_ends_at).getTime() > now.getTime()) {
+      return true;
+    }
+  }
+
+  return row.tier === "standard_rec" || row.tier === "standard_premium";
+}

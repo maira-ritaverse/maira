@@ -34,7 +34,8 @@ export type InAppPayload =
   | RecommendationLetterFinalizedForSeekerPayload
   | MeetingInvitedPayload
   | MeetingReminderPayload
-  | MeetingCanceledPayload;
+  | MeetingCanceledPayload
+  | LineMessageReceivedPayload;
 
 export type ReferralStatusChangePayload = {
   kind: "referral_status_change";
@@ -149,6 +150,21 @@ export type MeetingCanceledPayload = {
   startsAtIso: string;
 };
 
+/** LINE 公式アカウント に 求職者から 新着 メッセージ が 届いた 時 */
+export type LineMessageReceivedPayload = {
+  kind: "line_message_received";
+  title: string;
+  href: string;
+  lineUserId: string;
+  /** LINE プロフィール 名 */
+  senderDisplayName: string | null;
+  /** 紐付け 済 なら client_record の 名前 */
+  clientName: string | null;
+  /** メッセージ プレビュー (短縮済) */
+  preview: string;
+  messageType: string;
+};
+
 type FireParams = {
   organizationId: string;
   /** 通知を送らないユーザー(変更操作の実行者本人)。 */
@@ -199,6 +215,8 @@ export async function fireInAppNotification(params: FireParams): Promise<void> {
     meeting_invited: null,
     meeting_reminder: null,
     meeting_canceled: null,
+    // LINE 新着 は 全 org メンバー が 知る べき (担当 分担 で 対応 する 想定)
+    line_message_received: null,
   };
   const notificationKey = KIND_TO_KEY[params.payload.kind] as keyof NotificationPrefs | null;
 

@@ -17,6 +17,7 @@ export const AI_KIND_LABEL: Record<string, string> = {
   agency_resume_draft: "履歴書 AI 下書き",
   job_extract_from_document: "求人 自動取り込み(PDF / 画像)",
   csv_column_mapping: "CSV カラム AI マッピング",
+  agency_recording_processed: "面談録音 AI 処理(月 50 件)",
 };
 
 /** 上限設定 UI で「組織横断」「求職者 1 人あたり」を 表示する分類 */
@@ -29,6 +30,7 @@ export const AI_KIND_SCOPE_LABEL: Record<string, "agency_org" | "seeker_per_user
   agency_resume_draft: "agency_org",
   job_extract_from_document: "agency_org",
   csv_column_mapping: "agency_org",
+  agency_recording_processed: "agency_org",
 };
 
 /**
@@ -44,6 +46,7 @@ export const AI_KIND_UNIT_COST_USD: Record<string, number> = {
   agency_resume_draft: 0.045,
   job_extract_from_document: 0.13, // Claude vision PDF/画像 (15k input + 1.5k output 想定)
   csv_column_mapping: 0.005, // ヘッダ + 3 行サンプル → 軽量 (1k input + 300 output 想定)
+  agency_recording_processed: 0.58, // Whisper $0.36 (60min) + Claude $0.22 (3 コール)
 };
 
 export function estimateCostUsd(byKind: Record<string, number>): number {

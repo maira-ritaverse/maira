@@ -25,6 +25,7 @@
 import { NextResponse } from "next/server";
 
 import { requireOrgMember } from "@/lib/api/auth-guards";
+import { checkAiUsageLimit } from "@/lib/features/ai-usage";
 import { checkIntakeLimit } from "@/lib/features/usage-limits";
 
 const MAX_BYTES = 25 * 1024 * 1024;
@@ -81,6 +82,23 @@ export async function POST(request: Request, context: RouteContext) {
         error: "intake_limit_exceeded",
         message: `今月の AI ヒアリング上限(${limit.limit} 件)に達しました。`,
         usage: limit,
+      },
+      { status: 402 },
+    );
+  }
+
+  // 録音 機能 (組織プラン 録音 / Premium で 50 件、 トライアル中 も 50 件)。
+  // 月 50 件 に 達して いれば 拒否。 プラン未契約 (= 上限 0) の 場合は 即時 拒否。
+  const recordingLimit = await checkAiUsageLimit(supabase, user.id, "agency_recording_processed");
+  if (!recordingLimit.allowed) {
+    return NextResponse.json(
+      {
+        error: "recording_quota_exceeded",
+        message:
+          recordingLimit.limit === 0
+            ? "録音 機能 は 録音 / Premium プラン 契約が 必要 です。 /agency/settings/billing から アップグレード して ください。"
+            : `今月の 録音 件数 上限 (${recordingLimit.limit} 件) に 達しました (90 分 超過 = 2 件 換算)。`,
+        usage: recordingLimit,
       },
       { status: 402 },
     );

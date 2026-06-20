@@ -346,6 +346,28 @@ export async function POST(request: Request) {
     );
   }
 
+  // 8. 無料 トライアル を 自動 開始 (Standard + 全機能 試せる 状態 30 日)
+  //    Stripe 契約 前 でも 動かす ため、 service_role で 直接 INSERT する。
+  //    失敗しても 巻き戻し は しない (organization 自体は 維持。 後で 手動投入 可能)。
+  const trialStartedAt = new Date();
+  const trialEndsAt = new Date(trialStartedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const { error: planErr } = await admin.from("organization_plans").insert({
+    organization_id: organizationId,
+    tier: "standard",
+    cycle: "monthly",
+    status: "trialing",
+    trial_started_at: trialStartedAt.toISOString(),
+    trial_ends_at: trialEndsAt.toISOString(),
+    current_period_start: trialStartedAt.toISOString(),
+    current_period_end: trialEndsAt.toISOString(),
+  });
+  if (planErr) {
+    console.warn("[admin/organizations] failed to start trial", {
+      organizationId,
+      message: planErr.message,
+    });
+  }
+
   // 9. audit_log(from_contact_id でリード由来の発行を追跡可能に)
   await recordAuditLog({
     userId: invitedUserId,

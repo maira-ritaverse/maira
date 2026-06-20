@@ -49,11 +49,33 @@ type CanceledAddon = UserMeta & {
   updatedAt: string;
 };
 
+type OrgPlanTier = "standard" | "standard_rec" | "standard_pro" | "standard_premium";
+type OrgPlanStatus = "trialing" | "active" | "past_due" | "canceled" | "incomplete";
+
+type OrgPlanContract = {
+  organizationId: string;
+  organizationName: string | null;
+  tier: OrgPlanTier;
+  cycle: "monthly" | "yearly";
+  status: OrgPlanStatus;
+  trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+  canceledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type ApiResponse = {
   proPlans: {
     implemented: boolean;
-    contracts: unknown[];
-    stats: { active: number; expired: number };
+    contracts: OrgPlanContract[];
+    stats: {
+      trialing: number;
+      active: number;
+      pastDue: number;
+      canceled: number;
+      byTier: Record<OrgPlanTier, number>;
+    };
   };
   addons: {
     recent: AddonRow[];
@@ -68,6 +90,13 @@ type ApiResponse = {
 
 const ADDON_LABEL: Record<string, string> = {
   meeting_recording_auto: "会議録音 自動連携",
+};
+
+const TIER_LABEL: Record<OrgPlanTier, string> = {
+  standard: "Standard",
+  standard_rec: "+ 録音",
+  standard_pro: "+ Pro",
+  standard_premium: "+ Premium",
 };
 
 export function BillingOverviewSections() {
@@ -118,34 +147,112 @@ export function BillingOverviewSections() {
 }
 
 // ─────────────────────────────────────────
-// ① Pro プラン 契約一覧
+// ① エージェント企業 プラン 契約一覧
 // ─────────────────────────────────────────
 function ProPlansSection({ proPlans }: { proPlans: ApiResponse["proPlans"] }) {
+  const { contracts, stats } = proPlans;
   return (
     <section className="space-y-3">
       <div>
-        <h2 className="text-lg font-semibold">エージェント企業 Pro プラン 契約一覧</h2>
+        <h2 className="text-lg font-semibold">エージェント企業 プラン 契約一覧</h2>
         <p className="text-muted-foreground mt-1 text-xs">
-          Zoom 録音 → AI 履歴書生成 / 月次 AI 上限引上 を 提供する 月額プラン。 手動切替 (運営者
-          操作) で 開始。
+          Standard / 録音 / Pro / Premium の 4 ティア (排他)。 docs/agency-billing-design.md 参照。
+          Stripe 連携 前 は 手動切替 / トライアル の 行 のみ 表示。
         </p>
       </div>
 
-      {!proPlans.implemented ? (
-        <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-4 text-xs">
-          <p className="font-medium">機能 開発中</p>
-          <p className="text-muted-foreground mt-1">
-            Pro プラン (organizations.plan カラム) は まだ 実装 されて いません。
-            docs/agency-pro-plan-design.md の Phase 1 着手後 ここに 契約一覧が 表示されます。
-          </p>
-        </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard label="無料期間中" value={`${stats.trialing} 社`} tone="primary" />
+        <StatCard label="契約中" value={`${stats.active} 社`} tone="primary" />
+        <StatCard label="課金失敗" value={`${stats.pastDue} 社`} tone="warning" />
+        <StatCard label="解約済" value={`${stats.canceled} 社`} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <TierStatCard label="Standard" count={stats.byTier.standard} />
+        <TierStatCard label="+ 録音" count={stats.byTier.standard_rec} />
+        <TierStatCard label="+ Pro" count={stats.byTier.standard_pro} />
+        <TierStatCard label="+ Premium" count={stats.byTier.standard_premium} />
+      </div>
+
+      {contracts.length === 0 ? (
+        <p className="text-muted-foreground text-xs">
+          まだ 契約は ありません (organization 発行時 に トライアル 行 が 自動生成 されます)。
+        </p>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <StatCard label="現在 Pro 契約中" value={`${proPlans.stats.active} 社`} tone="primary" />
-          <StatCard label="期限切れ / 解約" value={`${proPlans.stats.expired} 社`} />
+        <div className="overflow-x-auto rounded-md ring-1 ring-slate-200">
+          <table className="min-w-full bg-white text-xs">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="px-3 py-2 text-left font-medium">企業名</th>
+                <th className="px-3 py-2 text-left font-medium">プラン</th>
+                <th className="px-3 py-2 text-left font-medium">サイクル</th>
+                <th className="px-3 py-2 text-left font-medium">状態</th>
+                <th className="px-3 py-2 text-left font-medium">トライアル / 課金 期限</th>
+                <th className="px-3 py-2 text-left font-medium">更新日</th>
+              </tr>
+            </thead>
+            <tbody>
+              {contracts.map((c) => (
+                <tr key={c.organizationId} className="border-t border-slate-100">
+                  <td className="px-3 py-2 align-top">
+                    {c.organizationName ?? (
+                      <span className="font-mono text-[10px] text-slate-400">
+                        {c.organizationId.slice(0, 8)}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold">
+                      {TIER_LABEL[c.tier]}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 align-top text-[10px]">
+                    {c.cycle === "yearly" ? "年払い" : "月払い"}
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    <PlanStatusBadge status={c.status} />
+                  </td>
+                  <td className="px-3 py-2 align-top text-[10px] whitespace-nowrap">
+                    {c.status === "trialing" && c.trialEndsAt
+                      ? `${new Date(c.trialEndsAt).toLocaleDateString("ja-JP")} (トライアル)`
+                      : c.currentPeriodEnd
+                        ? `${new Date(c.currentPeriodEnd).toLocaleDateString("ja-JP")} (次回)`
+                        : "—"}
+                  </td>
+                  <td className="px-3 py-2 align-top text-[10px] whitespace-nowrap">
+                    {new Date(c.updatedAt).toLocaleDateString("ja-JP")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </section>
+  );
+}
+
+function TierStatCard({ label, count }: { label: string; count: number }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 p-2 text-center">
+      <p className="text-muted-foreground text-[10px]">{label}</p>
+      <p className="text-foreground mt-0.5 text-base font-bold">{count}</p>
+    </div>
+  );
+}
+
+function PlanStatusBadge({ status }: { status: OrgPlanStatus }) {
+  const map: Record<OrgPlanStatus, { label: string; cls: string }> = {
+    trialing: { label: "無料期間中", cls: "bg-emerald-100 text-emerald-800" },
+    active: { label: "契約中", cls: "bg-blue-100 text-blue-800" },
+    past_due: { label: "課金失敗", cls: "bg-amber-100 text-amber-800" },
+    canceled: { label: "解約済", cls: "bg-slate-100 text-slate-700" },
+    incomplete: { label: "未完了", cls: "bg-slate-100 text-slate-700" },
+  };
+  const m = map[status];
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${m.cls}`}>{m.label}</span>
   );
 }
 

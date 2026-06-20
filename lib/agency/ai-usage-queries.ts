@@ -157,6 +157,9 @@ export const AI_KIND_FREE_DEFAULT: Record<AiUsageKind, number> = {
   seeker_cv_create: SEEKER_CV_CREATE_FREE_MONTHLY,
   seeker_resume_ai_draft: SEEKER_RESUME_AI_DRAFT_HARD_MONTHLY,
   seeker_cv_ai_draft: SEEKER_CV_AI_DRAFT_HARD_MONTHLY,
+  // 録音 は 組織プラン (録音 / Premium) で 50 件、 未契約 は 0。
+  // 既定 0 で 表示 上 「プラン契約 が 必要」と わかる ように する。
+  agency_recording_processed: 0,
 };
 
 export type AiQuotaRow = {

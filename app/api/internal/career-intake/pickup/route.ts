@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { checkCronAuth } from "@/lib/api/cron-auth";
 import { notifyShareFromAgencyIntake } from "@/lib/career-intake/post-process";
 import { runIntakeProcessing } from "@/lib/career-intake/process";
+import { recordAgencyRecordingUsage } from "@/lib/features/ai-usage";
 import { getGoogleAccessToken } from "@/lib/integrations/google-token";
 import { getZoomAccessToken } from "@/lib/integrations/zoom-token";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -252,11 +253,26 @@ async function processUploadedRow(
     })
     .eq("id", rec.id);
 
-  // agency_interview の場合は求職者にレビュー依頼を自動送信
-  try {
-    await notifyShareFromAgencyIntake({ service, recordingId: rec.id });
-  } catch {
-    // 失敗してもパイプライン全体は成功扱い(後で再試行ジョブを足すか手動で fallback)
+  // agency_interview の場合 のみ:
+  //   ・録音 件数 として ai_usage_events に 計上 (90 分超過 = 2 件 換算)
+  //   ・求職者 本人に レビュー依頼 を 自動送信
+  if (rec.transcript_purpose === "agency_interview") {
+    // duration_seconds は 現状 null (Whisper verbose_json 未対応)。
+    // null の 場合 は 安全側 で 1 件 として 記録。
+    const { data: durRow } = await service
+      .from("career_intake_recordings")
+      .select("duration_seconds")
+      .eq("id", rec.id)
+      .maybeSingle();
+    const durationSeconds =
+      (durRow as { duration_seconds: number | null } | null)?.duration_seconds ?? null;
+    await recordAgencyRecordingUsage(service, rec.user_id, durationSeconds, rec.id);
+
+    try {
+      await notifyShareFromAgencyIntake({ service, recordingId: rec.id });
+    } catch {
+      // 失敗してもパイプライン全体は成功扱い(後で再試行ジョブを足すか手動で fallback)
+    }
   }
 
   return { picked: 1, ok: true, id: rec.id };

@@ -30,7 +30,9 @@ export type AiUsageKind =
   | "seeker_cv_create"
   // 求職者 AI 下書き系 (月次リセット、 ブースト対象外 ハード上限)
   | "seeker_resume_ai_draft"
-  | "seeker_cv_ai_draft";
+  | "seeker_cv_ai_draft"
+  // 録音 → AI 処理 (組織プラン 録音 / Premium で 月 50 件、 90 分超過 = 2 件 換算)
+  | "agency_recording_processed";
 
 /** kind の scope:組織側(全メンバー合算上限)/ 求職者側(1 人あたり上限) */
 type KindScope = "agency_org" | "seeker_per_user";
@@ -48,6 +50,7 @@ const KIND_SCOPE: Record<AiUsageKind, KindScope> = {
   seeker_cv_create: "seeker_per_user",
   seeker_resume_ai_draft: "seeker_per_user",
   seeker_cv_ai_draft: "seeker_per_user",
+  agency_recording_processed: "agency_org",
 };
 
 // 既定値(組織が 何も 設定していない 状態の フォールバック)
@@ -138,6 +141,10 @@ function defaultLimitFor(kind: AiUsageKind, addon: boolean): number {
       return SEEKER_RESUME_AI_DRAFT_HARD_MONTHLY;
     case "seeker_cv_ai_draft":
       return SEEKER_CV_AI_DRAFT_HARD_MONTHLY;
+    case "agency_recording_processed":
+      // 録音 機能 を 含まない プラン は 0、 含む プラン は 50。
+      // 実際 の 値 は チェック層 で 組織プラン を 参照して 上書きする。
+      return 0;
   }
 }
 
@@ -220,17 +227,98 @@ async function getOrgQuotaForKind(
 /**
  * 呼出元 組織 の 月次 「総量」上限 を 取得。
  *
- * platform_ai_total_quotas に 設定があれば それ、無ければ 既定値
- * PLATFORM_AI_TOTAL_FREE_MONTHLY (= 500)。
+ * 優先順位:
+ *   1) platform_ai_total_quotas (Maira admin 強制設定) → そのまま 採用
+ *      (tier ボーナス と 重ねず、 admin 設定値 が 絶対)
+ *   2) 既定値 PLATFORM_AI_TOTAL_FREE_MONTHLY (500) + tier ボーナス
+ *      ・standard / standard_rec → +0
+ *      ・standard_pro / standard_premium → +500
+ *      ・トライアル中 は 全プラン +500 (Pro/Premium を 試せる)
+ *   3) プラン未開始 → 既定値 500 のみ
  *
  * 求職者 (organization_members レコードなし) は 関知しない (呼出側で
  * scope=agency_org に 限って 呼ぶ)。
  */
-async function getOrgTotalQuota(supabase: SupabaseClient): Promise<number> {
-  const { data, error } = await supabase.rpc("get_platform_ai_total_quota_for_caller");
-  if (error) return PLATFORM_AI_TOTAL_FREE_MONTHLY;
-  const v = typeof data === "number" ? data : Number(data);
-  return Number.isFinite(v) ? v : PLATFORM_AI_TOTAL_FREE_MONTHLY;
+async function getOrgTotalQuota(supabase: SupabaseClient, now: Date = new Date()): Promise<number> {
+  // 1) admin 強制設定 を 最優先 で 採用
+  const { data: overrideData, error: overrideErr } = await supabase.rpc(
+    "get_platform_ai_total_quota_for_caller",
+  );
+  if (!overrideErr && overrideData !== null && overrideData !== undefined) {
+    const v = typeof overrideData === "number" ? overrideData : Number(overrideData);
+    if (Number.isFinite(v)) return v;
+  }
+
+  // 2) tier ボーナス を 既定値 に 加算
+  const bonus = await getPlanTierAiBonus(supabase, now);
+  return PLATFORM_AI_TOTAL_FREE_MONTHLY + bonus;
+}
+
+/**
+ * 録音 機能 の 月次 上限 を 取得 (組織プラン から)。
+ *
+ * - 録音 オプション / Premium / トライアル中 → 50 件
+ * - それ以外 → 0 件 (= 録音 機能 使用不可)
+ *
+ * 90 分 超過 = 2 件 換算 ロジック は 「recordAiUsage 時 に 2 行 INSERT」で
+ * 実現する ため、 ここでは 単純な 上限値 のみ 返す。
+ */
+async function getAgencyRecordingQuota(
+  supabase: SupabaseClient,
+  now: Date = new Date(),
+): Promise<number> {
+  const { data, error } = await supabase.rpc("get_my_organization_plan");
+  if (error || !data || (Array.isArray(data) && data.length === 0)) return 0;
+
+  const row = (Array.isArray(data) ? data[0] : data) as {
+    tier?: string;
+    status?: string;
+    trial_ends_at?: string | null;
+  };
+
+  // トライアル中 は 全プラン 50 件 試せる
+  if (row.status === "trialing" && row.trial_ends_at) {
+    if (new Date(row.trial_ends_at).getTime() > now.getTime()) {
+      return 50;
+    }
+  }
+
+  return row.tier === "standard_rec" || row.tier === "standard_premium" ? 50 : 0;
+}
+
+/**
+ * 現組織の プラン tier (or トライアル状態) から AI 上限 ボーナス を 取得。
+ *
+ * lib/billing/agency.ts の getEffectiveAiBonus と 同等の ロジックを
+ * 軽量 RPC で 解決 (循環 import を 避けるため ここで 直書き)。
+ *
+ * 失敗時 / プラン未開始 → 0 (= 既定 500 のみ)
+ */
+async function getPlanTierAiBonus(
+  supabase: SupabaseClient,
+  now: Date = new Date(),
+): Promise<number> {
+  const { data, error } = await supabase.rpc("get_my_organization_plan");
+  if (error || !data || (Array.isArray(data) && data.length === 0)) return 0;
+
+  const row = (Array.isArray(data) ? data[0] : data) as {
+    tier?: string;
+    status?: string;
+    trial_ends_at?: string | null;
+  };
+  if (!row || !row.tier) return 0;
+
+  // トライアル中 (status=trialing かつ trial_ends_at > now) は +500
+  if (row.status === "trialing" && row.trial_ends_at) {
+    if (new Date(row.trial_ends_at).getTime() > now.getTime()) {
+      return 500;
+    }
+  }
+
+  if (row.tier === "standard_pro" || row.tier === "standard_premium") {
+    return 500;
+  }
+  return 0;
 }
 
 /**
@@ -344,7 +432,11 @@ export async function checkAiUsageLimit(
 
   // 上限値の決定:組織のカスタム設定があれば それを 採用、無ければ 既定値
   let limit: number;
-  if (scopeOfKind === "agency_org") {
+  if (kind === "agency_recording_processed") {
+    // 録音 機能 は 組織プラン (録音 オプション / Premium / トライアル) で 開放。
+    // 個別 organization_ai_quotas / platform_ai_quotas で 上書きする 想定は ない。
+    limit = await getAgencyRecordingQuota(supabase, now);
+  } else if (scopeOfKind === "agency_org") {
     const custom = await getOrgQuotaForKind(supabase, kind);
     limit = custom ?? defaultLimitFor(kind, addon);
   } else {
@@ -367,9 +459,9 @@ export async function checkAiUsageLimit(
       : await countAiUsageThisMonth(supabase, userId, kind, now);
 
   // 総量チェック (agency_org のみ):企業全体の月次合計が 総量上限を 超えたら 拒否
-  // platform_ai_total_quotas で 個別設定があれば それ、無ければ 既定 500
+  // 既定 500 + Pro/Premium ボーナス +500、 admin 強制設定が あれば それ優先
   if (scopeOfKind === "agency_org") {
-    const total = await getOrgTotalQuota(supabase);
+    const total = await getOrgTotalQuota(supabase, now);
     const totalUsage = await countOrgTotalAiUsageThisMonth(supabase, now);
     if (totalUsage >= total) {
       // 総量超過時:limit を 0 と 報告して allowed=false
@@ -413,5 +505,46 @@ export async function recordAiUsage(
       .insert({ user_id: userId, kind, metadata: metadata ?? null });
   } catch (err) {
     console.warn("[ai-usage] insert failed", err);
+  }
+}
+
+/** 90 分 超過 で 2 件 換算 する 閾値 (秒) */
+const RECORDING_90MIN_SECONDS = 90 * 60;
+
+/**
+ * 録音 1 件 を 「件数 カウント」で 記録 する。
+ *
+ * - 90 分 以下 → 1 件 として INSERT
+ * - 90 分 超過 → 2 件 として INSERT (同じ recording_id を metadata に持って 2 行)
+ *
+ * duration_seconds が null (未計測) の 場合 は 安全側 で 1 件 だけ INSERT する。
+ * (将来 Whisper verbose_json で duration を 取れる ように なれば 精度向上)
+ */
+export async function recordAgencyRecordingUsage(
+  supabase: SupabaseClient,
+  userId: string,
+  durationSeconds: number | null,
+  recordingId: string,
+): Promise<void> {
+  const units = durationSeconds !== null && durationSeconds > RECORDING_90MIN_SECONDS ? 2 : 1;
+
+  const rows = Array.from({ length: units }, (_, index) => ({
+    user_id: userId,
+    kind: "agency_recording_processed" as const,
+    metadata: {
+      recording_id: recordingId,
+      duration_seconds: durationSeconds,
+      unit_index: index + 1,
+      unit_total: units,
+    },
+  }));
+
+  try {
+    const { error } = await supabase.from("ai_usage_events").insert(rows);
+    if (error) {
+      console.warn("[ai-usage] recording usage insert failed", error.message);
+    }
+  } catch (err) {
+    console.warn("[ai-usage] recording usage insert exception", err);
   }
 }
