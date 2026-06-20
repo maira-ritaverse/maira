@@ -100,6 +100,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
           <div className="flex flex-col items-end gap-2">
             <ExportButton href="/api/agency/export/placements" label="成約・売上 CSV" />
             <ExportButton href="/api/agency/export/referrals" label="応募 CSV" />
+            <ExportButton href="/api/agency/export/interviews" label="面接 履歴 CSV" />
+            <ExportButton href="/api/agency/export/tasks" label="タスク CSV" />
+            <ExportButton href="/api/agency/export/line-broadcasts" label="LINE 一斉配信 CSV" />
           </div>
         )}
       </div>
