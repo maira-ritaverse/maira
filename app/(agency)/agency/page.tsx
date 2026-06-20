@@ -7,6 +7,7 @@ import { SectionLayoutContainer } from "@/components/features/layout/section-lay
 
 import { AnnouncementsSection } from "./announcements-section";
 import { getOrgAiTotalQuotaSummary } from "@/lib/agency/ai-usage-queries";
+import { getMonthlyActivityKpi } from "@/lib/agency/dashboard-kpi";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import {
@@ -55,28 +56,36 @@ export default async function AgencyDashboardPage() {
   const orgId = role.organization.id;
   const memberId = role.member.id;
 
-  // 並列取得:クライアント / 自分のタスク / 直近の対応履歴 / 総件数 / 次の面談 / AI 残数
-  const [clients, myTasksRes, recentInteractionsRes, totalClientCount, nextMeeting, aiTotalQuota] =
-    await Promise.all([
-      listClientRecordsWithUpdateBadge(orgId, user.id),
-      supabase
-        .from("agency_tasks")
-        .select("id, title, due_at, priority, client_record_id")
-        .eq("organization_id", orgId)
-        .eq("assigned_member_id", memberId)
-        .eq("status", "pending")
-        .order("due_at", { ascending: true, nullsFirst: false })
-        .limit(8),
-      supabase
-        .from("client_interactions")
-        .select("id, interaction_type, occurred_at, summary, client_record_id")
-        .eq("organization_id", orgId)
-        .order("occurred_at", { ascending: false })
-        .limit(6),
-      getClientRecordsTotalCount(orgId),
-      getNextMeetingForHost(supabase, user.id, { withinHours: 24 }),
-      getOrgAiTotalQuotaSummary(),
-    ]);
+  // 並列取得:クライアント / 自分のタスク / 直近の対応履歴 / 総件数 / 次の面談 / AI 残数 / 今月 KPI
+  const [
+    clients,
+    myTasksRes,
+    recentInteractionsRes,
+    totalClientCount,
+    nextMeeting,
+    aiTotalQuota,
+    monthlyKpi,
+  ] = await Promise.all([
+    listClientRecordsWithUpdateBadge(orgId, user.id),
+    supabase
+      .from("agency_tasks")
+      .select("id, title, due_at, priority, client_record_id")
+      .eq("organization_id", orgId)
+      .eq("assigned_member_id", memberId)
+      .eq("status", "pending")
+      .order("due_at", { ascending: true, nullsFirst: false })
+      .limit(8),
+    supabase
+      .from("client_interactions")
+      .select("id, interaction_type, occurred_at, summary, client_record_id")
+      .eq("organization_id", orgId)
+      .order("occurred_at", { ascending: false })
+      .limit(6),
+    getClientRecordsTotalCount(orgId),
+    getNextMeetingForHost(supabase, user.id, { withinHours: 24 }),
+    getOrgAiTotalQuotaSummary(),
+    getMonthlyActivityKpi(orgId),
+  ]);
 
   // ────────────────────────────────────────────
   // 集計:沈黙 / 重複 / アクティブ状況
@@ -205,6 +214,7 @@ export default async function AgencyDashboardPage() {
         defaultOrder={[
           "platform-announcements",
           "kpi",
+          "monthly-activity",
           "my-tasks",
           "recent-interactions",
           "data-quality",
@@ -214,6 +224,7 @@ export default async function AgencyDashboardPage() {
         titles={{
           "platform-announcements": "Maira からのお知らせ",
           kpi: "活動概要(KPI)",
+          "monthly-activity": `今月 の 活動 (${monthlyKpi.periodLabel})`,
           "my-tasks": "自分のタスク",
           "recent-interactions": "直近の対応履歴",
           "data-quality": "データ入力品質",
@@ -243,6 +254,20 @@ export default async function AgencyDashboardPage() {
                 tone={neverContacted > 0 ? "amber" : "neutral"}
                 href={neverContacted > 0 ? "/agency/clients?silence=never" : undefined}
               />
+            </div>
+          ),
+          "monthly-activity": (
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+              <StatCard label="新規 顧客" value={monthlyKpi.newClients} href="/agency/clients" />
+              <StatCard label="新規 推薦" value={monthlyKpi.newReferrals} href="/agency/clients" />
+              <StatCard label="面接 実施" value={monthlyKpi.doneInterviews} />
+              <StatCard
+                label="内定 / 入社"
+                value={monthlyKpi.offersJoined}
+                tone={monthlyKpi.offersJoined > 0 ? "primary" : "neutral"}
+              />
+              <StatCard label="MA 配信" value={monthlyKpi.maSent} href="/agency/marketing" />
+              <StatCard label="LINE 受信" value={monthlyKpi.lineInbound} href="/agency/line" />
             </div>
           ),
           "my-tasks": (
@@ -373,7 +398,7 @@ type StatCardProps = {
   label: string;
   value: number;
   hint?: string;
-  tone?: "neutral" | "amber" | "red";
+  tone?: "neutral" | "amber" | "red" | "primary";
   href?: string;
 };
 
@@ -381,6 +406,7 @@ const TONE_RING: Record<NonNullable<StatCardProps["tone"]>, string> = {
   neutral: "ring-foreground/10",
   amber: "ring-amber-300 bg-amber-50/50 dark:bg-amber-950/30",
   red: "ring-red-300 bg-red-50/50 dark:bg-red-950/30",
+  primary: "ring-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/30",
 };
 
 function StatCard({ label, value, hint, tone = "neutral", href }: StatCardProps) {
