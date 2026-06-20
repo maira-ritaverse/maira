@@ -1,0 +1,678 @@
+"use client";
+
+import { Briefcase, CalendarClock, Image as ImageIcon, Paperclip, Smile } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { getErrorMessage } from "@/lib/api/client-fetch";
+import type { ConversationMessage } from "@/lib/line/conversations";
+import { COMMON_STICKERS, getStickerImageUrl } from "@/lib/line/stickers";
+
+import { MeetingProposePanel } from "./meeting-propose-panel";
+
+/**
+ * LINE風 個別 チャット UI (Client Component)
+ *
+ * 構成:
+ *   ・上部:メッセージ バブル の リスト (古い順、 一番下 が 最新)
+ *   ・下部:固定 入力欄 + 送信 ボタン
+ *
+ * スタイル:
+ *   ・送信 (outbound) = 右側、 LINE グリーン (#06C755)
+ *   ・受信 (inbound) = 左側、 白 + グレー枠
+ *   ・スタンプ = LINE CDN 画像
+ *   ・system = 中央 グレー テキスト
+ *
+ * 機能:
+ *   ・10 秒 ごと に 新着 メッセージ を ポーリング
+ *   ・送信後 自動 リフレッシュ
+ *   ・送信中 / 失敗 状態 表示
+ *   ・unfollowed なら 送信欄 disable
+ */
+type Props = {
+  lineUserId: string;
+  initialMessages: ConversationMessage[];
+  unfollowed: boolean;
+  jobOptions: Array<{ id: string; label: string }>;
+  scheduledMeetings: Array<{
+    id: string;
+    title: string;
+    startsAt: string;
+    joinUrl: string;
+  }>;
+};
+
+const POLL_INTERVAL_MS = 10_000;
+const STICKER_CDN = "https://stickershop.line-scdn.net/stickershop/v1/sticker";
+
+export function LineConversationClient({
+  lineUserId,
+  initialMessages,
+  unfollowed,
+  jobOptions,
+  scheduledMeetings,
+}: Props) {
+  const [messages, setMessages] = useState<ConversationMessage[]>(initialMessages);
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
+  const [jobShareOpen, setJobShareOpen] = useState(false);
+  const [selectedJobIds, setSelectedJobIds] = useState<string[]>([]);
+  const [meetingProposeOpen, setMeetingProposeOpen] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // 最下部 へ スクロール
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages.length]);
+
+  // ポーリング
+  useEffect(() => {
+    const ctrl = new AbortController();
+    let active = true;
+
+    const poll = async () => {
+      try {
+        const url = `/api/agency/line/conversations/${encodeURIComponent(lineUserId)}/messages`;
+        const res = await fetch(url, { signal: ctrl.signal });
+        if (!res.ok) return;
+        const json = (await res.json()) as { messages: ConversationMessage[] };
+        if (active && json.messages.length !== messages.length) {
+          setMessages(json.messages);
+        }
+      } catch {
+        // ポーリング 失敗 は 無視 (次回 試行)
+      }
+    };
+
+    const interval = setInterval(poll, POLL_INTERVAL_MS);
+    return () => {
+      clearInterval(interval);
+      active = false;
+      ctrl.abort();
+    };
+  }, [lineUserId, messages.length]);
+
+  const onSend = async () => {
+    if (!text.trim()) return;
+    if (unfollowed) {
+      setError("ブロック / 友達解除 された 相手 には 送信 できません");
+      return;
+    }
+    setSending(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/agency/line/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lineUserId, text: text.trim() }),
+      });
+      const body = (await res.json().catch(() => null)) as
+        | { ok: true; sendMethod: "reply" | "push" }
+        | { error: string; message?: string };
+      if (!res.ok || !("ok" in body && body.ok)) {
+        const msg =
+          "message" in body && body.message
+            ? body.message
+            : "error" in body
+              ? body.error
+              : `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+      setText("");
+      // 即時 リフレッシュ
+      await refresh();
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const onSendSticker = async (packageId: string, stickerId: string) => {
+    if (unfollowed) {
+      setError("ブロック / 友達解除 された 相手 には 送信 できません");
+      return;
+    }
+    setSending(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/agency/line/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lineUserId,
+          sticker: { packageId, stickerId },
+        }),
+      });
+      const body = (await res.json().catch(() => null)) as
+        | { ok: true; sendMethod: "reply" | "push" }
+        | { error: string; message?: string };
+      if (!res.ok || !("ok" in body && body.ok)) {
+        const msg =
+          "message" in body && body.message
+            ? body.message
+            : "error" in body
+              ? body.error
+              : `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+      setStickerPickerOpen(false);
+      await refresh();
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const onSendImage = async (file: File) => {
+    if (unfollowed) {
+      setError("ブロック / 友達解除 された 相手 には 送信 できません");
+      return;
+    }
+    setSending(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append("lineUserId", lineUserId);
+      fd.append("file", file);
+      const res = await fetch("/api/agency/line/share-image", {
+        method: "POST",
+        body: fd,
+      });
+      const body = (await res.json().catch(() => null)) as
+        | { ok: true; sendMethod: "reply" | "push" }
+        | { error: string; message?: string };
+      if (!res.ok || !("ok" in body && body.ok)) {
+        const msg =
+          "message" in body && body.message
+            ? body.message
+            : "error" in body
+              ? body.error
+              : `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+      await refresh();
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const onShareJobs = async () => {
+    if (selectedJobIds.length === 0) return;
+    if (unfollowed) {
+      setError("ブロック / 友達解除 された 相手 には 送信 できません");
+      return;
+    }
+    setSending(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/agency/line/share-job", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lineUserId, jobIds: selectedJobIds }),
+      });
+      const body = (await res.json().catch(() => null)) as
+        | { ok: true; jobCount: number }
+        | { error: string; message?: string };
+      if (!res.ok || !("ok" in body && body.ok)) {
+        const msg =
+          "message" in body && body.message
+            ? body.message
+            : "error" in body
+              ? body.error
+              : `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+      setJobShareOpen(false);
+      setSelectedJobIds([]);
+      await refresh();
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const refresh = async () => {
+    try {
+      const url = `/api/agency/line/conversations/${encodeURIComponent(lineUserId)}/messages`;
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const json = (await res.json()) as { messages: ConversationMessage[] };
+      setMessages(json.messages);
+    } catch {
+      // ignore
+    }
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Cmd/Ctrl + Enter で 送信
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      void onSend();
+    }
+  };
+
+  return (
+    <>
+      {/* 確定済 面談 バナー (未来 の もの のみ、 上 5 件) */}
+      {scheduledMeetings.length > 0 && (
+        <ScheduledMeetingsBanner
+          meetings={scheduledMeetings}
+          onCanceled={async () => {
+            await refresh();
+            // ページ 再読込 で バナー も 更新
+            window.location.reload();
+          }}
+        />
+      )}
+
+      {/* メッセージ リスト */}
+      <div
+        ref={scrollRef}
+        className="bg-line-bg flex-1 overflow-y-auto rounded-md border bg-[#7295A8] px-3 py-4"
+        style={{ backgroundImage: "linear-gradient(180deg, #7295A8 0%, #8AABBE 100%)" }}
+      >
+        {messages.length === 0 ? (
+          <p className="text-center text-xs text-white/70">まだ メッセージ が ありません。</p>
+        ) : (
+          <div className="space-y-2">
+            {messages.map((m) => (
+              <MessageBubble key={m.id} message={m} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 日程 提案 パネル */}
+      {meetingProposeOpen && (
+        <MeetingProposePanel
+          lineUserId={lineUserId}
+          onSent={async () => {
+            setMeetingProposeOpen(false);
+            await refresh();
+          }}
+          onClose={() => setMeetingProposeOpen(false)}
+          unfollowed={unfollowed}
+        />
+      )}
+
+      {/* 求人 共有 パネル (展開時 だけ 表示) */}
+      {jobShareOpen && (
+        <div className="space-y-2 border-t bg-white p-3">
+          <p className="text-xs font-semibold">求人 を 共有 (最大 12 件)</p>
+          {jobOptions.length === 0 ? (
+            <p className="text-muted-foreground text-xs">
+              送信可能 な 求人 が ありません (status=open を 確認)。
+            </p>
+          ) : (
+            <div className="max-h-40 space-y-1 overflow-y-auto">
+              {jobOptions.map((j) => (
+                <label
+                  key={j.id}
+                  className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded p-1.5 text-xs"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedJobIds.includes(j.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        if (selectedJobIds.length >= 12) return;
+                        setSelectedJobIds([...selectedJobIds, j.id]);
+                      } else {
+                        setSelectedJobIds(selectedJobIds.filter((id) => id !== j.id));
+                      }
+                    }}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{j.label}</span>
+                </label>
+              ))}
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="outline" onClick={() => setJobShareOpen(false)}>
+              閉じる
+            </Button>
+            <Button
+              size="sm"
+              onClick={onShareJobs}
+              disabled={selectedJobIds.length === 0 || sending}
+              className="bg-[#06C755] text-white hover:bg-[#05a647]"
+            >
+              {selectedJobIds.length} 件 を 共有
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* スタンプ ピッカー (展開時 だけ 表示) */}
+      {stickerPickerOpen && (
+        <div className="grid grid-cols-6 gap-2 border-t bg-white p-3">
+          {COMMON_STICKERS.map((s) => (
+            <button
+              key={`${s.packageId}-${s.stickerId}`}
+              onClick={() => onSendSticker(s.packageId, s.stickerId)}
+              disabled={sending || unfollowed}
+              className="rounded-md p-1 transition-colors hover:bg-slate-100 disabled:opacity-50"
+              title={s.label}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={getStickerImageUrl(s.stickerId)}
+                alt={s.label}
+                className="h-14 w-14 object-contain"
+                loading="lazy"
+              />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 入力欄 */}
+      <div className="border-t bg-white p-2">
+        {error && (
+          <Alert variant="destructive" className="mb-2">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        <div className="flex items-end gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => {
+              setStickerPickerOpen((v) => !v);
+              setJobShareOpen(false);
+            }}
+            disabled={unfollowed || sending}
+            aria-label="スタンプ を 選ぶ"
+            className="shrink-0"
+          >
+            <Smile className="size-4" aria-hidden />
+          </Button>
+          <label
+            className={`border-input bg-background hover:bg-accent inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-md border text-sm ${
+              unfollowed || sending ? "pointer-events-none opacity-50" : ""
+            }`}
+            aria-label="画像 を 送信"
+          >
+            <ImageIcon className="size-4" aria-hidden />
+            <input
+              type="file"
+              accept="image/jpeg,image/png"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void onSendImage(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => {
+              setJobShareOpen((v) => !v);
+              setStickerPickerOpen(false);
+              setMeetingProposeOpen(false);
+            }}
+            disabled={unfollowed || sending}
+            aria-label="求人 を 共有"
+            className="shrink-0"
+          >
+            <Briefcase className="size-4" aria-hidden />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => {
+              setMeetingProposeOpen((v) => !v);
+              setStickerPickerOpen(false);
+              setJobShareOpen(false);
+            }}
+            disabled={unfollowed || sending}
+            aria-label="面談 日程 を 提案"
+            className="shrink-0"
+          >
+            <CalendarClock className="size-4" aria-hidden />
+          </Button>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder={
+              unfollowed ? "解除 された 相手 には 送信 できません" : "メッセージ を 入力..."
+            }
+            disabled={unfollowed || sending}
+            rows={2}
+            className="border-input bg-background min-h-11 flex-1 resize-none rounded-md border px-3 py-2 text-sm"
+          />
+          <Button
+            onClick={onSend}
+            disabled={!text.trim() || sending || unfollowed}
+            className="bg-[#06C755] text-white hover:bg-[#05a647]"
+          >
+            {sending ? "送信中" : "送信"}
+          </Button>
+        </div>
+        <p className="text-muted-foreground mt-1 text-[10px]">
+          Cmd/Ctrl + Enter で 送信 · 30 秒以内 の Reply は 無料、 過ぎていれば Push (課金通数 1)
+        </p>
+      </div>
+    </>
+  );
+}
+
+function MessageBubble({ message }: { message: ConversationMessage }) {
+  if (message.messageType === "system") {
+    return (
+      <div className="my-2 flex justify-center">
+        <span className="rounded-full bg-black/30 px-3 py-1 text-[10px] text-white">
+          {message.text ?? "[システム]"}
+        </span>
+      </div>
+    );
+  }
+
+  const isOutbound = message.direction === "outbound";
+  return (
+    <div className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}>
+      <div className="flex max-w-[75%] flex-col gap-0.5">
+        <div
+          className={`rounded-2xl px-3 py-2 text-sm wrap-break-word ${
+            isOutbound ? "bg-[#06C755] text-white" : "text-foreground bg-white"
+          }`}
+        >
+          {renderContent(message)}
+        </div>
+        <div
+          className={`text-[10px] ${
+            isOutbound ? "self-end text-white/80" : "self-start text-white/80"
+          }`}
+        >
+          {new Date(message.createdAt).toLocaleTimeString("ja-JP", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+          {isOutbound && message.sendStatus === "failed" && (
+            <span className="ml-1 text-red-200">送信失敗</span>
+          )}
+          {isOutbound && message.sendStatus === "queued" && (
+            <span className="ml-1 text-yellow-200">送信中...</span>
+          )}
+          {isOutbound && message.sendMethod === "reply" && (
+            <span className="ml-1 text-yellow-200">Reply</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ScheduledMeetingsBanner({
+  meetings,
+  onCanceled,
+}: {
+  meetings: Array<{ id: string; title: string; startsAt: string; joinUrl: string }>;
+  onCanceled: () => Promise<void>;
+}) {
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const onCancel = async (meetingId: string) => {
+    const ok = window.confirm(
+      "この 面談 を キャンセル しますか?\nZoom 会議 削除 + LINE で 求職者 に 通知 されます。",
+    );
+    if (!ok) return;
+    setCancelingId(meetingId);
+    setError(null);
+    try {
+      const res = await fetch("/api/agency/line/cancel-meeting", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ meetingScheduleId: meetingId }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? `HTTP ${res.status}`);
+      }
+      await onCanceled();
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setCancelingId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-2 rounded-md border border-emerald-200 bg-emerald-50 p-3">
+      <p className="text-xs font-semibold text-emerald-800">確定済 面談 ({meetings.length} 件)</p>
+      {meetings.map((m) => (
+        <div key={m.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-medium">{m.title}</p>
+            <p className="text-emerald-700">
+              {new Date(m.startsAt).toLocaleString("ja-JP", {
+                month: "numeric",
+                day: "numeric",
+                weekday: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </p>
+          </div>
+          <div className="flex gap-1">
+            <a
+              href={m.joinUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded border border-emerald-300 bg-white px-2 py-1 text-emerald-700 hover:bg-emerald-100"
+            >
+              Zoom
+            </a>
+            <button
+              onClick={() => onCancel(m.id)}
+              disabled={cancelingId === m.id}
+              className="rounded border border-red-300 bg-white px-2 py-1 text-red-700 hover:bg-red-100 disabled:opacity-50"
+            >
+              {cancelingId === m.id ? "キャンセル中..." : "キャンセル"}
+            </button>
+          </div>
+        </div>
+      ))}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+    </div>
+  );
+}
+
+function renderContent(m: ConversationMessage) {
+  switch (m.messageType) {
+    case "text":
+      return <span style={{ whiteSpace: "pre-wrap" }}>{m.text ?? "[復号失敗]"}</span>;
+    case "sticker":
+      if (m.stickerId) {
+        return (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`${STICKER_CDN}/${m.stickerId}/android/sticker.png`}
+            alt="sticker"
+            className="h-24 w-24"
+          />
+        );
+      }
+      return <span className="text-muted-foreground italic">[スタンプ]</span>;
+    case "image":
+      if (m.hasAttachment) {
+        return (
+          <a
+            href={`/api/agency/line/attachments/${m.id}?inline=1`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`/api/agency/line/attachments/${m.id}?inline=1`}
+              alt="image"
+              className="max-h-64 max-w-full rounded"
+              loading="lazy"
+            />
+          </a>
+        );
+      }
+      return <span className="italic">[画像]</span>;
+    case "video":
+      if (m.hasAttachment) {
+        return (
+          <video
+            src={`/api/agency/line/attachments/${m.id}?inline=1`}
+            controls
+            className="max-h-64 max-w-full rounded"
+          />
+        );
+      }
+      return <span className="italic">[動画]</span>;
+    case "audio":
+      if (m.hasAttachment) {
+        return (
+          <audio
+            src={`/api/agency/line/attachments/${m.id}?inline=1`}
+            controls
+            className="max-w-full"
+          />
+        );
+      }
+      return <span className="italic">[音声]</span>;
+    case "file":
+      if (m.hasAttachment) {
+        return (
+          <a
+            href={`/api/agency/line/attachments/${m.id}?inline=1`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 underline"
+          >
+            <Paperclip className="size-3.5" aria-hidden />
+            <span>{m.attachmentFileName ?? "ファイル"}</span>
+          </a>
+        );
+      }
+      return <span className="italic">[ファイル]</span>;
+    case "location":
+      return <span className="italic">[位置情報]</span>;
+    case "flex":
+    case "template":
+      return <span className="italic">[リッチメッセージ]</span>;
+    default:
+      return <span className="italic">[{m.messageType}]</span>;
+  }
+}

@@ -142,6 +142,25 @@ export default async function AgencyIntegrationsPage({
       {/* Google 連携(Calendar + Drive 録画取込) */}
       <GoogleConnectCard status={googleStatus} googleConfigured={googleConfigured} />
 
+      {/* LINE 公式アカウント 連携 (Phase 1 〜) */}
+      <Card className="space-y-3 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-semibold">LINE 公式アカウント 連携</h2>
+        </div>
+        <p className="text-muted-foreground text-sm">
+          御社 の 公式LINE と Maira を 連携 し、 求職者 と の やり取り を Maira UI で 完結 +
+          求人共有 / Zoom 案内 を LINE 経由 で 可能 に します。
+        </p>
+        <div className="pt-1">
+          <Link
+            href="/agency/settings/integrations/line"
+            className="hover:text-foreground inline-flex items-center text-sm font-medium underline"
+          >
+            設定 / 接続状況 を 確認 →
+          </Link>
+        </div>
+      </Card>
+
       {/* カレンダー購読 URL(エージェントの予定を Google Calendar 等で購読) */}
       <CalendarFeedSection />
     </div>

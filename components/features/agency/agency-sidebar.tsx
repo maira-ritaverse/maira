@@ -28,6 +28,7 @@ const BASE_ITEMS: ItemDescriptor[] = [
   { id: "jobs", href: "/agency/jobs", icon: "briefcase", defaultLabel: "求人管理" },
   { id: "calendar", href: "/agency/calendar", icon: "calendar", defaultLabel: "カレンダー" },
   { id: "meetings", href: "/agency/meetings", icon: "video", defaultLabel: "面談" },
+  { id: "line", href: "/agency/line", icon: "message", defaultLabel: "LINE" },
   { id: "marketing", href: "/agency/marketing", icon: "megaphone", defaultLabel: "マーケティング" },
   { id: "announcements", href: "/agency/announcements", icon: "bell", defaultLabel: "お知らせ" },
   { id: "reports", href: "/agency/reports", icon: "reports", defaultLabel: "レポート" },
@@ -38,7 +39,15 @@ const ADMIN_ITEMS: ItemDescriptor[] = [
 ];
 
 const DEFAULT_LAYOUT: SidebarLayout = {
-  topLevelItemIds: ["dashboard", "calendar", "meetings", "marketing", "announcements", "reports"],
+  topLevelItemIds: [
+    "dashboard",
+    "calendar",
+    "meetings",
+    "line",
+    "marketing",
+    "announcements",
+    "reports",
+  ],
   groups: [
     {
       id: "crm",
