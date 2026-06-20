@@ -17,7 +17,9 @@ import {
   calculateDeliveryRate,
   type ScenarioSendStatsMap,
 } from "@/lib/ma/kpi";
+import type { LineMaKpi } from "@/lib/ma/line-kpi";
 import { ConsentModal } from "./consent-modal";
+import { LineMaScreen } from "./line-ma-screen";
 import { TestSendModal } from "./test-send-modal";
 
 /**
@@ -51,6 +53,7 @@ export type MarketingScreenProps = {
    * 値が無いシナリオは「未配信」として扱う。
    */
   lastSentAtByScenarioId: Record<string, string>;
+  lineKpi: LineMaKpi;
 };
 
 export function MarketingScreen({
@@ -62,6 +65,7 @@ export function MarketingScreen({
   isAdmin,
   sendStatsByScenarioId,
   lastSentAtByScenarioId,
+  lineKpi,
 }: MarketingScreenProps) {
   const router = useRouter();
   // channel タブ 切替。 デフォルト は Eメール (歴史的)。
@@ -70,8 +74,9 @@ export function MarketingScreen({
   const [revoking, setRevoking] = useState(false);
   const [revokeError, setRevokeError] = useState<string | null>(null);
 
-  // 現在 タブ の channel に 沿った 同意 / バージョン / シナリオ を 集約
-  const currentConsent = activeChannel === "email" ? emailConsent : lineConsent;
+  // 現在 タブ の channel に 沿った 同意 / バージョン を 集約。
+  // currentConsent は currentFeature の 派生 で、 EmailMaSection は consent を
+  // 直接 props で 受け取る ので 不要 (撤回 ボタン の feature 判定 だけ で 十分)。
   const currentConsentVersion =
     activeChannel === "email" ? emailConsentVersion : lineConsentVersion;
   const currentFeature: MAFeature = activeChannel === "email" ? "email_ma" : "line_ma";
@@ -111,62 +116,124 @@ export function MarketingScreen({
 
   return (
     <>
+      {/* channel タブ (Eメール / LINE) — 共通 ヘッダー の 上 に */}
+      <div className="inline-flex rounded-md ring-1 ring-slate-200">
+        <button
+          type="button"
+          onClick={() => setActiveChannel("email")}
+          className={`rounded-l-md px-4 py-1.5 text-xs font-medium transition-colors ${
+            activeChannel === "email"
+              ? "bg-emerald-500 text-white"
+              : "bg-white text-slate-600 hover:bg-slate-50"
+          }`}
+        >
+          Eメール
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveChannel("line")}
+          className={`rounded-r-md px-4 py-1.5 text-xs font-medium transition-colors ${
+            activeChannel === "line"
+              ? "bg-emerald-500 text-white"
+              : "bg-white text-slate-600 hover:bg-slate-50"
+          }`}
+        >
+          LINE
+        </button>
+      </div>
+
+      {/* LINE タブ は 専用 EMPRO 風 画面 に 委譲 */}
+      {activeChannel === "line" ? (
+        <LineMaScreen
+          scenarios={scenarios}
+          consent={lineConsent}
+          consentVersion={lineConsentVersion}
+          isAdmin={isAdmin}
+          sendStatsByScenarioId={sendStatsByScenarioId}
+          lastSentAtByScenarioId={lastSentAtByScenarioId}
+          kpi={lineKpi}
+        />
+      ) : (
+        <EmailMaSection
+          scenarios={candidateScenarios}
+          consent={emailConsent}
+          isAdmin={isAdmin}
+          sendStatsByScenarioId={sendStatsByScenarioId}
+          lastSentAtByScenarioId={lastSentAtByScenarioId}
+          revoking={revoking}
+          revokeError={revokeError}
+          activeScenarioCount={activeScenarioCount}
+          overallSendStats={overallSendStats}
+          deliveryRate={deliveryRate}
+          onRequestConsent={() => setShowConsent(true)}
+          onRevoke={handleRevoke}
+        />
+      )}
+
+      <ConsentModal
+        open={showConsent}
+        feature={currentFeature}
+        consentVersion={currentConsentVersion}
+        onClose={() => setShowConsent(false)}
+      />
+    </>
+  );
+}
+
+// ============================================================
+// Email MA セクション (既存 レイアウト を 関数 化)
+// ============================================================
+type EmailSectionProps = {
+  scenarios: ScenarioView[];
+  consent: ConsentStatus;
+  isAdmin: boolean;
+  sendStatsByScenarioId: ScenarioSendStatsMap;
+  lastSentAtByScenarioId: Record<string, string>;
+  revoking: boolean;
+  revokeError: string | null;
+  activeScenarioCount: number;
+  overallSendStats: { sent: number; failed: number; skipped: number };
+  deliveryRate: number | null;
+  onRequestConsent: () => void;
+  onRevoke: () => void | Promise<void>;
+};
+
+function EmailMaSection({
+  scenarios,
+  consent,
+  isAdmin,
+  sendStatsByScenarioId,
+  lastSentAtByScenarioId,
+  revoking,
+  revokeError,
+  activeScenarioCount,
+  overallSendStats,
+  deliveryRate,
+  onRequestConsent,
+  onRevoke,
+}: EmailSectionProps) {
+  return (
+    <>
       {/* ヘッダ */}
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold">マーケティング オートメーション</h1>
-          </div>
-          {/* 送信履歴へのナビ。同意状態に関係なく閲覧可(advisor も含む)。 */}
+          <h1 className="text-2xl font-bold">Eメール (MA)</h1>
           <Button variant="outline" size="sm" render={<Link href="/agency/marketing/logs" />}>
             送信履歴
           </Button>
         </div>
 
-        {/* channel タブ (Eメール / LINE) */}
-        <div className="inline-flex rounded-md ring-1 ring-slate-200">
-          <button
-            type="button"
-            onClick={() => setActiveChannel("email")}
-            className={`rounded-l-md px-4 py-1.5 text-xs font-medium transition-colors ${
-              activeChannel === "email"
-                ? "bg-emerald-500 text-white"
-                : "bg-white text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            Eメール
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveChannel("line")}
-            className={`rounded-r-md px-4 py-1.5 text-xs font-medium transition-colors ${
-              activeChannel === "line"
-                ? "bg-emerald-500 text-white"
-                : "bg-white text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            LINE
-          </button>
-        </div>
+        <p className="text-muted-foreground text-sm">Eメール 自動配信 シナリオ の 管理・設定</p>
 
-        <p className="text-muted-foreground text-sm">
-          {activeChannel === "email"
-            ? "Eメール 自動配信 シナリオ の 管理・設定"
-            : "LINE 公式 アカウント 経由 の 自動配信 シナリオ の 管理・設定"}
-        </p>
-
-        {/* 同意状態の表示 (タブ ごと に 切替) */}
-        {currentConsent.isActive ? (
+        {/* 同意 状態 */}
+        {consent.isActive ? (
           <div className="flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm">
             <span className="text-emerald-900">
-              有効化済み(特約バージョン {currentConsent.consentVersion}、
-              {currentConsent.acceptedAt
-                ? new Date(currentConsent.acceptedAt).toLocaleDateString("ja-JP")
-                : "—"}
-              )
+              有効化済み(特約バージョン {consent.consentVersion}、
+              {consent.acceptedAt ? new Date(consent.acceptedAt).toLocaleDateString("ja-JP") : "—"})
             </span>
             {isAdmin && (
-              <Button variant="ghost" size="sm" onClick={handleRevoke} disabled={revoking}>
+              <Button variant="ghost" size="sm" onClick={() => void onRevoke()} disabled={revoking}>
                 {revoking ? "撤回中..." : "撤回"}
               </Button>
             )}
@@ -175,7 +242,7 @@ export function MarketingScreen({
           <div className="flex items-center justify-between rounded-md border border-amber-200 bg-amber-50 p-3 text-sm">
             <span className="text-amber-900">利用を開始するには配信特約への同意が必要です。</span>
             {isAdmin && (
-              <Button size="sm" onClick={() => setShowConsent(true)}>
+              <Button size="sm" onClick={onRequestConsent}>
                 有効化する
               </Button>
             )}
@@ -188,13 +255,12 @@ export function MarketingScreen({
         )}
       </div>
 
-      {/* 全体 KPI サマリ:配信中シナリオ数 + 直近 30 日の合算実績 + 配信率
-          シナリオ別カードに行く前の「ざっくり状況把握」用。 */}
+      {/* 全体 KPI サマリ */}
       <div className="bg-muted/40 grid grid-cols-2 gap-2 rounded-md border p-3 text-xs md:grid-cols-4">
         <div>
           <p className="text-muted-foreground">配信中シナリオ</p>
           <p className="text-foreground mt-0.5 text-lg font-semibold">
-            {activeScenarioCount}/{candidateScenarios.length}
+            {activeScenarioCount}/{scenarios.length}
           </p>
         </div>
         <div>
@@ -225,26 +291,19 @@ export function MarketingScreen({
 
       {/* シナリオカード一覧 */}
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">求職者シナリオ ({candidateScenarios.length})</h2>
+        <h2 className="text-lg font-semibold">求職者シナリオ ({scenarios.length})</h2>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {candidateScenarios.map((view) => (
+          {scenarios.map((view) => (
             <ScenarioCard
               key={view.preset.id}
               view={view}
-              disabled={!currentConsent.isActive || !isAdmin}
+              disabled={!consent.isActive || !isAdmin}
               stats={view.activation ? sendStatsByScenarioId[view.activation.id] : undefined}
               lastSentAt={view.activation ? lastSentAtByScenarioId[view.activation.id] : undefined}
             />
           ))}
         </div>
       </section>
-
-      <ConsentModal
-        open={showConsent}
-        feature={currentFeature}
-        consentVersion={currentConsentVersion}
-        onClose={() => setShowConsent(false)}
-      />
     </>
   );
 }
