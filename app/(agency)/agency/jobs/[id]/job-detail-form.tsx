@@ -11,6 +11,7 @@ import {
   type JobPosting,
   jobStatusLabels,
 } from "@/lib/jobs/types";
+import { JobImageUploader } from "@/components/features/agency/job-image-uploader";
 import { LabourProgressBadge } from "@/components/features/agency/labour-progress-badge";
 
 // salary_min / salary_max は z.preprocess で input 型が unknown になるため、
@@ -29,9 +30,15 @@ import { Label } from "@/components/ui/label";
  * PATCH /api/agency/jobs/[id] を呼ぶ。保存成功時は router.refresh() で再取得。
  */
 
-type Props = { job: JobPosting };
+type Props = {
+  job: JobPosting;
+  /** Server Component で 計算 した hero_image_path の public URL */
+  heroImageUrl: string | null;
+  /** Server Component で 計算 した line_share_image_path の public URL */
+  lineShareImageUrl: string | null;
+};
 
-export function JobDetailForm({ job }: Props) {
+export function JobDetailForm({ job, heroImageUrl, lineShareImageUrl }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -101,6 +108,30 @@ export function JobDetailForm({ job }: Props) {
             <AlertDescription>{successMessage}</AlertDescription>
           </Alert>
         )}
+
+        {/* 画像 セクション (form 外部 と 通信、 即時 反映) */}
+        <div className="space-y-4 rounded-md border bg-slate-50/30 p-4">
+          <div>
+            <h3 className="text-sm font-semibold">求人 画像</h3>
+            <p className="text-muted-foreground text-[10px]">
+              保存 ボタン と は 別 に 即時 反映 されます。 差し替え / 削除 も ここ から。
+            </p>
+          </div>
+          <JobImageUploader
+            jobId={job.id}
+            kind="hero"
+            label="メイン 画像 (求人 詳細 / 一覧)"
+            description="サイト 上 や 求職者 向け 詳細 で 使う 画像"
+            initialImageUrl={heroImageUrl}
+          />
+          <JobImageUploader
+            jobId={job.id}
+            kind="line_share"
+            label="LINE 配信 用 画像 (任意)"
+            description="設定 する と LINE 求人カード で 優先 使用。 未設定 ならメイン画像 を 使用"
+            initialImageUrl={lineShareImageUrl}
+          />
+        </div>
 
         <div className="space-y-2">
           <Label htmlFor="company_name">

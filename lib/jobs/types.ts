@@ -38,10 +38,20 @@ export type JobPosting = {
   breakTime: string | null; // 休憩時間
   holidays: string | null; // 休日休暇
   applicationQualifications: string | null; // 応募資格
+  // 20260629000010 で追加。 求人 メイン画像 / LINE 配信用 画像 の Storage パス。
+  heroImagePath: string | null;
+  lineShareImagePath: string | null;
   createdByMemberId: string | null;
   createdAt: string;
   updatedAt: string;
 };
+
+/**
+ * 求人 画像 の 種別。
+ *   hero       求人 詳細 / 一覧 で 表示 する メイン 画像
+ *   line_share LINE 配信 (Flex 求人カード) で 使う 画像。 設定 無し なら hero を 使う
+ */
+export type JobImageKind = "hero" | "line_share";
 
 // 年収バリデーション(0〜100000万円 = 0〜10億円。実用上充分な上限)
 // 空文字を null に変換するためのプリプロセッサ:

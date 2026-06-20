@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { requireOrgMember } from "@/lib/api/auth-guards";
 import { buildAbsoluteUrl } from "@/lib/config/site-url";
+import { getJobShareImageUrl } from "@/lib/jobs/image-url";
 import { formatSalaryRange } from "@/lib/jobs/types";
 import type { LineMessage } from "@/lib/line/api";
 import { buildJobShareCard, buildJobShareCarousel } from "@/lib/line/flex";
@@ -73,10 +74,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "line_user_not_found_or_unfollowed" }, { status: 404 });
   }
 
-  // 求人 を 一括取得 (自組織のもの だけ、 RLS 経由)
+  // 求人 を 一括取得 (自組織のもの だけ、 RLS 経由)。 画像 列 も 取得 する。
   const { data: jobsData } = await guard.supabase
     .from("job_postings")
-    .select("id, company_name, position, location, salary_min, salary_max")
+    .select(
+      "id, company_name, position, location, salary_min, salary_max, hero_image_path, line_share_image_path",
+    )
     .in("id", jobIds);
 
   type JobRow = {
@@ -86,6 +89,8 @@ export async function POST(request: Request) {
     location: string | null;
     salary_min: number | null;
     salary_max: number | null;
+    hero_image_path: string | null;
+    line_share_image_path: string | null;
   };
   const jobs = (jobsData ?? []) as JobRow[];
   if (jobs.length === 0) {
@@ -112,7 +117,7 @@ export async function POST(request: Request) {
       companyName: job.company_name,
       location: job.location,
       salaryText,
-      heroImageUrl: null,
+      heroImageUrl: getJobShareImageUrl(guard.supabase, job),
       detailUrl,
       interestPostbackData: withInterestButton ? `job_interest:${job.id}` : undefined,
     };

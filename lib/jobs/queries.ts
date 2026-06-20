@@ -31,6 +31,9 @@ type JobPostingRow = {
   break_time: string | null;
   holidays: string | null;
   application_qualifications: string | null;
+  // 20260629000010
+  hero_image_path: string | null;
+  line_share_image_path: string | null;
   created_by_member_id: string | null;
   created_at: string;
   updated_at: string;
@@ -58,6 +61,8 @@ function rowToJobPosting(row: JobPostingRow): JobPosting {
     breakTime: row.break_time,
     holidays: row.holidays,
     applicationQualifications: row.application_qualifications,
+    heroImagePath: row.hero_image_path,
+    lineShareImagePath: row.line_share_image_path,
     createdByMemberId: row.created_by_member_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

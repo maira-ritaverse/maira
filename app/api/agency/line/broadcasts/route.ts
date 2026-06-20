@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireOrgMember } from "@/lib/api/auth-guards";
 import { buildAbsoluteUrl } from "@/lib/config/site-url";
 import { encryptField } from "@/lib/crypto/field-encryption";
+import { getJobShareImageUrl } from "@/lib/jobs/image-url";
 import { formatSalaryRange } from "@/lib/jobs/types";
 import { multicastMessage, type LineMessage } from "@/lib/line/api";
 import { classifyLineError } from "@/lib/line/errors";
@@ -156,7 +157,9 @@ export async function POST(request: Request) {
   } else {
     const { data: jobsData } = await admin
       .from("job_postings")
-      .select("id, company_name, position, location, salary_min, salary_max")
+      .select(
+        "id, company_name, position, location, salary_min, salary_max, hero_image_path, line_share_image_path",
+      )
       .in("id", parsed.data.jobIds)
       .eq("organization_id", guard.organization.id);
     type JobRow = {
@@ -166,6 +169,8 @@ export async function POST(request: Request) {
       location: string | null;
       salary_min: number | null;
       salary_max: number | null;
+      hero_image_path: string | null;
+      line_share_image_path: string | null;
     };
     const jobs = (jobsData ?? []) as JobRow[];
     if (jobs.length === 0) {
@@ -184,7 +189,7 @@ export async function POST(request: Request) {
         job.salary_min === null && job.salary_max === null
           ? null
           : formatSalaryRange(job.salary_min, job.salary_max),
-      heroImageUrl: null,
+      heroImageUrl: getJobShareImageUrl(admin, job),
       detailUrl: channel.liffId
         ? `https://liff.line.me/${channel.liffId}/jobs/${job.id}`
         : buildAbsoluteUrl(`/app/jobs/${job.id}`),

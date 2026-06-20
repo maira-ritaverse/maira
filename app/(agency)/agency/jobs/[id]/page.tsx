@@ -136,7 +136,20 @@ export default async function JobDetailPage({ params }: RouteParams) {
         </div>
       </div>
 
-      <JobDetailForm job={job} />
+      <JobDetailForm
+        job={job}
+        heroImageUrl={
+          job.heroImagePath
+            ? supabase.storage.from("job-images").getPublicUrl(job.heroImagePath).data.publicUrl
+            : null
+        }
+        lineShareImageUrl={
+          job.lineShareImagePath
+            ? supabase.storage.from("job-images").getPublicUrl(job.lineShareImagePath).data
+                .publicUrl
+            : null
+        }
+      />
 
       {/* この 求人 を 推薦中 の クライアント 一覧 (LINE 紐付け 済 なら LINE 共有 可) */}
       <JobRecommendationsSection job={job} referrals={referralViews} />

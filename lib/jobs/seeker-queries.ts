@@ -71,6 +71,9 @@ export async function getJobForSeeker(jobId: string): Promise<SeekerJobDetail | 
     breakTime: row.break_time,
     holidays: row.holidays,
     applicationQualifications: row.application_qualifications,
+    // 求職者 向け RPC は 画像 列 を 返さ ない 想定。 必要 になれば RPC 側 を 拡張 する。
+    heroImagePath: null,
+    lineShareImagePath: null,
     createdByMemberId: null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

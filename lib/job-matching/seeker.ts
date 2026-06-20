@@ -202,6 +202,8 @@ function mapRowsToJobs(rows: SeekerJobRow[]): Array<JobPosting & { organizationN
     breakTime: null,
     holidays: null,
     applicationQualifications: null,
+    heroImagePath: null,
+    lineShareImagePath: null,
     createdByMemberId: null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
