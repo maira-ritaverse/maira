@@ -35,6 +35,7 @@ import { ClientDetailForm } from "./client-detail-form";
 import { CustomFieldsSection } from "./custom-fields-section";
 import { AiMatchingSection } from "./ai-matching-section";
 import { MatchingSection } from "./matching-section";
+import { ProposeMeetingButton } from "./propose-meeting-button";
 import { ScheduleMeetingDialog } from "./schedule-meeting-dialog";
 import { SendEmailDialog } from "./send-email-dialog";
 import { AgencyApplicationsSection } from "./agency-applications-section";
@@ -143,6 +144,7 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
     _viewed,
     auditLog,
     seekerPhoto,
+    lineLinkRes,
   ] = await Promise.all([
     listReferralsByClient(client.id),
     listJobPostings(role.organization.id),
@@ -161,7 +163,16 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
     client.linkedUserId
       ? getLinkedSeekerLatestPhoto(client.linkedUserId)
       : Promise.resolve(null),
+    // LINE 紐付け 済 友達 (LINE 日程候補 提案 ボタン 表示 判定 用)
+    supabase
+      .from("line_user_links")
+      .select("line_user_id, unfollowed_at")
+      .eq("client_record_id", client.id)
+      .eq("organization_id", client.organizationId)
+      .maybeSingle(),
   ]);
+  type LineLink = { line_user_id: string; unfollowed_at: string | null };
+  const lineLink = (lineLinkRes.data as LineLink | null) ?? null;
   void _viewed;
   const openJobs = allJobs.filter((j) => j.status === "open");
 
@@ -229,6 +240,10 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
               現時点でもボタン自体は出して「配信停止です」のメッセージを見せる方が
               ユーザの誤解を招かない。 */}
           <ScheduleMeetingDialog clientId={client.id} clientName={client.name} />
+          <ProposeMeetingButton
+            lineUserId={lineLink?.line_user_id ?? null}
+            unfollowed={Boolean(lineLink?.unfollowed_at)}
+          />
           <SendEmailDialog
             clientId={client.id}
             clientName={client.name}

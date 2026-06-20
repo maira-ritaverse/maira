@@ -17,7 +17,7 @@ import { getErrorMessage } from "@/lib/api/client-fetch";
 import type { ConversationMessage } from "@/lib/line/conversations";
 import { COMMON_STICKERS, getStickerImageUrl } from "@/lib/line/stickers";
 
-import { MeetingProposePanel } from "./meeting-propose-panel";
+import { MeetingProposePanel } from "@/components/features/meetings/meeting-propose-panel";
 import { QuickMeetingDialog } from "./quick-meeting-dialog";
 
 /**
