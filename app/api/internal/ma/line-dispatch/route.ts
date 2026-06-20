@@ -68,10 +68,17 @@ export async function POST(request: Request) {
     )
     .eq("is_active", true);
   const scenarios = (scenarioRows ?? []) as unknown as ScenarioRow[];
+  const LINE_KEYS = new Set([
+    "line_welcome_after_friend",
+    "line_dormant_outreach",
+    "line_register_meeting_promotion",
+    "line_meeting_reminder",
+    "line_job_introduction",
+    "line_after_interview_followup",
+    "line_birthday_greeting",
+  ]);
   const lineScenarios = scenarios.filter(
-    (s) =>
-      s.ma_scenario_presets?.key === "line_welcome_after_friend" ||
-      s.ma_scenario_presets?.key === "line_dormant_outreach",
+    (s) => s.ma_scenario_presets?.key && LINE_KEYS.has(s.ma_scenario_presets.key),
   );
   if (lineScenarios.length === 0) {
     return NextResponse.json({ ok: true, processed: 0, message: "no_active_line_scenarios" });
@@ -241,13 +248,66 @@ async function findLineCandidates(
     triggerDays: number;
   },
 ): Promise<Candidate[]> {
-  if (args.presetKey === "line_welcome_after_friend") {
+  if (args.presetKey === "line_welcome_after_friend")
     return await findWelcomeCandidates(admin, args);
-  }
-  if (args.presetKey === "line_dormant_outreach") {
-    return await findDormantCandidates(admin, args);
-  }
+  if (args.presetKey === "line_dormant_outreach") return await findDormantCandidates(admin, args);
+  if (args.presetKey === "line_register_meeting_promotion")
+    return await findRegisterMeetingPromotionLine(admin, args);
+  if (args.presetKey === "line_meeting_reminder") return await findMeetingReminderLine(admin, args);
+  if (args.presetKey === "line_job_introduction") return await findJobIntroductionLine(admin, args);
+  if (args.presetKey === "line_after_interview_followup")
+    return await findAfterInterviewFollowupLine(admin, args);
+  if (args.presetKey === "line_birthday_greeting")
+    return await findBirthdayGreetingLine(admin, args);
   return [];
+}
+
+// ============================================================
+// 共通 ヘルパー (linked friends + 既送信 除外)
+// ============================================================
+
+/**
+ * 自組織 で client_records に 紐付け 済 (= linked) の 友達 を 取得。
+ * Map で client_record_id → { lineUserId, displayName } を 返す。
+ */
+async function loadLinkedFriendsByClientId(
+  admin: AdminClient,
+  organizationId: string,
+  clientIds?: string[],
+): Promise<Map<string, { lineUserId: string; displayName: string | null }>> {
+  let query = admin
+    .from("line_user_links")
+    .select("line_user_id, client_record_id, display_name")
+    .eq("organization_id", organizationId)
+    .is("unfollowed_at", null)
+    .not("client_record_id", "is", null);
+  if (clientIds && clientIds.length > 0) {
+    query = query.in("client_record_id", clientIds);
+  }
+  const { data } = await query;
+  type Row = { line_user_id: string; client_record_id: string; display_name: string | null };
+  const map = new Map<string, { lineUserId: string; displayName: string | null }>();
+  for (const r of (data ?? []) as Row[]) {
+    map.set(r.client_record_id, { lineUserId: r.line_user_id, displayName: r.display_name });
+  }
+  return map;
+}
+
+/**
+ * 同 シナリオ で 既送信 (status='sent') の line_user_id 集合 を 返す。
+ */
+async function loadSentLineUserIds(admin: AdminClient, scenarioId: string): Promise<Set<string>> {
+  const { data } = await admin
+    .from("ma_send_logs")
+    .select("recipient_line_user_id")
+    .eq("scenario_id", scenarioId)
+    .eq("status", "sent")
+    .not("recipient_line_user_id", "is", null);
+  return new Set(
+    ((data ?? []) as Array<{ recipient_line_user_id: string }>).map(
+      (l) => l.recipient_line_user_id,
+    ),
+  );
 }
 
 /**
@@ -355,4 +415,261 @@ async function findDormantCandidates(
     });
   }
   return candidates;
+}
+
+// ============================================================
+// line_register_meeting_promotion:
+//   登録日 (line_user_links.created_at) から N 日経過、
+//   かつ interviews が 0 件、 未送信
+// ============================================================
+async function findRegisterMeetingPromotionLine(
+  admin: AdminClient,
+  args: { scenarioId: string; organizationId: string; triggerDays: number },
+): Promise<Candidate[]> {
+  const threshold = new Date(Date.now() - args.triggerDays * 86400_000).toISOString();
+  const { data: links } = await admin
+    .from("line_user_links")
+    .select("line_user_id, client_record_id, display_name, created_at")
+    .eq("organization_id", args.organizationId)
+    .is("unfollowed_at", null)
+    .not("client_record_id", "is", null)
+    .lte("created_at", threshold)
+    .limit(500);
+  type LinkRow = {
+    line_user_id: string;
+    client_record_id: string;
+    display_name: string | null;
+  };
+  const allLinks = (links ?? []) as LinkRow[];
+  if (allLinks.length === 0) return [];
+
+  const clientIds = allLinks.map((l) => l.client_record_id);
+  const [interviewsRes, sentSet] = await Promise.all([
+    admin
+      .from("interviews")
+      .select("referrals!inner(client_record_id)")
+      .eq("organization_id", args.organizationId),
+    loadSentLineUserIds(admin, args.scenarioId),
+  ]);
+  type IVRow = {
+    referrals: { client_record_id: string } | { client_record_id: string }[] | null;
+  };
+  const clientsWithInterview = new Set(
+    ((interviewsRes.data ?? []) as IVRow[])
+      .map((r) => {
+        const ref = Array.isArray(r.referrals) ? r.referrals[0] : r.referrals;
+        return ref?.client_record_id;
+      })
+      .filter((id): id is string => !!id && clientIds.includes(id)),
+  );
+
+  return allLinks
+    .filter((l) => !clientsWithInterview.has(l.client_record_id) && !sentSet.has(l.line_user_id))
+    .map((l) => ({
+      lineUserId: l.line_user_id,
+      clientRecordId: l.client_record_id,
+      displayName: l.display_name,
+    }));
+}
+
+// ============================================================
+// line_meeting_reminder: interviews.scheduled_at が 今 + |days| 日 ± 12h
+// ============================================================
+async function findMeetingReminderLine(
+  admin: AdminClient,
+  args: { scenarioId: string; organizationId: string; triggerDays: number },
+): Promise<Candidate[]> {
+  const targetTime = Date.now() + args.triggerDays * 86400_000;
+  const windowMs = 12 * 3600 * 1000;
+  const lower = new Date(targetTime - windowMs).toISOString();
+  const upper = new Date(targetTime + windowMs).toISOString();
+
+  const { data } = await admin
+    .from("interviews")
+    .select("scheduled_at, result, referrals!inner(client_record_id)")
+    .eq("organization_id", args.organizationId)
+    .eq("result", "scheduled")
+    .gte("scheduled_at", lower)
+    .lte("scheduled_at", upper);
+  type IVRow = {
+    referrals: { client_record_id: string } | { client_record_id: string }[] | null;
+  };
+  const clientIds = Array.from(
+    new Set(
+      ((data ?? []) as IVRow[])
+        .map((r) => {
+          const ref = Array.isArray(r.referrals) ? r.referrals[0] : r.referrals;
+          return ref?.client_record_id;
+        })
+        .filter((id): id is string => !!id),
+    ),
+  );
+  if (clientIds.length === 0) return [];
+
+  const [friendMap, sentSet] = await Promise.all([
+    loadLinkedFriendsByClientId(admin, args.organizationId, clientIds),
+    loadSentLineUserIds(admin, args.scenarioId),
+  ]);
+
+  const out: Candidate[] = [];
+  for (const cid of clientIds) {
+    const f = friendMap.get(cid);
+    if (!f) continue;
+    if (sentSet.has(f.lineUserId)) continue;
+    out.push({ lineUserId: f.lineUserId, clientRecordId: cid, displayName: f.displayName });
+  }
+  return out;
+}
+
+// ============================================================
+// line_job_introduction: 1次面談 done から N 日経過、 referrals 0 件
+// ============================================================
+async function findJobIntroductionLine(
+  admin: AdminClient,
+  args: { scenarioId: string; organizationId: string; triggerDays: number },
+): Promise<Candidate[]> {
+  const cutoff = new Date(Date.now() - args.triggerDays * 86400_000).toISOString();
+  const { data: interviews } = await admin
+    .from("interviews")
+    .select("scheduled_at, referrals!inner(client_record_id)")
+    .eq("organization_id", args.organizationId)
+    .eq("kind", "first")
+    .eq("result", "done")
+    .lte("scheduled_at", cutoff);
+  type IVRow = {
+    referrals: { client_record_id: string } | { client_record_id: string }[] | null;
+  };
+  const candidatesClientIds = Array.from(
+    new Set(
+      ((interviews ?? []) as IVRow[])
+        .map((r) => {
+          const ref = Array.isArray(r.referrals) ? r.referrals[0] : r.referrals;
+          return ref?.client_record_id;
+        })
+        .filter((id): id is string => !!id),
+    ),
+  );
+  if (candidatesClientIds.length === 0) return [];
+
+  // referrals 0 件 を 残す
+  const { data: refs } = await admin
+    .from("referrals")
+    .select("client_record_id")
+    .eq("organization_id", args.organizationId)
+    .in("client_record_id", candidatesClientIds);
+  const refSet = new Set(
+    ((refs ?? []) as Array<{ client_record_id: string }>).map((r) => r.client_record_id),
+  );
+  const noRefIds = candidatesClientIds.filter((id) => !refSet.has(id));
+  if (noRefIds.length === 0) return [];
+
+  const [friendMap, sentSet] = await Promise.all([
+    loadLinkedFriendsByClientId(admin, args.organizationId, noRefIds),
+    loadSentLineUserIds(admin, args.scenarioId),
+  ]);
+
+  const out: Candidate[] = [];
+  for (const cid of noRefIds) {
+    const f = friendMap.get(cid);
+    if (!f) continue;
+    if (sentSet.has(f.lineUserId)) continue;
+    out.push({ lineUserId: f.lineUserId, clientRecordId: cid, displayName: f.displayName });
+  }
+  return out;
+}
+
+// ============================================================
+// line_after_interview_followup: 2 次 / 最終 / 企業 面接 done から N 日経過
+// ============================================================
+async function findAfterInterviewFollowupLine(
+  admin: AdminClient,
+  args: { scenarioId: string; organizationId: string; triggerDays: number },
+): Promise<Candidate[]> {
+  const cutoff = new Date(Date.now() - args.triggerDays * 86400_000).toISOString();
+  const { data: interviews } = await admin
+    .from("interviews")
+    .select("scheduled_at, referrals!inner(client_record_id)")
+    .eq("organization_id", args.organizationId)
+    .in("kind", ["second", "final", "company"])
+    .eq("result", "done")
+    .lte("scheduled_at", cutoff);
+  type IVRow = {
+    referrals: { client_record_id: string } | { client_record_id: string }[] | null;
+  };
+  const clientIds = Array.from(
+    new Set(
+      ((interviews ?? []) as IVRow[])
+        .map((r) => {
+          const ref = Array.isArray(r.referrals) ? r.referrals[0] : r.referrals;
+          return ref?.client_record_id;
+        })
+        .filter((id): id is string => !!id),
+    ),
+  );
+  if (clientIds.length === 0) return [];
+
+  const [friendMap, sentSet] = await Promise.all([
+    loadLinkedFriendsByClientId(admin, args.organizationId, clientIds),
+    loadSentLineUserIds(admin, args.scenarioId),
+  ]);
+
+  const out: Candidate[] = [];
+  for (const cid of clientIds) {
+    const f = friendMap.get(cid);
+    if (!f) continue;
+    if (sentSet.has(f.lineUserId)) continue;
+    out.push({ lineUserId: f.lineUserId, clientRecordId: cid, displayName: f.displayName });
+  }
+  return out;
+}
+
+// ============================================================
+// line_birthday_greeting: client_records.birth_date の MM-DD が 今日 と 一致
+// ============================================================
+async function findBirthdayGreetingLine(
+  admin: AdminClient,
+  args: { scenarioId: string; organizationId: string },
+): Promise<Candidate[]> {
+  const today = new Date();
+  const month = today.getMonth() + 1;
+  const day = today.getDate();
+
+  const { data: clients } = await admin
+    .from("client_records")
+    .select("id, birth_date")
+    .eq("organization_id", args.organizationId)
+    .not("birth_date", "is", null);
+  type CRow = { id: string; birth_date: string | null };
+  const matchedIds = ((clients ?? []) as CRow[])
+    .filter((c) => {
+      if (!c.birth_date) return false;
+      const d = new Date(c.birth_date);
+      return d.getMonth() + 1 === month && d.getDate() === day;
+    })
+    .map((c) => c.id);
+  if (matchedIds.length === 0) return [];
+
+  // 過去 1 年 以内 に 同 シナリオ で 送信 済 の friend は 除外
+  const oneYearAgo = new Date(Date.now() - 365 * 86400_000).toISOString();
+  const { data: recentLogs } = await admin
+    .from("ma_send_logs")
+    .select("recipient_line_user_id")
+    .eq("scenario_id", args.scenarioId)
+    .eq("status", "sent")
+    .gte("sent_at", oneYearAgo);
+  const recentlySent = new Set(
+    ((recentLogs ?? []) as Array<{ recipient_line_user_id: string | null }>)
+      .map((l) => l.recipient_line_user_id)
+      .filter((id): id is string => !!id),
+  );
+
+  const friendMap = await loadLinkedFriendsByClientId(admin, args.organizationId, matchedIds);
+  const out: Candidate[] = [];
+  for (const cid of matchedIds) {
+    const f = friendMap.get(cid);
+    if (!f) continue;
+    if (recentlySent.has(f.lineUserId)) continue;
+    out.push({ lineUserId: f.lineUserId, clientRecordId: cid, displayName: f.displayName });
+  }
+  return out;
 }

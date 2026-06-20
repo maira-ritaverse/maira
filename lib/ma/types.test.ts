@@ -10,7 +10,7 @@ import { IMPLEMENTED_SCENARIO_KEYS, isScenarioImplemented } from "./types";
  */
 
 describe("IMPLEMENTED_SCENARIO_KEYS", () => {
-  it("現状の実装済みシナリオキーは Email 7 件 + LINE 2 件 = 9 件", () => {
+  it("現状 の 実装済 シナリオ キー は Email 7 件 + LINE 7 件 = 14 件", () => {
     // この件数を増やすときは Edge Function / cron route 側 にも 対応 ロジック を 追加 して から 更新 する。
     expect(IMPLEMENTED_SCENARIO_KEYS).toEqual([
       "register_meeting_promotion",
@@ -22,6 +22,11 @@ describe("IMPLEMENTED_SCENARIO_KEYS", () => {
       "after_interview_followup",
       "post_placement_followup",
       "birthday_greeting",
+      "line_register_meeting_promotion",
+      "line_meeting_reminder",
+      "line_job_introduction",
+      "line_after_interview_followup",
+      "line_birthday_greeting",
     ]);
   });
 });

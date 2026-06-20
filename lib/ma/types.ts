@@ -297,6 +297,12 @@ export const IMPLEMENTED_SCENARIO_KEYS = [
   "after_interview_followup", // 2 次 / 最終 面接 done から N 日 経過
   "post_placement_followup", // referrals.status='joined' から N 日 経過
   "birthday_greeting", // client_records.birthday の MM-DD が 今日 と 一致
+  // ── Phase C2 (Email 版 と 1:1 の LINE 版 5 件、 line-dispatch で 実装) ──
+  "line_register_meeting_promotion",
+  "line_meeting_reminder",
+  "line_job_introduction",
+  "line_after_interview_followup",
+  "line_birthday_greeting",
 ] as const;
 
 export type ImplementedScenarioKey = (typeof IMPLEMENTED_SCENARIO_KEYS)[number];
