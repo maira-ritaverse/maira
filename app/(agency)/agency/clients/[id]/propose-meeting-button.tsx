@@ -45,7 +45,7 @@ export function ProposeMeetingButton({ lineUserId, unfollowed }: Props) {
             if (e.target === e.currentTarget) setOpen(false);
           }}
         >
-          <div className="w-full max-w-xl">
+          <div className="w-full max-w-xl overflow-hidden rounded-md bg-white shadow-xl">
             <MeetingProposePanel
               lineUserId={lineUserId}
               unfollowed={unfollowed}
