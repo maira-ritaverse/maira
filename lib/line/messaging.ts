@@ -34,6 +34,32 @@ export type SendMessageResult =
     };
 
 /**
+ * Outbound 送信完了時 に 「対応済」マーク を 付ける。
+ *
+ * 自動 マーク は 「Maira UI から 送信 した 主体的 な 返信」 を 想定。
+ * handled_by_user_id は 「ユーザー が 誰か」分かる 場合 に セット (省略可)。
+ */
+export async function markConversationHandled(
+  service: SupabaseClient,
+  organizationId: string,
+  lineUserId: string,
+  handledByUserId?: string,
+): Promise<void> {
+  try {
+    await service
+      .from("line_user_links")
+      .update({
+        handled_at: new Date().toISOString(),
+        handled_by_user_id: handledByUserId ?? null,
+      })
+      .eq("organization_id", organizationId)
+      .eq("line_user_id", lineUserId);
+  } catch (err) {
+    console.warn("[line/messaging] markHandled failed", err);
+  }
+}
+
+/**
  * Outbound テキスト メッセージ を 送信。
  *
  * @param service     service_role キー (line_messages INSERT 用)

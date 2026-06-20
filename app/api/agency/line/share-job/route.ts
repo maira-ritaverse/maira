@@ -5,7 +5,7 @@ import { requireOrgMember } from "@/lib/api/auth-guards";
 import { buildAbsoluteUrl } from "@/lib/config/site-url";
 import type { LineMessage } from "@/lib/line/api";
 import { buildJobShareCard, buildJobShareCarousel } from "@/lib/line/flex";
-import { sendMessages } from "@/lib/line/messaging";
+import { markConversationHandled, sendMessages } from "@/lib/line/messaging";
 import { getLineChannelByOrgId } from "@/lib/line/queries";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -123,6 +123,9 @@ export async function POST(request: Request) {
       .update({ related_job_id: orderedJobs[0].id })
       .eq("id", sendResult.messageId);
   }
+
+  // 対応済 マーク
+  await markConversationHandled(admin, guard.organization.id, lineUserId, guard.user.id);
 
   return NextResponse.json({
     ok: true,

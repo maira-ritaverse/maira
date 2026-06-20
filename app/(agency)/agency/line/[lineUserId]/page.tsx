@@ -46,7 +46,7 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
   const { data: linkRow } = await supabase
     .from("line_user_links")
     .select(
-      "line_user_id, client_record_id, display_name, picture_url, unfollowed_at, link_method, created_at",
+      "line_user_id, client_record_id, display_name, picture_url, unfollowed_at, link_method, created_at, assigned_to_user_id",
     )
     .eq("line_user_id", lineUserId)
     .maybeSingle();
@@ -58,6 +58,7 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
     unfollowed_at: string | null;
     link_method: "manual" | "code" | "liff_login" | null;
     created_at: string;
+    assigned_to_user_id: string | null;
   } | null;
 
   if (!link) notFound();
@@ -133,6 +134,28 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
     // 既読化 失敗 は 致命的でない
   }
 
+  // 組織 メンバー (担当者 セレクタ 用)
+  const { data: membersData } = await supabase
+    .from("organization_members")
+    .select("user_id, role")
+    .eq("organization_id", role.organization.id);
+  // 表示名 (email から ローカル部) を 取得 する ため service_role で auth.users を 引く
+  const memberOptions = await (async () => {
+    const rows = (membersData ?? []) as Array<{ user_id: string; role: string }>;
+    if (rows.length === 0) return [];
+    try {
+      const admin = createServiceClient();
+      const lookups = await Promise.all(rows.map((r) => admin.auth.admin.getUserById(r.user_id)));
+      return rows.map((r, i) => {
+        const email = lookups[i].data?.user?.email ?? null;
+        const label = email ? email.split("@")[0] : `(${r.role})`;
+        return { userId: r.user_id, displayName: `${label} (${r.role})` };
+      });
+    } catch {
+      return rows.map((r) => ({ userId: r.user_id, displayName: r.role }));
+    }
+  })();
+
   return (
     <>
       {/* 中央: ヘッダー + チャット + 入力欄 */}
@@ -176,6 +199,8 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
         linkMethod={link.link_method}
         unfollowedAt={link.unfollowed_at}
         createdAt={link.created_at}
+        assigneeUserId={link.assigned_to_user_id}
+        memberOptions={memberOptions}
       />
     </>
   );

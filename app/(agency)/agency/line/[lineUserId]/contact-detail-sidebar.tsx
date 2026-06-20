@@ -1,5 +1,10 @@
 import Link from "next/link";
 
+import { ActivitySection } from "./activity-section";
+import { AssigneeSection } from "./assignee-section";
+import { NotesSection } from "./notes-section";
+import { TagsSection } from "./tags-section";
+
 /**
  * 右 サイドバー:選択中 友達 の 連絡先 詳細
  *
@@ -23,6 +28,8 @@ type Props = {
   linkMethod: "manual" | "code" | "liff_login" | null;
   unfollowedAt: string | null;
   createdAt: string;
+  assigneeUserId: string | null;
+  memberOptions: Array<{ userId: string; displayName: string }>;
 };
 
 export function ContactDetailSidebar({
@@ -34,6 +41,8 @@ export function ContactDetailSidebar({
   linkMethod,
   unfollowedAt,
   createdAt,
+  assigneeUserId,
+  memberOptions,
 }: Props) {
   return (
     <aside className="hidden w-72 shrink-0 flex-col overflow-y-auto border-l bg-white lg:flex">
@@ -80,28 +89,21 @@ export function ContactDetailSidebar({
         )}
       </div>
 
-      {/* ノート (プレースホルダ、 後日 実装) */}
-      <div className="space-y-2 border-b px-4 py-4">
-        <div className="flex items-baseline justify-between">
-          <p className="text-xs font-semibold">ノート</p>
-          <span className="text-muted-foreground text-[10px]">準備中</span>
-        </div>
-        <div className="rounded-md bg-slate-50 p-3 text-[11px] text-slate-600">
-          <p className="font-semibold">相手 と の やりとり を 記録 できます</p>
-          <p className="text-muted-foreground mt-1 leading-relaxed">
-            相手 の 情報 や 対応 の 記録、 引き継ぎ用 メモ などを 追加 できる ように なります。
-            (内部メモ。 相手 には 見えません)
-          </p>
-        </div>
-      </div>
+      {/* 担当者 */}
+      <AssigneeSection
+        lineUserId={lineUserId}
+        initialAssigneeUserId={assigneeUserId}
+        members={memberOptions}
+      />
 
-      {/* 利用履歴 (プレースホルダ、 後日 実装) */}
-      <div className="space-y-2 px-4 py-4">
-        <p className="text-xs font-semibold">利用履歴</p>
-        <p className="text-muted-foreground text-[11px]">
-          求人 興味 / 応募 / 面談 の タイムライン を 表示 (準備中)
-        </p>
-      </div>
+      {/* タグ */}
+      <TagsSection lineUserId={lineUserId} />
+
+      {/* ノート */}
+      <NotesSection lineUserId={lineUserId} />
+
+      {/* 利用履歴 */}
+      <ActivitySection lineUserId={lineUserId} />
     </aside>
   );
 }

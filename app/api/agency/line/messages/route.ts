@@ -4,7 +4,7 @@ import { z } from "zod";
 import { requireOrgMember } from "@/lib/api/auth-guards";
 import type { LineMessage } from "@/lib/line/api";
 import { getLineChannelByOrgId } from "@/lib/line/queries";
-import { sendMessages } from "@/lib/line/messaging";
+import { markConversationHandled, sendMessages } from "@/lib/line/messaging";
 import { createServiceClient } from "@/lib/supabase/service";
 
 /**
@@ -106,6 +106,9 @@ export async function POST(request: Request) {
       { status: 502 },
     );
   }
+
+  // 対応済 マーク (UI 一覧 の 要対応 タブ から 外れる)
+  await markConversationHandled(admin, guard.organization.id, lineUserId, guard.user.id);
 
   return NextResponse.json({
     ok: true,

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { requireOrgMember } from "@/lib/api/auth-guards";
 import { encryptField } from "@/lib/crypto/field-encryption";
 import { buildMeetingProposalMessage } from "@/lib/line/flex";
-import { sendMessages } from "@/lib/line/messaging";
+import { markConversationHandled, sendMessages } from "@/lib/line/messaging";
 import { getLineChannelByOrgId } from "@/lib/line/queries";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -126,6 +126,8 @@ export async function POST(request: Request) {
       { status: 502 },
     );
   }
+
+  await markConversationHandled(admin, guard.organization.id, input.lineUserId, guard.user.id);
 
   return NextResponse.json({
     ok: true,

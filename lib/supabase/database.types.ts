@@ -2052,6 +2052,115 @@ export type Database = {
           },
         ];
       };
+      line_conversation_notes: {
+        Row: {
+          created_at: string;
+          created_by_user_id: string | null;
+          encrypted_content: string;
+          id: string;
+          line_user_id: string;
+          organization_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by_user_id?: string | null;
+          encrypted_content: string;
+          id?: string;
+          line_user_id: string;
+          organization_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by_user_id?: string | null;
+          encrypted_content?: string;
+          id?: string;
+          line_user_id?: string;
+          organization_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "line_conversation_notes_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      line_conversation_tag_assignments: {
+        Row: {
+          assigned_at: string;
+          assigned_by_user_id: string | null;
+          line_user_id: string;
+          organization_id: string;
+          tag_id: string;
+        };
+        Insert: {
+          assigned_at?: string;
+          assigned_by_user_id?: string | null;
+          line_user_id: string;
+          organization_id: string;
+          tag_id: string;
+        };
+        Update: {
+          assigned_at?: string;
+          assigned_by_user_id?: string | null;
+          line_user_id?: string;
+          organization_id?: string;
+          tag_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "line_conversation_tag_assignments_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "line_conversation_tag_assignments_tag_id_fkey";
+            columns: ["tag_id"];
+            isOneToOne: false;
+            referencedRelation: "line_conversation_tags";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      line_conversation_tags: {
+        Row: {
+          color: string | null;
+          created_at: string;
+          id: string;
+          name: string;
+          organization_id: string;
+        };
+        Insert: {
+          color?: string | null;
+          created_at?: string;
+          id?: string;
+          name: string;
+          organization_id: string;
+        };
+        Update: {
+          color?: string | null;
+          created_at?: string;
+          id?: string;
+          name?: string;
+          organization_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "line_conversation_tags_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       line_link_codes: {
         Row: {
           client_record_id: string;
@@ -2273,9 +2382,14 @@ export type Database = {
       };
       line_user_links: {
         Row: {
+          assigned_at: string | null;
+          assigned_by_user_id: string | null;
+          assigned_to_user_id: string | null;
           client_record_id: string | null;
           created_at: string;
           display_name: string | null;
+          handled_at: string | null;
+          handled_by_user_id: string | null;
           id: string;
           line_user_id: string;
           link_method: string | null;
@@ -2287,9 +2401,14 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          assigned_at?: string | null;
+          assigned_by_user_id?: string | null;
+          assigned_to_user_id?: string | null;
           client_record_id?: string | null;
           created_at?: string;
           display_name?: string | null;
+          handled_at?: string | null;
+          handled_by_user_id?: string | null;
           id?: string;
           line_user_id: string;
           link_method?: string | null;
@@ -2301,9 +2420,14 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          assigned_at?: string | null;
+          assigned_by_user_id?: string | null;
+          assigned_to_user_id?: string | null;
           client_record_id?: string | null;
           created_at?: string;
           display_name?: string | null;
+          handled_at?: string | null;
+          handled_by_user_id?: string | null;
           id?: string;
           line_user_id?: string;
           link_method?: string | null;

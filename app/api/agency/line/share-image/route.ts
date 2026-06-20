@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireOrgMember } from "@/lib/api/auth-guards";
 import { encryptField } from "@/lib/crypto/field-encryption";
 import { pushMessage, replyMessage, type LineMessage } from "@/lib/line/api";
+import { markConversationHandled } from "@/lib/line/messaging";
 import { getLineChannelByOrgId } from "@/lib/line/queries";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -180,6 +181,8 @@ export async function POST(request: Request) {
     .from("line_messages")
     .update({ send_status: "sent", send_method: replyToken ? "reply" : "push" })
     .eq("id", insertedId);
+
+  await markConversationHandled(admin, guard.organization.id, lineUserId, guard.user.id);
 
   return NextResponse.json({
     ok: true,

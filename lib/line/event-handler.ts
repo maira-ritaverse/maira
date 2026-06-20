@@ -85,6 +85,13 @@ async function handleMessage(
   // ケース に 対応)。 プロフィール は LINE API から 取得 し、 失敗 しても 続行。
   await ensureLineUserLink(ctx, lineUserId);
 
+  // inbound 受信 = 「要対応」に 戻す (handled_at を NULL に)
+  await ctx.service
+    .from("line_user_links")
+    .update({ handled_at: null, handled_by_user_id: null })
+    .eq("organization_id", ctx.organizationId)
+    .eq("line_user_id", lineUserId);
+
   // text かつ 連携コード パターン に 一致 した 場合、 自動 消費 を 試みる。
   // 成功 すれば 「連携完了」system メッセージ を 残し、 元 の text は 保存しない
   // (機密 = コード 自体 は DB に 残さない)。

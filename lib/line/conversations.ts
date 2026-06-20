@@ -17,6 +17,7 @@ export type ConversationListItem = {
   displayName: string | null;
   pictureUrl: string | null;
   unfollowedAt: string | null;
+  handledAt: string | null;
   lastMessageAt: string | null;
   lastMessagePreview: string | null;
   lastMessageDirection: "inbound" | "outbound" | null;
@@ -52,7 +53,7 @@ export type ConversationMessage = {
 export async function listConversations(supabase: SupabaseClient): Promise<ConversationListItem[]> {
   const { data: linkData } = await supabase
     .from("line_user_links")
-    .select("line_user_id, client_record_id, display_name, picture_url, unfollowed_at");
+    .select("line_user_id, client_record_id, display_name, picture_url, unfollowed_at, handled_at");
 
   type LinkRow = {
     line_user_id: string;
@@ -60,6 +61,7 @@ export async function listConversations(supabase: SupabaseClient): Promise<Conve
     display_name: string | null;
     picture_url: string | null;
     unfollowed_at: string | null;
+    handled_at: string | null;
   };
   const links = (linkData ?? []) as LinkRow[];
 
@@ -110,6 +112,7 @@ export async function listConversations(supabase: SupabaseClient): Promise<Conve
         displayName: link.display_name,
         pictureUrl: link.picture_url,
         unfollowedAt: link.unfollowed_at,
+        handledAt: link.handled_at,
         lastMessageAt: lastAt,
         lastMessagePreview: preview,
         lastMessageDirection: direction,
