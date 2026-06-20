@@ -50,7 +50,7 @@ export default async function LineBroadcastsPage() {
 
   // 友達数 を 取得 (UI 表示 用)
   type CountResult = { count: number | null };
-  const [allCount, linkedCount, unlinkedCount] = await Promise.all([
+  const [allCount, linkedCount, unlinkedCount, jobsResult] = await Promise.all([
     supabase
       .from("line_user_links")
       .select("id", { count: "exact", head: true })
@@ -68,7 +68,27 @@ export default async function LineBroadcastsPage() {
       .is("unfollowed_at", null)
       .is("client_record_id", null)
       .then((r) => (r as unknown as CountResult).count ?? 0),
+    // 配信 候補 求人 (公開中、 最大 50 件、 最新 順)。 UI で picker から 選択 する。
+    supabase
+      .from("job_postings")
+      .select("id, company_name, position, status, created_at")
+      .eq("status", "published")
+      .order("created_at", { ascending: false })
+      .limit(50),
   ]);
+
+  type JobPickerRow = {
+    id: string;
+    company_name: string;
+    position: string;
+    status: string;
+    created_at: string;
+  };
+  const jobs = ((jobsResult.data ?? []) as JobPickerRow[]).map((j) => ({
+    id: j.id,
+    companyName: j.company_name,
+    position: j.position,
+  }));
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
@@ -87,6 +107,7 @@ export default async function LineBroadcastsPage() {
           allCount={allCount}
           linkedCount={linkedCount}
           unlinkedCount={unlinkedCount}
+          jobs={jobs}
         />
       </div>
     </div>

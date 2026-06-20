@@ -17,6 +17,10 @@
     {
       "path": "/api/internal/billing/trial-expire",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/internal/line/broadcasts-dispatch",
+      "schedule": "* * * * *"
     }
   ]
 }

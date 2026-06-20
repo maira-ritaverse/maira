@@ -18,6 +18,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { encryptField } from "@/lib/crypto/field-encryption";
 import { pushMessage, replyMessage, type LineMessage } from "./api";
+import { classifyLineError, type LineErrorClass } from "./errors";
 
 export type SendMessageResult =
   | {
@@ -29,6 +30,8 @@ export type SendMessageResult =
   | {
       ok: false;
       reason: string;
+      /** LINE 側 エラー の 分類 (UI で 人 が 読める メッセージ + リトライ 可否) */
+      errorClass?: LineErrorClass;
       // 失敗 でも DB には failed 状態 で 保存済み
       messageId?: string;
     };
@@ -145,12 +148,32 @@ export async function sendMessages(
     : await pushMessage(accessToken, lineUserId, messages);
 
   if (!result.ok) {
+    const errorClass = classifyLineError(result.status, result.message);
     // 失敗 状態 で 更新
     await service
       .from("line_messages")
-      .update({ send_status: "failed", send_error: result.message })
+      .update({
+        send_status: "failed",
+        send_error: `${errorClass.kind}: ${errorClass.message}`,
+      })
       .in("id", insertedIds);
-    return { ok: false, reason: `line_api_failed: ${result.message}`, messageId: insertedIds[0] };
+
+    // 友達 解除 / ブロック 検知 → line_user_links を unfollowed に マーク
+    if (errorClass.kind === "user_blocked") {
+      await service
+        .from("line_user_links")
+        .update({ unfollowed_at: new Date().toISOString() })
+        .eq("organization_id", organizationId)
+        .eq("line_user_id", lineUserId)
+        .is("unfollowed_at", null);
+    }
+
+    return {
+      ok: false,
+      reason: `line_api_failed: ${result.message}`,
+      errorClass,
+      messageId: insertedIds[0],
+    };
   }
 
   // 成功 → reply_token を クリア (= 消費済) + sent 状態 で 更新
