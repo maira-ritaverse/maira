@@ -7,7 +7,6 @@ import {
   Image as ImageIcon,
   Paperclip,
   Smile,
-  Video,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -18,7 +17,6 @@ import type { ConversationMessage } from "@/lib/line/conversations";
 import { COMMON_STICKERS, getStickerImageUrl } from "@/lib/line/stickers";
 
 import { MeetingProposePanel } from "@/components/features/meetings/meeting-propose-panel";
-import { QuickMeetingDialog } from "./quick-meeting-dialog";
 
 /**
  * LINE風 個別 チャット UI (Client Component)
@@ -50,8 +48,6 @@ type Props = {
     startsAt: string;
     joinUrl: string;
   }>;
-  /** 紐付け 済 client_records.id (= 面談 履歴 に 残す ため)。 未連携 友達 は null */
-  clientRecordId: string | null;
 };
 
 // 受信 メッセージ 反映 の レイテンシー。 3 秒 = 1 分 で 20 回 = Vercel
@@ -65,7 +61,6 @@ export function LineConversationClient({
   unfollowed,
   jobOptions,
   scheduledMeetings,
-  clientRecordId,
 }: Props) {
   const [messages, setMessages] = useState<ConversationMessage[]>(initialMessages);
   const [text, setText] = useState("");
@@ -75,7 +70,6 @@ export function LineConversationClient({
   const [jobShareOpen, setJobShareOpen] = useState(false);
   const [selectedJobIds, setSelectedJobIds] = useState<string[]>([]);
   const [meetingProposeOpen, setMeetingProposeOpen] = useState(false);
-  const [quickMeetingOpen, setQuickMeetingOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // 最下部 へ スクロール
@@ -334,19 +328,6 @@ export function LineConversationClient({
         />
       )}
 
-      {/* クイック 会議 ダイアログ (Zoom / Meet を 即時 作成 + URL を LINE で 送信) */}
-      {quickMeetingOpen && (
-        <QuickMeetingDialog
-          lineUserId={lineUserId}
-          clientRecordId={clientRecordId}
-          onClose={() => setQuickMeetingOpen(false)}
-          onSent={async () => {
-            setQuickMeetingOpen(false);
-            await refresh();
-          }}
-        />
-      )}
-
       {/* 求人 共有 パネル (展開時 だけ 表示) */}
       {jobShareOpen && (
         <div className="space-y-2 border-t bg-white p-3">
@@ -484,17 +465,6 @@ export function LineConversationClient({
             className="shrink-0"
           >
             <CalendarClock className="size-4" aria-hidden />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setQuickMeetingOpen(true)}
-            disabled={unfollowed || sending}
-            aria-label="クイック 会議 URL を 送信"
-            title="クイック 会議 (Zoom / Meet を 即時 作成 して URL を 送信)"
-            className="shrink-0"
-          >
-            <Video className="size-4" aria-hidden />
           </Button>
           <textarea
             value={text}

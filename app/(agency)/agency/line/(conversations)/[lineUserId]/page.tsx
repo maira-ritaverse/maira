@@ -206,7 +206,6 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
           unfollowed={link.unfollowed_at !== null}
           jobOptions={jobOptions}
           scheduledMeetings={scheduledMeetings}
-          clientRecordId={link.client_record_id}
         />
       </div>
 
