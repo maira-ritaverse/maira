@@ -27,7 +27,17 @@ export type MeetingHistoryEntry = MeetingScheduleView & {
 
 export async function MeetingHistorySection({ clientRecordId }: Props) {
   const supabase = await createClient();
-  const meetings = await listMeetingsByClientRecord(supabase, clientRecordId);
+  const [meetings, lineLinkRes] = await Promise.all([
+    listMeetingsByClientRecord(supabase, clientRecordId),
+    // 紐付け 済 LINE 友達 (= meeting URL を LINE に 送信 可能 か どうか)
+    supabase
+      .from("line_user_links")
+      .select("line_user_id, unfollowed_at")
+      .eq("client_record_id", clientRecordId)
+      .is("unfollowed_at", null)
+      .maybeSingle(),
+  ]);
+  const lineUserId = (lineLinkRes.data as { line_user_id: string } | null)?.line_user_id ?? null;
 
   if (meetings.length === 0) {
     return (
@@ -76,7 +86,7 @@ export async function MeetingHistorySection({ clientRecordId }: Props) {
         <h2 className="text-base font-semibold">面談履歴</h2>
         <span className="text-muted-foreground text-xs">{entries.length} 件</span>
       </div>
-      <MeetingHistoryClient entries={entries} />
+      <MeetingHistoryClient entries={entries} lineUserId={lineUserId} />
     </Card>
   );
 }

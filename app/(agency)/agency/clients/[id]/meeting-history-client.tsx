@@ -9,7 +9,7 @@
  */
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileText } from "lucide-react";
+import { FileText, MessageCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -20,6 +20,8 @@ import type { MeetingHistoryEntry } from "./meeting-history-section";
 
 type Props = {
   entries: MeetingHistoryEntry[];
+  /** LINE 友達 紐付け 済 の line_user_id (= LINE で URL 送信 可能 か どうか の 判定) */
+  lineUserId: string | null;
 };
 
 function fmt(iso: string): string {
@@ -54,10 +56,37 @@ function statusBadge(m: MeetingHistoryEntry): { label: string; tone: string } {
   return { label: "予約済", tone: "bg-blue-100 text-blue-700" };
 }
 
-export function MeetingHistoryClient({ entries }: Props) {
+export function MeetingHistoryClient({ entries, lineUserId }: Props) {
   const router = useRouter();
   const [transcriptEntry, setTranscriptEntry] = useState<MeetingHistoryEntry | null>(null);
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [sendErrorId, setSendErrorId] = useState<{ id: string; message: string } | null>(null);
   const refresh = () => router.refresh();
+
+  const onSendLine = async (m: MeetingHistoryEntry) => {
+    if (!lineUserId) return;
+    setSendingId(m.id);
+    setSendErrorId(null);
+    try {
+      const text =
+        `${m.title} の 日程 を ご案内 します。\n` +
+        `日時: ${fmt(m.startsAt)}\n` +
+        `参加 URL (${providerLabel(m.provider)}):\n${m.joinUrl}`;
+      const res = await fetch("/api/agency/line/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lineUserId, text }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(body?.message ?? `HTTP ${res.status}`);
+      }
+    } catch (e) {
+      setSendErrorId({ id: m.id, message: e instanceof Error ? e.message : "送信 失敗" });
+    } finally {
+      setSendingId(null);
+    }
+  };
 
   return (
     <>
@@ -103,8 +132,23 @@ export function MeetingHistoryClient({ entries }: Props) {
                     文字起こし
                   </Button>
                 )}
+                {lineUserId && m.status !== "canceled" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void onSendLine(m)}
+                    disabled={sendingId === m.id}
+                    title="この 会議 の URL を LINE で 送信"
+                  >
+                    <MessageCircle className="size-3.5" />
+                    {sendingId === m.id ? "送信中..." : "LINE 送信"}
+                  </Button>
+                )}
                 <MeetingActionMenu meeting={m} onChanged={refresh} />
               </div>
+              {sendErrorId?.id === m.id && (
+                <p className="ml-2 text-[10px] text-red-700">{sendErrorId.message}</p>
+              )}
             </li>
           );
         })}

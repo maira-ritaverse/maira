@@ -14,6 +14,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
+import { getGoogleAccessToken } from "@/lib/integrations/google-token";
+import { createGoogleMeetEvent } from "@/lib/integrations/google-meet";
 import { createZoomMeeting } from "@/lib/integrations/zoom-meeting";
 import { getZoomAccessToken } from "@/lib/integrations/zoom-token";
 import { getMessageContent, getUserProfile, replyMessage } from "./api";
@@ -534,6 +536,8 @@ async function confirmMeetingProposal(
     consumed_at: string | null;
     consumed_slot_index: number | null;
     consumed_meeting_schedule_id: string | null;
+    /** 20260630000001 で 追加。 後方 互換 で デフォルト 'zoom' */
+    provider: "zoom" | "google_meet";
   };
   const proposal = proposalRow as ProposalRow | null;
   if (!proposal) {
@@ -568,35 +572,52 @@ async function confirmMeetingProposal(
     ? ((await decryptField(proposal.encrypted_agenda)) ?? "")
     : "";
 
-  // Zoom 会議 作成 (発行者 = エージェント 本人 の Zoom 連携)
+  // 会議 作成 (proposal.provider に 応じて Zoom / Google Meet を 切替)
   let joinUrl: string | null = null;
-  let zoomMeetingId: string | null = null;
+  let externalMeetingId: string | null = null;
   let hostUrl: string | null = null;
   let passcode: string | null = null;
   try {
-    const zoomCtx = await getZoomAccessToken({
-      service: ctx.service,
-      byUserId: proposal.created_by_user_id,
-    });
-    const zoomMeeting = await createZoomMeeting(zoomCtx.accessToken, {
-      topic: proposal.title,
-      startTime: slot.startsAt,
-      durationMinutes: proposal.duration_minutes,
-      agenda: agendaText,
-    });
-    joinUrl = zoomMeeting.join_url;
-    zoomMeetingId = String(zoomMeeting.id);
-    hostUrl = zoomMeeting.start_url;
-    passcode = zoomMeeting.password ?? null;
+    if (proposal.provider === "google_meet") {
+      const googleCtx = await getGoogleAccessToken({
+        service: ctx.service,
+        userId: proposal.created_by_user_id,
+      });
+      const { event: gEvent, meetUrl } = await createGoogleMeetEvent(googleCtx.accessToken, {
+        summary: proposal.title,
+        description: agendaText,
+        startsAt: slot.startsAt,
+        endsAt: slot.endsAt,
+        timezone: "Asia/Tokyo",
+      });
+      joinUrl = meetUrl;
+      externalMeetingId = gEvent.id ?? null;
+    } else {
+      const zoomCtx = await getZoomAccessToken({
+        service: ctx.service,
+        byUserId: proposal.created_by_user_id,
+      });
+      const zoomMeeting = await createZoomMeeting(zoomCtx.accessToken, {
+        topic: proposal.title,
+        startTime: slot.startsAt,
+        durationMinutes: proposal.duration_minutes,
+        agenda: agendaText,
+      });
+      joinUrl = zoomMeeting.join_url;
+      externalMeetingId = String(zoomMeeting.id);
+      hostUrl = zoomMeeting.start_url;
+      passcode = zoomMeeting.password ?? null;
+    }
   } catch (err) {
-    console.warn("[line/postback] zoom create failed", err);
+    console.warn("[line/postback] meeting create failed", { provider: proposal.provider, err });
+    const providerLabel = proposal.provider === "google_meet" ? "Google Meet" : "Zoom";
     await replyMessage(ctx.accessToken, event.replyToken, [
       {
         type: "text",
-        text: "Zoom 会議 の 作成 に 失敗 しました。 担当 から 改めて ご連絡 します。",
+        text: `${providerLabel} 会議 の 作成 に 失敗 しました。 担当 から 改めて ご連絡 します。`,
       },
     ]);
-    return { ok: false, type: "postback", reason: "zoom_create_failed" };
+    return { ok: false, type: "postback", reason: "meeting_create_failed" };
   }
 
   // meeting_schedules INSERT
@@ -606,8 +627,8 @@ async function confirmMeetingProposal(
       organization_id: ctx.organizationId,
       host_user_id: proposal.created_by_user_id,
       client_record_id: proposal.client_record_id,
-      provider: "zoom",
-      external_meeting_id: zoomMeetingId,
+      provider: proposal.provider,
+      external_meeting_id: externalMeetingId,
       join_url: joinUrl,
       host_url: hostUrl,
       passcode,

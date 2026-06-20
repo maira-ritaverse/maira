@@ -31,6 +31,8 @@ const bodySchema = z.object({
   slots: z.array(z.string().datetime()).min(1).max(12),
   expiresInHours: z.number().int().min(1).max(720).default(168),
   introText: z.string().max(500).optional(),
+  /** 候補 選択 時 に 作成 する 会議 プロバイダ。 デフォルト Zoom (後方 互換) */
+  provider: z.enum(["zoom", "google_meet"]).default("zoom"),
 });
 
 export async function POST(request: Request) {
@@ -94,6 +96,7 @@ export async function POST(request: Request) {
       duration_minutes: input.durationMinutes,
       candidates,
       expires_at: expiresAt.toISOString(),
+      provider: input.provider,
     })
     .select("id")
     .single();

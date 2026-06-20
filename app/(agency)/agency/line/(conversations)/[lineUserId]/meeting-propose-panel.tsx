@@ -31,6 +31,7 @@ export function MeetingProposePanel({ lineUserId, onSent, onClose, unfollowed }:
   const [agenda, setAgenda] = useState("");
   const [durationMinutes, setDurationMinutes] = useState(30);
   const [slots, setSlots] = useState<string[]>([""]);
+  const [provider, setProvider] = useState<"zoom" | "google_meet">("zoom");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,6 +80,7 @@ export function MeetingProposePanel({ lineUserId, onSent, onClose, unfollowed }:
           agenda: agenda || undefined,
           durationMinutes,
           slots: isoSlots,
+          provider,
         }),
       });
       const body = (await res.json().catch(() => null)) as
@@ -121,6 +123,30 @@ export function MeetingProposePanel({ lineUserId, onSent, onClose, unfollowed }:
             onChange={(e) => setTitle(e.target.value)}
             placeholder="例: 初回面談"
           />
+        </div>
+
+        <div className="col-span-2 space-y-1">
+          <Label className="text-xs">会議 プロバイダ</Label>
+          <div className="inline-flex rounded-md ring-1 ring-slate-200">
+            <button
+              type="button"
+              onClick={() => setProvider("zoom")}
+              className={`rounded-l-md px-3 py-1 text-xs font-medium ${
+                provider === "zoom" ? "bg-emerald-500 text-white" : "bg-white text-slate-600"
+              }`}
+            >
+              Zoom
+            </button>
+            <button
+              type="button"
+              onClick={() => setProvider("google_meet")}
+              className={`rounded-r-md px-3 py-1 text-xs font-medium ${
+                provider === "google_meet" ? "bg-emerald-500 text-white" : "bg-white text-slate-600"
+              }`}
+            >
+              Google Meet
+            </button>
+          </div>
         </div>
         <div className="space-y-1">
           <Label htmlFor="propose-duration" className="text-xs">
