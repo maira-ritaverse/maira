@@ -63,10 +63,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // Launcher/Window 自体は内部で「現在の応募ID」を見て表示制御するので、
     // 応募詳細ページ以外では何も描画されない。
     <PopupChatProvider>
-      <div className="bg-background flex min-h-screen">
+      {/* h-screen overflow-hidden で サイドバー / ヘッダー を 固定、 main 内 のみ スクロール。 */}
+      <div className="bg-background flex h-screen overflow-hidden">
         <AppSidebar invitedCount={invitedCount} />
-        <div className="flex flex-1 flex-col">
-          <header className="flex h-14 items-center justify-end gap-1 border-b px-4">
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <header className="flex h-14 shrink-0 items-center justify-end gap-1 border-b px-4">
             <NotificationBell />
             <UserMenu email={user.email ?? ""} displayName={profile?.display_name ?? null} />
           </header>

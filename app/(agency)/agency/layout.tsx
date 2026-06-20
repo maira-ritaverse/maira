@@ -51,11 +51,15 @@ export default async function AgencyLayout({ children }: { children: React.React
   const requirePolicy = needsToAccept(policyAcceptance);
   const hasPriorPolicy = policyAcceptance.acceptedAt !== null;
 
+  // 親 を h-screen overflow-hidden に する こと で:
+  //   ・サイドバー は 100vh で 固定 され、 ページ スクロール しても 動か ない
+  //   ・main 内 だけ overflow-auto で スクロール する
+  //   ・ヘッダー も main column の トップ で 固定 表示 さ れる
   return (
-    <div className="bg-background flex min-h-screen">
+    <div className="bg-background flex h-screen overflow-hidden">
       <AgencySidebar organizationName={role.organization.name} memberRole={role.member.role} />
-      <div className="flex flex-1 flex-col">
-        <header className="flex h-14 items-center justify-end gap-2 border-b px-4">
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <header className="flex h-14 shrink-0 items-center justify-end gap-2 border-b px-4">
           <NotificationBell />
           <UserMenu email={user.email ?? ""} displayName={profile?.display_name ?? null} />
         </header>

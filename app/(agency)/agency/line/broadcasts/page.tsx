@@ -1,21 +1,21 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { getMyLineChannel } from "@/lib/line/queries";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient } from "@/lib/supabase/server";
 
-import { BroadcastsClient } from "./broadcasts-client";
+import { BroadcastHistory } from "./broadcasts-client";
 
 /**
  * /agency/line/broadcasts
  *
- * 一斉配信 (LINE Multicast) ページ。
+ * LINE 一斉配信 履歴 ページ。
  *
- * 機能:
- *   ・配信 作成 (テキスト、 ターゲット = 全 / 連携済 / 未連携)
- *   ・配信履歴 + 統計 (sent / failed / 課金通数)
+ * 新規 配信 の 作成 は サイドバー の 「LINE設定」 (/agency/line/settings) で
+ * 行う 設計 に 分離 した。 ここ は 過去 の 配信 結果 を 閲覧 する 専用 画面。
  */
 export const dynamic = "force-dynamic";
 
@@ -35,7 +35,7 @@ export default async function LineBroadcastsPage() {
   if (!channel) {
     return (
       <div className="mx-auto max-w-3xl space-y-4">
-        <h1 className="text-2xl font-bold">LINE 一斉配信</h1>
+        <h1 className="text-2xl font-bold">LINE 一斉配信 履歴</h1>
         <Card className="p-6">
           <p className="text-sm">
             LINE 公式アカウント が まだ 接続 されて いません。{" "}
@@ -48,68 +48,28 @@ export default async function LineBroadcastsPage() {
     );
   }
 
-  // 友達数 を 取得 (UI 表示 用)
-  type CountResult = { count: number | null };
-  const [allCount, linkedCount, unlinkedCount, jobsResult] = await Promise.all([
-    supabase
-      .from("line_user_links")
-      .select("id", { count: "exact", head: true })
-      .is("unfollowed_at", null)
-      .then((r) => (r as unknown as CountResult).count ?? 0),
-    supabase
-      .from("line_user_links")
-      .select("id", { count: "exact", head: true })
-      .is("unfollowed_at", null)
-      .not("client_record_id", "is", null)
-      .then((r) => (r as unknown as CountResult).count ?? 0),
-    supabase
-      .from("line_user_links")
-      .select("id", { count: "exact", head: true })
-      .is("unfollowed_at", null)
-      .is("client_record_id", null)
-      .then((r) => (r as unknown as CountResult).count ?? 0),
-    // 配信 候補 求人 (公開中、 最大 50 件、 最新 順)。 UI で picker から 選択 する。
-    supabase
-      .from("job_postings")
-      .select("id, company_name, position, status, created_at")
-      .eq("status", "published")
-      .order("created_at", { ascending: false })
-      .limit(50),
-  ]);
-
-  type JobPickerRow = {
-    id: string;
-    company_name: string;
-    position: string;
-    status: string;
-    created_at: string;
-  };
-  const jobs = ((jobsResult.data ?? []) as JobPickerRow[]).map((j) => ({
-    id: j.id,
-    companyName: j.company_name,
-    position: j.position,
-  }));
-
   return (
-    <div className="flex-1 overflow-y-auto p-6">
-      <div className="mx-auto max-w-3xl space-y-4">
-        <div className="flex items-baseline justify-between gap-2">
-          <h1 className="text-2xl font-bold">LINE 一斉配信</h1>
+    <div className="mx-auto max-w-3xl space-y-4">
+      <div className="flex items-baseline justify-between gap-2">
+        <h1 className="text-2xl font-bold">LINE 一斉配信 履歴</h1>
+        <div className="flex items-center gap-3">
           <Link
             href="/agency/line"
             className="text-muted-foreground hover:text-foreground text-xs underline"
           >
             ← トーク 一覧
           </Link>
+          <Button
+            size="sm"
+            className="bg-[#06C755] text-white hover:bg-[#05a647]"
+            render={<Link href="/agency/line/settings" />}
+          >
+            新規 配信 を 作成
+          </Button>
         </div>
-
-        <BroadcastsClient
-          allCount={allCount}
-          linkedCount={linkedCount}
-          unlinkedCount={unlinkedCount}
-          jobs={jobs}
-        />
       </div>
+
+      <BroadcastHistory />
     </div>
   );
 }

@@ -29,6 +29,14 @@ const BASE_ITEMS: ItemDescriptor[] = [
   { id: "calendar", href: "/agency/calendar", icon: "calendar", defaultLabel: "カレンダー" },
   { id: "meetings", href: "/agency/meetings", icon: "video", defaultLabel: "面談" },
   { id: "line", href: "/agency/line", icon: "message", defaultLabel: "LINE" },
+  // LINE 設定: 新規 一斉配信 (テキスト / 求人 / 予約) を 登録 する 設定 画面。
+  // /agency/line (トーク 一覧 + 履歴) と は 役割 が 違う ので 別 項目 に。
+  {
+    id: "line-settings",
+    href: "/agency/line/settings",
+    icon: "megaphone",
+    defaultLabel: "LINE設定",
+  },
   { id: "marketing", href: "/agency/marketing", icon: "megaphone", defaultLabel: "マーケティング" },
   { id: "announcements", href: "/agency/announcements", icon: "bell", defaultLabel: "お知らせ" },
   { id: "reports", href: "/agency/reports", icon: "reports", defaultLabel: "レポート" },
@@ -44,6 +52,7 @@ const DEFAULT_LAYOUT: SidebarLayout = {
     "calendar",
     "meetings",
     "line",
+    "line-settings",
     "marketing",
     "announcements",
     "reports",
