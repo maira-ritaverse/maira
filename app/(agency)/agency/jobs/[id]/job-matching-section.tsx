@@ -1,9 +1,14 @@
 "use client";
 
-import { useMemo } from "react";
+import { Plus } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { getErrorMessage } from "@/lib/api/client-fetch";
 import { clientStatusLabels, type ClientRecordWithAssignee } from "@/lib/clients/types";
 import type { JobPosting } from "@/lib/jobs/types";
 import { rankMatches, type MatchReason } from "@/lib/matching/score";
@@ -45,6 +50,37 @@ export function JobMatchingSection({
   clients,
   alreadyAppliedClientIds,
 }: JobMatchingSectionProps) {
+  const router = useRouter();
+  const [addingId, setAddingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+
+  const onAddToRecommendation = async (clientRecordId: string) => {
+    setAddingId(clientRecordId);
+    setError(null);
+    try {
+      const res = await fetch("/api/agency/referrals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_record_id: clientRecordId,
+          job_posting_id: job.id,
+        }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? `HTTP ${res.status}`);
+      }
+      // 楽観的に 一覧 から 即時 隠す + サーバ 推薦中 セクション を 再取得
+      setHiddenIds((s) => new Set([...s, clientRecordId]));
+      router.refresh();
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setAddingId(null);
+    }
+  };
+
   const matches = useMemo(() => {
     const excluded = new Set(alreadyAppliedClientIds);
     const jobInput = {
@@ -90,55 +126,73 @@ export function JobMatchingSection({
         </span>
       </div>
 
-      {matches.length === 0 ? (
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {matches.filter((m) => !hiddenIds.has(m.client.id)).length === 0 ? (
         <p className="text-muted-foreground py-6 text-center text-sm">
           該当する顧客がいません。求人条件 / 顧客の希望条件 をご確認ください。
         </p>
       ) : (
         <ul className="divide-foreground/10 divide-y">
-          {matches.map((m) => (
-            <li key={m.client.id} className="py-3">
-              <Link
-                href={`/agency/clients/${m.client.id}`}
-                className="hover:bg-accent flex flex-wrap items-start justify-between gap-3 rounded px-1 py-1"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-baseline gap-2">
-                    <span className="font-medium">{m.client.name}</span>
-                    <span className="text-muted-foreground text-xs">
-                      {clientStatusLabels[m.client.status]}
-                    </span>
-                    <span className="text-muted-foreground text-xs">
-                      担当:{m.client.assigneeName ?? "未割当"}
-                    </span>
-                  </div>
-                  <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-xs">
-                    {m.client.prefecture && <span>勤務地:{m.client.prefecture}</span>}
-                    {m.client.desiredAnnualIncome !== null && (
-                      <span>希望年収 {m.client.desiredAnnualIncome} 万円</span>
-                    )}
-                    {m.client.currentEmploymentType && (
-                      <span>現雇用 {m.client.currentEmploymentType}</span>
-                    )}
-                  </div>
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    {m.reasons.map((r) => (
-                      <span
-                        key={r}
-                        className={`inline-block rounded-full px-2 py-0.5 text-[10px] ${REASON_TONE[r]}`}
-                      >
-                        {REASON_LABEL[r]}
+          {matches
+            .filter((m) => !hiddenIds.has(m.client.id))
+            .map((m) => (
+              <li key={m.client.id} className="py-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <Link
+                    href={`/agency/clients/${m.client.id}`}
+                    className="hover:bg-accent min-w-0 flex-1 rounded px-1 py-1"
+                  >
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="font-medium">{m.client.name}</span>
+                      <span className="text-muted-foreground text-xs">
+                        {clientStatusLabels[m.client.status]}
                       </span>
-                    ))}
+                      <span className="text-muted-foreground text-xs">
+                        担当:{m.client.assigneeName ?? "未割当"}
+                      </span>
+                    </div>
+                    <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-xs">
+                      {m.client.prefecture && <span>勤務地:{m.client.prefecture}</span>}
+                      {m.client.desiredAnnualIncome !== null && (
+                        <span>希望年収 {m.client.desiredAnnualIncome} 万円</span>
+                      )}
+                      {m.client.currentEmploymentType && (
+                        <span>現雇用 {m.client.currentEmploymentType}</span>
+                      )}
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {m.reasons.map((r) => (
+                        <span
+                          key={r}
+                          className={`inline-block rounded-full px-2 py-0.5 text-[10px] ${REASON_TONE[r]}`}
+                        >
+                          {REASON_LABEL[r]}
+                        </span>
+                      ))}
+                    </div>
+                  </Link>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <div className="text-right">
+                      <div className="text-2xl font-bold tabular-nums">{m.score}</div>
+                      <div className="text-muted-foreground text-[10px]">/100</div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => void onAddToRecommendation(m.client.id)}
+                      disabled={addingId === m.client.id}
+                    >
+                      <Plus className="mr-1 size-3.5" aria-hidden />
+                      {addingId === m.client.id ? "追加中..." : "推薦に追加"}
+                    </Button>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold tabular-nums">{m.score}</div>
-                  <div className="text-muted-foreground text-[10px]">/100</div>
-                </div>
-              </Link>
-            </li>
-          ))}
+              </li>
+            ))}
         </ul>
       )}
     </Card>
