@@ -386,10 +386,13 @@ async function handlePostback(
     const jobId = data.slice("job_interest:".length);
 
     // 求人 と 友達 の 情報 を 並列 取得
-    const [{ data: jobRow }, { data: linkRow }] = await Promise.all([
+    //  ※ job_postings に client_record_id 列 は 無い (求人 と クライアント は
+    //     referrals 経由 で N:N)。 余計な 列 を 入れる と SELECT 全体 が 失敗
+    //     する ので 列 を 厳選 する。
+    const [jobResult, linkResult] = await Promise.all([
       ctx.service
         .from("job_postings")
-        .select("id, company_name, position, client_record_id")
+        .select("id, company_name, position")
         .eq("id", jobId)
         .maybeSingle(),
       ctx.service
@@ -399,13 +402,18 @@ async function handlePostback(
         .eq("line_user_id", lineUserId)
         .maybeSingle(),
     ]);
-    const job = jobRow as {
+    if (jobResult.error) {
+      console.warn("[line/job_interest] job lookup failed", {
+        jobId,
+        message: jobResult.error.message,
+      });
+    }
+    const job = jobResult.data as {
       id: string;
       company_name: string;
       position: string;
-      client_record_id: string | null;
     } | null;
-    const friend = linkRow as {
+    const friend = linkResult.data as {
       display_name: string | null;
       client_record_id: string | null;
     } | null;
