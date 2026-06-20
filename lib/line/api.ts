@@ -273,6 +273,24 @@ export async function testWebhookEndpoint(accessToken: string): Promise<Result<W
 // → 手動 で LIFF ID を 設定 してもらう (LiffForm)。
 
 /**
+ * メッセージ を 「既読」 に マーク (LINE → 求職者 の 1:1 トーク で 既読 表示)。
+ * POST /v2/bot/message/markAsRead
+ *
+ * 前提:Bot の チャネル 基本設定 で 「メッセージ既読モード」 = manual に なって いる こと。
+ * auto モード の 場合 は 自動 で 既読 が 付く ので この API は 不要 (呼出時 400)。
+ *
+ * 公式: https://developers.line.biz/ja/reference/messaging-api/#mark-messages-as-read
+ */
+export async function markChatAsRead(
+  accessToken: string,
+  chatId: string,
+): Promise<Result<unknown>> {
+  return await postJson(`${LINE_API_BASE}/bot/message/markAsRead`, accessToken, {
+    chat: { chatId },
+  });
+}
+
+/**
  * Rich Menu を デフォルト として 設定 (全 未個別設定 ユーザー に 適用)。
  * POST /v2/bot/user/all/richmenu/{richMenuId}
  */

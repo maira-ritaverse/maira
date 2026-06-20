@@ -131,6 +131,44 @@ export function LineChannelStatus({ channel }: Props) {
         )}
       </div>
 
+      <div className="rounded-md border border-amber-200 bg-amber-50/80 p-3 text-[11px]">
+        <p className="font-semibold text-amber-900">
+          求職者 側 に 「既読」 を 表示 する 設定 (任意)
+        </p>
+        <ol className="mt-1 ml-4 list-decimal space-y-0.5 text-amber-900">
+          <li>
+            <a
+              href="https://manager.line.biz/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+            >
+              LINE Official Account Manager
+            </a>{" "}
+            → 設定 → 応答設定 → 「チャット」 を On
+          </li>
+          <li>
+            <a
+              href="https://developers.line.biz/console/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+            >
+              LINE Developers コンソール
+            </a>{" "}
+            → 該当 Messaging API チャネル → 「Messaging API 設定」 →{" "}
+            <strong>「LINE Official Account 機能」</strong> 内 の{" "}
+            <strong>「メッセージ既読モード」</strong> を <strong>「手動 (manual)」</strong> に 変更
+          </li>
+          <li>Maira で トーク を 開く たび に 自動で 「既読」 が 求職者 側 に 反映 されます</li>
+        </ol>
+        <p className="mt-2 text-[10px] text-amber-800">
+          ※ 初期 設定 (auto) の まま でも 求職者 が メッセージ を 送って すぐ 既読 になる ので
+          大きな 差は ありません。 「Maira で 開いた タイミング = 既読」 と したい 場合 だけ 上記
+          設定 して ください。
+        </p>
+      </div>
+
       <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
         <p className="text-muted-foreground text-[11px] font-semibold">
           Webhook URL (LINE Developers に 貼り付け)

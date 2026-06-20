@@ -1,13 +1,15 @@
 import { notFound, redirect } from "next/navigation";
 
+import { markChatAsRead } from "@/lib/line/api";
 import { listConversationMessages, markConversationRead } from "@/lib/line/conversations";
-import { getMyLineChannel } from "@/lib/line/queries";
+import { getLineChannelByOrgId, getMyLineChannel } from "@/lib/line/queries";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
 import { ContactDetailSidebar } from "./contact-detail-sidebar";
 import { LineConversationClient } from "./line-conversation-client";
+import { SidebarRefresh } from "./sidebar-refresh";
 
 /**
  * /agency/line/[lineUserId]
@@ -126,10 +128,25 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
     }));
   }
 
-  // 既読化 (service_role)
+  // 既読化:
+  //   1) Maira DB の line_messages.read_at を 更新 (内部 未読 集計 用)
+  //   2) LINE 側 にも 既読 信号 を 送る (求職者 の 1:1 トーク で 「既読」 表示)
+  //      manual モード の Bot のみ 動作。 auto モード は 400 で 失敗 する が 既読 は 既に 自動。
   try {
     const admin = createServiceClient();
     await markConversationRead(admin, role.organization.id, lineUserId);
+
+    const channelWithToken = await getLineChannelByOrgId(admin, role.organization.id);
+    if (channelWithToken) {
+      const result = await markChatAsRead(channelWithToken.channelAccessToken, lineUserId);
+      if (!result.ok && result.status !== 400) {
+        // 400 = auto モード や 仕様未対応 で 想定内。 それ以外 は warn ログ。
+        console.warn("[line/mark-read] LINE markAsRead failed", {
+          status: result.status,
+          message: result.message,
+        });
+      }
+    }
   } catch {
     // 既読化 失敗 は 致命的でない
   }
@@ -158,6 +175,9 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
 
   return (
     <>
+      {/* 開いた タイミング で サイドバー 未読バッジ を 更新 */}
+      <SidebarRefresh lineUserId={lineUserId} />
+
       {/* 中央: ヘッダー + チャット + 入力欄 */}
       <div className="flex min-w-0 flex-1 flex-col bg-slate-100">
         <header className="flex items-center gap-3 border-b bg-white px-4 py-2.5">
