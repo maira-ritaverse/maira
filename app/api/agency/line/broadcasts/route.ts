@@ -55,7 +55,7 @@ export async function GET() {
     message_type: string;
     target_filter: {
       kind: "all" | "linked" | "unlinked";
-      tags?: string[];
+      tagIds?: string[];
       jobIds?: string[];
     };
     target_count: number;
@@ -75,7 +75,7 @@ export async function GET() {
       createdByUserId: b.created_by_user_id,
       messageType: b.message_type,
       targetKind: b.target_filter.kind,
-      tags: b.target_filter.tags ?? null,
+      tagIds: b.target_filter.tagIds ?? null,
       jobIds: b.target_filter.jobIds ?? null,
       targetCount: b.target_count,
       status: b.status,
@@ -89,22 +89,22 @@ export async function GET() {
   });
 }
 
-// tags は 0 〜 20 件、 1 タグ ≤ 50 字。 0 件 = フィルタ なし。
-const tagsField = z.array(z.string().min(1).max(50)).max(20).optional();
+// tagIds は line_conversation_tags.id の 配列。 0 〜 20 件。
+const tagIdsField = z.array(z.string().uuid()).max(20).optional();
 
 const bodySchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("text"),
     text: z.string().min(1).max(5000),
     target: z.enum(["all", "linked", "unlinked"]),
-    tags: tagsField,
+    tagIds: tagIdsField,
     scheduledFor: z.string().datetime().optional(),
   }),
   z.object({
     kind: z.literal("job"),
     jobIds: z.array(z.string().uuid()).min(1).max(12),
     target: z.enum(["all", "linked", "unlinked"]),
-    tags: tagsField,
+    tagIds: tagIdsField,
     scheduledFor: z.string().datetime().optional(),
   }),
 ]);
@@ -132,7 +132,7 @@ export async function POST(request: Request) {
   const userIds = await resolveBroadcastTargetLineUserIds(admin, {
     organizationId: guard.organization.id,
     target: parsed.data.target,
-    tags: parsed.data.tags ?? null,
+    tagIds: parsed.data.tagIds ?? null,
   });
 
   if (userIds.length === 0) {
@@ -249,7 +249,9 @@ export async function POST(request: Request) {
       message_type: messageType,
       target_filter: {
         kind: parsed.data.target,
-        ...(parsed.data.tags && parsed.data.tags.length > 0 ? { tags: parsed.data.tags } : {}),
+        ...(parsed.data.tagIds && parsed.data.tagIds.length > 0
+          ? { tagIds: parsed.data.tagIds }
+          : {}),
         ...(jobIdsForFilter ? { jobIds: jobIdsForFilter } : {}),
       },
       target_count: userIds.length,

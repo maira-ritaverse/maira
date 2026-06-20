@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Card } from "@/components/ui/card";
-import { getOrganizationCrmTagsStats } from "@/lib/clients/queries";
+import { getOrganizationLineTagsStats } from "@/lib/line/conversation-tags";
 import { getMyLineChannel } from "@/lib/line/queries";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient } from "@/lib/supabase/server";
@@ -82,7 +82,7 @@ export default async function LineSettingsPage() {
       .eq("status", "open")
       .order("created_at", { ascending: false })
       .limit(50),
-    getOrganizationCrmTagsStats(role.organization.id),
+    getOrganizationLineTagsStats(role.organization.id),
   ]);
 
   type JobPickerRow = {
@@ -122,8 +122,8 @@ export default async function LineSettingsPage() {
         jobs={jobs}
         availableTags={tagsStats.tags}
         tagsDiagnostics={{
-          totalClients: tagsStats.totalClients,
-          withTagsClients: tagsStats.withTagsClients,
+          totalTags: tagsStats.totalTags,
+          assignedFriends: tagsStats.assignedFriends,
         }}
       />
     </div>

@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     message_type: "text" | "flex";
     target_filter: {
       kind: "all" | "linked" | "unlinked";
-      tags?: string[];
+      tagIds?: string[];
       jobIds?: string[];
     };
     target_count: number;
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
     const userIds = await resolveBroadcastTargetLineUserIds(admin, {
       organizationId: bc.organization_id,
       target: bc.target_filter.kind,
-      tags: bc.target_filter.tags ?? null,
+      tagIds: bc.target_filter.tagIds ?? null,
     });
 
     // メッセージ 復元

@@ -41,17 +41,24 @@ export type JobOption = {
   position: string;
 };
 
+/** LINE 会話 タグ (line_conversation_tags) の 表示 用 オブジェクト */
+export type TagOption = {
+  id: string;
+  name: string;
+  color: string | null;
+};
+
 type FormProps = {
   allCount: number;
   linkedCount: number;
   unlinkedCount: number;
   jobs: JobOption[];
-  /** 自組織 で 使われて いる crm_tags 一覧 (タグ ピッカー 用) */
-  availableTags: string[];
+  /** 自組織 の LINE 会話 タグ 一覧 */
+  availableTags: TagOption[];
   /** タグ ピッカー が 空 の 時 の 原因 切り分け 用 統計 */
   tagsDiagnostics?: {
-    totalClients: number;
-    withTagsClients: number;
+    totalTags: number;
+    assignedFriends: number;
   };
 };
 
@@ -72,7 +79,8 @@ export function BroadcastForm({
   const [text, setText] = useState("");
   const [selectedJobIds, setSelectedJobIds] = useState<string[]>([]);
   const [target, setTarget] = useState<"all" | "linked" | "unlinked">("all");
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  // 選択 中 の タグ ID (= line_conversation_tags.id)
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [scheduledFor, setScheduledFor] = useState<string>(""); // datetime-local 形式
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,13 +97,13 @@ export function BroadcastForm({
   const [countLoading, setCountLoading] = useState(false);
 
   const baseCount = target === "all" ? allCount : target === "linked" ? linkedCount : unlinkedCount;
-  const targetCount = selectedTags.length > 0 ? (taggedCount ?? 0) : baseCount;
+  const targetCount = selectedTagIds.length > 0 ? (taggedCount ?? 0) : baseCount;
 
   // タグ / target が 変わる たび に count を 再取得。
-  // selectedTags が 空 の 時 は targetCount は baseCount に 切り替わる ため
+  // selectedTagIds が 空 の 時 は targetCount は baseCount に 切り替わる ため
   // taggedCount を リセット する 必要 が ない (useEffect 内 setState を 避ける)。
   useEffect(() => {
-    if (selectedTags.length === 0) return;
+    if (selectedTagIds.length === 0) return;
     let active = true;
     const ctrl = new AbortController();
     // fetch 開始 表示 用 loading フラグ。 lint の effect 内 setState 規制 は
@@ -104,7 +112,7 @@ export function BroadcastForm({
     setCountLoading(true);
     const params = new URLSearchParams({
       kind: target,
-      tags: selectedTags.join(","),
+      tagIds: selectedTagIds.join(","),
     });
     void fetch(`/api/agency/line/broadcast-targets/count?${params.toString()}`, {
       signal: ctrl.signal,
@@ -123,7 +131,7 @@ export function BroadcastForm({
       active = false;
       ctrl.abort();
     };
-  }, [target, selectedTags]);
+  }, [target, selectedTagIds]);
 
   const canSubmit = useMemo(() => {
     if (sending || targetCount === 0 || countLoading) return false;
@@ -131,9 +139,9 @@ export function BroadcastForm({
     return selectedJobIds.length > 0;
   }, [sending, targetCount, countLoading, kind, text, selectedJobIds]);
 
-  const toggleTag = (tag: string) => {
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+  const toggleTag = (tagId: string) => {
+    setSelectedTagIds((prev) =>
+      prev.includes(tagId) ? prev.filter((t) => t !== tagId) : [...prev, tagId],
     );
   };
 
@@ -162,7 +170,7 @@ export function BroadcastForm({
     setLastResult(null);
 
     const commonExtras = {
-      ...(selectedTags.length > 0 ? { tags: selectedTags } : {}),
+      ...(selectedTagIds.length > 0 ? { tagIds: selectedTagIds } : {}),
       ...(scheduledIso ? { scheduledFor: scheduledIso } : {}),
     };
     const body =
@@ -204,7 +212,7 @@ export function BroadcastForm({
       });
       setText("");
       setSelectedJobIds([]);
-      setSelectedTags([]);
+      setSelectedTagIds([]);
       setScheduledFor("");
     } catch (e) {
       setError(getErrorMessage(e));
@@ -271,20 +279,19 @@ export function BroadcastForm({
         </div>
       </div>
 
-      {/* タグ フィルタ */}
+      {/* タグ フィルタ (LINE 会話 タグ ベース) */}
       <div className="space-y-1.5">
         <Label className="text-xs">タグ で 絞り込む (任意)</Label>
         {availableTags.length === 0 ? (
           <div className="space-y-1">
             <p className="text-muted-foreground text-[10px]">
-              まだ タグ が ありません。 クライアント 詳細 で タグ を 設定 する と、 ここ で 絞り込み
-              に 使え ます。
+              まだ タグ が ありません。 LINE トーク 詳細 の 右 サイドバー で タグ を 追加 する と、
+              ここ で 絞り込み に 使え ます。
             </p>
             {tagsDiagnostics && (
               <p className="text-[10px] text-amber-700">
-                (自組織 の クライアント:{tagsDiagnostics.totalClients} 件、 うち タグ 設定 済:
-                {tagsDiagnostics.withTagsClients} 件 — 「タグ 設定 済」が 1 以上 な のに 表示
-                されない 場合 は 保存 失敗 の 可能性 が ある ので 詳しい 状況 を 教えて ください)
+                (タグ マスタ:{tagsDiagnostics.totalTags} 件、 タグ 付き 友達:
+                {tagsDiagnostics.assignedFriends} 件)
               </p>
             )}
           </div>
@@ -292,12 +299,17 @@ export function BroadcastForm({
           <>
             <div className="flex flex-wrap gap-1.5">
               {availableTags.map((tag) => {
-                const checked = selectedTags.includes(tag);
+                const checked = selectedTagIds.includes(tag.id);
                 return (
                   <button
                     type="button"
-                    key={tag}
-                    onClick={() => toggleTag(tag)}
+                    key={tag.id}
+                    onClick={() => toggleTag(tag.id)}
+                    style={
+                      checked && tag.color
+                        ? { backgroundColor: tag.color, borderColor: tag.color, color: "#fff" }
+                        : undefined
+                    }
                     className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
                       checked
                         ? "border-emerald-500 bg-emerald-500 text-white"
@@ -305,15 +317,14 @@ export function BroadcastForm({
                     }`}
                   >
                     {checked ? "✓ " : ""}
-                    {tag}
+                    {tag.name}
                   </button>
                 );
               })}
             </div>
-            {selectedTags.length > 0 && (
+            {selectedTagIds.length > 0 && (
               <p className="text-muted-foreground text-[10px]">
-                選択 タグ の **いずれか** を 持つ 求職者 に 紐付け 済 の 友達 のみ 対象 に
-                なります。
+                選択 タグ の **いずれか** が 付いて いる 友達 のみ 対象 に なります。
                 {countLoading ? " (件数 計算 中...)" : ""}
               </p>
             )}
