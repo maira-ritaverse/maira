@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { requireOrgMember } from "@/lib/api/auth-guards";
 import { buildAbsoluteUrl } from "@/lib/config/site-url";
+import { formatSalaryRange } from "@/lib/jobs/types";
 import type { LineMessage } from "@/lib/line/api";
 import { buildJobShareCard, buildJobShareCarousel } from "@/lib/line/flex";
 import { markConversationHandled, sendMessages } from "@/lib/line/messaging";
@@ -89,12 +90,18 @@ export async function POST(request: Request) {
     const detailUrl = channel.liffId
       ? `https://liff.line.me/${channel.liffId}/jobs/${job.id}`
       : buildAbsoluteUrl(`/app/jobs/${job.id}`);
+    // salary は 万円 単位 で 保存 されて いる ので 既存 ヘルパー を そのまま 使う。
+    // 両方 null の 場合 だけ 「応相談」を 出さず Flex から 行 を 省く 方が UI 上 良い。
+    const salaryText =
+      job.salary_min === null && job.salary_max === null
+        ? null
+        : formatSalaryRange(job.salary_min, job.salary_max);
     return {
       jobId: job.id,
       position: job.position,
       companyName: job.company_name,
       location: job.location,
-      salaryText: formatSalary(job.salary_min, job.salary_max),
+      salaryText,
       heroImageUrl: null,
       detailUrl,
       interestPostbackData: withInterestButton ? `job_interest:${job.id}` : undefined,
@@ -133,13 +140,4 @@ export async function POST(request: Request) {
     sendMethod: sendResult.sendMethod,
     jobCount: orderedJobs.length,
   });
-}
-
-function formatSalary(min: number | null, max: number | null): string | null {
-  if (min === null && max === null) return null;
-  const fmt = (v: number) => `${Math.round(v / 10000)} 万円`;
-  if (min !== null && max !== null) return `${fmt(min)} 〜 ${fmt(max)}`;
-  if (min !== null) return `${fmt(min)} 〜`;
-  if (max !== null) return `〜 ${fmt(max)}`;
-  return null;
 }
