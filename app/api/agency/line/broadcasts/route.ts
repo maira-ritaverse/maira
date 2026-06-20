@@ -7,6 +7,7 @@ import { encryptField } from "@/lib/crypto/field-encryption";
 import { getJobShareImageUrl } from "@/lib/jobs/image-url";
 import { formatSalaryRange } from "@/lib/jobs/types";
 import { multicastMessage, type LineMessage } from "@/lib/line/api";
+import { resolveBroadcastTargetLineUserIds } from "@/lib/line/broadcast-targets";
 import { classifyLineError } from "@/lib/line/errors";
 import { buildJobShareCard, buildJobShareCarousel } from "@/lib/line/flex";
 import { getLineChannelByOrgId } from "@/lib/line/queries";
@@ -52,7 +53,11 @@ export async function GET() {
     id: string;
     created_by_user_id: string;
     message_type: string;
-    target_filter: { kind: "all" | "linked" | "unlinked"; jobIds?: string[] };
+    target_filter: {
+      kind: "all" | "linked" | "unlinked";
+      tags?: string[];
+      jobIds?: string[];
+    };
     target_count: number;
     status: "queued" | "sending" | "sent" | "failed";
     sent_count: number;
@@ -70,6 +75,7 @@ export async function GET() {
       createdByUserId: b.created_by_user_id,
       messageType: b.message_type,
       targetKind: b.target_filter.kind,
+      tags: b.target_filter.tags ?? null,
       jobIds: b.target_filter.jobIds ?? null,
       targetCount: b.target_count,
       status: b.status,
@@ -83,17 +89,22 @@ export async function GET() {
   });
 }
 
+// tags は 0 〜 20 件、 1 タグ ≤ 50 字。 0 件 = フィルタ なし。
+const tagsField = z.array(z.string().min(1).max(50)).max(20).optional();
+
 const bodySchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("text"),
     text: z.string().min(1).max(5000),
     target: z.enum(["all", "linked", "unlinked"]),
+    tags: tagsField,
     scheduledFor: z.string().datetime().optional(),
   }),
   z.object({
     kind: z.literal("job"),
     jobIds: z.array(z.string().uuid()).min(1).max(12),
     target: z.enum(["all", "linked", "unlinked"]),
+    tags: tagsField,
     scheduledFor: z.string().datetime().optional(),
   }),
 ]);
@@ -117,20 +128,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "channel_not_configured" }, { status: 409 });
   }
 
-  // ターゲット 取得 (unfollowed 除外)
-  let query = admin
-    .from("line_user_links")
-    .select("line_user_id, client_record_id")
-    .eq("organization_id", guard.organization.id)
-    .is("unfollowed_at", null);
-  if (parsed.data.target === "linked") {
-    query = query.not("client_record_id", "is", null);
-  } else if (parsed.data.target === "unlinked") {
-    query = query.is("client_record_id", null);
-  }
-  const { data: userRows } = await query;
-  type LinkRow = { line_user_id: string };
-  const userIds = ((userRows ?? []) as LinkRow[]).map((r) => r.line_user_id);
+  // ターゲット 取得 (共通 ヘルパー 経由、 cron と 同じ ロジック)
+  const userIds = await resolveBroadcastTargetLineUserIds(admin, {
+    organizationId: guard.organization.id,
+    target: parsed.data.target,
+    tags: parsed.data.tags ?? null,
+  });
 
   if (userIds.length === 0) {
     return NextResponse.json(
@@ -246,6 +249,7 @@ export async function POST(request: Request) {
       message_type: messageType,
       target_filter: {
         kind: parsed.data.target,
+        ...(parsed.data.tags && parsed.data.tags.length > 0 ? { tags: parsed.data.tags } : {}),
         ...(jobIdsForFilter ? { jobIds: jobIdsForFilter } : {}),
       },
       target_count: userIds.length,

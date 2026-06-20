@@ -6,6 +6,7 @@ import { decryptField } from "@/lib/crypto/field-encryption";
 import { getJobShareImageUrl } from "@/lib/jobs/image-url";
 import { formatSalaryRange } from "@/lib/jobs/types";
 import { multicastMessage, type LineMessage } from "@/lib/line/api";
+import { resolveBroadcastTargetLineUserIds } from "@/lib/line/broadcast-targets";
 import { classifyLineError } from "@/lib/line/errors";
 import { buildJobShareCard, buildJobShareCarousel } from "@/lib/line/flex";
 import { getLineChannelByOrgId } from "@/lib/line/queries";
@@ -51,7 +52,11 @@ export async function POST(request: Request) {
     organization_id: string;
     encrypted_content: string;
     message_type: "text" | "flex";
-    target_filter: { kind: "all" | "linked" | "unlinked"; jobIds?: string[] };
+    target_filter: {
+      kind: "all" | "linked" | "unlinked";
+      tags?: string[];
+      jobIds?: string[];
+    };
     target_count: number;
   };
   const broadcasts = (dueRows ?? []) as Row[];
@@ -87,21 +92,12 @@ export async function POST(request: Request) {
       continue;
     }
 
-    // ターゲット 再取得 (予約時 と 現時点 で 友達 数 が 変わって いる 可能性 あり)
-    let query = admin
-      .from("line_user_links")
-      .select("line_user_id, client_record_id")
-      .eq("organization_id", bc.organization_id)
-      .is("unfollowed_at", null);
-    if (bc.target_filter.kind === "linked") {
-      query = query.not("client_record_id", "is", null);
-    } else if (bc.target_filter.kind === "unlinked") {
-      query = query.is("client_record_id", null);
-    }
-    const { data: linkRows } = await query;
-    const userIds = ((linkRows ?? []) as Array<{ line_user_id: string }>).map(
-      (r) => r.line_user_id,
-    );
+    // ターゲット 再取得 (予約時 と 現時点 で 友達 数 / タグ が 変わって いる 可能性 あり)
+    const userIds = await resolveBroadcastTargetLineUserIds(admin, {
+      organizationId: bc.organization_id,
+      target: bc.target_filter.kind,
+      tags: bc.target_filter.tags ?? null,
+    });
 
     // メッセージ 復元
     let message: LineMessage;

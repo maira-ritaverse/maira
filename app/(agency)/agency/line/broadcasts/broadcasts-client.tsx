@@ -46,18 +46,27 @@ type FormProps = {
   linkedCount: number;
   unlinkedCount: number;
   jobs: JobOption[];
+  /** 自組織 で 使われて いる crm_tags 一覧 (タグ ピッカー 用) */
+  availableTags: string[];
 };
 
 type MessageKind = "text" | "job";
 
 // ============================================================
-// BroadcastForm:新規 配信 作成 (テキスト / 求人 / 予約)
+// BroadcastForm:新規 配信 作成 (テキスト / 求人 / 予約 / タグ フィルタ)
 // ============================================================
-export function BroadcastForm({ allCount, linkedCount, unlinkedCount, jobs }: FormProps) {
+export function BroadcastForm({
+  allCount,
+  linkedCount,
+  unlinkedCount,
+  jobs,
+  availableTags,
+}: FormProps) {
   const [kind, setKind] = useState<MessageKind>("text");
   const [text, setText] = useState("");
   const [selectedJobIds, setSelectedJobIds] = useState<string[]>([]);
   const [target, setTarget] = useState<"all" | "linked" | "unlinked">("all");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [scheduledFor, setScheduledFor] = useState<string>(""); // datetime-local 形式
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,14 +78,58 @@ export function BroadcastForm({ allCount, linkedCount, unlinkedCount, jobs }: Fo
     scheduledFor?: string;
   } | null>(null);
 
-  const targetCount =
-    target === "all" ? allCount : target === "linked" ? linkedCount : unlinkedCount;
+  // タグ フィルタ 無し の 時 は 既存 静的 count を 使う。 タグ 選択 時 は API を 叩く。
+  const [taggedCount, setTaggedCount] = useState<number | null>(null);
+  const [countLoading, setCountLoading] = useState(false);
+
+  const baseCount = target === "all" ? allCount : target === "linked" ? linkedCount : unlinkedCount;
+  const targetCount = selectedTags.length > 0 ? (taggedCount ?? 0) : baseCount;
+
+  // タグ / target が 変わる たび に count を 再取得。
+  // selectedTags が 空 の 時 は targetCount は baseCount に 切り替わる ため
+  // taggedCount を リセット する 必要 が ない (useEffect 内 setState を 避ける)。
+  useEffect(() => {
+    if (selectedTags.length === 0) return;
+    let active = true;
+    const ctrl = new AbortController();
+    // fetch 開始 表示 用 loading フラグ。 lint の effect 内 setState 規制 は
+    // ここ では 「外部 (HTTP) 同期」 と 見なせる の で 抑制 する。
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCountLoading(true);
+    const params = new URLSearchParams({
+      kind: target,
+      tags: selectedTags.join(","),
+    });
+    void fetch(`/api/agency/line/broadcast-targets/count?${params.toString()}`, {
+      signal: ctrl.signal,
+    })
+      .then((r) => r.json())
+      .then((j: { count: number }) => {
+        if (active) setTaggedCount(j.count ?? 0);
+      })
+      .catch(() => {
+        if (active) setTaggedCount(0);
+      })
+      .finally(() => {
+        if (active) setCountLoading(false);
+      });
+    return () => {
+      active = false;
+      ctrl.abort();
+    };
+  }, [target, selectedTags]);
 
   const canSubmit = useMemo(() => {
-    if (sending || targetCount === 0) return false;
+    if (sending || targetCount === 0 || countLoading) return false;
     if (kind === "text") return text.trim().length > 0;
     return selectedJobIds.length > 0;
-  }, [sending, targetCount, kind, text, selectedJobIds]);
+  }, [sending, targetCount, countLoading, kind, text, selectedJobIds]);
+
+  const toggleTag = (tag: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+    );
+  };
 
   const toggleJob = (jobId: string) => {
     setSelectedJobIds((prev) => {
@@ -102,20 +155,14 @@ export function BroadcastForm({ allCount, linkedCount, unlinkedCount, jobs }: Fo
     setError(null);
     setLastResult(null);
 
+    const commonExtras = {
+      ...(selectedTags.length > 0 ? { tags: selectedTags } : {}),
+      ...(scheduledIso ? { scheduledFor: scheduledIso } : {}),
+    };
     const body =
       kind === "text"
-        ? {
-            kind: "text" as const,
-            text,
-            target,
-            ...(scheduledIso ? { scheduledFor: scheduledIso } : {}),
-          }
-        : {
-            kind: "job" as const,
-            jobIds: selectedJobIds,
-            target,
-            ...(scheduledIso ? { scheduledFor: scheduledIso } : {}),
-          };
+        ? { kind: "text" as const, text, target, ...commonExtras }
+        : { kind: "job" as const, jobIds: selectedJobIds, target, ...commonExtras };
 
     try {
       const res = await fetch("/api/agency/line/broadcasts", {
@@ -151,6 +198,7 @@ export function BroadcastForm({ allCount, linkedCount, unlinkedCount, jobs }: Fo
       });
       setText("");
       setSelectedJobIds([]);
+      setSelectedTags([]);
       setScheduledFor("");
     } catch (e) {
       setError(getErrorMessage(e));
@@ -215,6 +263,47 @@ export function BroadcastForm({ allCount, linkedCount, unlinkedCount, jobs }: Fo
             onClick={() => setTarget("unlinked")}
           />
         </div>
+      </div>
+
+      {/* タグ フィルタ */}
+      <div className="space-y-1.5">
+        <Label className="text-xs">タグ で 絞り込む (任意)</Label>
+        {availableTags.length === 0 ? (
+          <p className="text-muted-foreground text-[10px]">
+            まだ タグ が ありません。 クライアント 詳細 で タグ を 設定 する と、 ここ で 絞り込み
+            に 使え ます。
+          </p>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-1.5">
+              {availableTags.map((tag) => {
+                const checked = selectedTags.includes(tag);
+                return (
+                  <button
+                    type="button"
+                    key={tag}
+                    onClick={() => toggleTag(tag)}
+                    className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                      checked
+                        ? "border-emerald-500 bg-emerald-500 text-white"
+                        : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+                    }`}
+                  >
+                    {checked ? "✓ " : ""}
+                    {tag}
+                  </button>
+                );
+              })}
+            </div>
+            {selectedTags.length > 0 && (
+              <p className="text-muted-foreground text-[10px]">
+                選択 タグ の **いずれか** を 持つ 求職者 に 紐付け 済 の 友達 のみ 対象 に
+                なります。
+                {countLoading ? " (件数 計算 中...)" : ""}
+              </p>
+            )}
+          </>
+        )}
       </div>
 
       {/* 本文 / 求人 ピッカー */}

@@ -300,6 +300,30 @@ export async function listClientRecords(organizationId: string): Promise<ClientR
 }
 
 /**
+ * 自組織 の client_records から 使われて いる crm_tags 一覧 を 取得 (unique、 ソート 済)。
+ *
+ * LINE 一斉送信 の タグ フィルタ ピッカー で 使う。 件数 が 増えて も
+ * unique タグ 数 は 通常 数十 件 以内 と 想定 されて いる ため、 全 行 SELECT で 集計。
+ */
+export async function listOrganizationCrmTags(organizationId: string): Promise<string[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("client_records")
+    .select("crm_tags")
+    .eq("organization_id", organizationId)
+    .not("crm_tags", "is", null);
+  type Row = { crm_tags: string[] | null };
+  const set = new Set<string>();
+  for (const r of (data ?? []) as Row[]) {
+    for (const t of r.crm_tags ?? []) {
+      const trimmed = t.trim();
+      if (trimmed) set.add(trimmed);
+    }
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b, "ja"));
+}
+
+/**
  * 単一のクライアントレコードを取得
  */
 export async function getClientRecord(clientId: string): Promise<ClientRecord | null> {
