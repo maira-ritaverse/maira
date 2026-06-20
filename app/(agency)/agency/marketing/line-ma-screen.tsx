@@ -188,7 +188,22 @@ export function LineMaScreen({
       {/* LINE 配信 数 進捗 バー */}
       <div className="space-y-1">
         <div className="flex items-baseline justify-between text-xs">
-          <span className="font-semibold">LINE 配信数</span>
+          <span className="font-semibold">
+            LINE 配信数
+            {kpi.plan && (
+              <span className="text-muted-foreground ml-1 text-[10px]">
+                (
+                {kpi.plan === "free"
+                  ? "Communication"
+                  : kpi.plan === "light"
+                    ? "Light"
+                    : kpi.plan === "standard"
+                      ? "Standard"
+                      : kpi.plan}{" "}
+                プラン)
+              </span>
+            )}
+          </span>
           <span className="text-slate-700">
             <span className="text-base font-bold">{kpi.sentCount.toLocaleString()}</span>
             <span className="text-muted-foreground"> / {kpi.limit.toLocaleString()}</span>

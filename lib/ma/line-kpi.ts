@@ -14,7 +14,15 @@
  */
 import { createClient } from "@/lib/supabase/server";
 
-const DEFAULT_LINE_MONTHLY_LIMIT = 5000;
+// LINE 公式 アカウント の プラン 別 月次 配信通数 上限。
+// 現行 LINE の Communication / Light / Standard プラン に 対応。
+// 出典: https://www.linebiz.com/jp/service/line-official-account/plan/
+const LINE_PLAN_LIMITS: Record<string, number> = {
+  free: 200, // Communication プラン (旧 Free)
+  light: 5000, // Light プラン
+  standard: 30000, // Standard プラン
+};
+const DEFAULT_LINE_MONTHLY_LIMIT = LINE_PLAN_LIMITS.light;
 
 export type LineMaKpi = {
   sentCount: number;
@@ -24,6 +32,8 @@ export type LineMaKpi = {
   /** LINE MA 配信 後 7 日 以内 に referrals 作成 された 一意 client 数 */
   applicationCount: number;
   limit: number;
+  /** LINE プラン 名 (free / light / standard)。 未設定 / 不正 値 は null */
+  plan: string | null;
   /** 集計 対象 期間 の 月 (YYYY-MM)、 UI 表示 用 */
   periodLabel: string;
 };
@@ -48,7 +58,7 @@ export async function getLineMaKpi(
 
   type CountResult = { count: number | null };
 
-  const [sentRes, replyRes, clickAggRes, sentLogsForAttr] = await Promise.all([
+  const [sentRes, replyRes, clickAggRes, sentLogsForAttr, channelRes] = await Promise.all([
     supabase
       .from("ma_send_logs")
       .select("id", { count: "exact", head: true })
@@ -83,6 +93,12 @@ export async function getLineMaKpi(
       .not("recipient_client_record_id", "is", null)
       .gte("sent_at", start)
       .lt("sent_at", end),
+    // 配信通数 上限 用: 組織 の LINE プラン を 取得
+    supabase
+      .from("line_channels")
+      .select("line_plan")
+      .eq("organization_id", organizationId)
+      .maybeSingle(),
   ]);
 
   type ClickRow = { click_count: number };
@@ -97,12 +113,20 @@ export async function getLineMaKpi(
   const sentLogs = (sentLogsForAttr.data ?? []) as SentLogRow[];
   const applicationCount = await computeAttributedApplications(supabase, organizationId, sentLogs);
 
+  // プラン 連動 の 月次 上限。 未設定 / 不正 値 は light (5000) を 既定 と する。
+  const linePlan = (channelRes.data as { line_plan: string | null } | null)?.line_plan ?? null;
+  const limit =
+    linePlan && LINE_PLAN_LIMITS[linePlan] !== undefined
+      ? LINE_PLAN_LIMITS[linePlan]
+      : DEFAULT_LINE_MONTHLY_LIMIT;
+
   return {
     sentCount: sentRes,
     clickCount,
     replyCount: replyRes,
     applicationCount,
-    limit: DEFAULT_LINE_MONTHLY_LIMIT,
+    limit,
+    plan: linePlan,
     periodLabel,
   };
 }
