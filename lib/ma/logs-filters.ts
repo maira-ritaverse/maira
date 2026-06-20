@@ -82,12 +82,13 @@ export function parseLogPage(raw: string | null | undefined): number {
 export type LogsUrlUpdates = Partial<{
   scenario: string;
   status: string;
+  channel: string;
   from: string;
   to: string;
   page: string;
 }>;
 
-const FILTER_KEYS = ["scenario", "status", "from", "to"] as const;
+const FILTER_KEYS = ["scenario", "status", "channel", "from", "to"] as const;
 
 export function buildLogsUrl(path: string, current: string, updates: LogsUrlUpdates): string {
   const params = new URLSearchParams(current);

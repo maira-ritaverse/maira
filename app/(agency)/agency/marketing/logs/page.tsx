@@ -24,6 +24,7 @@ export default async function MarketingLogsPage({
   searchParams: Promise<{
     scenario?: string;
     status?: string;
+    channel?: string;
     from?: string;
     to?: string;
     page?: string;
@@ -45,6 +46,7 @@ export default async function MarketingLogsPage({
   // 不正値は黙って全体表示に倒す方針。
   const statusFilter = parseLogStatus(sp.status);
   const scenarioFilter = sp.scenario && sp.scenario.length > 0 ? sp.scenario : undefined;
+  const channelFilter = sp.channel === "email" || sp.channel === "line" ? sp.channel : undefined;
   const { dateFrom, dateTo } = parseLogDateRange(sp.from, sp.to);
 
   // ページ番号:1 始まり。
@@ -58,6 +60,7 @@ export default async function MarketingLogsPage({
     listSendLogs(role.organization.id, {
       scenarioId: scenarioFilter,
       status: statusFilter,
+      channel: channelFilter,
       dateFrom,
       dateTo,
       limit: PAGE_SIZE + 1,
@@ -107,6 +110,7 @@ export default async function MarketingLogsPage({
         filterOptions={filterOptions}
         currentScenarioId={scenarioFilter}
         currentStatus={statusFilter}
+        currentChannel={channelFilter}
         currentFrom={dateFrom ? sp.from : undefined}
         currentTo={dateTo ? sp.to : undefined}
         currentPage={pageNum}

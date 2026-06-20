@@ -311,6 +311,11 @@ export async function listSendLogs(
      * `sent_at <= dateTo` で絞り込み。「YYYY-MM-DD」を 23:59:59.999Z 補完。
      */
     dateTo?: string;
+    /**
+     * チャネル 絞り込み。 "email" = recipient_email IS NOT NULL、 "line" =
+     * recipient_line_user_id IS NOT NULL。 省略 で 全件。
+     */
+    channel?: "email" | "line";
   },
 ): Promise<SendLog[]> {
   const supabase = await createClient();
@@ -320,7 +325,7 @@ export async function listSendLogs(
   let query = supabase
     .from("ma_send_logs")
     .select(
-      "id, organization_id, scenario_id, recipient_client_record_id, recipient_email, encrypted_subject, encrypted_body, sent_at, status, error_message, resend_message_id",
+      "id, organization_id, scenario_id, recipient_client_record_id, recipient_email, recipient_line_user_id, encrypted_subject, encrypted_body, sent_at, status, error_message, resend_message_id",
     )
     .eq("organization_id", organizationId)
     .order("sent_at", { ascending: false })
@@ -331,6 +336,8 @@ export async function listSendLogs(
   if (opts?.status) query = query.eq("status", opts.status);
   if (opts?.dateFrom) query = query.gte("sent_at", opts.dateFrom);
   if (opts?.dateTo) query = query.lte("sent_at", opts.dateTo);
+  if (opts?.channel === "line") query = query.not("recipient_line_user_id", "is", null);
+  if (opts?.channel === "email") query = query.not("recipient_email", "is", null);
 
   const { data, error } = await query;
   if (error) {
@@ -351,6 +358,7 @@ export async function listSendLogs(
         scenarioId: row.scenario_id,
         recipientClientRecordId: row.recipient_client_record_id,
         recipientEmail: row.recipient_email,
+        recipientLineUserId: row.recipient_line_user_id ?? null,
         subject,
         body,
         sentAt: row.sent_at,

@@ -32,6 +32,7 @@ export type LogsTableProps = {
   filterOptions: { id: string; name: string }[];
   currentScenarioId?: string;
   currentStatus?: "sent" | "failed" | "skipped";
+  currentChannel?: "email" | "line";
   // YYYY-MM-DD 形式の日付フィルタ。サーバー側で時刻補完して使う(00:00 〜 23:59:59)。
   currentFrom?: string;
   currentTo?: string;
@@ -58,6 +59,7 @@ export function LogsTable({
   filterOptions,
   currentScenarioId,
   currentStatus,
+  currentChannel,
   currentFrom,
   currentTo,
   currentPage,
@@ -69,7 +71,7 @@ export function LogsTable({
 
   // フィルタ・ページ遷移の URL 組み立ては lib/ma/logs-filters の buildLogsUrl に集約。
   // page リセット・default page 省略・空文字での delete は純関数側で吸収される。
-  function updateFilter(key: "scenario" | "status" | "from" | "to", value: string) {
+  function updateFilter(key: "scenario" | "status" | "from" | "to" | "channel", value: string) {
     router.push(buildLogsUrl(LOGS_PATH, searchParams.toString(), { [key]: value }));
   }
 
@@ -113,6 +115,21 @@ export function LogsTable({
             <option value="sent">成功</option>
             <option value="failed">失敗</option>
             <option value="skipped">スキップ</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <label htmlFor="channelFilter" className="text-sm font-medium">
+            チャネル:
+          </label>
+          <select
+            id="channelFilter"
+            value={currentChannel ?? ""}
+            onChange={(e) => updateFilter("channel", e.target.value)}
+            className="rounded border px-2 py-1 text-sm"
+          >
+            <option value="">すべて</option>
+            <option value="email">Eメール</option>
+            <option value="line">LINE</option>
           </select>
         </div>
         {/* 日付範囲フィルタ。YYYY-MM-DD を URL クエリに直接入れる(サーバー側で時刻補完)。

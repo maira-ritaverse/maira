@@ -326,7 +326,10 @@ export type SendLog = {
   organizationId: string;
   scenarioId: string;
   recipientClientRecordId: string | null;
-  recipientEmail: string;
+  /** Email 配信 の 受信 アドレス。 LINE 配信 時 は null。 */
+  recipientEmail: string | null;
+  /** LINE 配信 の 受信 line_user_id。 Email 配信 時 は null。 */
+  recipientLineUserId: string | null;
   subject: string; // 復号後
   body: string; // 復号後
   sentAt: string;
