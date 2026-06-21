@@ -56,6 +56,36 @@ export default async function SettingsPage() {
 
         {/* 右: その他 を まとめて */}
         <div className="space-y-3">
+          {/* プロフィール 編集 (表示名 + アバター) */}
+          <Card className="p-4">
+            <Link
+              href="/agency/settings/profile"
+              className="hover:bg-accent -m-4 flex items-center gap-3 rounded-md p-4 transition-colors"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">プロフィール</p>
+                <p className="text-muted-foreground text-xs">
+                  表示名 と アイコン 画像 (管理者 が 一覧 で 識別 し やすく する)
+                </p>
+              </div>
+              <span className="text-muted-foreground text-sm">→</span>
+            </Link>
+          </Card>
+
+          {/* パスワード 変更 */}
+          <Card className="p-4">
+            <Link
+              href="/agency/settings/password"
+              className="hover:bg-accent -m-4 flex items-center gap-3 rounded-md p-4 transition-colors"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">パスワード変更</p>
+                <p className="text-muted-foreground text-xs">ログイン パスワード を 変更 します</p>
+              </div>
+              <span className="text-muted-foreground text-sm">→</span>
+            </Link>
+          </Card>
+
           {/* 外部連携(全メンバー) */}
           <Card className="p-4">
             <Link
