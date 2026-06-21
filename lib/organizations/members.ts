@@ -1,10 +1,12 @@
-import { createClient } from "@/lib/supabase/server";
 import {
   emptyPermissionFlags,
   PERMISSION_KEYS,
   type MemberPermissionFlags,
   type PermissionKey,
 } from "@/lib/permissions/types";
+import { resolveAvatarPublicUrl } from "@/lib/profile/avatar";
+import { createClient } from "@/lib/supabase/server";
+
 import type { OrganizationRole } from "./types";
 
 /**
@@ -25,6 +27,8 @@ export type OrganizationMemberListItem = {
   role: OrganizationRole;
   displayName: string | null;
   email: string | null;
+  /** アバター 画像 の public URL (null = 未設定 / フォールバック 表示) */
+  avatarUrl: string | null;
   createdAt: string;
   permissions: MemberPermissionFlags;
 };
@@ -51,6 +55,7 @@ export async function listOrganizationMembersWithMeta(
       role: string;
       display_name: string | null;
       email: string | null;
+      avatar_storage_path: string | null;
       created_at: string;
     }> | null) ?? [];
 
@@ -81,6 +86,7 @@ export async function listOrganizationMembersWithMeta(
     role: m.role as OrganizationRole,
     displayName: m.display_name,
     email: m.email,
+    avatarUrl: resolveAvatarPublicUrl(supabase, m.avatar_storage_path),
     createdAt: m.created_at,
     permissions: permsByMember.get(m.member_id) ?? emptyPermissionFlags(),
   }));

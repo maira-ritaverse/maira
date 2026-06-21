@@ -1,16 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { ChevronDownIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -187,6 +188,14 @@ export function MembersTable({ members, currentMemberId }: MembersTableProps) {
                   <TableRow key={m.memberId}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
+                        <Avatar className="size-7">
+                          {m.avatarUrl && (
+                            <AvatarImage src={m.avatarUrl} alt={m.displayName ?? m.email ?? ""} />
+                          )}
+                          <AvatarFallback className="text-[10px]">
+                            {(m.displayName ?? m.email ?? "?").charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
                         <span>{m.displayName ?? "(名前未設定)"}</span>
                         {isSelf && (
                           <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs">
