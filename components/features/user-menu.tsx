@@ -1,7 +1,8 @@
 "use client";
 
-import { useTransition } from "react";
+import { Settings } from "lucide-react";
 import Link from "next/link";
+import { useTransition } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,9 +19,15 @@ import { logout } from "@/app/auth/actions";
 type Props = {
   email: string;
   displayName: string | null;
+  /**
+   * 「設定」 リンク の 遷移 先。
+   * 求職者 (app) は "/app/settings"、 エージェント (agency) は "/agency/settings"。
+   * layout 側 で 明示 する (= 固定 にする と 反対 側 へ 飛んで 不整合 が 起きる)。
+   */
+  settingsHref: string;
 };
 
-export function UserMenu({ email, displayName }: Props) {
+export function UserMenu({ email, displayName, settingsHref }: Props) {
   const [isPending, startTransition] = useTransition();
 
   const handleLogout = () => {
@@ -55,7 +62,10 @@ export function UserMenu({ email, displayName }: Props) {
           </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem render={<Link href="/app/settings" />}>⚙️ 設定</DropdownMenuItem>
+        <DropdownMenuItem render={<Link href={settingsHref} />}>
+          <Settings className="mr-2 size-4" aria-hidden />
+          設定
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         {/* base-ui の Menu.Item は onSelect を持たない(onClick のみ)。
             以前 onSelect で書いていたためハンドラが発火していなかった。 */}

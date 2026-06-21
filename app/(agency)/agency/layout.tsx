@@ -61,7 +61,11 @@ export default async function AgencyLayout({ children }: { children: React.React
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-14 shrink-0 items-center justify-end gap-2 border-b px-4">
           <NotificationBell />
-          <UserMenu email={user.email ?? ""} displayName={profile?.display_name ?? null} />
+          <UserMenu
+            email={user.email ?? ""}
+            displayName={profile?.display_name ?? null}
+            settingsHref="/agency/settings"
+          />
         </header>
         <main className="flex-1 overflow-auto p-6">{children}</main>
       </div>

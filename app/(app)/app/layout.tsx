@@ -69,7 +69,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="flex flex-1 flex-col overflow-hidden">
           <header className="flex h-14 shrink-0 items-center justify-end gap-1 border-b px-4">
             <NotificationBell />
-            <UserMenu email={user.email ?? ""} displayName={profile?.display_name ?? null} />
+            <UserMenu
+              email={user.email ?? ""}
+              displayName={profile?.display_name ?? null}
+              settingsHref="/app/settings"
+            />
           </header>
           <main className="flex-1 overflow-auto p-6">{children}</main>
         </div>
