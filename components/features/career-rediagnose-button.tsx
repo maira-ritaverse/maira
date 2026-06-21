@@ -1,19 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+
 import { Button } from "@/components/ui/button";
+import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 
 /**
  * 「もう一度棚卸しする」ボタン(上書き警告つき)
@@ -44,36 +34,22 @@ export function CareerRediagnoseButton({
   variant = "outline",
 }: Props) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [isPending, startTransition] = useTransition();
-
-  const handleConfirm = () => {
-    // 遷移完了まで保留中表示にしたいので transition で包む。
-    // /app/career/new は Server Component で createCareerConversation → redirect する。
-    startTransition(() => {
-      router.push("/app/career/new");
-    });
-  };
 
   return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger render={<Button variant={variant} size={size} />}>
-        {label}
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>もう一度棚卸しをしますか?</AlertDialogTitle>
-          <AlertDialogDescription>
-            現在の棚卸し結果は、新しい内容で上書きされます。よろしいですか?
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={isPending}>キャンセル</AlertDialogCancel>
-          <AlertDialogAction onClick={handleConfirm} disabled={isPending}>
-            {isPending ? "開始中..." : "棚卸しを始める"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <ConfirmActionDialog
+      trigger={
+        <Button variant={variant} size={size}>
+          {label}
+        </Button>
+      }
+      title="もう一度棚卸しをしますか?"
+      description="現在の棚卸し結果は、新しい内容で上書きされます。よろしいですか?"
+      confirmLabel="棚卸しを始める"
+      pendingLabel="開始中..."
+      onConfirm={() => {
+        // /app/career/new は Server Component で createCareerConversation → redirect する。
+        router.push("/app/career/new");
+      }}
+    />
   );
 }

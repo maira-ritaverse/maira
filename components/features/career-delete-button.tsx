@@ -1,19 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+
 import { Button } from "@/components/ui/button";
+import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 
 /**
  * 「棚卸し結果を削除する」ボタン(影響説明ダイアログつき)
@@ -31,17 +21,32 @@ import { Button } from "@/components/ui/button";
  *   本コンポーネントから user_id は送らない(サーバ側 auth.getUser() で決まる)。
  * - 成功で /app/career(一覧)に遷移。一覧は profile なし状態(empty)に戻り、
  *   初回導線「新しく棚卸しを始める」が再表示される。
+ * - 確認 ダイアログ は 共通 ConfirmActionDialog を 使用 (pending / error 表示
+ *   ロジック を 各 削除 ボタン で 重複 実装 しない ため)。
  */
 export function CareerDeleteButton() {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
 
-  const handleConfirm = () => {
-    setError(null);
-    startTransition(async () => {
-      try {
+  return (
+    <ConfirmActionDialog
+      trigger={
+        <Button variant="destructive" size="sm">
+          削除
+        </Button>
+      }
+      title="棚卸し結果を削除しますか?"
+      description={
+        <>
+          削除すると、棚卸し結果に加えてキャリア診断の結果も同時に消えます。
+          履歴書・職務経歴書・作成済みの書類は残りますが、AI
+          による下書き生成と「Mairaに相談」は、棚卸しをやり直すまで使えなくなります。
+          この操作は元に戻せません。
+        </>
+      }
+      confirmLabel="削除する"
+      pendingLabel="削除中..."
+      destructive
+      onConfirm={async () => {
         const response = await fetch("/api/career/profile", { method: "DELETE" });
         if (!response.ok) {
           const json = (await response.json().catch(() => ({}))) as {
@@ -53,39 +58,7 @@ export function CareerDeleteButton() {
         // 削除成功 → 一覧へ。router.refresh で Server Component の getCareerProfile を再評価。
         router.push("/app/career");
         router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "通信エラーが発生しました");
-      }
-    });
-  };
-
-  return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger render={<Button variant="destructive" size="sm" />}>
-        削除
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>棚卸し結果を削除しますか?</AlertDialogTitle>
-          <AlertDialogDescription>
-            削除すると、棚卸し結果に加えてキャリア診断の結果も同時に消えます。
-            履歴書・職務経歴書・作成済みの書類は残りますが、AI
-            による下書き生成と「Mairaに相談」は、棚卸しをやり直すまで使えなくなります。
-            この操作は元に戻せません。
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        {error && (
-          <p className="text-sm text-red-600" role="alert">
-            {error}
-          </p>
-        )}
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={isPending}>キャンセル</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" onClick={handleConfirm} disabled={isPending}>
-            {isPending ? "削除中..." : "削除する"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+      }}
+    />
   );
 }
