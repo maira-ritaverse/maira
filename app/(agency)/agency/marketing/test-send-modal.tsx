@@ -1,5 +1,6 @@
 "use client";
 
+import { AlertTriangle, Check } from "lucide-react";
 import { useState } from "react";
 import {
   AlertDialog,
@@ -102,7 +103,10 @@ export function TestSendModal({ open, scenarioId, scenarioName, onClose }: TestS
           {/* 結果表示 */}
           {result?.sent && (
             <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-900">
-              ✓ 送信成功
+              <span className="inline-flex items-center gap-1">
+                <Check className="size-3.5" aria-hidden />
+                送信成功
+              </span>
               {result.messageId && (
                 <span className="text-muted-foreground ml-2 font-mono text-xs">
                   ID: {result.messageId.slice(0, 12)}…
@@ -112,7 +116,10 @@ export function TestSendModal({ open, scenarioId, scenarioName, onClose }: TestS
           )}
           {result && !result.sent && result.reason === "not_configured" && (
             <div className="rounded border border-amber-200 bg-amber-50 p-2 text-sm text-amber-900">
-              ⚠ Resend が未設定(skipped としてログ記録)
+              <span className="inline-flex items-center gap-1">
+                <AlertTriangle className="size-3.5" aria-hidden />
+                Resend が未設定(skipped としてログ記録)
+              </span>
               <br />
               <span className="text-xs">
                 RESEND_API_KEY / EMAIL_FROM を設定すると実送信されます。

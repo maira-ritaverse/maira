@@ -1,7 +1,8 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Inbox } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Fragment, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -200,7 +201,7 @@ export function LogsTable({
       {/* テーブル */}
       {logs.length === 0 ? (
         <EmptyState
-          icon="📭"
+          icon={<Inbox className="size-10" aria-hidden />}
           title="送信履歴がまだありません"
           description="MA 配信や「テスト送信」を実行するとここに表示されます"
         />

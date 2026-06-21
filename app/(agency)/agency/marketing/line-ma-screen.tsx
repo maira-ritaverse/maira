@@ -1,5 +1,6 @@
 "use client";
 
+import { Calendar, Check } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -103,8 +104,8 @@ export function LineMaScreen({
         <div className="text-right">
           {consent.isActive ? (
             <>
-              <p className="text-xs text-emerald-700">
-                ✓{" "}
+              <p className="inline-flex items-center gap-1 text-xs text-emerald-700">
+                <Check className="size-3" aria-hidden />
                 {consent.acceptedAt
                   ? new Date(consent.acceptedAt).toLocaleDateString("ja-JP")
                   : "—"}{" "}
@@ -167,7 +168,7 @@ export function LineMaScreen({
             </Link>
           </div>
           <div className="flex items-center gap-1 rounded-md border bg-white px-3 py-1.5 text-xs">
-            <span className="text-slate-500">📅</span>
+            <Calendar className="size-3 text-slate-500" aria-hidden />
             <span>{kpi.periodLabel}</span>
           </div>
         </div>

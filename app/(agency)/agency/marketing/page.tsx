@@ -1,3 +1,4 @@
+import { AlertTriangle } from "lucide-react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
@@ -79,7 +80,10 @@ export default async function MarketingPage({ searchParams }: { searchParams?: S
           admin だけでなく advisor にも見せる(運用状況の透明性のため)。 */}
       {!resendConfigured && (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          <p className="font-semibold">⚠ Resend が未設定です</p>
+          <p className="inline-flex items-center gap-1.5 font-semibold">
+            <AlertTriangle className="size-4" aria-hidden />
+            Resend が未設定です
+          </p>
           <p className="mt-1">
             <code className="font-mono text-xs">RESEND_API_KEY</code> または{" "}
             <code className="font-mono text-xs">EMAIL_FROM</code> が Vercel
