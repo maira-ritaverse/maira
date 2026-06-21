@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -103,9 +104,7 @@ export function DuplicatesCard({ clients, canMerge }: DuplicatesCardProps) {
     <Card className="space-y-3 border-red-200 bg-red-50/30 p-4 dark:border-red-900 dark:bg-red-950/20">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span aria-hidden className="text-red-600 dark:text-red-400">
-            ⚠
-          </span>
+          <AlertTriangle aria-hidden className="size-4 text-red-600 dark:text-red-400" />
           <h2 className="text-sm font-semibold">重複の可能性がある顧客</h2>
           <span className="text-muted-foreground text-xs">({groups.length} グループ)</span>
         </div>

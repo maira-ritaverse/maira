@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { AlertTriangle } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useMemo } from "react";
 
 import { Card } from "@/components/ui/card";
 import type { ClientRecordWithUpdateBadge } from "@/lib/clients/types";
@@ -63,9 +64,7 @@ export function SilenceAlertCard({ clients }: SilenceAlertCardProps) {
   return (
     <Card className="space-y-3 border-amber-200 bg-amber-50/30 p-4 dark:border-amber-900 dark:bg-amber-950/20">
       <div className="flex items-center gap-2">
-        <span aria-hidden className="text-amber-600 dark:text-amber-400">
-          ⚠
-        </span>
+        <AlertTriangle aria-hidden className="size-4 text-amber-600 dark:text-amber-400" />
         <h2 className="text-sm font-semibold">対応が止まっている顧客</h2>
         <span className="text-muted-foreground text-xs">(完了 / 見送り は除外)</span>
       </div>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState, type DragEvent } from "react";
+import { AlertTriangle } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useMemo, useState, type DragEvent } from "react";
 
 import {
   clientStatusLabels,
@@ -263,8 +264,9 @@ function KanbanCard({
           </span>
         )}
         {client.hasOtherAgencyStatus && (
-          <span className="inline-block rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-950 dark:text-purple-300">
-            ⚠ 他社
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-950 dark:text-purple-300">
+            <AlertTriangle className="size-2.5" aria-hidden />
+            他社
           </span>
         )}
         {client.referralBreakdown.total > 0 && (

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { AlertTriangle, Lightbulb, Settings2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -169,10 +170,14 @@ export function ClientsTable({
   return (
     <div className="space-y-2">
       <div className="text-muted-foreground flex flex-wrap items-center justify-between gap-2 text-[11px]">
-        <span>💡 列見出しをドラッグして並び替え、クリックでソート</span>
+        <span className="inline-flex items-center gap-1">
+          <Lightbulb className="size-3" aria-hidden />
+          列見出しをドラッグして並び替え、クリックでソート
+        </span>
         {onOpenColumnConfig && (
           <Button size="sm" variant="ghost" onClick={onOpenColumnConfig}>
-            ⚙ 列の表示
+            <Settings2 className="mr-1 size-3.5" aria-hidden />
+            列の表示
           </Button>
         )}
       </div>
@@ -338,10 +343,11 @@ function renderCell(
           )}
           {client.hasOtherAgencyStatus && (
             <span
-              className="inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-purple-700 dark:bg-purple-950 dark:text-purple-300"
+              className="inline-flex items-center gap-0.5 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-purple-700 dark:bg-purple-950 dark:text-purple-300"
               title="他社エージェント利用状況が記録されています(詳細は詳細画面で)"
             >
-              ⚠ 他社利用中
+              <AlertTriangle className="size-3" aria-hidden />
+              他社利用中
             </span>
           )}
         </div>

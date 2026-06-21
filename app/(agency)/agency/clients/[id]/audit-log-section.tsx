@@ -1,5 +1,6 @@
 "use client";
 
+import { Lock } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Card } from "@/components/ui/card";
@@ -134,10 +135,11 @@ function AuditLogItem({ entry }: { entry: ClientAuditLogEntry }) {
         </span>
         {isEncryptedField && (
           <span
-            className="inline-block rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-950 dark:text-purple-300"
+            className="inline-flex items-center gap-0.5 rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-950 dark:text-purple-300"
             title="暗号化された機密情報のため、変更内容は履歴に残しません"
           >
-            🔒 暗号化
+            <Lock className="size-2.5" aria-hidden />
+            暗号化
           </span>
         )}
       </div>
