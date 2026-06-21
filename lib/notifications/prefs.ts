@@ -22,7 +22,8 @@ export type NotificationKey =
   | "seeker_application_request" // 求職者が「応募を依頼」した
   | "task_assigned" // タスクが自分にアサインされた(将来用)
   | "client_silent_30d" // 30日沈黙顧客の日次サマリ(将来用)
-  | "line_message_received"; // 公式 LINE で 求職者 から メッセージ が 届いた
+  | "line_message_received" // 公式 LINE で 求職者 から メッセージ が 届いた
+  | "daily_digest"; // 毎朝 の ダイジェスト メール (タスク + 沈黙 顧客 + 停止 中 応募)
 
 export type NotificationPrefs = Partial<Record<NotificationKey, boolean>> & {
   /** メール 通知 全体 の マスター スイッチ。 未指定 / true = 送る、 false = 一切 送らない */
@@ -36,11 +37,13 @@ export const notificationPrefsSchema = z.object({
   task_assigned: z.boolean().optional(),
   client_silent_30d: z.boolean().optional(),
   line_message_received: z.boolean().optional(),
+  daily_digest: z.boolean().optional(),
   email_enabled: z.boolean().optional(),
 });
 
 /** UI に 表示 する 通知 種類 の 順序 (UI も これ に 従う) */
 export const NOTIFICATION_DISPLAY_ORDER: NotificationKey[] = [
+  "daily_digest",
   "line_message_received",
   "seeker_job_interest",
   "seeker_application_request",
@@ -57,6 +60,7 @@ export const NOTIFICATION_LABEL: Record<NotificationKey, string> = {
   task_assigned: "タスクの割り当て",
   client_silent_30d: "30 日以上対応していない顧客のサマリ",
   line_message_received: "公式 LINE での 新規 メッセージ",
+  daily_digest: "毎朝 の ダイジェスト メール",
 };
 
 /** 通知の説明(UI のヘルプテキスト) */
@@ -67,6 +71,8 @@ export const NOTIFICATION_DESCRIPTION: Record<NotificationKey, string> = {
   task_assigned: "(未実装)担当タスクが新しく自分に割り当てられた時に通知する",
   client_silent_30d: "(未実装)毎朝、対応が止まっている顧客の件数を通知する",
   line_message_received: "求職者 から 公式 LINE 経由 で メッセージ が 届いた 時 に 通知 する",
+  daily_digest:
+    "毎朝 8 時 に 今日 期限 / 超過 の タスク・ 沈黙 中 の 顧客・ 進捗 停止 中 の 応募 を 1 通 に まとめて 配信 (admin のみ、 メール 専用)",
 };
 
 /**

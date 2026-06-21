@@ -41,6 +41,7 @@ export function NotificationPrefsForm({ initialPrefs }: Props) {
     task_assigned: initialPrefs.task_assigned ?? true,
     client_silent_30d: initialPrefs.client_silent_30d ?? true,
     line_message_received: initialPrefs.line_message_received ?? true,
+    daily_digest: initialPrefs.daily_digest ?? true,
   });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
