@@ -17,7 +17,7 @@
 
 import { encryptField } from "@/lib/crypto/field-encryption";
 import { createServiceClient } from "@/lib/supabase/service";
-import { isSubscribed, type NotificationPrefs } from "./prefs";
+import { isSubscribed, type NotificationKey, type NotificationPrefs } from "./prefs";
 
 /**
  * 通知ペイロードの kind 文字列。
@@ -245,7 +245,7 @@ export async function fireInAppNotification(params: FireParams): Promise<void> {
     // 求職者 本人 向け は prefs gate 不要
     advisor_message_to_seeker: null,
   };
-  const notificationKey = KIND_TO_KEY[params.payload.kind] as keyof NotificationPrefs | null;
+  const notificationKey = KIND_TO_KEY[params.payload.kind] as NotificationKey | null;
 
   const recipients = (members ?? [])
     .filter((m) => {

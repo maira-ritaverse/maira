@@ -13,6 +13,7 @@
  */
 import { buildAbsoluteUrl } from "@/lib/config/site-url";
 import { sendLineMessageEmail } from "@/lib/email/line-message-received";
+import { isEmailEnabled, isSubscribed, type NotificationPrefs } from "@/lib/notifications/prefs";
 import { fireInAppNotification } from "@/lib/notifications/in-app";
 import { sendSlackMessage } from "@/lib/slack/notify";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -99,17 +100,24 @@ async function fireEmailsSafe(
   href: string,
 ): Promise<void> {
   try {
+    // admin 全員 を user_id + notification_prefs で 取得 し、 メール 全体 OFF と
+    // line_message_received の OFF を 両方 尊重 して 送信 対象 を フィルタ。
     const { data: admins } = await service
       .from("organization_members")
-      .select("user_id")
+      .select("user_id, notification_prefs")
       .eq("organization_id", args.organizationId)
       .eq("role", "admin");
 
-    const adminUserIds = ((admins ?? []) as Array<{ user_id: string }>).map((m) => m.user_id);
-    if (adminUserIds.length === 0) return;
+    type Row = { user_id: string; notification_prefs: NotificationPrefs | null };
+    const eligible = ((admins ?? []) as Row[]).filter(
+      (m) =>
+        isEmailEnabled(m.notification_prefs) &&
+        isSubscribed(m.notification_prefs, "line_message_received"),
+    );
+    if (eligible.length === 0) return;
 
     const lookups = await Promise.all(
-      adminUserIds.map((uid) => service.auth.admin.getUserById(uid)),
+      eligible.map((m) => service.auth.admin.getUserById(m.user_id)),
     );
     const emails = lookups
       .map((r) => r.data?.user?.email ?? null)
