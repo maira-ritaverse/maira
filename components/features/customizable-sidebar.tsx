@@ -225,9 +225,9 @@ export function CustomizableSidebar({
   const [editingTitleGroupId, setEditingTitleGroupId] = useState<string | null>(null);
   const [editingTitleValue, setEditingTitleValue] = useState("");
 
-  const startTitleEdit = (groupId: string, current: string) => {
+  const startTitleEdit = (groupId: string, current: string | null) => {
     setEditingTitleGroupId(groupId);
-    setEditingTitleValue(current);
+    setEditingTitleValue(current ?? "");
   };
   const commitTitleEdit = () => {
     if (!editingTitleGroupId) return;
@@ -425,7 +425,9 @@ export function CustomizableSidebar({
                         className="hover:bg-accent/60 text-foreground flex-1 truncate rounded px-1 py-0.5 text-left text-sm font-semibold"
                         title="クリックで名称を編集"
                       >
-                        {g.title}
+                        {g.title ?? (
+                          <span className="text-muted-foreground italic">(無題 / 区切り)</span>
+                        )}
                       </button>
                     )}
                     <button

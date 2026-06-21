@@ -27,7 +27,9 @@ export type ItemDescriptor = {
 
 export type GroupDescriptor = {
   id: string;
-  title: string;
+  /** タイトル。 null の 場合 は タイトル 行 を 出さず、 中身 を フラット に 並べる
+   *  (= 単に 順番 制御 用 の 区切り として 使う)。 */
+  title: string | null;
   itemIds: string[];
 };
 

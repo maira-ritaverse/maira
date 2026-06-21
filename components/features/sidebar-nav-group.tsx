@@ -51,7 +51,9 @@ export function SidebarLink({ item }: { item: SidebarItem }) {
 type GroupProps = {
   groupId: string;
   storageKeyPrefix: string;
-  title: string;
+  /** title が null の 場合 は タイトル ボタン を 出さず、 リンク を フラット 列挙 する
+   *  (= 折りたたみ なし、 単に 順番 制御 の 区切り として 使う グループ) */
+  title: string | null;
   items: SidebarItem[];
 };
 
@@ -65,8 +67,49 @@ type GroupProps = {
  * - ユーザが明示的に開いた状態は localStorage で永続化
  * - 折りたたみ中でもタイトル色が active 状態を示す
  * - グループ自体はアイコンを持たない(視覚ノイズ低減、項目アイコンに集中)
+ *
+ * title が null の 場合:
+ * - タイトル ボタン を 描画 せず、 リンク だけ を 通常 トップ レベル 風 に 並べる
+ * - フラット 表示 と 折りたたみ グループ を 混在 して 任意 順序 で 並べる ため の 仕組み
  */
-export function SidebarNavGroup({ groupId, storageKeyPrefix, title, items }: GroupProps) {
+export function SidebarNavGroup(props: GroupProps) {
+  // title null = フラット 表示 (折りたたみ なし)。
+  // hooks rule の ため、 早期 return ではなく 別 コンポーネント へ 振り分ける。
+  if (props.title === null) {
+    return <FlatGroupList items={props.items} />;
+  }
+  return <CollapsibleGroup {...props} title={props.title} />;
+}
+
+function FlatGroupList({ items }: { items: SidebarItem[] }) {
+  return (
+    <ul className="space-y-0.5">
+      {items.map((item) => (
+        <li key={item.href}>
+          <Link
+            href={item.href}
+            data-tour={item.dataAttr}
+            aria-current={item.isActive ? "page" : undefined}
+            className={linkClass(!!item.isActive)}
+          >
+            <NavIcon name={item.icon} className="size-4 shrink-0" />
+            <span className="flex-1 truncate">{item.label}</span>
+            {item.badge !== undefined && item.badge > 0 && (
+              <Badge active={!!item.isActive} count={item.badge} />
+            )}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function CollapsibleGroup({
+  groupId,
+  storageKeyPrefix,
+  title,
+  items,
+}: GroupProps & { title: string }) {
   const anyActive = items.some((i) => i.isActive);
 
   // 初期 expanded:active 項目を含む場合のみ true、それ以外はデフォルト折りたたみ。

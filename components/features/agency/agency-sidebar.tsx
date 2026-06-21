@@ -27,7 +27,6 @@ const BASE_ITEMS: ItemDescriptor[] = [
   { id: "clients", href: "/agency/clients", icon: "users", defaultLabel: "クライアント管理" },
   { id: "jobs", href: "/agency/jobs", icon: "briefcase", defaultLabel: "求人管理" },
   { id: "calendar", href: "/agency/calendar", icon: "calendar", defaultLabel: "カレンダー" },
-  { id: "meetings", href: "/agency/meetings", icon: "video", defaultLabel: "面談" },
   { id: "line", href: "/agency/line", icon: "message", defaultLabel: "LINE" },
   // LINE 設定: 新規 一斉配信 (テキスト / 求人 / 予約) を 登録 する 設定 画面。
   // /agency/line (トーク 一覧 + 履歴) と は 役割 が 違う ので 別 項目 に。
@@ -46,22 +45,43 @@ const ADMIN_ITEMS: ItemDescriptor[] = [
   { id: "members", href: "/agency/members", icon: "user-cog", defaultLabel: "メンバー管理" },
 ];
 
+/**
+ * デフォルト レイアウト (新規 ユーザー / 初期 化 時):
+ *   1. ダッシュボード (top)
+ *   2. カレンダー    (top)
+ *   3. 公式ライン    (group: LINE / LINE設定)
+ *   4. 顧客・求人管理  (group: クライアント管理 / 求人管理)
+ *   5. マーケティング  (タイトル無し group = 順番 制御 用)
+ *   6. お知らせ      ↑同 group
+ *   7. レポート      ↑同 group
+ *   設定           (group: メンバー管理 / 個人設定)
+ *
+ * 「面談」 は サイドバー から 除外 (カレンダー / 顧客 詳細 から アクセス できる ため)。
+ *
+ * 注: 描画 順 は 「topLevelItemIds → groups[*]」 固定 の ため、
+ *     カレンダー の 「後 に」 公式ライン グループ を 挟む に は
+ *     topLevel を 最小 (ダッシュボード / カレンダー) に 留め、
+ *     残り を group (タイトル 有 / 無) で 順序 制御 する。
+ */
 const DEFAULT_LAYOUT: SidebarLayout = {
-  topLevelItemIds: [
-    "dashboard",
-    "calendar",
-    "meetings",
-    "line",
-    "line-settings",
-    "marketing",
-    "announcements",
-    "reports",
-  ],
+  topLevelItemIds: ["dashboard", "calendar"],
   groups: [
     {
+      id: "line-group",
+      title: "公式ライン",
+      itemIds: ["line", "line-settings"],
+    },
+    {
       id: "crm",
-      title: "顧客・案件管理",
+      title: "顧客・求人管理",
       itemIds: ["clients", "jobs"],
+    },
+    {
+      // title null = タイトル 行 を 出さず トップ レベル 風 に フラット 表示。
+      // 順番 制御 だけ の ため の 区切り グループ。
+      id: "flat-tail",
+      title: null,
+      itemIds: ["marketing", "announcements", "reports"],
     },
     {
       id: "settings-group",
