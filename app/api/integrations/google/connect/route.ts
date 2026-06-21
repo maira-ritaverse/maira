@@ -1,27 +1,23 @@
 import { NextResponse } from "next/server";
 
 import { requireUser } from "@/lib/api/auth-guards";
-import { hasAddon } from "@/lib/features/entitlements";
 import { buildAuthorizeUrl, getGoogleConfig } from "@/lib/integrations/google";
 import { createOAuthState } from "@/lib/integrations/oauth-state";
 
 /**
  * GET /api/integrations/google/connect
  *
- * Google OAuth 認可フローを開始。アドオン契約者のみ。
+ * Google OAuth 認可 フロー を 開始。 基本 機能 (Google Meet 会議 作成 等) は
+ * 全 ユーザー に 開放 する。
+ *
+ * Google Drive 録音 自動 取込 機能 (= meeting_recording_auto アドオン) は
+ * 別途 pickup cron 側 で hasAddon チェック を かける ことで 課金 ガード を
+ * 維持 する。
  */
 export async function GET() {
   const guard = await requireUser();
   if (!guard.ok) return guard.response;
-  const { supabase, user } = guard;
-
-  const addonOk = await hasAddon(supabase, user.id, "meeting_recording_auto");
-  if (!addonOk) {
-    return NextResponse.json(
-      { error: "addon_required", addon: "meeting_recording_auto" },
-      { status: 402 },
-    );
-  }
+  const { user } = guard;
 
   const config = getGoogleConfig();
   if (!config) {
