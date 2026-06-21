@@ -105,10 +105,9 @@ export function DisplayNameEditor({ lineUserId, displayName, customName }: Props
           placeholder={displayName ?? ""}
           className="flex-1 rounded-md border px-2 py-1 text-sm"
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              void save();
-            } else if (e.key === "Escape") {
+            // Enter での 暴発 保存 を 避ける ため、 Escape の キャンセル のみ。
+            // 保存 は ✓ ボタン を 明示 的 に 押して もらう。
+            if (e.key === "Escape") {
               setEditing(false);
             }
           }}
