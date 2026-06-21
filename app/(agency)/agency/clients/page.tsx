@@ -1,3 +1,4 @@
+import { Users } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -67,7 +68,7 @@ export default async function ClientsPage() {
 
       {clients.length === 0 ? (
         <EmptyState
-          icon="👥"
+          icon={<Users className="size-10" aria-hidden />}
           title="クライアントがまだ登録されていません"
           description="「クライアント登録」ボタンから追加できます"
         />

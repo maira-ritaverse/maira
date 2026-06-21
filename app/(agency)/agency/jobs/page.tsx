@@ -1,3 +1,4 @@
+import { Briefcase } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -84,7 +85,7 @@ export default async function JobsPage({
 
       {jobs.length === 0 ? (
         <EmptyState
-          icon="💼"
+          icon={<Briefcase className="size-10" aria-hidden />}
           title="求人がまだ登録されていません"
           description="「求人登録」ボタンから追加できます"
         />

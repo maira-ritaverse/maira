@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Handshake } from "lucide-react";
 import Link from "next/link";
+import { useMemo, useState } from "react";
 
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -159,8 +160,9 @@ export function ApplicationsListClient({ applications }: Props) {
                         {/* エージェント経由で /app/agent-referrals から「追加」された行は notes に
                             「○○エージェント 経由」が含まれる。ローカル管理と区別するためのバッジ。 */}
                         {app.details.notes?.includes("経由") && (
-                          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] whitespace-nowrap text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-                            🤝 エージェント経由
+                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] whitespace-nowrap text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                            <Handshake className="size-2.5" aria-hidden />
+                            エージェント経由
                           </span>
                         )}
                         {dueBadge && (

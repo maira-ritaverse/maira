@@ -1,5 +1,6 @@
 "use client";
 
+import { Check } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -316,7 +317,7 @@ export function BroadcastForm({
                         : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
                     }`}
                   >
-                    {checked ? "✓ " : ""}
+                    {checked && <Check className="mr-0.5 inline-block size-3" aria-hidden />}
                     {tag.name}
                   </button>
                 );

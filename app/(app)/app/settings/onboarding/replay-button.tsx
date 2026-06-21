@@ -1,5 +1,6 @@
 "use client";
 
+import { GraduationCap } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
@@ -14,5 +15,10 @@ import { Button } from "@/components/ui/button";
  * onboarded_at は autoStart=false 側で扱われるため、再表示で記録は変更されない。
  */
 export function OnboardingReplayButton() {
-  return <Button render={<Link href="/app?replay=tour" />}>🎓 ツアーを再表示する</Button>;
+  return (
+    <Button render={<Link href="/app?replay=tour" />}>
+      <GraduationCap className="mr-2 size-4" aria-hidden />
+      ツアーを再表示する
+    </Button>
+  );
 }

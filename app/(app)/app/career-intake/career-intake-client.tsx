@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -198,7 +199,10 @@ export function CareerIntakeClient({ initialRecordings }: Props) {
         {warnings.length > 0 && (
           <ul className="space-y-0.5 text-xs text-amber-700 dark:text-amber-300">
             {warnings.map((w, i) => (
-              <li key={i}>⚠ {w.message}</li>
+              <li key={i} className="inline-flex items-center gap-1">
+                <AlertTriangle className="size-3 shrink-0" aria-hidden />
+                {w.message}
+              </li>
             ))}
           </ul>
         )}
