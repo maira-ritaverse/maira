@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Card } from "@/components/ui/card";
+import { PageHeading } from "@/components/ui/page-heading";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { type NotificationPrefs } from "@/lib/notifications/prefs";
@@ -36,12 +37,10 @@ export default async function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">個人設定</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          通知 の 受け取り方 や 各種 連携 を 変更 でき ます
-        </p>
-      </div>
+      <PageHeading
+        title="個人設定"
+        description="通知 の 受け取り方 や 各種 連携 を 変更 でき ます"
+      />
 
       {/*
         2 カラム レイアウト:

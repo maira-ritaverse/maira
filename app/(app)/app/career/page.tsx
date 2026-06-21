@@ -5,6 +5,7 @@ import { CareerRediagnoseButton } from "@/components/features/career-rediagnose-
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeading } from "@/components/ui/page-heading";
 import { getCareerProfile, listCareerConversations } from "@/lib/career/conversations";
 import { createClient } from "@/lib/supabase/server";
 
@@ -27,12 +28,10 @@ export default async function CareerListPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">キャリア棚卸し</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          雑談感覚であなたの強みや価値観を整理します
-        </p>
-      </div>
+      <PageHeading
+        title="キャリア棚卸し"
+        description="雑談感覚であなたの強みや価値観を整理します"
+      />
 
       {profileData && (
         <Card className="border-primary/40 bg-primary/5 p-6">
