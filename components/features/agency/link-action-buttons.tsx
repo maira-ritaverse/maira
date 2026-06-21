@@ -2,18 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+
 import { Button } from "@/components/ui/button";
+import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 
 /**
  * エージェント側:クライアント詳細での連携アクション
@@ -169,57 +160,35 @@ export function ResendInvitationButton({ clientRecordId }: { clientRecordId: str
 // 解除申請を承認(revoke_requested → revoked、P4)
 //
 // 即時に開示が停止する破壊的操作。承認しない場合は猶予期限の経過で自動的に
-// revoked に確定する(P6 cron、未実装)が、エージェント承認は「早く確定する」
+// revoked に確定する(P6 cron = /api/internal/clients/finalize-revokes、
+// 日次 03:00 UTC = JST 12:00 で 動作 済)。 エージェント承認は「早く確定する」
 // 選択肢として提供される。拒否・差し戻し経路は方針として作らない(本人の
 // 撤回権を守るため、エージェントは早く確定できるだけ)。
 // ====================================================================
 export function ApproveRevokeButton({ clientRecordId }: { clientRecordId: string }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-
-  const handleConfirm = () => {
-    setError(null);
-    startTransition(async () => {
-      try {
+  return (
+    <ConfirmActionDialog
+      trigger={<Button size="sm">解除を承認する</Button>}
+      title="解除申請を承認しますか?"
+      description={
+        <>
+          承認すると、このクライアントの履歴書・職務経歴書・希望条件の閲覧が
+          <strong>即座に停止します</strong>
+          。再連携には、改めて招待を送り直して求職者の承認を得る必要があります。
+          <span className="text-muted-foreground mt-2 block text-xs">
+            承認しなくても、猶予期限の経過で自動的に停止します。今すぐ確定したい場合のみ承認してください。
+          </span>
+        </>
+      }
+      confirmLabel="解除を承認する"
+      pendingLabel="承認中..."
+      destructive
+      onConfirm={async () => {
         await postApproveRevoke(clientRecordId);
         router.refresh();
-        setOpen(false);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "通信エラーが発生しました");
-      }
-    });
-  };
-
-  return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger render={<Button size="sm" />}>解除を承認する</AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>解除申請を承認しますか?</AlertDialogTitle>
-          <AlertDialogDescription>
-            承認すると、このクライアントの履歴書・職務経歴書・希望条件の閲覧が
-            <strong>即座に停止します</strong>
-            。再連携には、改めて招待を送り直して求職者の承認を得る必要があります。
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <p className="text-muted-foreground text-xs">
-          承認しなくても、猶予期限の経過で自動的に停止します。今すぐ確定したい場合のみ承認してください。
-        </p>
-        {error && (
-          <p className="text-sm text-red-600" role="alert">
-            {error}
-          </p>
-        )}
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={isPending}>キャンセル</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" onClick={handleConfirm} disabled={isPending}>
-            {isPending ? "承認中..." : "解除を承認する"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+      }}
+    />
   );
 }
 
@@ -228,48 +197,22 @@ export function ApproveRevokeButton({ clientRecordId }: { clientRecordId: string
 // ====================================================================
 export function CancelInvitationButton({ clientRecordId }: { clientRecordId: string }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-
-  const handleConfirm = () => {
-    setError(null);
-    startTransition(async () => {
-      try {
+  return (
+    <ConfirmActionDialog
+      trigger={
+        <Button variant="outline" size="sm">
+          招待を取り消す
+        </Button>
+      }
+      title="招待を取り消しますか?"
+      description="このクライアントへの連携招待を取り消します。求職者側で承認待ち状態が解除されます。必要なら再度招待を出すことができます。"
+      confirmLabel="取り消す"
+      pendingLabel="取消中..."
+      destructive
+      onConfirm={async () => {
         await deleteInvite(clientRecordId);
         router.refresh();
-        setOpen(false);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "通信エラーが発生しました");
-      }
-    });
-  };
-
-  return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger render={<Button variant="outline" size="sm" />}>
-        招待を取り消す
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>招待を取り消しますか?</AlertDialogTitle>
-          <AlertDialogDescription>
-            このクライアントへの連携招待を取り消します。求職者側で承認待ち状態が解除されます。
-            必要なら再度招待を出すことができます。
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        {error && (
-          <p className="text-sm text-red-600" role="alert">
-            {error}
-          </p>
-        )}
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={isPending}>キャンセル</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" onClick={handleConfirm} disabled={isPending}>
-            {isPending ? "取消中..." : "取り消す"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+      }}
+    />
   );
 }
