@@ -199,6 +199,17 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
               {link.unfollowed_at && " · 解除済"}
             </p>
           </div>
+          {/* モバイル 限定 「詳細」 リンク。 lg 未満 で は サイドバー が 非表示 と
+              なる ため、 紐付け 先 の クライアント 詳細 へ ジャンプ できる 導線
+              を ヘッダー に 出す (紐付け 無し なら 非表示)。 */}
+          {link.client_record_id && (
+            <a
+              href={`/agency/clients/${link.client_record_id}`}
+              className="text-muted-foreground hover:text-foreground hover:bg-accent shrink-0 rounded-md border px-2.5 py-1 text-[11px] font-medium lg:hidden"
+            >
+              詳細
+            </a>
+          )}
         </header>
 
         <LineConversationClient
