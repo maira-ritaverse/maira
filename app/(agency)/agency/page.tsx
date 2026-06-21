@@ -36,11 +36,20 @@ import { MyTasksWidget } from "./my-tasks-widget";
  *   - listClientRecordsWithUpdateBadge:既存のリッチ取得を再利用(沈黙 / 重複の集計)
  *   - agency_tasks(自分宛、未完了)
  *   - client_interactions(全件、直近 N 件)
+ *   - getOrgAiTotalQuotaSummary:今月 AI 利用 残数 (RPC)
  *
  * パフォーマンス:
  *   - clients は全件取得 → JS で集計(現状の規模感に合わせる)。
  *     ページネーション導入後はサーバー側集計 RPC に切り替える前提。
+ *
+ * キャッシュ:
+ *   - AI 残数 / タスク / 面談 等 は AI 機能 / カレンダー 操作 で 頻繁 に 変わる ため
+ *     force-dynamic + revalidate=0 で 毎リクエスト 必ず 最新 値 を 取得 する。
+ *     (これ が ないと AI を 使って も ダッシュボード の カウント が 更新 されない)
  */
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function AgencyDashboardPage() {
   const supabase = await createClient();
   const {
