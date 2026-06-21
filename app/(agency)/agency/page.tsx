@@ -101,6 +101,14 @@ export default async function AgencyDashboardPage() {
   //
   // サーバー時刻ベースで集計する(クライアント側のタイムゾーン違いを吸収)。
   // Date.now() は react-hooks/purity で warn されるため new Date().getTime() を使う。
+  //
+  // パフォーマンス メモ (E-1 #4):
+  //   全 顧客 を 取得 + JS で 集計 する 力 ずく 方式 (= 上の listClientRecordsWithUpdateBadge
+  //   を 経由)。 ~500 件 までは 体感 影響 なし、 1000 件 超 で 顕在 化。
+  //   duplicates / dataQuality / clientNameMap の 全 3 軸 が 全件 を 要求 する ため
+  //   沈黙 集計 だけ RPC 化 しても 効果 限定 的。 1000 件 超 を 持つ 組織 が 増えた
+  //   段階 で 「集計 RPC + pagination + 必要 行 のみ 引く clientNameMap」 への
+  //   全面 再設計 に 移行 する。
   // ────────────────────────────────────────────
   const now = new Date().getTime();
   const DAY = 24 * 60 * 60 * 1000;
