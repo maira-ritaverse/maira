@@ -35,11 +35,10 @@ export function LeadRequestForm({ variant = "light" }: Props) {
       >
         <div className="flex items-center gap-2">
           <CheckCircle2 className="size-6 text-emerald-600" aria-hidden />
-          <p className="text-lg font-semibold">資料 請求 を 受け付け ました</p>
+          <p className="text-lg font-semibold">資料請求を受け付けました</p>
         </div>
         <p className="text-sm leading-relaxed text-slate-700">
-          1 営業 日 以内 に 担当 から 資料 (PDF) と 簡単 な ご紹介 を お送り します。 ご入力 の
-          メール アドレス を 受信 設定 に ご注意 ください。
+          1営業日以内に担当から資料(PDF)と簡単なご紹介をお送りします。ご入力のメールアドレスを受信設定にご注意ください。
         </p>
       </div>
     );
@@ -98,7 +97,7 @@ export function LeadRequestForm({ variant = "light" }: Props) {
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="space-y-1">
           <span className={labelClass}>
-            会社 名 <span className="text-red-500">*</span>
+            会社名 <span className="text-red-500">*</span>
           </span>
           <input
             name="companyName"
@@ -111,7 +110,7 @@ export function LeadRequestForm({ variant = "light" }: Props) {
         </label>
         <label className="space-y-1">
           <span className={labelClass}>
-            ご担当 者 名 <span className="text-red-500">*</span>
+            ご担当者名 <span className="text-red-500">*</span>
           </span>
           <input
             name="contactName"
@@ -137,7 +136,7 @@ export function LeadRequestForm({ variant = "light" }: Props) {
           />
         </label>
         <label className="space-y-1">
-          <span className={labelClass}>電話 (任意)</span>
+          <span className={labelClass}>電話(任意)</span>
           <input
             name="phone"
             maxLength={40}
@@ -149,23 +148,23 @@ export function LeadRequestForm({ variant = "light" }: Props) {
       </div>
 
       <label className="block space-y-1">
-        <span className={labelClass}>何 で 知り ました か? (任意)</span>
+        <span className={labelClass}>何で知りましたか?(任意)</span>
         <input
           name="source"
           maxLength={80}
-          placeholder="X / 知人 紹介 / 検索 など"
+          placeholder="X / 知人紹介 / 検索 など"
           className={inputClass}
           disabled={status === "submitting"}
         />
       </label>
 
       <label className="block space-y-1">
-        <span className={labelClass}>ご要望 / ご質問 (任意)</span>
+        <span className={labelClass}>ご要望・ご質問(任意)</span>
         <textarea
           name="notes"
           rows={3}
           maxLength={2000}
-          placeholder="気 に なる 機能、 試した い 内容 など"
+          placeholder="気になる機能、試したい内容 など"
           className={`${inputClass} resize-y`}
           disabled={status === "submitting"}
         />
@@ -183,17 +182,17 @@ export function LeadRequestForm({ variant = "light" }: Props) {
         className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-emerald-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition-colors hover:bg-emerald-600 disabled:opacity-60"
       >
         <FileText className="size-4" aria-hidden />
-        {status === "submitting" ? "送信 中…" : "資料 を 請求 する"}
+        {status === "submitting" ? "送信中…" : "資料を請求する"}
       </button>
 
       <p
         className={`${variant === "dark" ? "text-white/60" : "text-slate-500"} text-[11px] leading-relaxed`}
       >
-        送信 する と、 1 営業 日 以内 に 担当 から 資料 PDF を お送り します。 ご入力 内容 は{" "}
+        送信すると、1営業日以内に担当から資料PDFをお送りします。ご入力内容は
         <a href="/privacy" className="underline">
-          プライバシー ポリシー
-        </a>{" "}
-        に 沿って 取り扱い ます。
+          プライバシーポリシー
+        </a>
+        に沿って取り扱います。
       </p>
     </form>
   );

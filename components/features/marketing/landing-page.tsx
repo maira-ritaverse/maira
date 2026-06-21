@@ -90,7 +90,7 @@ function Header() {
             className="inline-flex items-center gap-1 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
           >
             <FileText className="size-3.5" aria-hidden />
-            資料 請求
+            資料請求
           </a>
         </nav>
       </div>
@@ -109,16 +109,15 @@ function Hero() {
         <div className="space-y-6">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
             <Sparkles className="size-3" aria-hidden />
-            転職 エージェント 業務 効率 化 SaaS
+            転職エージェント業務効率化SaaS
           </div>
           <h1 className="text-4xl leading-[1.2] font-bold tracking-tight sm:text-5xl">
-            エージェント 業務 を、
+            エージェント業務を、
             <br />
-            <span className="text-emerald-600">AI で 一人 3 倍 速 に</span>
+            <span className="text-emerald-600">AIで1人3倍速に。</span>
           </h1>
           <p className="text-base leading-relaxed text-slate-600 sm:text-lg">
-            クライアント 管理・公式 LINE 連携・カレンダー 同期・推薦文 AI 下書き ・進捗 管理 まで、
-            日々 の 業務 を 1 つ の 画面 で 完結。 取りこぼし を 朝の ダイジェスト で 防ぎ ます。
+            クライアント管理・公式LINE連携・カレンダー同期・推薦文AI下書き・進捗管理まで、日々の業務を1つの画面で完結。取りこぼしは朝のダイジェストで防ぎます。
           </p>
           <div className="flex flex-wrap gap-3">
             <a
@@ -126,36 +125,36 @@ function Hero() {
               className="inline-flex items-center gap-1.5 rounded-md bg-emerald-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 hover:bg-emerald-600"
             >
               <FileText className="size-4" aria-hidden />
-              資料 を 請求 する (無料)
+              資料を請求する(無料)
             </a>
             <a
               href="#features"
               className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:border-slate-400"
             >
-              機能 を 見る →
+              機能を見る →
             </a>
           </div>
           <ul className="grid grid-cols-2 gap-2 pt-2 text-xs text-slate-600">
             <li className="flex items-center gap-1.5">
               <CheckCircle2 className="size-3.5 text-emerald-500" aria-hidden />
-              テスト 導入 1 ヶ月 無料
+              テスト導入1ヶ月無料
             </li>
             <li className="flex items-center gap-1.5">
               <CheckCircle2 className="size-3.5 text-emerald-500" aria-hidden />
-              初期 セット アップ 30 分
+              初期セットアップ30分
             </li>
             <li className="flex items-center gap-1.5">
               <CheckCircle2 className="size-3.5 text-emerald-500" aria-hidden />
-              データ 移行 サポート
+              データ移行サポート
             </li>
             <li className="flex items-center gap-1.5">
               <CheckCircle2 className="size-3.5 text-emerald-500" aria-hidden />
-              解約 時 データ エクスポート
+              解約時データエクスポート
             </li>
           </ul>
         </div>
         <ScreenshotFrame
-          caption="ダッシュボード: 今日 期限 の タスク と 沈黙 顧客 を 一目 で"
+          caption="ダッシュボード:今日期限のタスクと沈黙顧客を一目で"
           src="/marketing/dashboard.png"
           alt="Maira ダッシュボード"
         >
@@ -174,33 +173,33 @@ function PainSection() {
   const pains: { icon: LucideIcon; title: string; body: string }[] = [
     {
       icon: Bell,
-      title: "対応 忘れ で 機会 損失",
-      body: "顧客 が 100 人 を 超える と、 連絡 漏れ が 月 数件 出る",
+      title: "対応忘れで機会損失",
+      body: "顧客が100人を超えると、連絡漏れが月数件発生する",
     },
     {
       icon: FileText,
-      title: "書類 作成 が 時間 を 食う",
-      body: "履歴書・推薦文 を 1 件 30 分 かけて 手 書き して いる",
+      title: "書類作成が時間を奪う",
+      body: "履歴書・推薦文を1件30分かけて手書きしている",
     },
     {
       icon: MessageSquare,
-      title: "LINE の 個別 対応 が 限界",
-      body: "属人 化 して 担当 不在 時 に 返信 が 止まる",
+      title: "LINEの個別対応が限界",
+      body: "属人化して、担当不在時に返信が止まる",
     },
     {
       icon: Workflow,
-      title: "進捗 管理 が 表計算 任せ",
-      body: "Excel が 増殖 し、 誰 が 何 を やった か わから ない",
+      title: "進捗管理が表計算任せ",
+      body: "Excelが増殖し、誰が何をやったか分からない",
     },
   ];
   return (
     <section className="border-y border-slate-100 bg-slate-50/50 py-20">
       <div className="mx-auto max-w-6xl px-5 lg:px-8">
         <p className="text-center text-xs font-semibold tracking-[0.2em] text-emerald-600 uppercase">
-          こんな 困り事 ありませんか
+          こんなお困りごと、ありませんか
         </p>
         <h2 className="mt-3 text-center text-3xl font-bold tracking-tight sm:text-4xl">
-          エージェント 業務 の 「あるある」 を AI で 解消
+          エージェント業務の「あるある」をAIで解消
         </h2>
         <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {pains.map((p) => (
@@ -226,14 +225,13 @@ function OverviewSection() {
       <div className="mx-auto max-w-6xl px-5 lg:px-8">
         <div className="text-center">
           <p className="text-xs font-semibold tracking-[0.2em] text-emerald-600 uppercase">
-            Maira の 全体 像
+            Mairaの全体像
           </p>
           <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
-            求職者 と エージェント を、 1 つ の ハブ で つなぐ
+            求職者とエージェントを、1つのハブでつなぐ
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-slate-600">
-            求職者 から の LINE / Web 経由 の アクション を、 エージェント 業務 と シームレス に
-            連携。 各 ハブ が AI で 連動 します。
+            求職者からのLINE/Web経由のアクションをエージェント業務とシームレスに連携。各ハブがAIで連動します。
           </p>
         </div>
         <div className="mt-12 overflow-hidden rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
@@ -307,14 +305,14 @@ function FeatureCrm() {
   return (
     <div id="features">
       <FeatureSection
-        badge="クライアント 管理"
-        title="求職者 を 「忘れない」 CRM"
-        description="紹介 状況 / 沈黙 期間 / 重複 を 自動 検出。 タスク と 期限 で 「次 やる こと」 が 一目 で わかります。"
+        badge="クライアント管理"
+        title="求職者を「忘れない」CRM"
+        description="紹介状況・沈黙期間・重複を自動検出。タスクと期限で「次にやること」が一目でわかります。"
         bullets={[
-          "30 / 60 / 90 日 沈黙 顧客 を 自動 ハイライト",
-          "電話 / メール / 同名 で 重複 候補 を 自動 検出",
-          "未入力 項目 を フィールド 別 に 可視 化",
-          "カンバン / 一覧 / カード を ワン クリック 切替",
+          "30/60/90日沈黙の顧客を自動ハイライト",
+          "電話・メール・同名で重複候補を自動検出",
+          "未入力項目をフィールド別に可視化",
+          "カンバン/一覧/カードをワンクリックで切替",
         ]}
         mock={<CrmMock />}
       />
@@ -325,18 +323,18 @@ function FeatureCrm() {
 function FeatureLine() {
   return (
     <FeatureSection
-      badge="公式 LINE 連携"
-      title="LINE で 100 名 を 一人 で さばく"
-      description="公式 LINE と Maira を 直接 接続。 トーク / 担当 者 割り当て / 一斉 配信 / シナリオ 自動 化 まで Maira 内 で 完結。"
+      badge="公式LINE連携"
+      title="LINEで100名を一人でさばく"
+      description="公式LINEとMairaを直接接続。トーク・担当者割り当て・一斉配信・シナリオ自動化までMaira内で完結します。"
       bullets={[
-        "1 友達 単位 で メモ / タグ / 担当 者 割当 + 編集 履歴",
-        "会話 上 で 面談 候補 日 提案 → タップ で 会議 URL 発行 まで 一気通貫",
-        "送信 タイミング を 候補 別 に 確認 / 利用 履歴 を 右 サイドバー に 集約",
-        "短縮 URL で クリック / 応募 を 計測",
+        "1友達単位でメモ・タグ・担当者割当+編集履歴",
+        "会話上で面談候補日提案 → タップで会議URL発行まで一気通貫",
+        "送信タイミングを候補別に確認/利用履歴を右サイドバーに集約",
+        "短縮URLでクリック・応募を計測",
       ]}
       mock={<LineConversationMock />}
       screenshotSrc="/marketing/line-conversation.png"
-      screenshotAlt="Maira LINE 会話 画面"
+      screenshotAlt="Maira LINE会話画面"
       reverse
     />
   );
@@ -345,18 +343,18 @@ function FeatureLine() {
 function FeatureLineMa() {
   return (
     <FeatureSection
-      badge="LINE MA (β)"
-      title="休眠 求職者 を 自動 で 掘り起こす"
-      description="「友達 追加 後 ウェルカム」「面談 前 リマインド」「休眠 求職者 掘り起こし」 等、 求職者 ライフ サイクル に 合わせた 自動 配信 シナリオ を プリセット で 提供。"
+      badge="LINE MA(β)"
+      title="休眠求職者を自動で掘り起こす"
+      description="「友達追加後ウェルカム」「面談前リマインド」「休眠求職者の掘り起こし」など、求職者ライフサイクルに合わせた自動配信シナリオをプリセットで提供します。"
       bullets={[
-        "全 友達 / 連携 済 / 未連携 / タグ 別 に 一斉 配信",
-        "7 件 の シナリオ プリセット を ON/OFF で 即 運用 開始",
-        "配信数 / クリック / 返信 / 応募 を 月次 KPI で 可視 化",
-        "テキスト / 求人 カード の 2 種類、 即時 + 予約 配信 対応",
+        "全友達/連携済/未連携/タグ別に一斉配信",
+        "7件のシナリオプリセットをON/OFFで即運用開始",
+        "配信数・クリック・返信・応募を月次KPIで可視化",
+        "テキスト/求人カードの2種類、即時+予約配信に対応",
       ]}
       mock={<LineConversationMock />}
       screenshotSrc="/marketing/line-ma.png"
-      screenshotAlt="Maira LINE MA 画面"
+      screenshotAlt="Maira LINE MA画面"
     />
   );
 }
@@ -364,18 +362,18 @@ function FeatureLineMa() {
 function FeatureCalendar() {
   return (
     <FeatureSection
-      badge="カレンダー + 会議 連携"
-      title="月 ビュー で 面談 と 受付 を 一目 把握"
-      description="エージェント が 候補 日 3 件 を 投げる だけ。 求職者 が タップ し た 瞬間 に 会議 URL が 発行 され、 双方 の カレンダー に 同期。 月 ビュー で 全 メンバー の 予定 を 一望 可能。"
+      badge="カレンダー+会議連携"
+      title="月ビューで面談と受付を一目把握"
+      description="エージェントが候補日3件を投げるだけ。求職者がタップした瞬間に会議URLが発行され、双方のカレンダーに同期。月ビューで全メンバーの予定を一望できます。"
       bullets={[
-        "Google カレンダー / Zoom と OAuth 連携 (自動 URL 発行)",
-        "面談 / 受付 / タスク / 対応 履歴 / Google 予定 を 1 画面 に",
-        "面談 24h / 1h 前 の 自動 リマインダー",
-        "カレンダー 購読 URL で 個人 端末 (iCal) でも 閲覧",
+        "Googleカレンダー/ZoomとOAuth連携で自動URL発行",
+        "面談・受付・タスク・対応履歴・Google予定を1画面に",
+        "面談24時間前/1時間前に自動リマインダー",
+        "カレンダー購読URLで個人端末(iCal等)からも閲覧可",
       ]}
       mock={<CalendarMock />}
       screenshotSrc="/marketing/calendar.png"
-      screenshotAlt="Maira カレンダー 月 ビュー"
+      screenshotAlt="Mairaカレンダー月ビュー"
     />
   );
 }
@@ -384,17 +382,17 @@ function FeatureReport() {
   return (
     <FeatureSection
       badge="レポート"
-      title="ステータス 分布 と 売上 を 月次 で 把握"
-      description="求職者 / 紹介 が 今 どの 段階 に 何件 あるか、 純売上 / 入金 / 返金 まで 1 画面 で 確認。 月次 / 任意 期間 で 切り替え 可能。"
+      title="ステータス分布と売上を月次で把握"
+      description="求職者・紹介が今どの段階に何件あるか、純売上・入金・返金まで1画面で確認できます。月次/任意期間で切り替え可能。"
       bullets={[
-        "求職者 ステータス × 紹介 ステータス の 2 軸 分布",
-        "純売上 = 成約 + 追加 報酬 − 返金 の 月次 集計",
-        "今月 / 先月 / 任意 期間 を ワン クリック で 切替",
-        "アドバイザー 別 パフォーマンス (admin のみ)",
+        "求職者ステータス × 紹介ステータスの2軸分布",
+        "純売上 = 成約 + 追加報酬 − 返金 の月次集計",
+        "今月/先月/任意期間をワンクリックで切替",
+        "アドバイザー別パフォーマンス(管理者のみ)",
       ]}
       mock={<DashboardMock />}
       screenshotSrc="/marketing/report.png"
-      screenshotAlt="Maira レポート 画面"
+      screenshotAlt="Mairaレポート画面"
       reverse
     />
   );
@@ -403,14 +401,14 @@ function FeatureReport() {
 function FeatureAiDocument() {
   return (
     <FeatureSection
-      badge="AI 文書 生成"
-      title="録音 を 流す だけ で 履歴 書 が できる"
-      description="面談 録音 (Zoom / 手動 アップロード) を Whisper で 文字 起こし → Claude が 構造 化 → 履歴 書・職経歴書・推薦文 を 自動 ドラフト。"
+      badge="AI文書生成"
+      title="録音を流すだけで履歴書ができる"
+      description="面談録音(Zoom/手動アップロード)をWhisperで文字起こし → Claudeが構造化 → 履歴書・職務経歴書・推薦文を自動ドラフト。"
       bullets={[
-        "Whisper による 高 精度 文字 起こし",
-        "Claude Sonnet 4.6 で 構造 化 抽出",
-        "PDF (Puppeteer) で 厚労省 推奨 様式 を 出力",
-        "編集 履歴 / バージョン 管理 で 安全 に 推敲",
+        "Whisperによる高精度な文字起こし",
+        "Claude Sonnet 4.6で構造化抽出",
+        "PDF(Puppeteer)で厚労省推奨様式を出力",
+        "編集履歴/バージョン管理で安全に推敲",
       ]}
       mock={<AiDocumentMock />}
       reverse
@@ -421,13 +419,13 @@ function FeatureAiDocument() {
 function FeatureDigest() {
   return (
     <FeatureSection
-      badge="プロアクティブ 伴走"
-      title="毎朝 8 時、 「今日 やる こと」 が 1 通 で 届く"
-      description="期限 切れ タスク・30 日 沈黙 顧客・進捗 停止 中 の 応募 を 集計 して、 admin に メール 配信。 0 件 の 朝 は 送ら ない の で 開封 率 を 維持。"
+      badge="プロアクティブ伴走"
+      title="毎朝8時、「今日やること」が1通で届く"
+      description="期限切れタスク・30日沈黙顧客・進捗停止中の応募を集計して、管理者にメール配信。0件の朝は送らないので開封率を維持できます。"
       bullets={[
-        "個人 設定 で メール 全体 ON/OFF + 種類 別 ON/OFF",
-        "アプリ 内 通知 も 連動 (LINE 受信、 興味 表明、 応募)",
-        "「何 を いつまで に やる」 を Maira が 教えて くれる",
+        "個人設定でメール全体ON/OFF + 種類別ON/OFF",
+        "アプリ内通知も連動(LINE受信・興味表明・応募)",
+        "「何をいつまでにやるか」をMairaが教えてくれる",
       ]}
       mock={<DigestMailMock />}
     />
@@ -442,23 +440,23 @@ function SecuritySection() {
   const items: { icon: LucideIcon; title: string; body: string }[] = [
     {
       icon: Lock,
-      title: "AES-256-GCM 暗号 化",
-      body: "会話・キャリア・タスク・応募 詳細 を サーバー サイド 暗号 化",
+      title: "AES-256-GCM暗号化",
+      body: "会話・キャリア・タスク・応募詳細をサーバーサイドで暗号化",
     },
     {
       icon: Shield,
-      title: "RLS で 完全 テナント 分離",
-      body: "Supabase RLS で 組織 を 跨いだ アクセス を 物理 的 に 不可",
+      title: "RLSで完全テナント分離",
+      body: "Supabase RLSで、組織を跨いだアクセスを物理的に不可能に",
     },
     {
       icon: CheckCircle2,
-      title: "Webhook HMAC 検証",
-      body: "LINE / Stripe / Zoom 等 全 webhook を HMAC-SHA256 で 署名 検証",
+      title: "Webhook HMAC検証",
+      body: "LINE/Stripe/Zoom等の全webhookをHMAC-SHA256で署名検証",
     },
     {
       icon: FileText,
-      title: "運営 アクセス 範囲 明示",
-      body: "プライバシー ポリシー で 運営 の 閲覧 範囲 を 明文 化",
+      title: "運営アクセス範囲を明示",
+      body: "プライバシーポリシーで運営の閲覧範囲を明文化",
     },
   ];
   return (
@@ -469,10 +467,10 @@ function SecuritySection() {
             Security
           </p>
           <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
-            機密 情報 を 守る ため の 4 段 防御
+            機密情報を守るための4段防御
           </h2>
           <p className="mx-auto mt-3 max-w-2xl text-sm text-slate-300">
-            求職者 の 個人 情報 と 採用 業務 の 機密 性 を 真剣 に 設計 して います。
+            求職者の個人情報と採用業務の機密性を、真剣に設計しています。
           </p>
         </div>
         <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -505,20 +503,19 @@ function CtaSection() {
             Get started
           </p>
           <h2 className="text-3xl leading-tight font-bold tracking-tight sm:text-4xl">
-            まず は 1 ヶ月 無料 で
+            まずは1ヶ月、
             <br />
-            お試し ください
+            無料でお試しください
           </h2>
           <p className="text-sm leading-relaxed text-white/90 sm:text-base">
-            お申し込み 後、 1 営業 日 以内 に 担当 から 資料 PDF と セット アップ 手順 を お送り
-            します。 機能 制限 なし の フル 機能 を 1 ヶ月 ご利用 いただけ ます。
+            お申し込み後、1営業日以内に担当から資料PDFとセットアップ手順をお送りします。機能制限なしのフル機能を1ヶ月ご利用いただけます。
           </p>
           <ul className="space-y-2 pt-2 text-sm">
             {[
-              "全 機能 を 1 ヶ月 無料 で 試せる",
-              "初期 セット アップ 30 分 サポート",
-              "CSV データ 移行 サポート",
-              "解約 時 データ エクスポート 保証",
+              "全機能を1ヶ月無料で試せる",
+              "初期セットアップ30分サポート",
+              "CSVデータ移行サポート",
+              "解約時データエクスポート保証",
             ].map((b) => (
               <li key={b} className="flex items-start gap-2">
                 <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-200" aria-hidden />
@@ -542,28 +539,28 @@ function CtaSection() {
 function FaqSection() {
   const faqs = [
     {
-      q: "テスト 導入 中 の データ は 本番 で そのまま 使え ますか?",
-      a: "はい。 テスト 中 に 入力 した データ は 本契約 後 そのまま 引き継がれ ます。 解約 時 は CSV / JSON で 一括 エクスポート 可能 です。",
+      q: "テスト導入中のデータは、本番でそのまま使えますか?",
+      a: "はい。テスト中に入力したデータは本契約後そのまま引き継がれます。解約時はCSV/JSONで一括エクスポート可能です。",
     },
     {
-      q: "求職者 へ の 公開 範囲 は コントロール でき ますか?",
-      a: "求職者 が 個別 に 「連携 解除 申請」 で 開示 を 停止 でき、 猶予 期間 経過 で 自動 確定。 二段階 解除 で 業務 中断 を 防ぎ ます。",
+      q: "求職者への公開範囲はコントロールできますか?",
+      a: "求職者が個別に「連携解除申請」で開示を停止でき、猶予期間経過で自動確定します。二段階解除で業務中断を防ぎます。",
     },
     {
-      q: "LINE 連携 は どの 規模 まで 対応 でき ますか?",
-      a: "LINE Messaging API の Light (5,000 通/月) から Pro まで 全 プラン に 対応。 配信 数 の 残量 は Maira 内 で 可視 化 されます。",
+      q: "LINE連携はどの規模まで対応できますか?",
+      a: "LINE Messaging APIのLight(5,000通/月)からProまで全プランに対応。配信数の残量はMaira内で可視化されます。",
     },
     {
-      q: "Google Meet / Zoom 連携 で カレンダー の 既存 予定 は 見え ますか?",
-      a: "scope は最小限 (calendar.events) で、 Maira から 作成 した 予定 のみ 編集 / 削除 します。 既存 予定 は 読み取り ません。",
+      q: "Google Meet/Zoom連携でカレンダーの既存予定は見えますか?",
+      a: "scopeは最小限(calendar.events)で、Mairaから作成した予定のみ編集/削除します。既存予定は読み取りません。",
     },
     {
-      q: "AI 利用 量 に 上限 は ありますか?",
-      a: "月次 で 機能 別 の 上限 が あり、 アドオン 契約 で 緩和 でき ます。 残量 は ダッシュボード で 常時 確認 可能 です。",
+      q: "AI利用量に上限はありますか?",
+      a: "月次で機能別の上限があり、アドオン契約で緩和できます。残量はダッシュボードで常時確認可能です。",
     },
     {
-      q: "サポート の 連絡 手段 は?",
-      a: "メール および フォーム から の お問い合わせ に、 1 営業 日 以内 に 一次 返信 します。",
+      q: "サポートの連絡手段は?",
+      a: "メールおよびお問い合わせフォームから、1営業日以内に一次返信します。",
     },
   ];
   return (
@@ -573,7 +570,7 @@ function FaqSection() {
           FAQ
         </p>
         <h2 className="mt-3 text-center text-3xl font-bold tracking-tight sm:text-4xl">
-          よく ある ご質問
+          よくあるご質問
         </h2>
         <div className="mt-10 space-y-3">
           {faqs.map((f) => (
@@ -607,7 +604,7 @@ function Footer() {
             <span className="text-base font-bold">Maira</span>
           </div>
           <p className="text-xs leading-relaxed text-slate-600">
-            転職 エージェント 業務 効率 化 SaaS
+            転職エージェント業務効率化SaaS
             <br />
             運営: maira-ritaverse
           </p>
@@ -624,7 +621,7 @@ function Footer() {
             </li>
             <li>
               <a href="#cta" className="text-slate-600 hover:text-slate-900">
-                資料 請求
+                資料請求
               </a>
             </li>
             <li>
@@ -656,17 +653,17 @@ function Footer() {
           <ul className="space-y-1.5">
             <li>
               <Link href="/privacy" className="text-slate-600 hover:text-slate-900">
-                プライバシー ポリシー
+                プライバシーポリシー
               </Link>
             </li>
             <li>
               <Link href="/terms" className="text-slate-600 hover:text-slate-900">
-                利用 規約
+                利用規約
               </Link>
             </li>
             <li>
               <Link href="/legal" className="text-slate-600 hover:text-slate-900">
-                特定 商取引 法
+                特定商取引法
               </Link>
             </li>
           </ul>
@@ -707,14 +704,15 @@ function ScreenshotFrame({
           <span className="size-2.5 rounded-full bg-slate-300" />
           <span className="size-2.5 rounded-full bg-slate-300" />
         </div>
-        <div className="aspect-16/10 bg-white">
+        <div className="aspect-video bg-white">
           {src ? (
             <Image
               src={src}
               alt={alt ?? ""}
-              width={1600}
-              height={1000}
-              className="h-full w-full object-cover object-top"
+              width={1920}
+              height={1080}
+              className="h-full w-full object-contain"
+              priority={false}
             />
           ) : (
             children
