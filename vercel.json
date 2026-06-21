@@ -25,6 +25,10 @@
     {
       "path": "/api/internal/ma/line-dispatch",
       "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/internal/clients/finalize-revokes",
+      "schedule": "0 3 * * *"
     }
   ]
 }
