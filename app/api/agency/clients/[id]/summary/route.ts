@@ -9,6 +9,7 @@ import {
 import { listTasksByClient } from "@/lib/agency-tasks/queries";
 import { getClientRecord } from "@/lib/clients/queries";
 import { getDisclosableProfileForLinkedClient } from "@/lib/connections/agency-queries";
+import { recordAiUsage } from "@/lib/features/ai-usage";
 import { listInteractionsByClient } from "@/lib/interactions/queries";
 import { getUserRole } from "@/lib/organizations/queries";
 import { listPlacementsByClient } from "@/lib/placements/queries";
@@ -128,6 +129,10 @@ export async function POST(_request: Request, { params }: RouteParams) {
         );
       },
     });
+
+    // 利用ログ(失敗 して も 本処理 は 止めない)。 ストリーム 開始 直後 に 計上。
+    // ストリーム 中 で エラー が 出ても 「呼び出した = 1 回」 として 課金 軸 を 維持。
+    await recordAiUsage(supabase, user.id, "agency_client_summary", { clientId: id });
 
     // プレーンテキストストリームを返す(useChat 不要・fetch + ReadableStream で読む)
     return result.toTextStreamResponse();

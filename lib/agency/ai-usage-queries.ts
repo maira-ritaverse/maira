@@ -5,6 +5,7 @@
 import { utcMonthStart } from "@/lib/features/usage-limits";
 import { createClient } from "@/lib/supabase/server";
 import {
+  AGENCY_CLIENT_SUMMARY_FREE_MONTHLY,
   AGENCY_CV_DRAFT_FREE_MONTHLY,
   AGENCY_RESUME_DRAFT_FREE_MONTHLY,
   CSV_COLUMN_MAPPING_FREE_MONTHLY,
@@ -160,6 +161,7 @@ export const AI_KIND_FREE_DEFAULT: Record<AiUsageKind, number> = {
   // 録音 は 組織プラン (録音 / Premium) で 50 件、 未契約 は 0。
   // 既定 0 で 表示 上 「プラン契約 が 必要」と わかる ように する。
   agency_recording_processed: 0,
+  agency_client_summary: AGENCY_CLIENT_SUMMARY_FREE_MONTHLY,
 };
 
 export type AiQuotaRow = {
