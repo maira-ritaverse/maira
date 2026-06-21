@@ -24,14 +24,19 @@
  *     <ScreenshotOrMock src="..." fallback={<Mock />} /> 内 で 差し替え 可能
  */
 import {
+  ArrowRight,
   Bell,
+  Briefcase,
+  Calendar,
   CheckCircle2,
   FileText,
   Lock,
   type LucideIcon,
   MessageSquare,
   Shield,
+  Smartphone,
   Sparkles,
+  Users,
   Workflow,
 } from "lucide-react";
 import Image from "next/image";
@@ -1306,170 +1311,87 @@ function DigestMailMock() {
 }
 
 function OverviewDiagram() {
+  const seekerFeatures = ["公式LINEで連絡", "面談日をタップで選択", "求人に興味あり/応募"];
+  const agentFeatures = [
+    "進捗を一目で把握",
+    "朝のダイジェストで取りこぼし防止",
+    "AIが書類作成を補助",
+  ];
+  const hubFeatures: { icon: LucideIcon; label: string }[] = [
+    { icon: Users, label: "CRM" },
+    { icon: MessageSquare, label: "LINE" },
+    { icon: Calendar, label: "カレンダー" },
+    { icon: FileText, label: "AI文書" },
+  ];
+
   return (
-    <svg viewBox="0 0 900 320" className="w-full" role="img" aria-label="Maira の 全体 像">
-      <g transform="translate(60 110)">
-        <rect width="160" height="100" rx="12" fill="#dcfce7" stroke="#10b981" strokeWidth="2" />
-        <text
-          x="80"
-          y="40"
-          fontFamily="sans-serif"
-          fontSize="14"
-          fontWeight="700"
-          fill="#064e3b"
-          textAnchor="middle"
-        >
-          求職者
-        </text>
-        <text
-          x="80"
-          y="60"
-          fontFamily="sans-serif"
-          fontSize="10"
-          fill="#065f46"
-          textAnchor="middle"
-        >
-          LINE / Web
-        </text>
-        <text
-          x="80"
-          y="76"
-          fontFamily="sans-serif"
-          fontSize="10"
-          fill="#065f46"
-          textAnchor="middle"
-        >
-          スマホ で 完結
-        </text>
-      </g>
-      <g transform="translate(370 80)">
-        <rect width="160" height="160" rx="12" fill="#0f172a" />
-        <text
-          x="80"
-          y="40"
-          fontFamily="sans-serif"
-          fontSize="18"
-          fontWeight="700"
-          fill="white"
-          textAnchor="middle"
-        >
-          Maira
-        </text>
-        <text x="80" y="58" fontFamily="sans-serif" fontSize="9" fill="#94a3b8" textAnchor="middle">
-          for agencies
-        </text>
-        <line x1="20" y1="75" x2="140" y2="75" stroke="#475569" />
-        <text x="80" y="95" fontFamily="sans-serif" fontSize="9" fill="#10b981" textAnchor="middle">
-          CRM
-        </text>
-        <text
-          x="80"
-          y="111"
-          fontFamily="sans-serif"
-          fontSize="9"
-          fill="#10b981"
-          textAnchor="middle"
-        >
-          LINE 連携
-        </text>
-        <text
-          x="80"
-          y="127"
-          fontFamily="sans-serif"
-          fontSize="9"
-          fill="#10b981"
-          textAnchor="middle"
-        >
-          カレンダー
-        </text>
-        <text
-          x="80"
-          y="143"
-          fontFamily="sans-serif"
-          fontSize="9"
-          fill="#10b981"
-          textAnchor="middle"
-        >
-          AI 文書 生成
-        </text>
-      </g>
-      <g transform="translate(680 110)">
-        <rect width="160" height="100" rx="12" fill="#dbeafe" stroke="#3b82f6" strokeWidth="2" />
-        <text
-          x="80"
-          y="40"
-          fontFamily="sans-serif"
-          fontSize="14"
-          fontWeight="700"
-          fill="#1e3a8a"
-          textAnchor="middle"
-        >
-          エージェント
-        </text>
-        <text
-          x="80"
-          y="60"
-          fontFamily="sans-serif"
-          fontSize="10"
-          fill="#1e40af"
-          textAnchor="middle"
-        >
-          1 つ の 画面 で
-        </text>
-        <text
-          x="80"
-          y="76"
-          fontFamily="sans-serif"
-          fontSize="10"
-          fill="#1e40af"
-          textAnchor="middle"
-        >
-          全 業務 を 管理
-        </text>
-      </g>
-      <defs>
-        <marker id="arrowR" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-          <path d="M0,0 L9,3 L0,6 Z" fill="#94a3b8" />
-        </marker>
-      </defs>
-      <line
-        x1="225"
-        y1="160"
-        x2="365"
-        y2="160"
-        stroke="#94a3b8"
-        strokeWidth="2"
-        markerEnd="url(#arrowR)"
-      />
-      <line
-        x1="535"
-        y1="160"
-        x2="675"
-        y2="160"
-        stroke="#94a3b8"
-        strokeWidth="2"
-        markerEnd="url(#arrowR)"
-      />
-      <text
-        x="295"
-        y="148"
-        fontFamily="sans-serif"
-        fontSize="10"
-        fill="#64748b"
-        textAnchor="middle"
-      >
-        メッセージ / 応募
-      </text>
-      <text
-        x="605"
-        y="148"
-        fontFamily="sans-serif"
-        fontSize="10"
-        fill="#64748b"
-        textAnchor="middle"
-      >
-        自動 通知 / AI 補助
-      </text>
-    </svg>
+    <div className="grid items-center gap-4 lg:grid-cols-[1fr_auto_1.4fr_auto_1fr] lg:gap-2">
+      {/* 求職者 */}
+      <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-5 text-center">
+        <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-emerald-500/15">
+          <Smartphone className="size-6 text-emerald-700" aria-hidden />
+        </div>
+        <h3 className="mt-3 text-base font-bold text-emerald-900">求職者</h3>
+        <p className="text-xs text-emerald-700/80">スマホ完結</p>
+        <ul className="mt-3 space-y-1 text-left text-xs text-emerald-900">
+          {seekerFeatures.map((f) => (
+            <li key={f} className="flex items-start gap-1">
+              <CheckCircle2 className="mt-0.5 size-3 shrink-0 text-emerald-600" aria-hidden />
+              <span>{f}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <FlowArrow label="メッセージ / 応募" />
+
+      {/* Maira ハブ (中央) */}
+      <div className="rounded-2xl bg-slate-900 p-6 text-center text-white shadow-xl">
+        <p className="text-[10px] font-semibold tracking-[0.2em] text-emerald-300 uppercase">
+          all-in-one hub
+        </p>
+        <h3 className="mt-1 text-2xl font-bold">Maira</h3>
+        <div className="mt-4 grid grid-cols-2 gap-2 border-t border-white/10 pt-4">
+          {hubFeatures.map((f) => (
+            <div
+              key={f.label}
+              className="flex flex-col items-center gap-1 rounded-lg bg-white/5 p-2 transition-colors hover:bg-white/10"
+            >
+              <f.icon className="size-5 text-emerald-300" aria-hidden />
+              <span className="text-[11px] font-medium">{f.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <FlowArrow label="通知 / AI補助" />
+
+      {/* エージェント */}
+      <div className="rounded-2xl border-2 border-blue-300 bg-blue-50 p-5 text-center">
+        <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-blue-500/15">
+          <Briefcase className="size-6 text-blue-700" aria-hidden />
+        </div>
+        <h3 className="mt-3 text-base font-bold text-blue-900">エージェント</h3>
+        <p className="text-xs text-blue-700/80">1画面で全業務</p>
+        <ul className="mt-3 space-y-1 text-left text-xs text-blue-900">
+          {agentFeatures.map((f) => (
+            <li key={f} className="flex items-start gap-1">
+              <CheckCircle2 className="mt-0.5 size-3 shrink-0 text-blue-600" aria-hidden />
+              <span>{f}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+/** Overview Diagram 内の 矢印 + ラベル (PC: 横、 モバイル: 縦) */
+function FlowArrow({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col items-center gap-1 py-2 lg:py-0">
+      <ArrowRight className="size-6 rotate-90 text-slate-400 lg:rotate-0" aria-hidden />
+      <span className="text-[10px] font-medium whitespace-nowrap text-slate-500">{label}</span>
+    </div>
   );
 }
