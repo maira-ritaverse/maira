@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient, getCurrentUser } from "@/lib/supabase/server";
+
 import { AppSidebar } from "@/components/features/app-sidebar";
 import { NotificationBell } from "@/components/features/notifications/notification-bell";
 import {
@@ -12,6 +12,8 @@ import { UserMenu } from "@/components/features/user-menu";
 import { countInvitedConnections } from "@/lib/connections/queries";
 import { getUserRole } from "@/lib/organizations/queries";
 import { getPolicyAcceptance, needsToAccept } from "@/lib/privacy/policy";
+import { resolveAvatarPublicUrl } from "@/lib/profile/avatar";
+import { createClient, getCurrentUser } from "@/lib/supabase/server";
 
 /**
  * 認証後のアプリ本体の共通レイアウト
@@ -37,7 +39,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // /app は 求職者 主導線 で 大半 は seeker なので 平均 では 大幅 速化。
   const [role, { data: profile }, invitedCount, policyAcceptance] = await Promise.all([
     getUserRole(user.id),
-    supabase.from("profiles").select("display_name, archived_at").eq("id", user.id).single(),
+    supabase
+      .from("profiles")
+      .select("display_name, archived_at, avatar_storage_path")
+      .eq("id", user.id)
+      .single(),
     countInvitedConnections(),
     getPolicyAcceptance(user.id),
   ]);
@@ -73,6 +79,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               email={user.email ?? ""}
               displayName={profile?.display_name ?? null}
               settingsHref="/app/settings"
+              avatarUrl={resolveAvatarPublicUrl(
+                supabase,
+                (profile as { avatar_storage_path: string | null } | null)?.avatar_storage_path ??
+                  null,
+              )}
             />
           </header>
           <main className="flex-1 overflow-auto p-6">{children}</main>

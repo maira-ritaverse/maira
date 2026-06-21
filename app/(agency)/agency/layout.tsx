@@ -1,11 +1,13 @@
 import { redirect } from "next/navigation";
-import { createClient, getCurrentUser } from "@/lib/supabase/server";
-import { getUserRole } from "@/lib/organizations/queries";
+
 import { AgencySidebar } from "@/components/features/agency/agency-sidebar";
 import { NotificationBell } from "@/components/features/notifications/notification-bell";
 import { PrivacyPolicyModal } from "@/components/features/privacy-policy-modal";
 import { UserMenu } from "@/components/features/user-menu";
+import { getUserRole } from "@/lib/organizations/queries";
 import { getPolicyAcceptance, needsToAccept } from "@/lib/privacy/policy";
+import { resolveAvatarPublicUrl } from "@/lib/profile/avatar";
+import { createClient, getCurrentUser } from "@/lib/supabase/server";
 
 /**
  * エージェント企業メンバー向けの共通レイアウト
@@ -28,7 +30,11 @@ export default async function AgencyLayout({ children }: { children: React.React
   // (旧:getUserRole 直列 → 3 並列 で 2 段 構成 だった)
   const [role, { data: profile }, policyAcceptance] = await Promise.all([
     getUserRole(user.id),
-    supabase.from("profiles").select("display_name, archived_at").eq("id", user.id).single(),
+    supabase
+      .from("profiles")
+      .select("display_name, archived_at, avatar_storage_path")
+      .eq("id", user.id)
+      .single(),
     getPolicyAcceptance(user.id),
   ]);
 
@@ -65,6 +71,11 @@ export default async function AgencyLayout({ children }: { children: React.React
             email={user.email ?? ""}
             displayName={profile?.display_name ?? null}
             settingsHref="/agency/settings"
+            avatarUrl={resolveAvatarPublicUrl(
+              supabase,
+              (profile as { avatar_storage_path: string | null } | null)?.avatar_storage_path ??
+                null,
+            )}
           />
         </header>
         <main className="flex-1 overflow-auto p-6">{children}</main>

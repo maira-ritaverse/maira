@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/app/auth/actions";
 
@@ -25,9 +25,11 @@ type Props = {
    * layout 側 で 明示 する (= 固定 にする と 反対 側 へ 飛んで 不整合 が 起きる)。
    */
   settingsHref: string;
+  /** アバター 画像 の public URL (null なら 頭文字 fallback) */
+  avatarUrl?: string | null;
 };
 
-export function UserMenu({ email, displayName, settingsHref }: Props) {
+export function UserMenu({ email, displayName, settingsHref, avatarUrl }: Props) {
   const [isPending, startTransition] = useTransition();
 
   const handleLogout = () => {
@@ -45,6 +47,7 @@ export function UserMenu({ email, displayName, settingsHref }: Props) {
         render={
           <Button variant="ghost" className="relative h-9 w-9 rounded-full" data-tour="user-menu">
             <Avatar className="h-9 w-9">
+              {avatarUrl && <AvatarImage src={avatarUrl} alt={displayName ?? email} />}
               <AvatarFallback>{initial}</AvatarFallback>
             </Avatar>
           </Button>

@@ -2,9 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { ProfileForm } from "@/app/(app)/app/settings/profile/profile-form";
+import { AvatarUploader } from "@/components/features/profile/avatar-uploader";
 import { Button } from "@/components/ui/button";
 import { PageHeading } from "@/components/ui/page-heading";
 import { getUserRole } from "@/lib/organizations/queries";
+import { resolveAvatarPublicUrl } from "@/lib/profile/avatar";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -34,20 +36,30 @@ export default async function AgencyProfileSettingsPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name")
+    .select("display_name, avatar_storage_path")
     .eq("id", user.id)
     .maybeSingle();
+  const profileRow = profile as {
+    display_name: string | null;
+    avatar_storage_path: string | null;
+  } | null;
+  const avatarPublicUrl = resolveAvatarPublicUrl(supabase, profileRow?.avatar_storage_path ?? null);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-start justify-between gap-3">
-        <PageHeading title="プロフィール" description="表示名 などの 基本 情報 を 編集" />
+        <PageHeading title="プロフィール" description="表示名 と アイコン 画像 を 編集" />
         <Button render={<Link href="/agency/settings" />} variant="outline" size="sm">
           設定 に 戻る
         </Button>
       </div>
 
-      <ProfileForm initialDisplayName={profile?.display_name ?? ""} email={user.email ?? ""} />
+      <AvatarUploader
+        initialPublicUrl={avatarPublicUrl}
+        fallbackInitial={profileRow?.display_name ?? user.email ?? ""}
+      />
+
+      <ProfileForm initialDisplayName={profileRow?.display_name ?? ""} email={user.email ?? ""} />
     </div>
   );
 }
