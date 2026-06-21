@@ -492,6 +492,10 @@ export async function checkAiUsageLimit(
 /**
  * 利用ログを 1 行 INSERT する。
  * 失敗時はログのみ(本処理は止めない)。
+ *
+ * Supabase は INSERT 失敗 を throw せず `{ error }` で 返す ため、 try/catch だけ
+ * では 「黙って 失敗」 が 起きる。 error を 必ず 拾って 警告 ログ を 出す ことで
+ * 月次 クォータ の 計上 漏れ を 監視 でき る ように する。
  */
 export async function recordAiUsage(
   supabase: SupabaseClient,
@@ -500,11 +504,14 @@ export async function recordAiUsage(
   metadata?: Record<string, unknown>,
 ): Promise<void> {
   try {
-    await supabase
+    const { error } = await supabase
       .from("ai_usage_events")
       .insert({ user_id: userId, kind, metadata: metadata ?? null });
+    if (error) {
+      console.warn("[ai-usage] insert failed", { kind, userId, message: error.message });
+    }
   } catch (err) {
-    console.warn("[ai-usage] insert failed", err);
+    console.warn("[ai-usage] insert threw", { kind, userId, err });
   }
 }
 

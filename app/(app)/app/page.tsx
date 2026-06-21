@@ -20,7 +20,15 @@ import { OnboardingTourMount } from "@/components/features/onboarding/onboarding
  * ツアーを自動起動する(OnboardingTourMount に autoStart で渡す)。
  * 再表示ボタンからは /app?replay=tour で遷移してくるため、searchParams を
  * 読んで replay フラグも渡す。
+ *
+ * キャッシュ:
+ *   AI 利用 残数 / 通知 / 直近 面談 等 は ユーザー の 操作 で 頻繁 に 変わる ため、
+ *   force-dynamic + revalidate=0 で 毎リクエスト 最新 値 を 取得 する。
+ *   (agency 側 ダッシュボード と 同じ 対応)
  */
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function DashboardPage({
   searchParams,
 }: {
