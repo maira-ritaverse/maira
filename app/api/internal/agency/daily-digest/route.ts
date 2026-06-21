@@ -70,50 +70,64 @@ export async function POST(request: Request) {
     return true;
   });
 
-  // 集計 + 送信 を 並列 (service-role 同一 接続 で 多重化 さ れる ため 数十 件 まで 安全)
+  // 集計 + 送信 を batch 並列 (CONCURRENCY=10 で 抑える)。
+  // 旧 実装 は Promise.all で 全 admin を 同時 並列 = admin 数 100+ で
+  // service.auth.admin.getUserById が 同時 100+ req → Supabase 側 レート 制限
+  // に 引っかかる 可能性 が あった。 batch 化 で 並列 度 を 上限。
   const todayLabel = formatJstDate(new Date(nowIso));
   const dashboardUrl = buildAbsoluteUrl("/agency");
+  const CONCURRENCY = 10;
 
-  const results = await Promise.all(
-    rows.map(async (m) => {
-      const summary = await computeDailyDigestForAdmin({
-        service,
-        organizationId: m.organization_id,
-        memberId: m.id,
-        nowIso,
-      });
-      if (!digestHasContent(summary)) {
-        return { userId: m.user_id, skipped: true as const, reason: "no_content" };
-      }
-      const orgName =
-        (Array.isArray(m.organizations) ? m.organizations[0]?.name : m.organizations?.name) ??
-        "(エージェント企業)";
+  type ProcessResult =
+    | { userId: string; skipped: true; reason: string }
+    | {
+        userId: string;
+        skipped: false;
+        sendResult: Awaited<ReturnType<typeof sendDailyDigestEmail>>;
+        summary: DailyDigestSummary;
+      };
 
-      // メール アドレス は auth.users から 引く (1 件 ずつ。 並列 数 が 多く なる
-      // 場合 は 別途 まとめ取り 検討)
-      const userLookup = await service.auth.admin.getUserById(m.user_id);
-      const email = userLookup.data?.user?.email ?? null;
-      if (!email) return { userId: m.user_id, skipped: true as const, reason: "no_email" };
+  async function processAdmin(m: Row): Promise<ProcessResult> {
+    const summary = await computeDailyDigestForAdmin({
+      service,
+      organizationId: m.organization_id,
+      memberId: m.id,
+      nowIso,
+    });
+    if (!digestHasContent(summary)) {
+      return { userId: m.user_id, skipped: true, reason: "no_content" };
+    }
+    const orgName =
+      (Array.isArray(m.organizations) ? m.organizations[0]?.name : m.organizations?.name) ??
+      "(エージェント企業)";
 
-      // 表示 名 取得 (失敗 して も skip しない、 email 宛 で 出す)
-      const { data: profile } = await service
-        .from("profiles")
-        .select("display_name")
-        .eq("id", m.user_id)
-        .maybeSingle();
-      const displayName = (profile as { display_name: string | null } | null)?.display_name ?? null;
+    // メール アドレス と 表示 名 を 並列 取得 (1 admin に つき 2 RPC)
+    const [userLookup, profileRes] = await Promise.all([
+      service.auth.admin.getUserById(m.user_id),
+      service.from("profiles").select("display_name").eq("id", m.user_id).maybeSingle(),
+    ]);
+    const email = userLookup.data?.user?.email ?? null;
+    if (!email) return { userId: m.user_id, skipped: true, reason: "no_email" };
+    const displayName =
+      (profileRes.data as { display_name: string | null } | null)?.display_name ?? null;
 
-      const sendResult = await sendDailyDigestEmail({
-        toEmail: email,
-        organizationName: orgName,
-        memberDisplayName: displayName,
-        summary,
-        dashboardUrl,
-        todayLabel,
-      });
-      return { userId: m.user_id, skipped: false as const, sendResult, summary };
-    }),
-  );
+    const sendResult = await sendDailyDigestEmail({
+      toEmail: email,
+      organizationName: orgName,
+      memberDisplayName: displayName,
+      summary,
+      dashboardUrl,
+      todayLabel,
+    });
+    return { userId: m.user_id, skipped: false, sendResult, summary };
+  }
+
+  const results: ProcessResult[] = [];
+  for (let i = 0; i < rows.length; i += CONCURRENCY) {
+    const batch = rows.slice(i, i + CONCURRENCY);
+    const batchResults = await Promise.all(batch.map(processAdmin));
+    results.push(...batchResults);
+  }
 
   const sentCount = results.filter((r) => !r.skipped && r.sendResult.sent).length;
   const skippedCount = results.filter((r) => r.skipped).length;

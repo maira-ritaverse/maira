@@ -69,7 +69,8 @@ export const NOTIFICATION_DESCRIPTION: Record<NotificationKey, string> = {
   seeker_job_interest: "自社の求人に対して、求職者が「興味あり」を表明した時に通知する",
   seeker_application_request: "自社の求人に対して、求職者が「応募を依頼」した時に通知する",
   task_assigned: "(未実装)担当タスクが新しく自分に割り当てられた時に通知する",
-  client_silent_30d: "(未実装)毎朝、対応が止まっている顧客の件数を通知する",
+  client_silent_30d:
+    "(daily_digest に 統合 済) 沈黙 顧客 件数 は 朝の ダイジェスト で 配信 中。 個別 通知 を 出す 場合 の キー として 保持。",
   line_message_received: "求職者 から 公式 LINE 経由 で メッセージ が 届いた 時 に 通知 する",
   daily_digest:
     "毎朝 8 時 に 今日 期限 / 超過 の タスク・ 沈黙 中 の 顧客・ 進捗 停止 中 の 応募 を 1 通 に まとめて 配信 (admin のみ、 メール 専用)",
