@@ -28,8 +28,12 @@ import { TestSendModal } from "./test-send-modal";
  *   ・KPI じょうご:配信数 → クリック / 返信 → 応募
  *   ・求職者 シナリオ カード (channel='line' のみ)
  *
- * KPI の 「クリック」「応募」 は 計測 未実装 の ため null = 「準備中」 表示。
- * 「配信数」「返信」 は 今月 の 実数 を 表示。
+ * KPI 計測:
+ *   ・配信数 / 返信: ma_send_logs の 今月 集計
+ *   ・クリック: 配信 本文 中 の URL を /r/[id] で 短縮 ラップ し ma_click_links
+ *     の click_count を 合算 (wrapBodyUrls + /r/[id] redirect handler 経由)
+ *   ・応募: 配信 後 ATTRIBUTION_WINDOW_DAYS 日 以内 に referrals が 作成 された
+ *     client_record の 一意 数 (= MA 起因 と 見なす)。 lib/ma/line-kpi.ts 参照。
  */
 export type LineMaScreenProps = {
   scenarios: ScenarioView[];
