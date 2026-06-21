@@ -8,7 +8,9 @@
  * Map を作って合流する(profiles の RLS を緩めずに済ませるため)。
  */
 
+import { getOrgMemberAvatarMaps } from "@/lib/agency/member-avatars";
 import { createClient } from "@/lib/supabase/server";
+
 import type {
   AgencyTask,
   AgencyTaskPriority,
@@ -96,11 +98,13 @@ export async function listTasksByClient(
 
   const tasks = sortTasks((data as AgencyTaskRow[]).map(rowToTask));
 
-  // 担当者の表示名 Map を取得(RLS バイパス関数経由)
-  const { data: memberRows, error: memberError } = await supabase.rpc(
-    "list_organization_member_display_names",
-    { target_organization_id: organizationId },
-  );
+  // 担当者の表示名 / avatar URL Map を 並列 取得 (RLS バイパス関数経由)
+  const [{ data: memberRows, error: memberError }, avatarMaps] = await Promise.all([
+    supabase.rpc("list_organization_member_display_names", {
+      target_organization_id: organizationId,
+    }),
+    getOrgMemberAvatarMaps(supabase, organizationId),
+  ]);
 
   const nameByMemberId = new Map<string, string | null>();
   if (!memberError && memberRows) {
@@ -112,6 +116,7 @@ export async function listTasksByClient(
   return tasks.map((t) => ({
     ...t,
     assigneeName: nameByMemberId.get(t.assignedMemberId) ?? null,
+    assigneeAvatarUrl: avatarMaps.byMemberId.get(t.assignedMemberId) ?? null,
   }));
 }
 

@@ -81,9 +81,10 @@ export type AgencyTask = {
   updatedAt: string;
 };
 
-// 一覧表示用に担当者の表示名を付与した型
+// 一覧表示用に担当者の表示名 + アバター URL を付与した型
 export type AgencyTaskWithAssignee = AgencyTask & {
   assigneeName: string | null;
+  assigneeAvatarUrl: string | null;
 };
 
 // check 制約と一致する zod enum

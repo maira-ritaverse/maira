@@ -360,6 +360,7 @@ describe("buildAgencyClientSummaryPrompt — tasks", () => {
       dueAt: "2026-06-20T00:00:00Z",
       completedAt: null,
       assigneeName: "佐藤",
+      assigneeAvatarUrl: null,
       createdAt: "2026-06-14T00:00:00Z",
       updatedAt: "2026-06-14T00:00:00Z",
       ...overrides,

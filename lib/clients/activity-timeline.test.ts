@@ -67,6 +67,7 @@ function task(overrides: Partial<AgencyTaskWithAssignee> = {}): AgencyTaskWithAs
     createdAt: "2026-06-09T09:00:00.000Z",
     updatedAt: "2026-06-09T09:00:00.000Z",
     assigneeName: "鈴木花子",
+    assigneeAvatarUrl: null,
     ...overrides,
   };
 }

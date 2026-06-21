@@ -1,19 +1,21 @@
 "use client";
 
-import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { type DueStatus, getDueStatus } from "@/lib/agency-tasks/due-status";
 import {
   type AgencyTaskPriority,
   type AgencyTaskWithAssignee,
   agencyTaskPriorityConfig,
   getAgencyTaskPriorityConfig,
 } from "@/lib/agency-tasks/types";
-import { type DueStatus, getDueStatus } from "@/lib/agency-tasks/due-status";
 import { useNow } from "@/lib/agency-tasks/use-now";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 
 /**
  * クライアント詳細画面の「タスク」セクション
@@ -353,7 +355,20 @@ function TaskView({
                 優先度: {priorityConfig.label}
               </span>
             )}
-            {task.assigneeName && <span>担当: {task.assigneeName}</span>}
+            {task.assigneeName && (
+              <span className="inline-flex items-center gap-1">
+                担当:
+                <Avatar className="size-4">
+                  {task.assigneeAvatarUrl && (
+                    <AvatarImage src={task.assigneeAvatarUrl} alt={task.assigneeName} />
+                  )}
+                  <AvatarFallback className="text-[8px]">
+                    {task.assigneeName.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <span>{task.assigneeName}</span>
+              </span>
+            )}
             {isDone && task.completedAt && <span>完了: {formatDue(task.completedAt)}</span>}
           </div>
           <div className="mt-2 flex gap-3 text-xs">
