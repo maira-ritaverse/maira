@@ -14,7 +14,8 @@ import { DuplicateResumeButton } from "./duplicate-resume-button";
  * 履歴書一覧(本人所有)
  *
  * 既存の /app/documents(AI生成テキスト)とは別の画面。
- * こちらは構造化データの履歴書(将来 PDF 出力する想定)。
+ * こちらは構造化データの履歴書。 詳細 ページ から PDF ダウンロード が 可能
+ * (/api/resumes/[id]/pdf を Puppeteer で 生成)。
  */
 export default async function ResumesListPage() {
   const supabase = await createClient();
@@ -36,7 +37,8 @@ export default async function ResumesListPage() {
       <div>
         <h1 className="text-2xl font-bold">履歴書</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          厚労省推奨様式に沿った履歴書を作成・管理します(PDF出力は今後対応)
+          厚労省推奨様式に沿った履歴書を作成・管理します。各履歴書の詳細から PDF
+          をダウンロードできます。
         </p>
       </div>
 
