@@ -49,9 +49,11 @@ export function LandingPage() {
         <OverviewSection />
         <FeatureCrm />
         <FeatureLine />
+        <FeatureLineMa />
         <FeatureCalendar />
         <FeatureAiDocument />
         <FeatureDigest />
+        <FeatureReport />
         <SecuritySection />
         <CtaSection />
         <FaqSection />
@@ -152,7 +154,11 @@ function Hero() {
             </li>
           </ul>
         </div>
-        <ScreenshotFrame caption="ダッシュボード: 今日 期限 の タスク と 沈黙 顧客 を 一目 で">
+        <ScreenshotFrame
+          caption="ダッシュボード: 今日 期限 の タスク と 沈黙 顧客 を 一目 で"
+          src="/marketing/dashboard.png"
+          alt="Maira ダッシュボード"
+        >
           <DashboardMock />
         </ScreenshotFrame>
       </div>
@@ -250,6 +256,8 @@ function FeatureSection({
   bullets,
   mock,
   reverse,
+  screenshotSrc,
+  screenshotAlt,
 }: {
   id?: string;
   badge: string;
@@ -258,6 +266,9 @@ function FeatureSection({
   bullets: string[];
   mock: React.ReactNode;
   reverse?: boolean;
+  /** 実 スクショ が ある なら 指定。 無ければ mock (SVG) が fallback */
+  screenshotSrc?: string;
+  screenshotAlt?: string;
 }) {
   return (
     <section
@@ -284,7 +295,9 @@ function FeatureSection({
             ))}
           </ul>
         </div>
-        <ScreenshotFrame>{mock}</ScreenshotFrame>
+        <ScreenshotFrame src={screenshotSrc} alt={screenshotAlt}>
+          {mock}
+        </ScreenshotFrame>
       </div>
     </section>
   );
@@ -314,15 +327,36 @@ function FeatureLine() {
     <FeatureSection
       badge="公式 LINE 連携"
       title="LINE で 100 名 を 一人 で さばく"
-      description="公式 LINE と Maira を 直接 接続。 一斉 配信、 シナリオ 自動 化、 求人 共有 まで Maira 内 で 完結。"
+      description="公式 LINE と Maira を 直接 接続。 トーク / 担当 者 割り当て / 一斉 配信 / シナリオ 自動 化 まで Maira 内 で 完結。"
       bullets={[
-        "1 友達 単位 で メモ / タグ / 担当 者 割当",
-        "テキスト / 求人 カード / 予約 リンク の 一斉 配信",
-        "MA シナリオ (面談 リマインド・誕生日・登録 御礼) を 自動 配信",
+        "1 友達 単位 で メモ / タグ / 担当 者 割当 + 編集 履歴",
+        "会話 上 で 面談 候補 日 提案 → タップ で 会議 URL 発行 まで 一気通貫",
+        "送信 タイミング を 候補 別 に 確認 / 利用 履歴 を 右 サイドバー に 集約",
         "短縮 URL で クリック / 応募 を 計測",
       ]}
       mock={<LineConversationMock />}
+      screenshotSrc="/marketing/line-conversation.png"
+      screenshotAlt="Maira LINE 会話 画面"
       reverse
+    />
+  );
+}
+
+function FeatureLineMa() {
+  return (
+    <FeatureSection
+      badge="LINE MA (β)"
+      title="休眠 求職者 を 自動 で 掘り起こす"
+      description="「友達 追加 後 ウェルカム」「面談 前 リマインド」「休眠 求職者 掘り起こし」 等、 求職者 ライフ サイクル に 合わせた 自動 配信 シナリオ を プリセット で 提供。"
+      bullets={[
+        "全 友達 / 連携 済 / 未連携 / タグ 別 に 一斉 配信",
+        "7 件 の シナリオ プリセット を ON/OFF で 即 運用 開始",
+        "配信数 / クリック / 返信 / 応募 を 月次 KPI で 可視 化",
+        "テキスト / 求人 カード の 2 種類、 即時 + 予約 配信 対応",
+      ]}
+      mock={<LineConversationMock />}
+      screenshotSrc="/marketing/line-ma.png"
+      screenshotAlt="Maira LINE MA 画面"
     />
   );
 }
@@ -331,15 +365,37 @@ function FeatureCalendar() {
   return (
     <FeatureSection
       badge="カレンダー + 会議 連携"
-      title="LINE で 日程 候補 → Meet/Zoom が 自動 作成"
-      description="エージェント が 候補 日 3 件 を 投げる だけ。 求職者 が タップ し た 瞬間 に 会議 URL が 発行 され、 双方 の カレンダー に 同期。"
+      title="月 ビュー で 面談 と 受付 を 一目 把握"
+      description="エージェント が 候補 日 3 件 を 投げる だけ。 求職者 が タップ し た 瞬間 に 会議 URL が 発行 され、 双方 の カレンダー に 同期。 月 ビュー で 全 メンバー の 予定 を 一望 可能。"
       bullets={[
-        "Google カレンダー / Zoom と OAuth 連携",
+        "Google カレンダー / Zoom と OAuth 連携 (自動 URL 発行)",
+        "面談 / 受付 / タスク / 対応 履歴 / Google 予定 を 1 画面 に",
         "面談 24h / 1h 前 の 自動 リマインダー",
-        "面談 記録 を AI で ヒアリング シート / 履歴 書 草案 化",
-        "カレンダー 購読 URL で 個人 端末 でも 閲覧",
+        "カレンダー 購読 URL で 個人 端末 (iCal) でも 閲覧",
       ]}
       mock={<CalendarMock />}
+      screenshotSrc="/marketing/calendar.png"
+      screenshotAlt="Maira カレンダー 月 ビュー"
+    />
+  );
+}
+
+function FeatureReport() {
+  return (
+    <FeatureSection
+      badge="レポート"
+      title="ステータス 分布 と 売上 を 月次 で 把握"
+      description="求職者 / 紹介 が 今 どの 段階 に 何件 あるか、 純売上 / 入金 / 返金 まで 1 画面 で 確認。 月次 / 任意 期間 で 切り替え 可能。"
+      bullets={[
+        "求職者 ステータス × 紹介 ステータス の 2 軸 分布",
+        "純売上 = 成約 + 追加 報酬 − 返金 の 月次 集計",
+        "今月 / 先月 / 任意 期間 を ワン クリック で 切替",
+        "アドバイザー 別 パフォーマンス (admin のみ)",
+      ]}
+      mock={<DashboardMock />}
+      screenshotSrc="/marketing/report.png"
+      screenshotAlt="Maira レポート 画面"
+      reverse
     />
   );
 }
@@ -627,7 +683,22 @@ function Footer() {
  * 共通: スクリーン ショット フレーム
  * ============================================================ */
 
-function ScreenshotFrame({ children, caption }: { children: React.ReactNode; caption?: string }) {
+function ScreenshotFrame({
+  children,
+  caption,
+  src,
+  alt,
+}: {
+  children: React.ReactNode;
+  caption?: string;
+  /**
+   * 実 スクリーン ショット の パス (例: "/marketing/dashboard.png")。
+   * 指定 さ れて いれば <Image> で 表示、 未 指定 なら children (SVG モック) を fallback。
+   * 画像 配置 ガイド: public/marketing/README.md 参照。
+   */
+  src?: string;
+  alt?: string;
+}) {
   return (
     <figure className="space-y-2">
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
@@ -636,7 +707,19 @@ function ScreenshotFrame({ children, caption }: { children: React.ReactNode; cap
           <span className="size-2.5 rounded-full bg-slate-300" />
           <span className="size-2.5 rounded-full bg-slate-300" />
         </div>
-        <div className="aspect-16/10 bg-white">{children}</div>
+        <div className="aspect-16/10 bg-white">
+          {src ? (
+            <Image
+              src={src}
+              alt={alt ?? ""}
+              width={1600}
+              height={1000}
+              className="h-full w-full object-cover object-top"
+            />
+          ) : (
+            children
+          )}
+        </div>
       </div>
       {caption && (
         <figcaption className="text-center text-[11px] text-slate-500">{caption}</figcaption>
