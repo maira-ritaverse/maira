@@ -38,14 +38,23 @@ export function DisplayNameEditor({ lineUserId, displayName, customName }: Props
     setSaving(true);
     setError(null);
     try {
+      // ブラウザ HTTP キャッシュ を 確実 に バイパス + Cookie を 必ず 送る
+      // (本番 で route 自体 は OPTIONS allow: PATCH を 返して 動く ことを 確認 済。
+      //  古い JS bundle が 残った 状態 で 404 に 見える 事象 を 防ぐ 防御 線)
       const res = await fetch(`/api/agency/line/user-links/${encodeURIComponent(lineUserId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ customName: value }),
+        cache: "no-store",
+        credentials: "same-origin",
       });
       if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(body?.message ?? `HTTP ${res.status}`);
+        const body = (await res.json().catch(() => null)) as {
+          message?: string;
+          error?: string;
+        } | null;
+        const detail = body?.message ?? body?.error ?? `HTTP ${res.status}`;
+        throw new Error(detail);
       }
       setEditing(false);
       router.refresh();
