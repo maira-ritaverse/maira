@@ -47,9 +47,10 @@ export type ClientInteraction = {
   updatedAt: string;
 };
 
-// 一覧表示用に記録者の表示名を付与した型
+// 一覧表示用に記録者の表示名 + アバター URL を付与した型
 export type ClientInteractionWithAuthor = ClientInteraction & {
   authorName: string | null;
+  authorAvatarUrl: string | null;
 };
 
 // check 制約と一致する zod enum

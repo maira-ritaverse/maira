@@ -9,7 +9,9 @@
  * メンバー表示名 Map を合流する(profiles の RLS を緩めずに済ませるため)。
  */
 
+import { getOrgMemberAvatarMaps } from "@/lib/agency/member-avatars";
 import { createClient } from "@/lib/supabase/server";
+
 import type { ClientInteraction, ClientInteractionWithAuthor, InteractionType } from "./types";
 
 type ClientInteractionRow = {
@@ -64,12 +66,14 @@ export async function listInteractionsByClient(
 
   const interactions = (data as ClientInteractionRow[]).map(rowToInteraction);
 
-  // 記録者の表示名 Map を取得(RLS バイパス関数経由)
-  // 取得に失敗しても履歴自体は返す(authorName のみ null になる)
-  const { data: memberRows, error: memberError } = await supabase.rpc(
-    "list_organization_member_display_names",
-    { target_organization_id: organizationId },
-  );
+  // 記録者の 表示名 / avatar URL Map を 並列 取得 (RLS バイパス関数経由)
+  // 取得に失敗しても履歴自体は返す(author* は null になる)
+  const [{ data: memberRows, error: memberError }, avatarMaps] = await Promise.all([
+    supabase.rpc("list_organization_member_display_names", {
+      target_organization_id: organizationId,
+    }),
+    getOrgMemberAvatarMaps(supabase, organizationId),
+  ]);
 
   const nameByMemberId = new Map<string, string | null>();
   if (!memberError && memberRows) {
@@ -81,5 +85,8 @@ export async function listInteractionsByClient(
   return interactions.map((it) => ({
     ...it,
     authorName: it.authorMemberId ? (nameByMemberId.get(it.authorMemberId) ?? null) : null,
+    authorAvatarUrl: it.authorMemberId
+      ? (avatarMaps.byMemberId.get(it.authorMemberId) ?? null)
+      : null,
   }));
 }

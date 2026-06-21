@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 
+import { getOrgMemberAvatarMaps } from "@/lib/agency/member-avatars";
 import { markChatAsRead } from "@/lib/line/api";
 import { listConversationMessages, markConversationRead } from "@/lib/line/conversations";
 import { getLineChannelByOrgId, getMyLineChannel } from "@/lib/line/queries";
@@ -152,11 +153,14 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
     // 既読化 失敗 は 致命的でない
   }
 
-  // 組織 メンバー (担当者 セレクタ 用)
-  const { data: membersData } = await supabase
-    .from("organization_members")
-    .select("user_id, role")
-    .eq("organization_id", role.organization.id);
+  // 組織 メンバー (担当者 セレクタ 用) + アバター URL
+  const [{ data: membersData }, avatarMaps] = await Promise.all([
+    supabase
+      .from("organization_members")
+      .select("user_id, role")
+      .eq("organization_id", role.organization.id),
+    getOrgMemberAvatarMaps(supabase, role.organization.id),
+  ]);
   // 表示名 (email から ローカル部) を 取得 する ため service_role で auth.users を 引く
   const memberOptions = await (async () => {
     const rows = (membersData ?? []) as Array<{ user_id: string; role: string }>;
@@ -167,10 +171,18 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
       return rows.map((r, i) => {
         const email = lookups[i].data?.user?.email ?? null;
         const label = email ? email.split("@")[0] : `(${r.role})`;
-        return { userId: r.user_id, displayName: `${label} (${r.role})` };
+        return {
+          userId: r.user_id,
+          displayName: `${label} (${r.role})`,
+          avatarUrl: avatarMaps.byUserId.get(r.user_id) ?? null,
+        };
       });
     } catch {
-      return rows.map((r) => ({ userId: r.user_id, displayName: r.role }));
+      return rows.map((r) => ({
+        userId: r.user_id,
+        displayName: r.role,
+        avatarUrl: avatarMaps.byUserId.get(r.user_id) ?? null,
+      }));
     }
   })();
 

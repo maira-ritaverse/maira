@@ -48,6 +48,7 @@ function interaction(
     createdAt: "2026-06-10T10:01:00.000Z",
     updatedAt: "2026-06-10T10:01:00.000Z",
     authorName: "山田太郎",
+    authorAvatarUrl: null,
     ...overrides,
   };
 }

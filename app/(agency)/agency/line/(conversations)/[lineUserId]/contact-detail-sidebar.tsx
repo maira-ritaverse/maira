@@ -33,7 +33,7 @@ type Props = {
   unfollowedAt: string | null;
   createdAt: string;
   assigneeUserId: string | null;
-  memberOptions: Array<{ userId: string; displayName: string }>;
+  memberOptions: Array<{ userId: string; displayName: string; avatarUrl: string | null }>;
 };
 
 export function ContactDetailSidebar({

@@ -250,6 +250,7 @@ describe("buildAgencyClientSummaryPrompt — interactions", () => {
       referralId: null,
       authorMemberId: null,
       authorName: "佐藤",
+      authorAvatarUrl: null,
       interactionType: "call",
       occurredAt: "2026-06-10T10:00:00Z",
       summary: "概要文",

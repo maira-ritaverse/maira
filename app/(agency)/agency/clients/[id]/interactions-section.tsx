@@ -9,6 +9,7 @@ import {
   interactionTypeConfig,
 } from "@/lib/interactions/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -183,8 +184,17 @@ function InteractionView({
           )}
         </div>
         {interaction.authorName && (
-          <span className="text-muted-foreground shrink-0 text-xs">
-            記録: {interaction.authorName}
+          <span className="text-muted-foreground inline-flex shrink-0 items-center gap-1 text-xs">
+            記録:
+            <Avatar className="size-4">
+              {interaction.authorAvatarUrl && (
+                <AvatarImage src={interaction.authorAvatarUrl} alt={interaction.authorName} />
+              )}
+              <AvatarFallback className="text-[8px]">
+                {interaction.authorName.charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            {interaction.authorName}
           </span>
         )}
       </div>
