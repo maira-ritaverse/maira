@@ -201,27 +201,42 @@ export function aggregateEntrySites(rows: { entry_site: string | null }[]): Reco
 /**
  * 組織全体のクライアント分布を集計して返す(close_reason × entry_site)。
  *
- * 一覧トップに表示するサマリカード用。N+1 を避けるため 1 クエリで両軸の元データを取得し、
- * 純粋関数で集計する。
+ * 一覧 トップ の サマリ カード 用。 SQL 側 で GROUP BY 集計 する RPC
+ * (get_client_distribution_stats) を 呼ぶ ため、 戻り 値 サイズ は 分類 数 と
+ * なる (1000 件 組織 でも ~10 行)。 旧 実装 は 全 行 取得 で 1000 行 を JS に
+ * 読み 込んで いた。
  */
 export async function getClientDistributionStats(
   organizationId: string,
 ): Promise<ClientDistributionStats> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("client_records")
-    .select("close_reason, entry_site")
-    .eq("organization_id", organizationId);
-
+  const { data, error } = await supabase.rpc("get_client_distribution_stats", {
+    p_organization_id: organizationId,
+  });
   if (error) {
     throw new Error(`クライアント分布の集計に失敗しました: ${error.message}`);
   }
-  const rows = data ?? [];
-  return {
-    closeReasons: aggregateCloseReasons(rows),
-    entrySites: aggregateEntrySites(rows),
-    totalClients: rows.length,
-  };
+
+  type Row = { bucket_kind: string; bucket_value: string; cnt: number | string };
+  const rows = (data ?? []) as Row[];
+
+  const closeReasons: Partial<Record<ClientCloseReason, number>> = {};
+  const entrySites: Record<string, number> = {};
+  let totalClients = 0;
+
+  for (const r of rows) {
+    const cnt = typeof r.cnt === "number" ? r.cnt : Number(r.cnt) || 0;
+    // null は "unset" に マッピング (= aggregateCloseReasons / aggregateEntrySites と 整合)
+    const key = r.bucket_value === "__null__" ? "unset" : r.bucket_value;
+    if (r.bucket_kind === "close_reason") {
+      closeReasons[key as ClientCloseReason] = cnt;
+    } else if (r.bucket_kind === "entry_site") {
+      entrySites[key] = cnt;
+    } else if (r.bucket_kind === "total") {
+      totalClients = cnt;
+    }
+  }
+  return { closeReasons, entrySites, totalClients };
 }
 
 // 公開する型エイリアス(close_reason のキーセット)を再エクスポートしておくと、

@@ -426,30 +426,19 @@ export async function findBirthdayGreetingCandidates(
       .filter((id): id is string => !!id),
   );
 
-  // 今日 の MM-DD で 抽出
-  const today = new Date();
-  const month = today.getMonth() + 1;
-  const day = today.getDate();
-  const { data: clients, error } = await supabase
-    .from("client_records")
-    .select("id, name, email, assigned_member_id, birth_date")
-    .eq("organization_id", params.organizationId)
-    .eq("email_distribution_enabled", true)
-    .not("birth_date", "is", null);
+  // SQL 側 で JST 基準 の 今日 誕生日 を フィルタ する RPC を 呼ぶ
+  // (旧: 全件 取得 + JS で MM-DD 比較 = 1000 件 で 999 件 不要 読み込み)
+  const { data: clients, error } = await supabase.rpc("list_birthday_clients_today_for_org", {
+    p_organization_id: params.organizationId,
+  });
   if (error) throw new Error(`client_records 取得失敗: ${error.message}`);
   type CRow = {
     id: string;
     name: string;
     email: string;
     assigned_member_id: string | null;
-    birth_date: string | null;
   };
   return ((clients ?? []) as CRow[])
-    .filter((c) => {
-      if (!c.birth_date) return false;
-      const d = new Date(c.birth_date);
-      return d.getMonth() + 1 === month && d.getDate() === day;
-    })
     .filter((c) => !recentlySent.has(c.id))
     .map((c) => ({
       clientRecordId: c.id,

@@ -86,24 +86,35 @@ export async function POST(request: Request) {
     );
   }
 
-  const results: Outcome[] = [];
-  const interactionInserts: Array<Record<string, unknown>> = [];
-
-  for (const c of clientRows as Array<{
+  // 直列 では 200 件 で 6-7 分 かかる ため、 並列 度 8 で 走らせる
+  // (Resend は free プラン で 2 req/sec、 paid で 10 req/sec の レート 制限。
+  //  並列 8 + 1 件 数 100ms 程度 で ~10 req/sec を 超え ない ように 抑える)
+  const CONCURRENCY = 8;
+  const memberId = role.member.id; // closure 内 で null チェック を 通過 済 に する
+  type Row = {
     id: string;
     name: string;
     email: string;
     email_distribution_enabled: boolean;
-  }>) {
-    if (!c.email_distribution_enabled) {
-      results.push({ clientId: c.id, status: "suppressed_distribution_off" });
-      continue;
-    }
+  };
+  const rows = clientRows as Row[];
 
+  // 結果 と interaction insert を 同じ index で 揃え る ため slot 配列 で 持つ
+  const slots: Array<{ result: Outcome; interaction: Record<string, unknown> | null }> = new Array(
+    rows.length,
+  );
+
+  async function processOne(c: Row, index: number): Promise<void> {
+    if (!c.email_distribution_enabled) {
+      slots[index] = {
+        result: { clientId: c.id, status: "suppressed_distribution_off" },
+        interaction: null,
+      };
+      return;
+    }
     // 変数差し替え:{client_name} のみサポート(個人ごとに差別化する用)
     const personalSubject = subject.replace(/\{client_name\}/g, c.name);
     const personalBody = bodyText.replace(/\{client_name\}/g, c.name);
-
     try {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -120,29 +131,47 @@ export async function POST(request: Request) {
       });
       if (!res.ok) {
         const t = await res.text().catch(() => "");
-        results.push({
-          clientId: c.id,
-          status: "failed",
-          message: `HTTP ${res.status}: ${t.slice(0, 200)}`,
-        });
-        continue;
+        slots[index] = {
+          result: {
+            clientId: c.id,
+            status: "failed",
+            message: `HTTP ${res.status}: ${t.slice(0, 200)}`,
+          },
+          interaction: null,
+        };
+        return;
       }
-      results.push({ clientId: c.id, status: "sent" });
-      // 対応履歴を後で一括 INSERT 用に蓄積
-      interactionInserts.push({
-        organization_id: orgId,
-        client_record_id: c.id,
-        author_member_id: role.member.id,
-        interaction_type: "email",
-        occurred_at: new Date().toISOString(),
-        summary: personalSubject,
-        body: personalBody,
-      });
+      slots[index] = {
+        result: { clientId: c.id, status: "sent" },
+        interaction: {
+          organization_id: orgId,
+          client_record_id: c.id,
+          author_member_id: memberId,
+          interaction_type: "email",
+          occurred_at: new Date().toISOString(),
+          summary: personalSubject,
+          body: personalBody,
+        },
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : "不明なエラー";
-      results.push({ clientId: c.id, status: "failed", message });
+      slots[index] = {
+        result: { clientId: c.id, status: "failed", message },
+        interaction: null,
+      };
     }
   }
+
+  // batch 化: 一度 に CONCURRENCY 件 だけ 走らせて Promise.all → 次 の batch
+  for (let i = 0; i < rows.length; i += CONCURRENCY) {
+    const batch = rows.slice(i, i + CONCURRENCY);
+    await Promise.all(batch.map((c, j) => processOne(c, i + j)));
+  }
+
+  const results: Outcome[] = slots.map((s) => s.result);
+  const interactionInserts: Array<Record<string, unknown>> = slots
+    .map((s) => s.interaction)
+    .filter((x): x is Record<string, unknown> => x !== null);
 
   if (interactionInserts.length > 0) {
     const { error: insErr } = await supabase.from("client_interactions").insert(interactionInserts);
