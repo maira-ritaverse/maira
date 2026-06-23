@@ -148,9 +148,9 @@ export default function RoiPage() {
             />
             <StatCard
               icon={Users}
-              value="4 倍"
+              value="2 倍"
               label="1 人 あたり 対応 可能 数"
-              sub="50 名 → 200 名"
+              sub="50 名 → 100 名"
               delay={80}
             />
             <StatCard

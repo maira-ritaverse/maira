@@ -31,7 +31,8 @@ const ASSUMPTIONS = {
   docMinutesAfterMaira: 5, // Maira AI 生成 で 1 件 5 分 に
   outreachLostReductionRate: 0.8, // Daily ダイジェスト + 沈黙 アラート で 連絡 漏れ 80% 削減
   dealUpliftRate: 0.05, // 面談 リマインダー で 成約 率 5% UP
-  lineCapacityMultiplier: 4, // 公式 LINE 効率 化 で 1 人 あたり 対応 数 4 倍 (= 50 → 200 名)
+  lineCapacityMultiplier: 2, // 公式 LINE 効率 化 で 1 人 あたり 対応 数 2 倍 (= 50 → 100 名)。
+  // 過去 は 4 倍 (200 名) と 案内 して いた が、 現実 的 な 負荷 観点 から 2 倍 に 補正。
 };
 
 export type RoiResult = {
@@ -111,7 +112,7 @@ export const ROI_ASSUMPTIONS_DESCRIPTION = [
   "Maira の AI 自動 生成 で 書類 作成 時間 が 1 件 5 分 に 短縮",
   "Daily ダイジェスト + 沈黙 アラート で 連絡 漏れ を 80% 削減",
   "面談 リマインダー で 成約 率 が 5% UP",
-  "公式 LINE 効率 化 で 1 人 あたり 対応 数 が 4 倍 (= 50 → 200 名 想定)",
+  "公式 LINE 効率 化 で 1 人 あたり 対応 数 が 2 倍 (= 50 → 100 名 想定)",
 ] as const;
 
 // デフォルト 入力 値 (= 中堅 エージェント の 典型 想定)
