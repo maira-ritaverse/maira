@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { BrandMark } from "@/components/features/marketing/brand-mark";
 import { ContactForm } from "@/components/features/marketing/contact-form";
 
 /**
@@ -304,7 +305,7 @@ function Hero() {
       {/* マストヘッド:版面の上端。LP全体を「号」として位置付ける小さなラベル。 */}
       <div className="mx-auto max-w-5xl px-6 pt-10 lg:px-8 lg:pt-14">
         <div className="lp-pv-rise lp-pv-rise-1 flex flex-wrap items-center gap-4 text-[color:var(--lp-ink-faint)]">
-          <span className="lp-pv-masthead">Maira</span>
+          <BrandMark className="lp-pv-masthead" />
           <span aria-hidden className="h-px w-6 bg-[color:var(--lp-line-strong)]" />
           <span className="lp-pv-masthead">Recruitment CRM</span>
           <span aria-hidden className="h-px w-6 bg-[color:var(--lp-line-strong)]" />

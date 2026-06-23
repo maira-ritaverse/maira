@@ -3,6 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { BrandMark } from "@/components/features/marketing/brand-mark";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -145,7 +146,9 @@ export function CareerChatForm({ conversationId, initialMessages }: Props) {
         {isLoading && (
           <div className="flex justify-start">
             <div className="bg-muted rounded-lg px-4 py-2">
-              <p className="text-xs opacity-70">Maira</p>
+              <p className="text-xs opacity-70">
+                <BrandMark />
+              </p>
               <p className="animate-pulse">考えています...</p>
             </div>
           </div>

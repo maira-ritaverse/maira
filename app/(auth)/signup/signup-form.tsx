@@ -9,6 +9,7 @@ import Link from "next/link";
 import { signupSchema, type SignupInput } from "@/lib/validations/auth";
 import { signup } from "@/app/auth/actions";
 import { GoogleSignInButton } from "@/components/features/auth/google-sign-in-button";
+import { BrandMark } from "@/components/features/marketing/brand-mark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -99,11 +100,18 @@ export function SignupForm({ invitation, clientInvitation }: Props) {
     }
   };
 
-  const headerTitle = invitation
-    ? "招待を受けて登録"
-    : clientInvitation
-      ? "Maira を始める(招待を受けて)"
-      : "Mairaを始める";
+  const headerTitle: React.ReactNode = invitation ? (
+    "招待を受けて登録"
+  ) : clientInvitation ? (
+    <>
+      <BrandMark /> を始める(招待を受けて)
+    </>
+  ) : (
+    <>
+      <BrandMark />
+      を始める
+    </>
+  );
 
   const headerSubtitle = invitation
     ? `${invitation.organizationName} に ${roleLabel[invitation.role]} として参加します`

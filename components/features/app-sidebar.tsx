@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { CustomizableSidebar } from "./customizable-sidebar";
+import { BrandMark } from "./marketing/brand-mark";
 import type { ItemDescriptor, SidebarLayout } from "@/lib/sidebar-layout/types";
 
 /**
@@ -132,7 +133,7 @@ export function AppSidebar({ invitedCount = 0 }: Props) {
             priority
             className="size-7 shrink-0"
           />
-          <span className="text-xl font-bold">Maira</span>
+          <BrandMark className="text-xl font-bold" />
         </Link>
       }
     />
