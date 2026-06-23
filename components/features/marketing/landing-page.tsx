@@ -42,6 +42,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 
+import { BrandMark } from "./brand-mark";
 import { LeadRequestForm } from "./lead-request-form";
 
 export function LandingPage() {
@@ -78,7 +79,7 @@ function Header() {
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 lg:px-8">
         <Link href="/" className="flex items-center gap-2" aria-label="Maira トップ">
           <Image src="/icon-192.png" alt="" width={32} height={32} priority className="size-8" />
-          <span className="text-lg font-bold tracking-tight">Maira</span>
+          <BrandMark className="text-lg font-bold tracking-tight" />
           <span className="text-muted-foreground ml-1 text-[10px] tracking-[0.2em] uppercase">
             for agencies
           </span>
@@ -606,7 +607,7 @@ function Footer() {
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <Image src="/icon-192.png" alt="" width={28} height={28} className="size-7" />
-            <span className="text-base font-bold">Maira</span>
+            <BrandMark className="text-base font-bold" />
           </div>
           <p className="text-xs leading-relaxed text-slate-600">
             転職エージェント業務効率化SaaS
