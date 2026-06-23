@@ -611,7 +611,7 @@ function Footer() {
           <p className="text-xs leading-relaxed text-slate-600">
             転職エージェント業務効率化SaaS
             <br />
-            運営: maira-ritaverse
+            運営: 株式会社Revorise
           </p>
         </div>
         <div className="space-y-2 text-sm">
