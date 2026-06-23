@@ -28,7 +28,7 @@ export function SiteHeader() {
         <nav className="flex items-center gap-2 sm:gap-4">
           <Link
             href="/login"
-            className="hidden text-sm text-slate-600 hover:text-slate-900 sm:inline"
+            className="hidden text-sm text-slate-600 transition-colors hover:text-orange-500 sm:inline"
           >
             ログイン
           </Link>

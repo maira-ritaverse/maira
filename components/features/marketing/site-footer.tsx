@@ -48,7 +48,10 @@ export function SiteFooter() {
               </Link>
             </li>
             <li>
-              <Link href="/login" className="text-slate-600 hover:text-slate-900">
+              <Link
+                href="/login"
+                className="text-slate-600 transition-colors hover:text-orange-500"
+              >
                 ログイン
               </Link>
             </li>
