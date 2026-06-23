@@ -1,15 +1,18 @@
 "use client";
 
 /**
- * /roi ページ の シミュレーター 本体。
+ * /roi ページのシミュレーター本体。
  *
- * - 数値 入力 → リアルタイム で 年間 効果 額 が 更新
- * - 提出 ボタン で /api/marketing/roi-simulation に POST → DB 保存 + メール 通知
- * - 提出 後 は 自動 返信 メール の 案内 を 表示
+ * - 数値入力 → リアルタイムで年間効果額が更新
+ * - 提出ボタンで /api/marketing/roi-simulation に POST → DB 保存 + メール通知
+ * - 提出後は自動返信メールの案内を表示
  *
  * 動き:
- *   ・年間 効果 額 が 0 → 最終 値 に カウント アップ ( requestAnimationFrame )
- *   ・入力 値 が 変わる たび に 600ms かけて 滑らか に 再 アニメート
+ *   ・年間効果額が 0 → 最終値にカウントアップ (requestAnimationFrame)
+ *   ・入力値が変わるたびに 600ms かけて滑らかに再アニメート
+ *
+ * 入力は type=text + 数字フィルター。「自由に大きな数字を入れたい」要望
+ * (上限なし、ホイールで値が変わらない、step に縛られない) に応じている。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
@@ -35,22 +38,33 @@ const NUMERIC_FIELDS: Array<{
   suffix: string;
   hint?: string;
 }> = [
-  { key: "advisorCount", label: "アドバイザー 数", suffix: "名" },
-  { key: "monthlyClients", label: "月間 対応 求職者 数", suffix: "名 / 月" },
-  { key: "docMinutesPerCase", label: "履歴 書 / 職経 1 件 あたり 作成 時間", suffix: "分" },
-  { key: "monthlyDeals", label: "月間 成約 件数", suffix: "件 / 月" },
-  { key: "avgFeeManYen", label: "平均 紹介 料 単価", suffix: "万円 / 件" },
-  { key: "monthlyLostLeads", label: "連絡 漏れ で 取りこぼし 案件", suffix: "件 / 月" },
+  { key: "advisorCount", label: "アドバイザー数", suffix: "名" },
+  { key: "monthlyClients", label: "月間対応求職者数", suffix: "名 / 月" },
+  { key: "docMinutesPerCase", label: "履歴書/職経1件あたり作成時間", suffix: "分" },
+  { key: "monthlyDeals", label: "月間成約件数", suffix: "件 / 月" },
+  { key: "avgFeeManYen", label: "平均紹介料単価", suffix: "万円 / 件" },
+  { key: "monthlyLostLeads", label: "連絡漏れで取りこぼし案件", suffix: "件 / 月" },
   {
     key: "advisorHourlyYen",
-    label: "アドバイザー 平均 時給",
+    label: "アドバイザー平均時給",
     suffix: "円",
-    hint: "月給 50 万 ≒ 時給 3,000 円",
+    hint: "月給50万 ≒ 時給3,000円",
   },
 ];
 
 export function RoiSimulator() {
   const [input, setInput] = useState<RoiInput>(DEFAULT_ROI_INPUT);
+  // text 入力 として 表示 する 文字列 ( 編集 中 の 「空文字」 や 桁 区切り を 保持 できる )
+  const [textValues, setTextValues] = useState<Record<keyof RoiInput, string>>(() => ({
+    advisorCount: String(DEFAULT_ROI_INPUT.advisorCount),
+    monthlyClients: String(DEFAULT_ROI_INPUT.monthlyClients),
+    docMinutesPerCase: String(DEFAULT_ROI_INPUT.docMinutesPerCase),
+    monthlyDeals: String(DEFAULT_ROI_INPUT.monthlyDeals),
+    avgFeeManYen: String(DEFAULT_ROI_INPUT.avgFeeManYen),
+    monthlyLostLeads: String(DEFAULT_ROI_INPUT.monthlyLostLeads),
+    advisorHourlyYen: String(DEFAULT_ROI_INPUT.advisorHourlyYen),
+  }));
+
   const [company, setCompany] = useState({
     companyName: "",
     contactName: "",
@@ -64,7 +78,7 @@ export function RoiSimulator() {
 
   const result = useMemo(() => calculateRoi(input), [input]);
 
-  // 数字 カウント アップ アニメーション
+  // 数字 カウントアップ アニメーション
   const [animatedTotal, setAnimatedTotal] = useState(result.yearly.total);
   const prevTotalRef = useRef(result.yearly.total);
   useEffect(() => {
@@ -85,15 +99,21 @@ export function RoiSimulator() {
     return () => cancelAnimationFrame(raf);
   }, [result.yearly.total]);
 
-  const updateNumeric = (key: keyof RoiInput, raw: string) => {
-    const n = Number(raw);
-    setInput((prev) => ({ ...prev, [key]: Number.isFinite(n) && n >= 0 ? n : 0 }));
+  // 数字 のみ 受け付け、 上限 なし。 カンマ や 半角 / 全角 数字 が 混ざっても 拾う。
+  const handleNumericChange = (key: keyof RoiInput, raw: string) => {
+    // 全角 数字 → 半角 に 正規化
+    const half = raw.replace(/[0-9]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+    // 数字 のみ 抽出 ( カンマ / 空白 等 は 捨てる )
+    const digits = half.replace(/[^0-9]/g, "");
+    setTextValues((prev) => ({ ...prev, [key]: digits }));
+    const n = digits === "" ? 0 : Number(digits);
+    setInput((prev) => ({ ...prev, [key]: Number.isFinite(n) ? n : 0 }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!company.companyName || !company.contactName || !company.email) {
-      setErrorMessage("会社名・担当者名・メールアドレスは必須 です");
+      setErrorMessage("会社名・担当者名・メールアドレスは必須です");
       setStatus("error");
       return;
     }
@@ -137,31 +157,31 @@ export function RoiSimulator() {
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_1.1fr]">
-      {/* === 入力 側 === */}
+      {/* === 入力側 === */}
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* 会社 情報 */}
+        {/* 会社情報 */}
         <section className="bg-card rounded-lg border p-6">
-          <h2 className="mb-4 text-lg font-bold">会社 情報</h2>
+          <h2 className="mb-4 text-lg font-bold">会社情報</h2>
           <div className="space-y-4">
-            <Field label="会社 名" required>
+            <Field label="会社名" required>
               <Input
                 value={company.companyName}
                 onChange={(e) => setCompany((p) => ({ ...p, companyName: e.target.value }))}
-                placeholder="株式会社 ◯◯"
+                placeholder="株式会社◯◯"
                 required
                 maxLength={200}
               />
             </Field>
-            <Field label="担当 者 名" required>
+            <Field label="担当者名" required>
               <Input
                 value={company.contactName}
                 onChange={(e) => setCompany((p) => ({ ...p, contactName: e.target.value }))}
-                placeholder="山田 太郎"
+                placeholder="山田太郎"
                 required
                 maxLength={120}
               />
             </Field>
-            <Field label="メール アドレス" required>
+            <Field label="メールアドレス" required>
               <Input
                 type="email"
                 value={company.email}
@@ -176,11 +196,11 @@ export function RoiSimulator() {
                 <Input
                   value={company.role}
                   onChange={(e) => setCompany((p) => ({ ...p, role: e.target.value }))}
-                  placeholder="経営者 / 人事 部長 等"
+                  placeholder="経営者 / 人事部長 等"
                   maxLength={80}
                 />
               </Field>
-              <Field label="電話 番号">
+              <Field label="電話番号">
                 <Input
                   value={company.phone}
                   onChange={(e) => setCompany((p) => ({ ...p, phone: e.target.value }))}
@@ -189,7 +209,7 @@ export function RoiSimulator() {
                 />
               </Field>
             </div>
-            <Field label="業種 / 専門 領域">
+            <Field label="業種 / 専門領域">
               <Input
                 value={company.industry}
                 onChange={(e) => setCompany((p) => ({ ...p, industry: e.target.value }))}
@@ -200,22 +220,22 @@ export function RoiSimulator() {
           </div>
         </section>
 
-        {/* 業務 数値 */}
+        {/* 業務数値 */}
         <section className="bg-card rounded-lg border p-6">
-          <h2 className="mb-1 text-lg font-bold">あなた の 会社 の 現状</h2>
+          <h2 className="mb-1 text-lg font-bold">あなたの会社の現状</h2>
           <p className="text-muted-foreground mb-4 text-xs">
-            数字 を 入れる と 右側 の 試算 が その場 で 更新 されます
+            数字を入れると右側の試算がその場で更新されます
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             {NUMERIC_FIELDS.map((f) => (
               <Field key={f.key} label={f.label} hint={f.hint}>
                 <div className="flex items-baseline gap-2">
                   <Input
-                    type="number"
+                    type="text"
                     inputMode="numeric"
-                    min={0}
-                    value={input[f.key]}
-                    onChange={(e) => updateNumeric(f.key, e.target.value)}
+                    pattern="[0-9]*"
+                    value={textValues[f.key]}
+                    onChange={(e) => handleNumericChange(f.key, e.target.value)}
                     className="max-w-32"
                   />
                   <span className="text-muted-foreground text-xs whitespace-nowrap">
@@ -233,14 +253,13 @@ export function RoiSimulator() {
             <Alert className="border-green-200 bg-green-50">
               <CheckCircle2 className="size-4 text-green-700" />
               <AlertDescription className="text-green-800">
-                試算 結果 を {company.email} に お送り しました。 営業 担当 から も 1 営業 日 以内
-                に ご連絡 します。
+                試算結果を{company.email}にお送りしました。営業担当からも1営業日以内にご連絡します。
               </AlertDescription>
             </Alert>
           ) : (
             <>
               <Button type="submit" size="lg" className="w-full" disabled={status === "submitting"}>
-                {status === "submitting" ? "送信 中..." : "この 試算 結果 を 受け取る"}
+                {status === "submitting" ? "送信中..." : "この試算結果を受け取る"}
                 <ArrowRight className="ml-1 size-4" />
               </Button>
               {errorMessage && (
@@ -249,8 +268,7 @@ export function RoiSimulator() {
                 </Alert>
               )}
               <p className="text-muted-foreground mt-3 text-xs">
-                送信 すると 試算 結果 が メール で 届き、 営業 担当 から 詳細 資料 を 1 営業 日 以内
-                に お送り します。
+                送信すると試算結果がメールで届き、営業担当から詳細資料を1営業日以内にお送りします。
               </p>
             </>
           )}
@@ -271,14 +289,14 @@ export function RoiSimulator() {
         </div>
       </form>
 
-      {/* === 結果 側 === */}
+      {/* === 結果側 === */}
       <aside className="space-y-5 self-start lg:sticky lg:top-24">
         <div className="relative overflow-hidden rounded-xl border border-orange-200 bg-linear-to-br from-orange-50 to-orange-100 p-8 shadow-sm">
-          <p className="text-sm font-medium text-orange-700">あなた の 会社 の 場合</p>
+          <p className="text-sm font-medium text-orange-700">あなたの会社の場合</p>
           <p className="my-3 text-5xl font-bold tracking-tight text-orange-600 tabular-nums">
             {yen(animatedTotal)}
           </p>
-          <p className="text-sm text-orange-900/80">の 年間 効果 が 期待 できます</p>
+          <p className="text-sm text-orange-900/80">の年間効果が期待できます</p>
           <div
             aria-hidden
             className="absolute -right-8 -bottom-8 size-32 rounded-full bg-orange-300/30 blur-2xl"
@@ -286,46 +304,46 @@ export function RoiSimulator() {
         </div>
 
         <div className="bg-card space-y-3 rounded-lg border p-6 text-sm">
-          <h3 className="text-sm font-bold">年間 効果 の 内訳</h3>
-          <Row label="書類 作成 時間 短縮" value={yen(result.yearly.docTimeSavings)} />
-          <Row label="連絡 漏れ 防止" value={yen(result.yearly.leadRecovery)} />
-          <Row label="面談 リマインダー で 成約 UP" value={yen(result.yearly.dealUplift)} />
+          <h3 className="text-sm font-bold">年間効果の内訳</h3>
+          <Row label="書類作成時間短縮" value={yen(result.yearly.docTimeSavings)} />
+          <Row label="連絡漏れ防止" value={yen(result.yearly.leadRecovery)} />
+          <Row label="面談リマインダーで成約UP" value={yen(result.yearly.dealUplift)} />
         </div>
 
         <div className="bg-card rounded-lg border p-6 text-sm">
-          <h3 className="mb-3 text-sm font-bold">月 ベース の 改善</h3>
+          <h3 className="mb-3 text-sm font-bold">月ベースの改善</h3>
           <div className="space-y-2 text-slate-700">
             <p>
-              <span className="font-medium">書類 作成 時間:</span>{" "}
+              <span className="font-medium">書類作成時間:</span>{" "}
               <span className="text-slate-500 line-through">
-                月 {Math.round(result.monthly.docHoursBefore)} 時間
+                月{Math.round(result.monthly.docHoursBefore)}時間
               </span>{" "}
               →{" "}
               <span className="font-bold text-slate-900">
-                月 {Math.round(result.monthly.docHoursAfter)} 時間
+                月{Math.round(result.monthly.docHoursAfter)}時間
               </span>
             </p>
             <p>
-              <span className="font-medium">機会 損失 回避:</span>{" "}
+              <span className="font-medium">機会損失回避:</span>{" "}
               <span className="font-bold text-slate-900">
                 {yen(result.monthly.leadRecoveryYen)} / 月
               </span>
             </p>
             <p>
-              <span className="font-medium">1 人 あたり 対応 可能 数:</span>{" "}
+              <span className="font-medium">1人あたり対応可能数:</span>{" "}
               <span className="text-slate-500">
-                {Math.round(result.capacity.currentPerAdvisor)} 名
+                {Math.round(result.capacity.currentPerAdvisor)}名
               </span>{" "}
               →{" "}
               <span className="font-bold text-slate-900">
-                {Math.round(result.capacity.afterMairaPerAdvisor)} 名
+                {Math.round(result.capacity.afterMairaPerAdvisor)}名
               </span>
             </p>
           </div>
         </div>
 
         <details className="text-muted-foreground rounded-lg border bg-slate-50 px-4 py-3 text-xs">
-          <summary className="cursor-pointer font-medium text-slate-700">計算 前提 を 見る</summary>
+          <summary className="cursor-pointer font-medium text-slate-700">計算前提を見る</summary>
           <ul className="mt-2 ml-4 list-disc space-y-1">
             {ROI_ASSUMPTIONS_DESCRIPTION.map((line) => (
               <li key={line}>{line}</li>

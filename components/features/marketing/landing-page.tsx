@@ -52,6 +52,7 @@ export function LandingPage() {
       <main>
         <Hero />
         <PainSection />
+        <RoiTeaserSection />
         <OverviewSection />
         <FeatureCrm />
         <FeatureLine />
@@ -61,6 +62,7 @@ export function LandingPage() {
         <FeatureDigest />
         <FeatureReport />
         <SecuritySection />
+        <RoiInlineCta />
         <CtaSection />
         <FaqSection />
       </main>
@@ -222,6 +224,116 @@ function PainSection() {
               <p className="mt-1 text-xs leading-relaxed text-slate-600">{p.body}</p>
             </div>
           ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ============================================================
+ * ROI ティーザー (Pain → 解決策の橋渡し で 試算 ページ へ 誘導)
+ * ============================================================ */
+
+function RoiTeaserSection() {
+  return (
+    <section className="border-y border-orange-100 bg-linear-to-br from-orange-50/60 via-white to-orange-50/40 py-20">
+      <div className="mx-auto grid max-w-6xl gap-10 px-5 lg:grid-cols-[1.1fr_1fr] lg:items-center lg:px-8">
+        <div>
+          <div className="inline-flex items-center gap-2 rounded-full bg-orange-100/80 px-3 py-1 text-xs font-medium text-orange-700">
+            <Sparkles className="size-3" aria-hidden />
+            あなたの会社の場合は?
+          </div>
+          <h2 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">
+            数字で見る、
+            <BrandMark />
+            導入の効果。
+          </h2>
+          <p className="mt-5 text-base leading-relaxed text-slate-600">
+            「興味はあるけど効くか分からない」を、数字で議論できる材料に。
+            自社のアドバイザー数や成約数を入れるだけで、年間効果額がその場で出ます。
+          </p>
+          <div className="mt-7 flex flex-wrap items-center gap-3">
+            <Link
+              href="/roi"
+              className="inline-flex items-center gap-1.5 rounded-md bg-orange-500 px-6 py-3 text-base font-semibold text-white shadow-lg shadow-orange-500/30 hover:bg-orange-600"
+            >
+              <Sparkles className="size-4" aria-hidden />
+              導入効果を試算する(30秒)
+            </Link>
+            <a href="#cta" className="text-sm font-medium text-slate-600 hover:text-slate-900">
+              または資料を請求する →
+            </a>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <RoiTeaserStat value="83%" label="書類時間削減" />
+          <RoiTeaserStat value="2倍" label="対応可能数" />
+          <RoiTeaserStat value="80%" label="連絡漏れ削減" />
+          <RoiTeaserStat value="+5%" label="成約率UP" />
+          <RoiTeaserStat value="月¥xxx万" label="削減人件費" highlight />
+          <RoiTeaserStat value="¥xxx万" label="機会損失回避" highlight />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function RoiTeaserStat({
+  value,
+  label,
+  highlight = false,
+}: {
+  value: string;
+  label: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={
+        highlight
+          ? "rounded-lg border border-orange-300 bg-white p-4 shadow-sm"
+          : "rounded-lg border border-slate-200 bg-white/80 p-4"
+      }
+    >
+      <p
+        className={
+          highlight ? "text-xl font-bold text-orange-600" : "text-xl font-bold text-slate-900"
+        }
+      >
+        {value}
+      </p>
+      <p className="mt-1 text-xs text-slate-600">{label}</p>
+    </div>
+  );
+}
+
+/* ============================================================
+ * ROI インライン CTA (Security → CTA の 間 で もう 一度 押し出し)
+ * ============================================================ */
+
+function RoiInlineCta() {
+  return (
+    <section className="bg-white py-14">
+      <div className="mx-auto max-w-4xl px-5 lg:px-8">
+        <div className="flex flex-col items-center gap-5 rounded-2xl border border-orange-200 bg-linear-to-r from-orange-50 to-amber-50 p-8 text-center md:flex-row md:text-left">
+          <div className="flex size-14 shrink-0 items-center justify-center rounded-full bg-white shadow-sm">
+            <Sparkles className="size-6 text-orange-500" aria-hidden />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-xl font-bold text-slate-900">
+              申し込む前に、効果を試算してみませんか?
+            </h3>
+            <p className="mt-2 text-sm text-slate-600">
+              自社の数字を入れるだけ。30秒で年間効果額が分かります。
+            </p>
+          </div>
+          <Link
+            href="/roi"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-orange-500 px-5 py-3 text-sm font-semibold text-white hover:bg-orange-600"
+          >
+            効果を試算する
+            <ArrowRight className="size-4" aria-hidden />
+          </Link>
         </div>
       </div>
     </section>

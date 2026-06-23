@@ -2,13 +2,13 @@
  * /roi  - ROI 試算 ページ
  *
  * 「ROI だけ では 寂しい」 要望 を 受け、 シミュレーター だけ で なく
- *   1. Hero ( 問いかけ + 価値 提案 )
+ *   1. Hero (問いかけ + 価値提案)
  *   2. ROI シミュレーター
- *   3. 効果 を 生む 3 つ の 機能
- *   4. 導入 効果 の 数字 ( ベンチマーク )
- *   5. CTA ( トップ の 資料 請求 へ )
- * の 構成 で 構築。 動き は CSS animation + Intersection Observer 風 の
- * delay 付き fade-in で 軽量 に。
+ *   3. 効果を生む 3 つの機能
+ *   4. 導入効果の数字 (ベンチマーク)
+ *   5. CTA (トップの資料請求へ)
+ * の構成で構築。動きは CSS animation + Intersection Observer 風の
+ * delay 付き fade-in で軽量に。
  */
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -28,9 +28,9 @@ import { RoiSimulator } from "@/components/features/marketing/roi-simulator";
 import { buttonVariants } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "ROI 試算 | Maira",
+  title: "ROI試算 | Maira",
   description:
-    "現状 の 数字 を 入力 する だけ で、 Maira 導入 後 の 年間 効果 額 を その場 で 試算。 経営 会議 や 社内 検討 に お役立て いただけます。",
+    "現状の数字を入力するだけで、Maira導入後の年間効果額をその場で試算。経営会議や社内検討にお役立ていただけます。",
 };
 
 export default function RoiPage() {
@@ -44,24 +44,24 @@ export default function RoiPage() {
             className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900"
           >
             <ArrowLeft className="size-4" />
-            トップ に 戻る
+            トップに戻る
           </Link>
 
           <div className="mt-6 max-w-3xl">
             <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-700">
               <Sparkles className="size-3" />
-              入力 30 秒 で 効果 を 可視 化
+              入力30秒で効果を可視化
             </div>
             <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 md:text-5xl">
-              <BrandMark /> を 導入 する と、
+              <BrandMark />
+              を導入すると、
               <br />
-              年間 で どれ だけ 変わる か。
+              年間でどれだけ変わるか。
             </h1>
             <p className="mt-5 text-base leading-relaxed text-slate-600 md:text-lg">
-              現状 の 数字 を 入力 する だけ で、 削減 時間 と 売上 効果 が その場 で 計算
-              されます。
+              現状の数字を入力するだけで、削減時間と売上効果がその場で計算されます。
               <br className="hidden md:block" />
-              経営 会議 や 社内 検討 で 「どの くらい 効くか」 を 数字 で 議論 する 材料 に。
+              経営会議や社内検討で「どのくらい効くか」を数字で議論する材料に。
             </p>
           </div>
         </div>
@@ -71,12 +71,9 @@ export default function RoiPage() {
       <section id="simulator" className="border-b border-slate-200 py-14 lg:py-20">
         <div className="mx-auto max-w-6xl px-5 lg:px-8">
           <div className="lp-fade-in mb-10 max-w-2xl">
-            <h2 className="text-2xl font-bold text-slate-900 md:text-3xl">
-              あなた の 会社 で 試算
-            </h2>
+            <h2 className="text-2xl font-bold text-slate-900 md:text-3xl">あなたの会社で試算</h2>
             <p className="mt-3 text-sm text-slate-600">
-              入力 値 は デフォルト で 中堅 エージェント 企業 の 一般 的 な 値 が 入って います。
-              ご自身 の 数字 に 書き換え て ください。
+              入力値はデフォルトで中堅エージェント企業の一般的な値が入っています。ご自身の数字に書き換えてください。
             </p>
           </div>
           <div className="lp-fade-in" style={{ animationDelay: "120ms" }}>
@@ -85,56 +82,59 @@ export default function RoiPage() {
         </div>
       </section>
 
-      {/* === 効果 を 生む 3 つ の 機能 === */}
+      {/* === 効果を生む3つの機能 === */}
       <section className="bg-white py-14 lg:py-20">
         <div className="mx-auto max-w-6xl px-5 lg:px-8">
           <div className="lp-fade-in mb-12 max-w-2xl">
             <h2 className="text-2xl font-bold text-slate-900 md:text-3xl">
-              この 効果 を 支える <BrandMark /> の 3 つ の 機能
+              この効果を支える
+              <BrandMark />
+              の3つの機能
             </h2>
             <p className="mt-3 text-sm text-slate-600">
-              試算 で 計上 して いる 効果 は、 すべて Maira の 実 機能 に 紐 付いて います。
+              試算で計上している効果は、すべてMairaの実機能に紐付いています。
             </p>
           </div>
 
           <div className="grid gap-6 md:grid-cols-3">
             <FeatureCard
               icon={FileText}
-              title="AI 履歴 書 / 職経 自動 生成"
-              description="会議 録音 を アップロード する だけ で、 履歴 書 / 職務 経歴 書 / 推薦 文 を AI が 構造 化 して 出力。 1 件 30 分 → 5 分 へ。"
+              title="AI履歴書/職経自動生成"
+              description="会議録音をアップロードするだけで、履歴書/職務経歴書/推薦文をAIが構造化して出力。1件30分→5分へ。"
               metric="83%"
-              metricLabel="作成 時間 削減"
+              metricLabel="作成時間削減"
               delay={0}
             />
             <FeatureCard
               icon={Bell}
-              title="Daily ダイジェスト + 沈黙 アラート"
-              description="毎朝 8 時 に 「今日 やる こと」 を 1 通 の メール で 配信。 30/60/90 日 連絡 なし の 顧客 を 自動 ハイライト し、 取りこぼし を 防止。"
+              title="Dailyダイジェスト+沈黙アラート"
+              description="毎朝8時に「今日やること」を1通のメールで配信。30/60/90日連絡なしの顧客を自動ハイライトし、取りこぼしを防止。"
               metric="80%"
-              metricLabel="連絡 漏れ 削減"
+              metricLabel="連絡漏れ削減"
               delay={100}
             />
             <FeatureCard
               icon={MessageSquare}
-              title="面談 リマインダー + 候補 日 提案"
-              description="面談 24h 前 / 1h 前 に 自動 リマインド。 LINE で 候補 日 を 一括 提案 → 求職者 選択 で Meet/Zoom URL が 自動 発行。"
+              title="面談リマインダー+候補日提案"
+              description="面談24h前/1h前に自動リマインド。LINEで候補日を一括提案→求職者選択でMeet/Zoom URLが自動発行。"
               metric="+5%"
-              metricLabel="成約 率 向上"
+              metricLabel="成約率向上"
               delay={200}
             />
           </div>
         </div>
       </section>
 
-      {/* === 数字 で 見る 効果 ( ベンチマーク ) === */}
+      {/* === 数字で見る効果(ベンチマーク) === */}
       <section className="border-y border-slate-200 bg-slate-100 py-14 lg:py-20">
         <div className="mx-auto max-w-6xl px-5 lg:px-8">
           <div className="lp-fade-in mb-12 max-w-2xl">
             <h2 className="text-2xl font-bold text-slate-900 md:text-3xl">
-              <BrandMark /> 導入 で 実現 する 数字
+              <BrandMark />
+              導入で実現する数字
             </h2>
             <p className="mt-3 text-sm text-slate-600">
-              既存 導入 先 の 平均 値 を 元 に した 期待 値 です。 ( 業務 形態 に より 変動 )
+              既存導入先の平均値を元にした期待値です(業務形態により変動)。
             </p>
           </div>
 
@@ -142,29 +142,29 @@ export default function RoiPage() {
             <StatCard
               icon={Clock}
               value="83%"
-              label="書類 作成 時間 削減"
-              sub="30 分 → 5 分 / 件"
+              label="書類作成時間削減"
+              sub="30分→5分 / 件"
               delay={0}
             />
             <StatCard
               icon={Users}
-              value="2 倍"
-              label="1 人 あたり 対応 可能 数"
-              sub="50 名 → 100 名"
+              value="2倍"
+              label="1人あたり対応可能数"
+              sub="50名→100名"
               delay={80}
             />
             <StatCard
               icon={Bell}
               value="80%"
-              label="連絡 漏れ 削減"
-              sub="Daily ダイジェスト 効果"
+              label="連絡漏れ削減"
+              sub="Dailyダイジェスト効果"
               delay={160}
             />
             <StatCard
               icon={TrendingUp}
               value="+5%"
-              label="成約 率 向上"
-              sub="リマインダー 効果"
+              label="成約率向上"
+              sub="リマインダー効果"
               delay={240}
             />
           </div>
@@ -175,17 +175,19 @@ export default function RoiPage() {
       <section className="bg-white py-14 lg:py-20">
         <div className="mx-auto max-w-3xl px-5 text-center lg:px-8">
           <h2 className="text-2xl font-bold text-slate-900 md:text-3xl">
-            まずは <BrandMark /> を 体験 して みません か?
+            まずは
+            <BrandMark />
+            を体験してみませんか?
           </h2>
           <p className="mt-4 text-sm text-slate-600">
-            試算 結果 を 元 に、 ご利用 に 合った 詳細 資料 と デモ を ご案内 します。
+            試算結果を元に、ご利用に合った詳細資料とデモをご案内します。
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link href="/#cta" className={buttonVariants({ size: "lg" })}>
-              資料 を 請求 する
+              資料を請求する
             </Link>
             <Link href="/contact" className={buttonVariants({ size: "lg", variant: "outline" })}>
-              直接 相談 する
+              直接相談する
             </Link>
           </div>
         </div>
@@ -194,7 +196,7 @@ export default function RoiPage() {
   );
 }
 
-// ===================== サブ コンポーネント =====================
+// ===================== サブコンポーネント =====================
 
 function FeatureCard({
   icon: Icon,
