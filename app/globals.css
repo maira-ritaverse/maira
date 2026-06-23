@@ -127,4 +127,25 @@
   html {
     @apply font-sans;
   }
+
+  /* /roi ページ で 使う フェード イン (= 軽量 アニメ、 framer-motion 不要)
+     style={{ animationDelay: "120ms" }} で 段階 的 に 動かす 想定 */
+  @keyframes lpFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .lp-fade-in {
+    animation: lpFadeIn 700ms ease-out both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lp-fade-in {
+      animation: none;
+    }
+  }
 }
