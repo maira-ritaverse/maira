@@ -33,8 +33,9 @@ Webアプリ(PWA)です。
 - AI: Anthropic API (Claude Sonnet 4.6)
 - 決済: Stripe Subscription
 - ホスティング: Vercel
-- メール: Resend
-- DNS: Cloudflare
+- メール送信: Resend(`maira.pro` ドメインで verify 済)
+- メール受信: ImprovMX 無料プラン(catch-all で `*@maira.pro` → `maira.ritaverse@gmail.com` に転送)
+- DNS: お名前.com(ネームサーバーは `01-04.dnsv.jp`、DNS レコード設定を利用)。Cloudflare は使っていない
 - アイコン: lucide-react
 - フォーム: react-hook-form + zod
 - 暗号化: Web Crypto API(外部ライブラリ禁止)
