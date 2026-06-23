@@ -139,6 +139,13 @@ function Hero() {
             >
               機能を見る →
             </a>
+            <Link
+              href="/roi"
+              className="inline-flex items-center gap-1.5 rounded-md border border-orange-300 bg-orange-50 px-5 py-3 text-sm font-semibold text-orange-700 hover:bg-orange-100"
+            >
+              <Sparkles className="size-4" aria-hidden />
+              導入効果を試算する
+            </Link>
           </div>
           <ul className="grid grid-cols-2 gap-2 pt-2 text-xs text-slate-600">
             <li className="flex items-center gap-1.5">
