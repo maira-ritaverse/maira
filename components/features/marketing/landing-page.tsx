@@ -44,11 +44,13 @@ import Link from "next/link";
 
 import { BrandMark } from "./brand-mark";
 import { LeadRequestForm } from "./lead-request-form";
+import { SiteFooter } from "./site-footer";
+import { SiteHeader } from "./site-header";
 
 export function LandingPage() {
   return (
     <div className="min-h-screen bg-white text-slate-900">
-      <Header />
+      <SiteHeader />
       <main>
         <Hero />
         <PainSection />
@@ -66,43 +68,8 @@ export function LandingPage() {
         <CtaSection />
         <FaqSection />
       </main>
-      <Footer />
+      <SiteFooter />
     </div>
-  );
-}
-
-/* ============================================================
- * Header
- * ============================================================ */
-
-function Header() {
-  return (
-    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 lg:px-8">
-        <Link href="/" className="flex items-center gap-2" aria-label="Maira トップ">
-          <Image src="/icon-192.png" alt="" width={32} height={32} priority className="size-8" />
-          <BrandMark className="text-lg font-bold tracking-tight" />
-          <span className="text-muted-foreground ml-1 text-[10px] tracking-[0.2em] uppercase">
-            for agencies
-          </span>
-        </Link>
-        <nav className="flex items-center gap-2 sm:gap-4">
-          <Link
-            href="/login"
-            className="hidden text-sm text-slate-600 hover:text-slate-900 sm:inline"
-          >
-            ログイン
-          </Link>
-          <a
-            href="#cta"
-            className="inline-flex items-center gap-1 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-          >
-            <FileText className="size-3.5" aria-hidden />
-            資料請求
-          </a>
-        </nav>
-      </div>
-    </header>
   );
 }
 
@@ -712,92 +679,6 @@ function FaqSection() {
         </div>
       </div>
     </section>
-  );
-}
-
-/* ============================================================
- * Footer
- * ============================================================ */
-
-function Footer() {
-  return (
-    <footer className="border-t border-slate-200 bg-slate-50 py-12">
-      <div className="mx-auto grid max-w-6xl gap-8 px-5 sm:grid-cols-2 lg:grid-cols-4 lg:px-8">
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Image src="/icon-192.png" alt="" width={28} height={28} className="size-7" />
-            <BrandMark className="text-base font-bold" />
-          </div>
-          <p className="text-xs leading-relaxed text-slate-600">
-            転職エージェント業務効率化SaaS
-            <br />
-            運営: 株式会社Revorise
-          </p>
-        </div>
-        <div className="space-y-2 text-sm">
-          <h3 className="text-xs font-semibold tracking-wider text-slate-500 uppercase">
-            プロダクト
-          </h3>
-          <ul className="space-y-1.5">
-            <li>
-              <a href="#features" className="text-slate-600 hover:text-slate-900">
-                機能
-              </a>
-            </li>
-            <li>
-              <a href="#cta" className="text-slate-600 hover:text-slate-900">
-                資料請求
-              </a>
-            </li>
-            <li>
-              <Link href="/login" className="text-slate-600 hover:text-slate-900">
-                ログイン
-              </Link>
-            </li>
-          </ul>
-        </div>
-        <div className="space-y-2 text-sm">
-          <h3 className="text-xs font-semibold tracking-wider text-slate-500 uppercase">
-            サポート
-          </h3>
-          <ul className="space-y-1.5">
-            <li>
-              <Link href="/contact" className="text-slate-600 hover:text-slate-900">
-                お問い合わせ
-              </Link>
-            </li>
-            <li>
-              <Link href="/support" className="text-slate-600 hover:text-slate-900">
-                ヘルプ
-              </Link>
-            </li>
-          </ul>
-        </div>
-        <div className="space-y-2 text-sm">
-          <h3 className="text-xs font-semibold tracking-wider text-slate-500 uppercase">法務</h3>
-          <ul className="space-y-1.5">
-            <li>
-              <Link href="/privacy" className="text-slate-600 hover:text-slate-900">
-                プライバシーポリシー
-              </Link>
-            </li>
-            <li>
-              <Link href="/terms" className="text-slate-600 hover:text-slate-900">
-                利用規約
-              </Link>
-            </li>
-            <li>
-              <Link href="/legal" className="text-slate-600 hover:text-slate-900">
-                特定商取引法
-              </Link>
-            </li>
-          </ul>
-        </div>
-      </div>
-      <div className="mx-auto mt-8 max-w-6xl border-t border-slate-200 px-5 pt-6 text-center text-xs text-slate-500 lg:px-8">
-        &copy; {new Date().getFullYear()} Maira. All rights reserved.
-      </div>
-    </footer>
   );
 }
 
