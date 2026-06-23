@@ -101,8 +101,10 @@ export function RoiSimulator() {
 
   // 数字 のみ 受け付け、 上限 なし。 カンマ や 半角 / 全角 数字 が 混ざっても 拾う。
   const handleNumericChange = (key: keyof RoiInput, raw: string) => {
-    // 全角 数字 → 半角 に 正規化
-    const half = raw.replace(/[0-9]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+    // 全角 数字 (U+FF10-FF19) → 半角 に 正規 化。
+    // 注意: 範囲 を `/[0-9]/g` と 書くと 半角 数字 が 対象 に なって 壊れる。
+    // 全角 範囲 は `[０-９]`。
+    const half = raw.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
     // 数字 のみ 抽出 ( カンマ / 空白 等 は 捨てる )
     const digits = half.replace(/[^0-9]/g, "");
     setTextValues((prev) => ({ ...prev, [key]: digits }));
