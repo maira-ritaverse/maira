@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # pnpm を Node のセットアップより先に入れる(setup-node の cache: pnpm が pnpm を要求するため)。
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           # package.json に packageManager がなく lockfileVersion 9 を使っているので、
           # 互換性のあるメジャーバージョンを明示。ローカルは pnpm 11 系。
@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11
       - uses: actions/setup-node@v4
@@ -62,7 +62,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11
       - uses: actions/setup-node@v4
