@@ -23,6 +23,7 @@ import {
   listReferralStatusHistoriesByReferralIds,
 } from "@/lib/referrals/queries";
 import { listTasksByClient, listOrganizationMembers } from "@/lib/agency-tasks/queries";
+import { listCollaboratorsForClient } from "@/lib/clients/collaborators";
 import { listClientAuditLog } from "@/lib/audit/client-audit-log";
 import { createClient } from "@/lib/supabase/server";
 import { buildActivityTimeline } from "@/lib/clients/activity-timeline";
@@ -33,6 +34,7 @@ import { getLinkedSeekerLatestPhoto } from "@/lib/agency/seeker-photo";
 import { ActivityTimelineSection } from "./activity-timeline-section";
 import { AuditLogSection } from "./audit-log-section";
 import { ClientDetailForm } from "./client-detail-form";
+import { CollaboratorsSection } from "./collaborators-section";
 import { CustomFieldsSection } from "./custom-fields-section";
 import { AiMatchingSection } from "./ai-matching-section";
 import { MatchingSection } from "./matching-section";
@@ -146,6 +148,7 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
     auditLog,
     seekerPhoto,
     lineLinkRes,
+    collaborators,
   ] = await Promise.all([
     listReferralsByClient(client.id),
     listJobPostings(role.organization.id),
@@ -171,6 +174,8 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
       .eq("client_record_id", client.id)
       .eq("organization_id", client.organizationId)
       .maybeSingle(),
+    // 副 担当 ( 共同 担当 ) 一覧
+    listCollaboratorsForClient(client.id),
   ]);
   type LineLink = { line_user_id: string; unfollowed_at: string | null };
   const lineLink = (lineLinkRes.data as LineLink | null) ?? null;
@@ -328,6 +333,20 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
           </p>
         </Card>
       )}
+
+      {/* 副 担当 ( 共同 担当 ) セクション。 同 組織 advisor を 1:N で 並行 共有。
+          主 担当 は ClientDetailForm 側 で 編集 する 既存 動線 を 維持。 */}
+      <CollaboratorsSection
+        clientRecordId={client.id}
+        primaryAssigneeMemberId={client.assignedMemberId ?? null}
+        collaborators={collaborators.map((c) => ({
+          memberId: c.memberId,
+          displayName: c.displayName,
+        }))}
+        members={members}
+        viewerMemberId={role.member.id}
+        viewerRole={role.member.role}
+      />
 
       {/* ─── タブナビ ─────────────────────────────────────────────
           URL の ?tab= に基づいてアクティブを表示。Server Component の
