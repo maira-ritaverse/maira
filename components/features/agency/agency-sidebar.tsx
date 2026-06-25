@@ -42,6 +42,12 @@ const BASE_ITEMS: ItemDescriptor[] = [
   { id: "settings", href: "/agency/settings", icon: "settings", defaultLabel: "個人設定" },
 ];
 const ADMIN_ITEMS: ItemDescriptor[] = [
+  {
+    id: "management",
+    href: "/agency/management",
+    icon: "reports",
+    defaultLabel: "組織マネジメント",
+  },
   { id: "members", href: "/agency/members", icon: "user-cog", defaultLabel: "メンバー管理" },
 ];
 
