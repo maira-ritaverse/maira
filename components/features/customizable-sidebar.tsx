@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { NavIcon } from "@/lib/ui/nav-icon";
 
+import { ChevronDown, ChevronUp } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import {
   addGroup,
@@ -13,6 +15,7 @@ import {
   moveItemToGroup,
   moveItemToTopLevel,
   renameGroup,
+  reorderGroups,
 } from "@/lib/sidebar-layout/operations";
 import { loadSidebarLayout, saveSidebarLayout } from "@/lib/sidebar-layout/storage";
 import type { ItemDescriptor, SidebarLayout } from "@/lib/sidebar-layout/types";
@@ -261,6 +264,15 @@ export function CustomizableSidebar({
     if (!confirm("このグループを削除しますか?中の項目はトップレベルに戻ります。")) return;
     setLayout((l) => deleteGroup(l, groupId));
   };
+  // グループ単位の並び替え。↑↓ ボタンで隣と入れ替え。
+  // DnD は既存のアイテム並び替えと衝突しやすいので、明示ボタン方式を採用。
+  const handleMoveGroup = (groupIndex: number, direction: "up" | "down") => {
+    setLayout((l) => {
+      const target = direction === "up" ? groupIndex - 1 : groupIndex + 1;
+      if (target < 0 || target >= l.groups.length) return l;
+      return reorderGroups(l, groupIndex, target);
+    });
+  };
   const handleReset = () => {
     if (!confirm("サイドバーを初期状態に戻しますか?")) return;
     setLayout(defaultLayout);
@@ -374,10 +386,12 @@ export function CustomizableSidebar({
         </div>
 
         {/* 各グループ */}
-        {layout.groups.map((g) => {
+        {layout.groups.map((g, groupIdx) => {
           const items = g.itemIds
             .map((id) => toSidebarItem(id))
             .filter((x): x is SidebarItem => x !== null);
+          const isFirstGroup = groupIdx === 0;
+          const isLastGroup = groupIdx === layout.groups.length - 1;
           return (
             <div
               key={g.id}
@@ -430,6 +444,26 @@ export function CustomizableSidebar({
                         )}
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => handleMoveGroup(groupIdx, "up")}
+                      disabled={isFirstGroup}
+                      className="text-muted-foreground hover:text-foreground shrink-0 rounded p-0.5 disabled:cursor-not-allowed disabled:opacity-30"
+                      aria-label="このグループを上へ移動"
+                      title="上へ移動"
+                    >
+                      <ChevronUp className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMoveGroup(groupIdx, "down")}
+                      disabled={isLastGroup}
+                      className="text-muted-foreground hover:text-foreground shrink-0 rounded p-0.5 disabled:cursor-not-allowed disabled:opacity-30"
+                      aria-label="このグループを下へ移動"
+                      title="下へ移動"
+                    >
+                      <ChevronDown className="size-3.5" />
+                    </button>
                     <button
                       type="button"
                       onClick={() => handleDeleteGroup(g.id)}
