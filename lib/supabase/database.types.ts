@@ -4352,7 +4352,7 @@ export type Database = {
       change_member_permission: {
         Args: {
           granted: boolean;
-          permission_key: string;
+          p_permission_key: string;
           target_member_id: string;
         };
         Returns: undefined;

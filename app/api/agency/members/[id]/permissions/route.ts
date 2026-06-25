@@ -66,7 +66,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
   const { error } = await supabase.rpc("change_member_permission", {
     target_member_id: id,
-    permission_key: parsed.data.permissionKey,
+    p_permission_key: parsed.data.permissionKey,
     granted: parsed.data.granted,
   });
 
