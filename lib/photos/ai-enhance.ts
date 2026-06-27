@@ -15,16 +15,44 @@
 
 const IMAGES_EDIT_URL = "https://api.openai.com/v1/images/edits";
 
+// プロンプト設計の方針:
+//   ・「Convert / Transform」 等 の 強い 動詞 は AI が 顔 まで 作り 直して しまう ため 避ける
+//   ・「Retouch only / Do not redraw the face」 を 役割 と して 最初 に 宣言
+//   ・「Same person」 「Preserve EXACT face」 を 繰り返し 強調 する
+//   ・変える もの ( 背景 / ライティング / クロップ ) と 変え ない もの ( 顔 / 服 ) を
+//     セクション 分け して 明示
+//   ・末尾 に DO NOT セクション を 置き、 顔 の 美化 / 別人 化 / アクセサリ 追加 を 禁止
 const PHOTO_PROMPT = [
-  "Convert this casual selfie photo into a Japanese formal resume photo (証明写真).",
-  "Requirements:",
-  "- Replace the background with a plain solid light-gray or off-white background (no patterns or shadows behind the subject).",
-  "- Keep the person's facial identity, expression, hair, skin tone, and clothing colors as natural and realistic as possible — do not change the person's appearance.",
-  "- Show head and shoulders only (chest up), facing forward, neutral or slight smile, eyes open and looking at the camera.",
-  "- Clean, professional lighting; remove harsh shadows.",
-  "- Output portrait orientation suitable for a Japanese resume photo (3:4 aspect ratio).",
-  "- Do not add any glasses, logos, accessories, jewelry, text, watermarks, or any element that is not in the original image.",
-].join(" ");
+  "You are a professional Japanese ID-photo retoucher.",
+  "RETOUCH ONLY the background, lighting, and framing of this selfie so it looks like an official Japanese resume photo (証明写真).",
+  "DO NOT redraw, regenerate, beautify, or alter the face in any way. The output must show the SAME PERSON as the input, visibly identical and recognizable.",
+  "",
+  "PRESERVE EXACTLY (must remain unchanged from the input):",
+  "- Facial identity, bone structure, face shape, and proportions.",
+  "- Skin tone, skin texture, freckles, moles, scars, acne, and birthmarks.",
+  "- Eye shape, eye color, eyelid shape, eyebrows, eyelashes.",
+  "- Nose shape, mouth shape, lip shape and color, teeth.",
+  "- Hair color, hair style, hairline, hair length, and hair texture.",
+  "- Ears and earlobes.",
+  "- Facial hair (beard, mustache, stubble) if present.",
+  "- Makeup level and style if present.",
+  "- Age, gender, and ethnicity.",
+  "- Existing clothing (color, style, neckline). Do not invent, remove, or change garments.",
+  "",
+  "CHANGE ONLY:",
+  "- Background: replace with a clean plain solid light-gray (about #E8E8E8) or off-white. Remove all patterns, objects, and shadows behind the subject.",
+  "- Framing: crop to head and shoulders (chest up), face centered, looking straight at the camera.",
+  "- Expression: keep neutral or very slight closed-mouth smile if already present; do not exaggerate.",
+  "- Lighting: soft, even, professional studio lighting. Remove harsh shadows on the face but keep natural skin tones.",
+  "- Aspect ratio: portrait, 3:4, suitable for a Japanese resume photo.",
+  "",
+  "DO NOT:",
+  "- Do not smooth, beautify, slim, plump, or sculpt the face.",
+  "- Do not change the person's age, gender, ethnicity, or perceived weight.",
+  "- Do not add glasses, accessories, jewelry, hats, ties, collars, logos, text, or watermarks that are not in the original.",
+  "- Do not remove glasses, accessories, or clothing that ARE in the original.",
+  "- Do not generate a different person. If the output face looks like a different person, the task has failed.",
+].join("\n");
 
 export type AiEnhanceResult =
   | { ok: true; pngBuffer: Buffer; promptUsed: string }
