@@ -10,7 +10,9 @@
  *   - quality=medium : ~$0.07 / 枚
  *   - quality=high   : ~$0.19 / 枚
  *
- * 現状は quality=medium(クオリティと費用のバランス)。
+ * 現状は quality=high + input_fidelity=high。
+ * medium だと 顔 の 同一 性 を 保てない 報告 が あり、 顔 保持 を 優先 して
+ * high に 切り替え。
  */
 
 const IMAGES_EDIT_URL = "https://api.openai.com/v1/images/edits";
@@ -78,7 +80,12 @@ export async function aiEnhanceSelfie(input: {
   form.append("image", input.imageBlob, input.filename);
   form.append("prompt", PHOTO_PROMPT);
   form.append("size", "1024x1536"); // 縦長 = 履歴書の 3:4
-  form.append("quality", input.quality ?? "medium");
+  // quality を high に 上げて モデル の 表現 余裕 を 増やし、
+  // 顔 の 同一 性 / 細部 保持 を 改善 する ( コスト は medium の 約 2.7 倍 )。
+  form.append("quality", input.quality ?? "high");
+  // input_fidelity = high で 元 画像 へ の 忠実 度 を 最大 化。
+  // 「顔 が 別人 に なる」 問題 の 主因 で、 この パラメータ が 一番 効く。
+  form.append("input_fidelity", "high");
   form.append("n", "1");
 
   let res: Response;
