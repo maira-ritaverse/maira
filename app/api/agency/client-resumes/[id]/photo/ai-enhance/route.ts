@@ -29,6 +29,10 @@ import { aiEnhanceSelfie } from "@/lib/photos/ai-enhance";
  *   ・本ルートでは履歴書本体は変更しない。保存は別ルート(/photo の POST)。
  */
 
+// 画像生成は 30-60 秒 かかる ことが ある ため、 Vercel デフォルト (10 秒) を 延長。
+// Pro プラン の 上限 300 秒 に 設定 ( Hobby なら 60 秒 で 頭打ち だが 問題 なく動く )。
+export const maxDuration = 300;
+
 const MAX_INPUT_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png"]);
 const PHOTO_WIDTH = 450;

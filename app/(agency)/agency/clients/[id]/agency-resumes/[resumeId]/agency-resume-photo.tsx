@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -79,9 +79,39 @@ export function AgencyResumePhoto({ resumeId, initialPreviewUrl, hasPhoto }: Pro
     setAiUrl(null);
   };
 
+  // AI 加工 中 の 疑似 進捗 ( 0 → 95% を 経過 時間 で 漸近 線 上 で 上げる、
+  // 完了 時 に 100% に ジャンプ )。 OpenAI 側 が 進捗 を 返さ ない ため、
+  // ユーザー の 体感 を 良く する 目的 の 表示。
+  const [progress, setProgress] = useState<number | null>(null);
+  const progressRafRef = useRef<number | null>(null);
+
+  const stopProgressTimer = () => {
+    if (progressRafRef.current !== null) {
+      cancelAnimationFrame(progressRafRef.current);
+      progressRafRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => stopProgressTimer();
+  }, []);
+
   const handleAiEnhance = () => {
     if (!originalFile) return;
     setError(null);
+
+    // 疑似 進捗 開始
+    setProgress(0);
+    const startTime = performance.now();
+    const tick = (now: number) => {
+      const elapsed = (now - startTime) / 1000; // 秒
+      // 25 秒 で 約 60%、 50 秒 で 約 85%、 漸近 95% で 頭打ち
+      const p = Math.min(95, Math.round(95 * (1 - Math.exp(-elapsed / 25))));
+      setProgress(p);
+      progressRafRef.current = requestAnimationFrame(tick);
+    };
+    progressRafRef.current = requestAnimationFrame(tick);
+
     startTransition(async () => {
       const fd = new FormData();
       fd.append("file", originalFile);
@@ -98,7 +128,13 @@ export function AgencyResumePhoto({ resumeId, initialPreviewUrl, hasPhoto }: Pro
         setAiBlob(blob);
         if (aiUrl) URL.revokeObjectURL(aiUrl);
         setAiUrl(URL.createObjectURL(blob));
+        // 進捗 を 100% に 持って いって すぐ クリア
+        stopProgressTimer();
+        setProgress(100);
+        setTimeout(() => setProgress(null), 600);
       } catch (err) {
+        stopProgressTimer();
+        setProgress(null);
         setError(err instanceof Error ? err.message : "AI 加工に失敗しました");
       }
     });
@@ -206,7 +242,11 @@ export function AgencyResumePhoto({ resumeId, initialPreviewUrl, hasPhoto }: Pro
             </Button>
             {!aiUrl && (
               <Button size="sm" variant="outline" onClick={handleAiEnhance} disabled={pending}>
-                {pending ? "AI 加工中…" : "AI で証明写真に加工"}
+                {pending && progress !== null
+                  ? `AI 加工中… ${progress}%`
+                  : pending
+                    ? "AI 加工中…"
+                    : "AI で証明写真に加工"}
               </Button>
             )}
             <Button size="sm" variant="outline" onClick={handleSaveOriginal} disabled={pending}>
@@ -218,9 +258,20 @@ export function AgencyResumePhoto({ resumeId, initialPreviewUrl, hasPhoto }: Pro
               </Button>
             )}
           </div>
+          {progress !== null && (
+            <div className="space-y-1">
+              <p className="text-muted-foreground text-xs">AI 加工中… {progress}%</p>
+              <div className="h-1.5 w-full rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-orange-500 transition-[width] duration-200"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          )}
           <p className="text-muted-foreground text-xs">
-            AI 加工は OpenAI gpt-image-1
-            を使用し、元画像が外部に送信されます。プライバシーポリシーに沿った AI 処理範囲です。
+            元画像は外部の AI 画像処理サービスに送信されます。プライバシーポリシーに沿った AI
+            処理範囲で扱われます。
           </p>
         </div>
       )}

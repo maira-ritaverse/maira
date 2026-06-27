@@ -29,6 +29,9 @@ import { verifyResumeOwner } from "@/lib/resumes/queries";
  *   ・コストは 1 枚あたり ~$0.07(quality=medium)
  */
 
+// 画像生成は 30-60 秒 かかる ことが ある ため、 Vercel デフォルト (10 秒) を 延長。
+export const maxDuration = 300;
+
 const MAX_INPUT_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png"]);
 const PHOTO_WIDTH = 450;
