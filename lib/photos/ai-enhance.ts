@@ -18,42 +18,51 @@
 const IMAGES_EDIT_URL = "https://api.openai.com/v1/images/edits";
 
 // プロンプト設計の方針:
-//   ・「Convert / Transform」 等 の 強い 動詞 は AI が 顔 まで 作り 直して しまう ため 避ける
-//   ・「Retouch only / Do not redraw the face」 を 役割 と して 最初 に 宣言
-//   ・「Same person」 「Preserve EXACT face」 を 繰り返し 強調 する
-//   ・変える もの ( 背景 / ライティング / クロップ ) と 変え ない もの ( 顔 / 服 ) を
-//     セクション 分け して 明示
-//   ・末尾 に DO NOT セクション を 置き、 顔 の 美化 / 別人 化 / アクセサリ 追加 を 禁止
+//   ・最初 に 「OUTPUT は 日本 の 証明 写真 (= passport-style ID photo)」 と 役割 / 出力 形式 を 明示
+//   ・「TIGHT head-and-shoulders crop」 を 何度 も 強調。 腕 / 手 / 胴体 は 必ず 切る
+//   ・PRESERVE / RE-FRAME / DO NOT の 3 セクション で 「顔 保持 + フレーム 変更 + 禁止 項」 を 整理
+//   ・「顔 保持」 と 「腕 / 胴体 を 切る」 が 矛盾 し ない よう、 服 は 「肩 から 上 の 見え る 部分 のみ 保持」 と 限定
+//   ・失敗 定義 ( = 別人 化 / 腕 が 写る ) を 末尾 に 並べ、 モデル に 「再 確認」 さ せる
 const PHOTO_PROMPT = [
   "You are a professional Japanese ID-photo retoucher.",
-  "RETOUCH ONLY the background, lighting, and framing of this selfie so it looks like an official Japanese resume photo (証明写真).",
-  "DO NOT redraw, regenerate, beautify, or alter the face in any way. The output must show the SAME PERSON as the input, visibly identical and recognizable.",
+  "The OUTPUT must be an official Japanese resume photo (証明写真 / passport-style ID photo).",
+  "Even though the input may be a casual half-body selfie, the OUTPUT MUST be re-cropped and re-framed into the strict Japanese resume photo format. Casual posing (arms crossed, half body, hands visible) MUST NOT appear in the output.",
   "",
-  "PRESERVE EXACTLY (must remain unchanged from the input):",
-  "- Facial identity, bone structure, face shape, and proportions.",
-  "- Skin tone, skin texture, freckles, moles, scars, acne, and birthmarks.",
+  "OUTPUT FORMAT — MANDATORY (this is the most important section):",
+  "- TIGHT head-and-shoulders framing ONLY. The top of the head is near the top of the frame; the bottom edge of the frame cuts off just below the shoulders (around collarbone level).",
+  "- Arms, hands, crossed arms, torso, chest area below the collarbone, waist — none of these may appear in the output. The output is a HEAD-AND-SHOULDERS SHOT, not a half-body shot.",
+  "- Subject centered, facing directly forward (no tilt, no profile).",
+  "- Neutral closed-mouth expression. No teeth showing, no big smile.",
+  "- Both eyes open, looking straight at the camera lens.",
+  "- Background: plain solid light-gray (around #E8E8E8) or off-white. No patterns, no shadows, no objects, no walls visible.",
+  "- Lighting: soft, even, professional studio lighting. No harsh face shadows. Keep natural skin tone.",
+  "- Aspect ratio: portrait, 3:4.",
+  "",
+  "PRESERVE EXACTLY (the output face must be the SAME PERSON):",
+  "- Facial identity, bone structure, face shape, face proportions, perceived weight.",
+  "- Skin tone, skin texture, freckles, moles, scars, acne, birthmarks.",
   "- Eye shape, eye color, eyelid shape, eyebrows, eyelashes.",
-  "- Nose shape, mouth shape, lip shape and color, teeth.",
-  "- Hair color, hair style, hairline, hair length, and hair texture.",
+  "- Nose shape, mouth shape, lip shape, lip color, teeth.",
+  "- Hair color, hair style, hairline, hair length, hair texture.",
   "- Ears and earlobes.",
   "- Facial hair (beard, mustache, stubble) if present.",
   "- Makeup level and style if present.",
-  "- Age, gender, and ethnicity.",
-  "- Existing clothing (color, style, neckline). Do not invent, remove, or change garments.",
-  "",
-  "CHANGE ONLY:",
-  "- Background: replace with a clean plain solid light-gray (about #E8E8E8) or off-white. Remove all patterns, objects, and shadows behind the subject.",
-  "- Framing: crop to head and shoulders (chest up), face centered, looking straight at the camera.",
-  "- Expression: keep neutral or very slight closed-mouth smile if already present; do not exaggerate.",
-  "- Lighting: soft, even, professional studio lighting. Remove harsh shadows on the face but keep natural skin tones.",
-  "- Aspect ratio: portrait, 3:4, suitable for a Japanese resume photo.",
+  "- Age, gender, ethnicity.",
+  "- The COLOR and STYLE of the visible upper clothing (collar / lapel area only — do not invent new garments, do not change jacket color).",
   "",
   "DO NOT:",
-  "- Do not smooth, beautify, slim, plump, or sculpt the face.",
-  "- Do not change the person's age, gender, ethnicity, or perceived weight.",
-  "- Do not add glasses, accessories, jewelry, hats, ties, collars, logos, text, or watermarks that are not in the original.",
-  "- Do not remove glasses, accessories, or clothing that ARE in the original.",
-  "- Do not generate a different person. If the output face looks like a different person, the task has failed.",
+  "- Do not show arms, hands, crossed arms, torso, chest area below the collarbone. Japanese resume photos NEVER show arms.",
+  "- Do not redraw, regenerate, smooth, beautify, slim, plump, or sculpt the face. The output face MUST be visibly the same person.",
+  "- Do not change the person's age, gender, ethnicity, perceived weight, or facial features.",
+  "- Do not add glasses, accessories, jewelry, hats, ties, scarves, logos, text, or watermarks that are not in the original.",
+  "- Do not remove glasses, earrings, or clothing that ARE in the original.",
+  "- Do not change the color of the clothing.",
+  "",
+  "FAILURE CONDITIONS (if any of these are true, the task has failed):",
+  "- The output shows arms, hands, or torso below the shoulders.",
+  "- The output face is visibly a different person from the input.",
+  "- The background is not a plain solid light-gray or off-white.",
+  "- The framing is not a tight head-and-shoulders shot.",
 ].join("\n");
 
 export type AiEnhanceResult =
