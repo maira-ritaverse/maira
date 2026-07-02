@@ -6,8 +6,122 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5";
   };
+  graphql_public: {
+    Tables: {
+      [_ in never]: never;
+    };
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json;
+          operationName?: string;
+          query?: string;
+          variables?: Json;
+        };
+        Returns: Json;
+      };
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+    CompositeTypes: {
+      [_ in never]: never;
+    };
+  };
   public: {
     Tables: {
+      advisor_messages: {
+        Row: {
+          created_at: string;
+          encrypted_content: string;
+          id: string;
+          read_at: string | null;
+          sender_kind: string;
+          sender_user_id: string;
+          thread_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          encrypted_content: string;
+          id?: string;
+          read_at?: string | null;
+          sender_kind: string;
+          sender_user_id: string;
+          thread_id: string;
+        };
+        Update: {
+          created_at?: string;
+          encrypted_content?: string;
+          id?: string;
+          read_at?: string | null;
+          sender_kind?: string;
+          sender_user_id?: string;
+          thread_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "advisor_messages_thread_id_fkey";
+            columns: ["thread_id"];
+            isOneToOne: false;
+            referencedRelation: "advisor_threads";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      advisor_threads: {
+        Row: {
+          client_record_id: string;
+          created_at: string;
+          id: string;
+          last_message_at: string | null;
+          organization_id: string;
+          seeker_user_id: string;
+          unread_for_agency: number;
+          unread_for_seeker: number;
+          updated_at: string;
+        };
+        Insert: {
+          client_record_id: string;
+          created_at?: string;
+          id?: string;
+          last_message_at?: string | null;
+          organization_id: string;
+          seeker_user_id: string;
+          unread_for_agency?: number;
+          unread_for_seeker?: number;
+          updated_at?: string;
+        };
+        Update: {
+          client_record_id?: string;
+          created_at?: string;
+          id?: string;
+          last_message_at?: string | null;
+          organization_id?: string;
+          seeker_user_id?: string;
+          unread_for_agency?: number;
+          unread_for_seeker?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "advisor_threads_client_record_id_fkey";
+            columns: ["client_record_id"];
+            isOneToOne: false;
+            referencedRelation: "client_records";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "advisor_threads_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       agency_applications: {
         Row: {
           applied_at: string;
@@ -1124,6 +1238,49 @@ export type Database = {
           },
         ];
       };
+      client_record_collaborators: {
+        Row: {
+          added_at: string;
+          added_by_member_id: string | null;
+          client_record_id: string;
+          member_id: string;
+        };
+        Insert: {
+          added_at?: string;
+          added_by_member_id?: string | null;
+          client_record_id: string;
+          member_id: string;
+        };
+        Update: {
+          added_at?: string;
+          added_by_member_id?: string | null;
+          client_record_id?: string;
+          member_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "client_record_collaborators_added_by_member_id_fkey";
+            columns: ["added_by_member_id"];
+            isOneToOne: false;
+            referencedRelation: "organization_members";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "client_record_collaborators_client_record_id_fkey";
+            columns: ["client_record_id"];
+            isOneToOne: false;
+            referencedRelation: "client_records";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "client_record_collaborators_member_id_fkey";
+            columns: ["member_id"];
+            isOneToOne: false;
+            referencedRelation: "organization_members";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       client_records: {
         Row: {
           assigned_member_id: string | null;
@@ -1832,6 +1989,60 @@ export type Database = {
         };
         Relationships: [];
       };
+      interviews: {
+        Row: {
+          created_at: string;
+          created_by_user_id: string | null;
+          id: string;
+          kind: string;
+          notes: string | null;
+          organization_id: string;
+          referral_id: string;
+          result: string;
+          scheduled_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by_user_id?: string | null;
+          id?: string;
+          kind: string;
+          notes?: string | null;
+          organization_id: string;
+          referral_id: string;
+          result?: string;
+          scheduled_at: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by_user_id?: string | null;
+          id?: string;
+          kind?: string;
+          notes?: string | null;
+          organization_id?: string;
+          referral_id?: string;
+          result?: string;
+          scheduled_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "interviews_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "interviews_referral_id_fkey";
+            columns: ["referral_id"];
+            isOneToOne: false;
+            referencedRelation: "referrals";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       job_postings: {
         Row: {
           application_qualifications: string | null;
@@ -1841,8 +2052,10 @@ export type Database = {
           created_by_member_id: string | null;
           description: string | null;
           employment_type: string | null;
+          hero_image_path: string | null;
           holidays: string | null;
           id: string;
+          line_share_image_path: string | null;
           location: string | null;
           location_change_scope: string | null;
           organization_id: string;
@@ -1866,8 +2079,10 @@ export type Database = {
           created_by_member_id?: string | null;
           description?: string | null;
           employment_type?: string | null;
+          hero_image_path?: string | null;
           holidays?: string | null;
           id?: string;
+          line_share_image_path?: string | null;
           location?: string | null;
           location_change_scope?: string | null;
           organization_id: string;
@@ -1891,8 +2106,10 @@ export type Database = {
           created_by_member_id?: string | null;
           description?: string | null;
           employment_type?: string | null;
+          hero_image_path?: string | null;
           holidays?: string | null;
           id?: string;
+          line_share_image_path?: string | null;
           location?: string | null;
           location_change_scope?: string | null;
           organization_id?: string;
@@ -2224,6 +2441,7 @@ export type Database = {
           id: string;
           line_user_id: string;
           organization_id: string;
+          provider: string;
           title: string;
         };
         Insert: {
@@ -2240,6 +2458,7 @@ export type Database = {
           id?: string;
           line_user_id: string;
           organization_id: string;
+          provider?: string;
           title: string;
         };
         Update: {
@@ -2256,6 +2475,7 @@ export type Database = {
           id?: string;
           line_user_id?: string;
           organization_id?: string;
+          provider?: string;
           title?: string;
         };
         Relationships: [
@@ -2387,6 +2607,7 @@ export type Database = {
           assigned_to_user_id: string | null;
           client_record_id: string | null;
           created_at: string;
+          custom_name: string | null;
           display_name: string | null;
           handled_at: string | null;
           handled_by_user_id: string | null;
@@ -2406,6 +2627,7 @@ export type Database = {
           assigned_to_user_id?: string | null;
           client_record_id?: string | null;
           created_at?: string;
+          custom_name?: string | null;
           display_name?: string | null;
           handled_at?: string | null;
           handled_by_user_id?: string | null;
@@ -2425,6 +2647,7 @@ export type Database = {
           assigned_to_user_id?: string | null;
           client_record_id?: string | null;
           created_at?: string;
+          custom_name?: string | null;
           display_name?: string | null;
           handled_at?: string | null;
           handled_by_user_id?: string | null;
@@ -2451,6 +2674,51 @@ export type Database = {
             columns: ["organization_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ma_click_links: {
+        Row: {
+          click_count: number;
+          created_at: string;
+          id: string;
+          last_clicked_at: string | null;
+          organization_id: string;
+          original_url: string;
+          send_log_id: string | null;
+        };
+        Insert: {
+          click_count?: number;
+          created_at?: string;
+          id?: string;
+          last_clicked_at?: string | null;
+          organization_id: string;
+          original_url: string;
+          send_log_id?: string | null;
+        };
+        Update: {
+          click_count?: number;
+          created_at?: string;
+          id?: string;
+          last_clicked_at?: string | null;
+          organization_id?: string;
+          original_url?: string;
+          send_log_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ma_click_links_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ma_click_links_send_log_id_fkey";
+            columns: ["send_log_id"];
+            isOneToOne: false;
+            referencedRelation: "ma_send_logs";
             referencedColumns: ["id"];
           },
         ];
@@ -2606,7 +2874,8 @@ export type Database = {
           id: string;
           organization_id: string;
           recipient_client_record_id: string | null;
-          recipient_email: string;
+          recipient_email: string | null;
+          recipient_line_user_id: string | null;
           resend_message_id: string | null;
           scenario_id: string;
           sent_at: string;
@@ -2620,7 +2889,8 @@ export type Database = {
           id?: string;
           organization_id: string;
           recipient_client_record_id?: string | null;
-          recipient_email: string;
+          recipient_email?: string | null;
+          recipient_line_user_id?: string | null;
           resend_message_id?: string | null;
           scenario_id: string;
           sent_at?: string;
@@ -2634,7 +2904,8 @@ export type Database = {
           id?: string;
           organization_id?: string;
           recipient_client_record_id?: string | null;
-          recipient_email?: string;
+          recipient_email?: string | null;
+          recipient_line_user_id?: string | null;
           resend_message_id?: string | null;
           scenario_id?: string;
           sent_at?: string;
@@ -2788,6 +3059,7 @@ export type Database = {
           id: string;
           invited_at: string | null;
           invitee_email: string | null;
+          invitee_name: string | null;
           join_url: string;
           organization_id: string | null;
           passcode: string | null;
@@ -2813,6 +3085,7 @@ export type Database = {
           id?: string;
           invited_at?: string | null;
           invitee_email?: string | null;
+          invitee_name?: string | null;
           join_url: string;
           organization_id?: string | null;
           passcode?: string | null;
@@ -2838,6 +3111,7 @@ export type Database = {
           id?: string;
           invited_at?: string | null;
           invitee_email?: string | null;
+          invitee_name?: string | null;
           join_url?: string;
           organization_id?: string | null;
           passcode?: string | null;
@@ -3223,16 +3497,27 @@ export type Database = {
       };
       organization_plans: {
         Row: {
+          ai_boost_enabled: boolean;
+          billing_exempt_reason: string | null;
+          billing_exempt_set_at: string | null;
+          billing_exempt_set_by_user_id: string | null;
           canceled_at: string | null;
           created_at: string;
           current_period_end: string | null;
           current_period_start: string | null;
           cycle: Database["public"]["Enums"]["organization_billing_cycle"];
+          is_billing_exempt: boolean;
+          last_stripe_event_id: string | null;
+          last_synced_at: string | null;
           next_billed_at: string | null;
           organization_id: string;
+          seat_count: number;
           status: Database["public"]["Enums"]["organization_plan_status"];
           stripe_customer_id: string | null;
           stripe_subscription_id: string | null;
+          stripe_subscription_item_id_ai_boost: string | null;
+          stripe_subscription_item_id_base: string | null;
+          stripe_subscription_item_id_extra_seat: string | null;
           tier: Database["public"]["Enums"]["organization_plan_tier"];
           trial_ends_at: string | null;
           trial_started_at: string | null;
@@ -3240,16 +3525,27 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          ai_boost_enabled?: boolean;
+          billing_exempt_reason?: string | null;
+          billing_exempt_set_at?: string | null;
+          billing_exempt_set_by_user_id?: string | null;
           canceled_at?: string | null;
           created_at?: string;
           current_period_end?: string | null;
           current_period_start?: string | null;
           cycle?: Database["public"]["Enums"]["organization_billing_cycle"];
+          is_billing_exempt?: boolean;
+          last_stripe_event_id?: string | null;
+          last_synced_at?: string | null;
           next_billed_at?: string | null;
           organization_id: string;
+          seat_count?: number;
           status?: Database["public"]["Enums"]["organization_plan_status"];
           stripe_customer_id?: string | null;
           stripe_subscription_id?: string | null;
+          stripe_subscription_item_id_ai_boost?: string | null;
+          stripe_subscription_item_id_base?: string | null;
+          stripe_subscription_item_id_extra_seat?: string | null;
           tier?: Database["public"]["Enums"]["organization_plan_tier"];
           trial_ends_at?: string | null;
           trial_started_at?: string | null;
@@ -3257,16 +3553,27 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          ai_boost_enabled?: boolean;
+          billing_exempt_reason?: string | null;
+          billing_exempt_set_at?: string | null;
+          billing_exempt_set_by_user_id?: string | null;
           canceled_at?: string | null;
           created_at?: string;
           current_period_end?: string | null;
           current_period_start?: string | null;
           cycle?: Database["public"]["Enums"]["organization_billing_cycle"];
+          is_billing_exempt?: boolean;
+          last_stripe_event_id?: string | null;
+          last_synced_at?: string | null;
           next_billed_at?: string | null;
           organization_id?: string;
+          seat_count?: number;
           status?: Database["public"]["Enums"]["organization_plan_status"];
           stripe_customer_id?: string | null;
           stripe_subscription_id?: string | null;
+          stripe_subscription_item_id_ai_boost?: string | null;
+          stripe_subscription_item_id_base?: string | null;
+          stripe_subscription_item_id_extra_seat?: string | null;
           tier?: Database["public"]["Enums"]["organization_plan_tier"];
           trial_ends_at?: string | null;
           trial_started_at?: string | null;
@@ -3274,6 +3581,13 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "organization_plans_billing_exempt_set_by_user_id_fkey";
+            columns: ["billing_exempt_set_by_user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "organization_plans_organization_id_fkey";
             columns: ["organization_id"];
@@ -3550,6 +3864,7 @@ export type Database = {
           account_type: string;
           archived_at: string | null;
           archived_reason: string | null;
+          avatar_storage_path: string | null;
           created_at: string;
           display_name: string | null;
           encrypted_master_key: string;
@@ -3570,6 +3885,7 @@ export type Database = {
           account_type?: string;
           archived_at?: string | null;
           archived_reason?: string | null;
+          avatar_storage_path?: string | null;
           created_at?: string;
           display_name?: string | null;
           encrypted_master_key?: string;
@@ -3590,6 +3906,7 @@ export type Database = {
           account_type?: string;
           archived_at?: string | null;
           archived_reason?: string | null;
+          avatar_storage_path?: string | null;
           created_at?: string;
           display_name?: string | null;
           encrypted_master_key?: string;
@@ -3873,6 +4190,78 @@ export type Database = {
         };
         Relationships: [];
       };
+      roi_simulations: {
+        Row: {
+          advisor_count: number;
+          advisor_hourly_yen: number | null;
+          avg_fee_man_yen: number;
+          calculated_yearly_deal_uplift_yen: number;
+          calculated_yearly_doc_savings_yen: number;
+          calculated_yearly_lead_recovery_yen: number;
+          calculated_yearly_total_yen: number;
+          company_name: string;
+          contact_name: string;
+          created_at: string;
+          doc_minutes_per_case: number;
+          email: string;
+          id: string;
+          industry: string | null;
+          ip_hash: string | null;
+          monthly_clients: number;
+          monthly_deals: number;
+          monthly_lost_leads: number | null;
+          phone: string | null;
+          role: string | null;
+          user_agent: string | null;
+        };
+        Insert: {
+          advisor_count: number;
+          advisor_hourly_yen?: number | null;
+          avg_fee_man_yen: number;
+          calculated_yearly_deal_uplift_yen?: number;
+          calculated_yearly_doc_savings_yen?: number;
+          calculated_yearly_lead_recovery_yen?: number;
+          calculated_yearly_total_yen: number;
+          company_name: string;
+          contact_name: string;
+          created_at?: string;
+          doc_minutes_per_case: number;
+          email: string;
+          id?: string;
+          industry?: string | null;
+          ip_hash?: string | null;
+          monthly_clients: number;
+          monthly_deals: number;
+          monthly_lost_leads?: number | null;
+          phone?: string | null;
+          role?: string | null;
+          user_agent?: string | null;
+        };
+        Update: {
+          advisor_count?: number;
+          advisor_hourly_yen?: number | null;
+          avg_fee_man_yen?: number;
+          calculated_yearly_deal_uplift_yen?: number;
+          calculated_yearly_doc_savings_yen?: number;
+          calculated_yearly_lead_recovery_yen?: number;
+          calculated_yearly_total_yen?: number;
+          company_name?: string;
+          contact_name?: string;
+          created_at?: string;
+          doc_minutes_per_case?: number;
+          email?: string;
+          id?: string;
+          industry?: string | null;
+          ip_hash?: string | null;
+          monthly_clients?: number;
+          monthly_deals?: number;
+          monthly_lost_leads?: number | null;
+          phone?: string | null;
+          role?: string | null;
+          user_agent?: string | null;
+        };
+        Relationships: [];
+      };
       saved_views: {
         Row: {
           created_at: string;
@@ -3907,6 +4296,47 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "saved_views_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      seat_sync_failures: {
+        Row: {
+          created_at: string;
+          error_message: string;
+          id: string;
+          next_retry_at: string;
+          organization_id: string;
+          resolved_at: string | null;
+          retry_count: number;
+          target_quantity: number;
+        };
+        Insert: {
+          created_at?: string;
+          error_message: string;
+          id?: string;
+          next_retry_at?: string;
+          organization_id: string;
+          resolved_at?: string | null;
+          retry_count?: number;
+          target_quantity: number;
+        };
+        Update: {
+          created_at?: string;
+          error_message?: string;
+          id?: string;
+          next_retry_at?: string;
+          organization_id?: string;
+          resolved_at?: string | null;
+          retry_count?: number;
+          target_quantity?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "seat_sync_failures_organization_id_fkey";
             columns: ["organization_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
@@ -4010,6 +4440,33 @@ export type Database = {
           id?: string;
           inputs_hash?: string;
           user_id?: string;
+        };
+        Relationships: [];
+      };
+      stripe_events: {
+        Row: {
+          error_message: string | null;
+          id: string;
+          processed_at: string | null;
+          received_at: string;
+          status: string;
+          type: string;
+        };
+        Insert: {
+          error_message?: string | null;
+          id: string;
+          processed_at?: string | null;
+          received_at?: string;
+          status?: string;
+          type: string;
+        };
+        Update: {
+          error_message?: string | null;
+          id?: string;
+          processed_at?: string | null;
+          received_at?: string;
+          status?: string;
+          type?: string;
         };
         Relationships: [];
       };
@@ -4305,16 +4762,27 @@ export type Database = {
           p_tier: Database["public"]["Enums"]["organization_plan_tier"];
         };
         Returns: {
+          ai_boost_enabled: boolean;
+          billing_exempt_reason: string | null;
+          billing_exempt_set_at: string | null;
+          billing_exempt_set_by_user_id: string | null;
           canceled_at: string | null;
           created_at: string;
           current_period_end: string | null;
           current_period_start: string | null;
           cycle: Database["public"]["Enums"]["organization_billing_cycle"];
+          is_billing_exempt: boolean;
+          last_stripe_event_id: string | null;
+          last_synced_at: string | null;
           next_billed_at: string | null;
           organization_id: string;
+          seat_count: number;
           status: Database["public"]["Enums"]["organization_plan_status"];
           stripe_customer_id: string | null;
           stripe_subscription_id: string | null;
+          stripe_subscription_item_id_ai_boost: string | null;
+          stripe_subscription_item_id_base: string | null;
+          stripe_subscription_item_id_extra_seat: string | null;
           tier: Database["public"]["Enums"]["organization_plan_tier"];
           trial_ends_at: string | null;
           trial_started_at: string | null;
@@ -4341,10 +4809,66 @@ export type Database = {
         Args: { p_monthly_limit: number; p_notes?: string; p_org_id: string };
         Returns: undefined;
       };
+      apply_stripe_subscription_sync: {
+        Args: {
+          p_ai_boost_enabled: boolean;
+          p_canceled_at: string;
+          p_current_period_end: string;
+          p_current_period_start: string;
+          p_cycle: Database["public"]["Enums"]["organization_billing_cycle"];
+          p_event_created_at: string;
+          p_event_id: string;
+          p_next_billed_at: string;
+          p_organization_id: string;
+          p_seat_count: number;
+          p_status: Database["public"]["Enums"]["organization_plan_status"];
+          p_stripe_customer_id: string;
+          p_stripe_item_ai_boost: string;
+          p_stripe_item_base: string;
+          p_stripe_item_extra_seat: string;
+          p_stripe_subscription_id: string;
+          p_tier: Database["public"]["Enums"]["organization_plan_tier"];
+        };
+        Returns: {
+          ai_boost_enabled: boolean;
+          billing_exempt_reason: string | null;
+          billing_exempt_set_at: string | null;
+          billing_exempt_set_by_user_id: string | null;
+          canceled_at: string | null;
+          created_at: string;
+          current_period_end: string | null;
+          current_period_start: string | null;
+          cycle: Database["public"]["Enums"]["organization_billing_cycle"];
+          is_billing_exempt: boolean;
+          last_stripe_event_id: string | null;
+          last_synced_at: string | null;
+          next_billed_at: string | null;
+          organization_id: string;
+          seat_count: number;
+          status: Database["public"]["Enums"]["organization_plan_status"];
+          stripe_customer_id: string | null;
+          stripe_subscription_id: string | null;
+          stripe_subscription_item_id_ai_boost: string | null;
+          stripe_subscription_item_id_base: string | null;
+          stripe_subscription_item_id_extra_seat: string | null;
+          tier: Database["public"]["Enums"]["organization_plan_tier"];
+          trial_ends_at: string | null;
+          trial_started_at: string | null;
+          trial_upgrade_choice: Database["public"]["Enums"]["organization_plan_tier"] | null;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "organization_plans";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       approve_revoke_client_link: {
         Args: { p_client_record_id: string };
         Returns: undefined;
       };
+      auto_finalize_expired_revokes: { Args: never; Returns: number };
       cancel_client_invitation: {
         Args: { p_client_record_id: string };
         Returns: undefined;
@@ -4380,6 +4904,15 @@ export type Database = {
       current_user_email: { Args: never; Returns: string };
       current_user_organization_id: { Args: never; Returns: string };
       current_user_organization_role: { Args: never; Returns: string };
+      deactivate_member: { Args: { target_member_id: string }; Returns: string };
+      get_client_distribution_stats: {
+        Args: { p_organization_id: string };
+        Returns: {
+          bucket_kind: string;
+          bucket_value: string;
+          cnt: number;
+        }[];
+      };
       get_job_for_seeker: {
         Args: { p_job_id: string };
         Returns: {
@@ -4415,13 +4948,17 @@ export type Database = {
       get_my_organization_plan: {
         Args: never;
         Returns: {
+          ai_boost_enabled: boolean;
           canceled_at: string;
           created_at: string;
           current_period_end: string;
           current_period_start: string;
           cycle: Database["public"]["Enums"]["organization_billing_cycle"];
+          is_billing_exempt: boolean;
+          last_synced_at: string;
           next_billed_at: string;
           organization_id: string;
+          seat_count: number;
           status: Database["public"]["Enums"]["organization_plan_status"];
           stripe_customer_id: string;
           stripe_subscription_id: string;
@@ -4514,6 +5051,15 @@ export type Database = {
         Args: { p_client_record_id: string };
         Returns: string;
       };
+      list_birthday_clients_today_for_org: {
+        Args: { p_organization_id: string };
+        Returns: {
+          assigned_member_id: string;
+          email: string;
+          id: string;
+          name: string;
+        }[];
+      };
       list_linked_clients_career_profile_updated_at: {
         Args: { p_client_record_ids: string[] };
         Returns: {
@@ -4541,6 +5087,14 @@ export type Database = {
           updated_at: string;
         }[];
       };
+      list_organization_member_avatars: {
+        Args: { target_organization_id: string };
+        Returns: {
+          avatar_storage_path: string;
+          member_id: string;
+          user_id: string;
+        }[];
+      };
       list_organization_member_display_names: {
         Args: { target_organization_id: string };
         Returns: {
@@ -4551,6 +5105,7 @@ export type Database = {
       list_organization_members_with_meta: {
         Args: { target_organization_id: string };
         Returns: {
+          avatar_storage_path: string;
           created_at: string;
           display_name: string;
           email: string;
@@ -4601,16 +5156,27 @@ export type Database = {
           p_choice: Database["public"]["Enums"]["organization_plan_tier"];
         };
         Returns: {
+          ai_boost_enabled: boolean;
+          billing_exempt_reason: string | null;
+          billing_exempt_set_at: string | null;
+          billing_exempt_set_by_user_id: string | null;
           canceled_at: string | null;
           created_at: string;
           current_period_end: string | null;
           current_period_start: string | null;
           cycle: Database["public"]["Enums"]["organization_billing_cycle"];
+          is_billing_exempt: boolean;
+          last_stripe_event_id: string | null;
+          last_synced_at: string | null;
           next_billed_at: string | null;
           organization_id: string;
+          seat_count: number;
           status: Database["public"]["Enums"]["organization_plan_status"];
           stripe_customer_id: string | null;
           stripe_subscription_id: string | null;
+          stripe_subscription_item_id_ai_boost: string | null;
+          stripe_subscription_item_id_base: string | null;
+          stripe_subscription_item_id_extra_seat: string | null;
           tier: Database["public"]["Enums"]["organization_plan_tier"];
           trial_ends_at: string | null;
           trial_started_at: string | null;
@@ -4627,16 +5193,27 @@ export type Database = {
       start_organization_trial: {
         Args: { p_trial_days?: number };
         Returns: {
+          ai_boost_enabled: boolean;
+          billing_exempt_reason: string | null;
+          billing_exempt_set_at: string | null;
+          billing_exempt_set_by_user_id: string | null;
           canceled_at: string | null;
           created_at: string;
           current_period_end: string | null;
           current_period_start: string | null;
           cycle: Database["public"]["Enums"]["organization_billing_cycle"];
+          is_billing_exempt: boolean;
+          last_stripe_event_id: string | null;
+          last_synced_at: string | null;
           next_billed_at: string | null;
           organization_id: string;
+          seat_count: number;
           status: Database["public"]["Enums"]["organization_plan_status"];
           stripe_customer_id: string | null;
           stripe_subscription_id: string | null;
+          stripe_subscription_item_id_ai_boost: string | null;
+          stripe_subscription_item_id_base: string | null;
+          stripe_subscription_item_id_extra_seat: string | null;
           tier: Database["public"]["Enums"]["organization_plan_tier"];
           trial_ends_at: string | null;
           trial_started_at: string | null;
@@ -4701,7 +5278,8 @@ export type Database = {
         | "application_followup"
         | "milestone_check"
         | "subscription_event"
-        | "system";
+        | "system"
+        | "advisor_message";
       organization_billing_cycle: "monthly" | "yearly";
       organization_plan_status: "trialing" | "active" | "past_due" | "canceled" | "incomplete";
       organization_plan_tier: "standard" | "standard_rec" | "standard_pro" | "standard_premium";
@@ -4832,6 +5410,9 @@ export type CompositeTypes<
     : never;
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       application_status: [
@@ -4884,6 +5465,7 @@ export const Constants = {
         "milestone_check",
         "subscription_event",
         "system",
+        "advisor_message",
       ],
       organization_billing_cycle: ["monthly", "yearly"],
       organization_plan_status: ["trialing", "active", "past_due", "canceled", "incomplete"],

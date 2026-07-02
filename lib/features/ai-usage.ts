@@ -101,7 +101,17 @@ export const SEEKER_CV_AI_DRAFT_HARD_MONTHLY = 20;
  * agency_org scope kinds の 合計 で この 値 を 超えたら 全 AI を 停止 する。
  * Maira admin が /admin/organizations/[id] で 上書き 可能。
  */
-export const PLATFORM_AI_TOTAL_FREE_MONTHLY = 500;
+// tier-limits.ts の 定数 を 単一 source of truth に する。 既存 の 名前 (PLATFORM_AI_TOTAL_FREE_MONTHLY)
+// は 呼び出し 側 で 参照 されて いる ため 残し、 値 だけ tier-limits.ts に 委譲。
+import {
+  AI_TOTAL_STANDARD_MONTHLY,
+  AI_TOTAL_UNPLANNED_MONTHLY,
+  getAiTotalLimitForPlan,
+  type PlanStatusValue,
+  type PlanTierValue,
+} from "@/lib/billing/tier-limits";
+
+export const PLATFORM_AI_TOTAL_FREE_MONTHLY: number = AI_TOTAL_STANDARD_MONTHLY;
 
 export type AiUsageStatus = {
   allowed: boolean;
@@ -258,9 +268,61 @@ async function getOrgTotalQuota(supabase: SupabaseClient, now: Date = new Date()
     if (Number.isFinite(v)) return v;
   }
 
-  // 2) tier ボーナス を 既定値 に 加算
-  const bonus = await getPlanTierAiBonus(supabase, now);
-  return PLATFORM_AI_TOTAL_FREE_MONTHLY + bonus;
+  // 2) tier / status / トライアル を tier-limits.ts で 一括 判定
+  return getPlanBasedTotalQuota(supabase, now);
+}
+
+/**
+ * organization_plans 行 を 見て 「tier ベース の 総量 上限」 を 決定 する。
+ *
+ * ・行 が 無い (プラン 未 開始) → AI_TOTAL_UNPLANNED_MONTHLY (=500)
+ * ・トライアル 中 / tier に 応じて tier-limits.ts の 純関数 で 決定
+ *
+ * is_billing_exempt は 現時点 で は RPC 戻り 値 に 含まれ ない ため false 固定
+ * (「免除 = Standard 相当」 の 方針 と 一致 する ので 挙動 は 意図 通り)。
+ */
+async function getPlanBasedTotalQuota(supabase: SupabaseClient, now: Date): Promise<number> {
+  const { data, error } = await supabase.rpc("get_my_organization_plan");
+  if (error || !data || (Array.isArray(data) && data.length === 0)) {
+    return AI_TOTAL_UNPLANNED_MONTHLY;
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as {
+    tier?: string;
+    status?: string;
+    trial_ends_at?: string | null;
+  };
+  if (!row || !row.tier || !row.status) return AI_TOTAL_UNPLANNED_MONTHLY;
+
+  const knownTiers: PlanTierValue[] = [
+    "standard",
+    "standard_rec",
+    "standard_pro",
+    "standard_premium",
+  ];
+  const knownStatuses: PlanStatusValue[] = [
+    "trialing",
+    "active",
+    "past_due",
+    "canceled",
+    "incomplete",
+  ];
+  const tier = knownTiers.includes(row.tier as PlanTierValue)
+    ? (row.tier as PlanTierValue)
+    : "standard";
+  const status = knownStatuses.includes(row.status as PlanStatusValue)
+    ? (row.status as PlanStatusValue)
+    : "active";
+
+  return getAiTotalLimitForPlan(
+    {
+      tier,
+      status,
+      trialEndsAt: row.trial_ends_at ?? null,
+      isBillingExempt: false,
+    },
+    now,
+  );
 }
 
 /**
@@ -295,40 +357,7 @@ async function getAgencyRecordingQuota(
   return row.tier === "standard_rec" || row.tier === "standard_premium" ? 50 : 0;
 }
 
-/**
- * 現組織の プラン tier (or トライアル状態) から AI 上限 ボーナス を 取得。
- *
- * lib/billing/agency.ts の getEffectiveAiBonus と 同等の ロジックを
- * 軽量 RPC で 解決 (循環 import を 避けるため ここで 直書き)。
- *
- * 失敗時 / プラン未開始 → 0 (= 既定 500 のみ)
- */
-async function getPlanTierAiBonus(
-  supabase: SupabaseClient,
-  now: Date = new Date(),
-): Promise<number> {
-  const { data, error } = await supabase.rpc("get_my_organization_plan");
-  if (error || !data || (Array.isArray(data) && data.length === 0)) return 0;
-
-  const row = (Array.isArray(data) ? data[0] : data) as {
-    tier?: string;
-    status?: string;
-    trial_ends_at?: string | null;
-  };
-  if (!row || !row.tier) return 0;
-
-  // トライアル中 (status=trialing かつ trial_ends_at > now) は +500
-  if (row.status === "trialing" && row.trial_ends_at) {
-    if (new Date(row.trial_ends_at).getTime() > now.getTime()) {
-      return 500;
-    }
-  }
-
-  if (row.tier === "standard_pro" || row.tier === "standard_premium") {
-    return 500;
-  }
-  return 0;
-}
+// (getPlanTierAiBonus は tier-limits.ts への 委譲 で 不要 に なった ため 削除)
 
 /**
  * 呼出元 組織 の 月次 「総量」利用回数 を 取得。

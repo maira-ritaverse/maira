@@ -83,11 +83,18 @@ export const TIER_UPGRADE_MONTHLY: Record<PlanTier, number> = {
  */
 export const PLAN_AI_BONUS = 500;
 
+// tier-limits.ts に「実 上限」 の 単一 source of truth を 集約 する。
+// 既存 API (getAiBonusForTier / getEffectiveAiBonus) は 「ボーナス値」 で
+// 返す 互換 の ため、 内部 で 減算 して 数値 を 揃える。
+import {
+  AI_TOTAL_STANDARD_MONTHLY,
+  getAiTotalLimitByTier,
+  getAiTotalLimitForPlan,
+  type PlanStatusValue,
+} from "./tier-limits";
+
 export function getAiBonusForTier(tier: PlanTier): number {
-  if (tier === "standard_pro" || tier === "standard_premium") {
-    return PLAN_AI_BONUS;
-  }
-  return 0;
+  return getAiTotalLimitByTier(tier) - AI_TOTAL_STANDARD_MONTHLY;
 }
 
 /**
@@ -255,8 +262,20 @@ export function trialDaysRemaining(plan: OrganizationPlan, now: Date = new Date(
  * 通常運用 では tier に 従う。
  */
 export function getEffectiveAiBonus(plan: OrganizationPlan, now: Date = new Date()): number {
-  if (isInTrial(plan, now)) return PLAN_AI_BONUS;
-  return getAiBonusForTier(plan.tier);
+  // tier-limits.ts に 委譲 して 「実 上限」 を 求め、 従来 の 「ボーナス」 API と
+  // 互換 に する ため 減算 で 戻す。 免除 フラグ は 現状 OrganizationPlan 型 に
+  // 生えて い ない ため false 固定 (Standard 相当 の 挙動)。 将来 の 拡張 は
+  // tier-limits.ts の コメント 参照。
+  const total = getAiTotalLimitForPlan(
+    {
+      tier: plan.tier,
+      status: plan.status as PlanStatusValue,
+      trialEndsAt: plan.trialEndsAt,
+      isBillingExempt: false,
+    },
+    now,
+  );
+  return total - AI_TOTAL_STANDARD_MONTHLY;
 }
 
 export function getEffectiveRecordingAccess(
