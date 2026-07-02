@@ -133,27 +133,36 @@ function verifyStripeSignature(
   secret: string,
 ): { ok: true; timestamp: number } | { ok: false; reason: string } {
   if (!header) return { ok: false, reason: "no_header" };
-  const parts = header.split(",").reduce<Record<string, string>>((acc, kv) => {
-    const [k, v] = kv.split("=");
-    if (k && v) acc[k.trim()] = v.trim();
-    return acc;
-  }, {});
-  const t = parts.t;
-  const v1 = parts.v1;
-  if (!t || !v1) return { ok: false, reason: "malformed" };
+  // Stripe は 「t=...,v1=...,v1=...」 の 形式 で 複数 v1 を 送りうる
+  // (Webhook Signing Secret ローテーション 中 は 新旧 両方 の 署名 が 並ぶ)。
+  // Record に 畳み込む と 後勝ち で 1 つ しか 検証 できず、 ロール 中 に 旧 secret
+  // 側 の 署名 が 401 で 弾かれる。 v1 は 配列 で 保持 して いずれか 一致 で OK とする。
+  let t: string | null = null;
+  const v1s: string[] = [];
+  for (const kv of header.split(",")) {
+    const eqIdx = kv.indexOf("=");
+    if (eqIdx < 0) continue;
+    const k = kv.slice(0, eqIdx).trim();
+    const v = kv.slice(eqIdx + 1).trim();
+    if (!v) continue;
+    if (k === "t") t = v;
+    else if (k === "v1") v1s.push(v);
+  }
+  if (!t || v1s.length === 0) return { ok: false, reason: "malformed" };
   const timestamp = Number(t);
   if (!Number.isFinite(timestamp)) return { ok: false, reason: "bad_timestamp" };
   if (Math.abs(Date.now() / 1000 - timestamp) > TOLERANCE_SEC) {
     return { ok: false, reason: "stale" };
   }
   const signed = `${t}.${rawBody}`;
-  const expected = createHmac("sha256", secret).update(signed).digest("hex");
-  const a = Buffer.from(v1);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) {
-    return { ok: false, reason: "bad_signature" };
+  const expected = Buffer.from(createHmac("sha256", secret).update(signed).digest("hex"));
+  for (const v1 of v1s) {
+    const candidate = Buffer.from(v1);
+    if (candidate.length === expected.length && timingSafeEqual(candidate, expected)) {
+      return { ok: true, timestamp };
+    }
   }
-  return { ok: true, timestamp };
+  return { ok: false, reason: "bad_signature" };
 }
 
 // ============================================

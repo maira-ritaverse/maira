@@ -83,11 +83,17 @@ export async function POST(request: Request) {
 
     const nextCount = row.retry_count + 1;
     if (nextCount >= MAX_RETRIES) {
-      // 打ち止め (人 手 対応 待ち)。 resolved_at は NULL の まま に して 監視 で 拾わせ る。
+      // 打ち止め (人 手 対応 待ち)。 resolved_at は NULL の まま だが、
+      // next_retry_at を 遠 未来 (100 年 後) に 押し やって cron の 選択 対象 から
+      // 外す。 こう し ない と 10 分 毎 に 同じ 行 を 拾い、 retry_count が 暴走 して
+      // RETRY_LIMIT (50 枠) を 打ち止め 行 が 食い 潰し、 新規 失敗 の リトライ を
+      // 遅延 させる。 監視 は 「resolved_at IS NULL AND retry_count >= 4」 で 拾える。
+      const farFuture = new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000).toISOString();
       await admin
         .from("seat_sync_failures")
         .update({
           retry_count: nextCount,
+          next_retry_at: farFuture,
           error_message: `${result.error} [max_retries_reached]`,
         })
         .eq("id", row.id);

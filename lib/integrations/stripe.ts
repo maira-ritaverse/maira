@@ -25,12 +25,26 @@ export function getStripeConfig(): StripeConfig | null {
   return { secretKey, addonPriceId, siteUrl: siteUrl.replace(/\/$/, "") };
 }
 
+/**
+ * Stripe API バージョン を 明示 的 に 固定 する。
+ *
+ * これ を pin し ない と、 Dashboard で API version を 上げた 瞬間 に
+ * Subscription や Invoice の payload 構造 が 変わり (例: 2025-04-30.basil で
+ * Subscription.current_period_* が items.data[].current_period_* に 移動)、
+ * Webhook で next_billed_at / current_period_end 等 が silent に null 化 する。
+ *
+ * 2024-06-20 は Subscription / Invoice の 平坦 レイアウト が 有効 な 最終 版 で、
+ * 現行 コード の 型 が これ に 合わせて 書か れて いる。
+ */
+export const STRIPE_API_VERSION = "2024-06-20" as const;
+
 async function stripePost<T>(secretKey: string, path: string, body: URLSearchParams): Promise<T> {
   const res = await fetch(`https://api.stripe.com/v1${path}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${secretKey}`,
       "Content-Type": "application/x-www-form-urlencoded",
+      "Stripe-Version": STRIPE_API_VERSION,
     },
     body,
   });
@@ -185,7 +199,10 @@ export function getOrgStripeConfig(): OrgStripeConfig | null {
 async function stripeGet<T>(secretKey: string, path: string): Promise<T> {
   const res = await fetch(`https://api.stripe.com/v1${path}`, {
     method: "GET",
-    headers: { Authorization: `Bearer ${secretKey}` },
+    headers: {
+      Authorization: `Bearer ${secretKey}`,
+      "Stripe-Version": STRIPE_API_VERSION,
+    },
     cache: "no-store",
   });
   if (!res.ok) {
@@ -198,7 +215,10 @@ async function stripeGet<T>(secretKey: string, path: string): Promise<T> {
 async function stripeDelete<T>(secretKey: string, path: string): Promise<T> {
   const res = await fetch(`https://api.stripe.com/v1${path}`, {
     method: "DELETE",
-    headers: { Authorization: `Bearer ${secretKey}` },
+    headers: {
+      Authorization: `Bearer ${secretKey}`,
+      "Stripe-Version": STRIPE_API_VERSION,
+    },
   });
   if (!res.ok) {
     const text = await res.text();
@@ -226,6 +246,7 @@ async function stripePostWithHeaders<T>(
     headers: {
       Authorization: `Bearer ${secretKey}`,
       "Content-Type": "application/x-www-form-urlencoded",
+      "Stripe-Version": STRIPE_API_VERSION,
       ...extraHeaders,
     },
     body,

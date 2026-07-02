@@ -23,8 +23,9 @@ import { TestCardsNotice } from "./test-cards-notice";
  *   3. トライアル 中 (status=trialing)           → PlanStatusCard + AiBoostToggle
  *                                                  + SubscribedActionsCard
  *                                                  (旧 TrialUpgradeChoiceForm は
- *                                                   Stripe 契約 後 は 不要 な の で
- *                                                   Stripe 未 完了 の 過渡 期 は 併記)
+ *                                                   Stripe 導入 後 は 実 効果 が 無く
+ *                                                   旧価格 表示 の 景表法 リスク も ある
+ *                                                   ため 廃止 済み)
  *   4. 契約 中 (active / past_due / 期末 解約 予約 中) → PlanStatusCard
  *                                                        + AiBoostToggle
  *                                                        + SubscribedActionsCard
@@ -133,6 +134,24 @@ export default async function AgencyBillingPage() {
 
           {plan.status === "canceled" ? (
             <PlanSelectForm currentSeatCount={seatCountForCheckout} />
+          ) : plan.status === "incomplete" ? (
+            // 初回 決済 未 完了 (SCA 未 通過 / カード 拒否 等)。 この 状態 で は
+            // Boost 追加 / 期末 解約 は Stripe が 400 を 返す。 Portal で 決済 を
+            // 完了 させる 動線 だけ に 絞る。
+            <Card className="p-6">
+              <h2 className="text-base font-semibold">決済 が 完了 して い ません</h2>
+              <p className="text-muted-foreground mt-2 text-xs">
+                初回 の 決済 が 完了 して い ない ため、 プラン 変更 や 解約 は 行え ません。
+                Billing Portal で カード 情報 を 再 登録 して 決済 を 完了 させて ください。
+              </p>
+              <div className="mt-4">
+                <SubscribedActionsCard
+                  pendingCancel={false}
+                  status={plan.status}
+                  currentPeriodEnd={plan.current_period_end}
+                />
+              </div>
+            </Card>
           ) : (
             <>
               <AiBoostToggle enabled={Boolean(plan.ai_boost_enabled)} cycle={plan.cycle} />
@@ -141,13 +160,6 @@ export default async function AgencyBillingPage() {
                 status={plan.status}
                 currentPeriodEnd={plan.current_period_end}
               />
-
-              {/*
-                旧 TrialUpgradeChoiceForm (Stripe 導入 前 の トライアル 終了 後 tier
-                選択 フォーム) は Stripe 契約 下 で は 実効果 が 無い + 旧価格
-                (¥3,980/席 等) を 表示 して 実 課金 と 齟齬 を 生む ため 廃止。
-                AiBoostToggle が Stripe 側 で 即時 反映 を 兼ねる。
-              */}
             </>
           )}
         </>
