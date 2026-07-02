@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useForm, type Resolver } from "react-hook-form";
+import { useForm, useWatch, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   updateClientRequestSchema,
@@ -78,7 +78,7 @@ export function ClientDetailForm({ client, seekerPhoto }: Props) {
   const {
     register,
     handleSubmit,
-    watch,
+    control,
     formState: { errors },
   } = useForm<UpdateClientRequest>({
     // updateClientRequestSchema は EMPRO 拡張で 40+ フィールドに膨らんだ結果、
@@ -136,6 +136,13 @@ export function ClientDetailForm({ client, seekerPhoto }: Props) {
       status_memo: client.statusMemo ?? "",
     },
   });
+
+  // 生年 月日 の 入力 値 を リアル タイム 監視 し、 「満 X 歳」 の ラベル を Label 横 に 出す。
+  // watch() は memo 化 でき ない 警告 が 出る ので、 useWatch を 使う。
+  const watchedBirthDate = useWatch({ control, name: "birth_date" });
+  const birthDateAgeLabel = formatAgeLabel(
+    typeof watchedBirthDate === "string" ? watchedBirthDate : undefined,
+  );
 
   const onSubmit = (data: UpdateClientRequest) => {
     startTransition(async () => {
@@ -413,14 +420,9 @@ export function ClientDetailForm({ client, seekerPhoto }: Props) {
             <div className="space-y-2">
               <Label htmlFor="birth_date">
                 生年月日
-                {(() => {
-                  // watch で 入力 中 の 値 も 拾って リアル タイム に 「満 X 歳」 を 出す。
-                  const raw = watch("birth_date");
-                  const label = formatAgeLabel(typeof raw === "string" ? raw : undefined);
-                  return label ? (
-                    <span className="text-muted-foreground ml-2 text-xs">({label})</span>
-                  ) : null;
-                })()}
+                {birthDateAgeLabel && (
+                  <span className="text-muted-foreground ml-2 text-xs">({birthDateAgeLabel})</span>
+                )}
               </Label>
               <Input id="birth_date" type="date" {...register("birth_date")} disabled={isPending} />
             </div>
