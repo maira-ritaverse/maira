@@ -20,6 +20,7 @@ import {
   addSubscriptionItem,
   getOrgStripeConfig,
   removeSubscriptionItem,
+  retrieveSubscription,
   updateSubscriptionSeatQuantity,
   type OrgStripeConfig,
 } from "@/lib/integrations/stripe";
@@ -94,6 +95,20 @@ export async function syncOrganizationSeatCount(args: {
   organizationId: string;
   reason: "invitation_accepted" | "member_removed" | "cron_reconciliation" | "manual";
 }): Promise<SyncSeatCountResult> {
+  // 全体 を try/catch で 包んで、 一過性 例外 (Supabase 5xx、 fetch 失敗 等) も
+  // { ok: false, error } に 統一 する。 syncSeatCountOrEnqueueFailure で
+  // enqueue に 落とせる ように する た め。
+  try {
+    return await syncOrganizationSeatCountInner(args);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+async function syncOrganizationSeatCountInner(args: {
+  organizationId: string;
+  reason: "invitation_accepted" | "member_removed" | "cron_reconciliation" | "manual";
+}): Promise<SyncSeatCountResult> {
   const admin = createServiceClient();
 
   // 1. plan 情報 を 取得
@@ -119,11 +134,36 @@ export async function syncOrganizationSeatCount(args: {
   const { extraSeatQuantity } = computeExtraSeatQuantity(memberCount);
 
   // 4. DB の seat_count と 目標 が 一致 = Stripe も 一致 して いる 前提 で no-op
-  //    (Webhook で seat_count が 反映 されて いる 状態 を 信じる。 ズレ は cron が 直す)
+  //    (Webhook で seat_count が 反映 されて いる 状態 を 信じる)。
+  //    ただし cron_reconciliation は 最後 の 砦 な の で、 Stripe 側 の 実 quantity
+  //    も 突合 し、 Stripe だけ ズレ て いる ケース (Dashboard 手動 編集 + Webhook
+  //    ロスト 等) を 検出 する。 他 の 経路 は 早期 return で 済ませる。
   const currentDbTotalSeats = plan.seat_count ?? SEAT_BASE_INCLUDED;
   const currentDbExtraSeat = Math.max(0, currentDbTotalSeats - SEAT_BASE_INCLUDED);
   if (currentDbExtraSeat === extraSeatQuantity) {
-    return { ok: true, skipped: "no_change" };
+    if (args.reason !== "cron_reconciliation") {
+      return { ok: true, skipped: "no_change" };
+    }
+    // cron: Stripe 側 の 実 quantity を 引いて 突合
+    try {
+      const stripeSub = await retrieveSubscription(config, plan.stripe_subscription_id);
+      const extraSeatItem = stripeSub.items.data.find(
+        (i) =>
+          i.price.id === config.prices.extraSeatMonthly ||
+          i.price.id === config.prices.extraSeatYearly,
+      );
+      const stripeQty = extraSeatItem?.quantity ?? 0;
+      if (stripeQty === extraSeatQuantity) {
+        return { ok: true, skipped: "no_change" };
+      }
+      // Stripe だけ が ズレ て いる → 下 の 反映 ロジック に 進む
+    } catch (e) {
+      // Stripe API 一過性 失敗 は 「今 回 は skip、 次回 cron で 再挑戦」 が 妥当
+      return {
+        ok: false,
+        error: `retrieveSubscription failed: ${e instanceof Error ? e.message : String(e)}`,
+      };
+    }
   }
 
   // 5. Stripe API 呼び出し

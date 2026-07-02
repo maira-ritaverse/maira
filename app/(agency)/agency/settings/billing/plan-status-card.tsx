@@ -44,8 +44,12 @@ export function PlanStatusCard({ plan }: { plan: PlanStatusInput }) {
   const extraSeats = Math.max(0, plan.seatCount - STRIPE_INCLUDED_SEATS);
   const isTrial = plan.status === "trialing";
   const daysLeft = plan.trialEndsAt ? daysUntil(plan.trialEndsAt) : 0;
-  const isPendingCancel =
-    (plan.status === "active" || plan.status === "trialing") && plan.canceledAt !== null;
+  // 解約 予約 中 は 「status !== canceled かつ canceled_at NOT NULL」 で 一意 に 判定 する。
+  // 従来 active / trialing のみ で 見て いた が、 past_due や incomplete 中 に
+  // Portal から cancel_at_period_end を 立て られる ケース も あり、 その 時 に
+  // ページ 側 の SubscribedActionsCard は pendingCancel=true 判定 に なる の で
+  // バッジ と 挙動 の 一致 を 取る。
+  const isPendingCancel = plan.status !== "canceled" && plan.canceledAt !== null;
 
   return (
     <Card className="p-6">

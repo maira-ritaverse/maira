@@ -194,10 +194,14 @@ function loadConfig(): WebhookConfig | { error: string } {
 // line items → tier / seat / ai_boost 判定 + item ID 抽出
 // ============================================
 
+type ParseOrgSubscriptionResult =
+  | { ok: true; parsed: ParsedOrgSubscription }
+  | { ok: false; reason: string };
+
 function parseOrgSubscription(
   sub: StripeSubscription,
   prices: OrgPriceMap,
-): ParsedOrgSubscription | null {
+): ParseOrgSubscriptionResult {
   let hasBase = false;
   let cycle: PlanCycle = "monthly";
   let seatCount = 0;
@@ -205,6 +209,7 @@ function parseOrgSubscription(
   let baseItemId: string | null = null;
   let extraSeatItemId: string | null = null;
   let aiBoostItemId: string | null = null;
+  const unknownPriceIds: string[] = [];
 
   for (const item of sub.items.data) {
     const priceId = item.price.id;
@@ -224,20 +229,36 @@ function parseOrgSubscription(
     } else if (priceId === prices.aiBoostMonthly || priceId === prices.aiBoostYearly) {
       aiBoostEnabled = true;
       aiBoostItemId = item.id;
+    } else {
+      unknownPriceIds.push(priceId);
     }
   }
 
-  if (!hasBase) return null;
+  if (!hasBase) return { ok: false, reason: "no_base_line_item" };
+
+  // 未知 price_id が 混ざって いる 場合 は env の 更新 忘れ (テスト → 本番 切替 で
+  // Price ID が 変わった 等) の 可能性 が 高い。 silent-skip する と Stripe と DB
+  // の seat_count が 乖離 する の で 500 で 弾き、 Stripe に リトライ させる +
+  // ログ で 気付ける ように する。
+  if (unknownPriceIds.length > 0) {
+    console.error(
+      `[stripe-webhook] parseOrgSubscription: unknown price_ids in subscription ${sub.id}: ${unknownPriceIds.join(", ")}. env の STRIPE_PRICE_* を 確認 して ください。`,
+    );
+    return { ok: false, reason: `unknown_price_ids:${unknownPriceIds.join(",")}` };
+  }
 
   return {
-    tier: aiBoostEnabled ? "standard_pro" : "standard",
-    cycle,
-    seatCount,
-    aiBoostEnabled,
-    itemIds: {
-      base: baseItemId,
-      extraSeat: extraSeatItemId,
-      aiBoost: aiBoostItemId,
+    ok: true,
+    parsed: {
+      tier: aiBoostEnabled ? "standard_pro" : "standard",
+      cycle,
+      seatCount,
+      aiBoostEnabled,
+      itemIds: {
+        base: baseItemId,
+        extraSeat: extraSeatItemId,
+        aiBoost: aiBoostItemId,
+      },
     },
   };
 }
@@ -371,8 +392,17 @@ async function handleSubscriptionSync(
   if (scope !== "organization") return { ok: true, reason: "not_organization_scope" };
   if (!orgId) return { ok: false, reason: "missing_organization_id" };
 
-  const parsed = parseOrgSubscription(sub, prices);
-  if (!parsed) return { ok: false, reason: "no_base_line_item" };
+  const parseResult = parseOrgSubscription(sub, prices);
+  if (!parseResult.ok) {
+    // no_base_line_item は 400 (顧客 側 の 問題 な の で リトライ 意味 無し)、
+    // unknown_price_ids は 500 に 昇格 して リトライ + アラート させたい が、
+    // 現状 の 呼び出し 契約 で は reason を 単一 文字列 で 返す 仕様。 呼び出し 元
+    // (POST の releaseOnRetryable) が unknown_price_ids で 検出 して リリース する
+    // よう に、 db_update_failed と 同じ プレフィックス 扱い に すべきか は 別途。
+    // ここ で は 忠実 に 理由 を 返す だけ。
+    return { ok: false, reason: parseResult.reason };
+  }
+  const parsed = parseResult.parsed;
 
   // 免除 組織 は plan を 一切 触ら ない (マイグレーション header の 契約)
   const exempt = await isOrgExempt(admin, orgId);
@@ -531,7 +561,14 @@ async function handleAddonSubscription(
   const item = sub.items.data.find((i) => i.price.id === addonPriceId);
   if (!item) return { ok: true, reason: "no_addon_item" };
   const userId = sub.metadata?.user_id;
-  if (!userId) return { ok: false, reason: "missing_user_id_metadata" };
+  if (!userId) {
+    // Dashboard 直挿し 等 で metadata.user_id が 無い subscription が 来た 場合、
+    // 400 で 返す と 「claim 済み + 500 じゃ ない」 で 以降 の リトライ が duplicate
+    // 化 して 握り 潰され、 その 契約 の cancel 検知 も 漏れる。 意図 的 に 無視 して
+    // ignored として 記録 する 方 が 安全 (未知 契約 は そもそも 追跡 対象 外)。
+    console.warn(`[stripe-webhook] addon subscription ${sub.id} lacks metadata.user_id — ignored`);
+    return { ok: true, reason: "no_user_id_metadata" };
+  }
 
   const status: "active" | "past_due" | "canceled" =
     eventType === "customer.subscription.deleted"
