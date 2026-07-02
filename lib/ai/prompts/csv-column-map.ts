@@ -37,14 +37,45 @@ export type CsvMapTarget = "clients" | "jobs";
  */
 export const CSV_CANONICAL_COLUMNS: Record<CsvMapTarget, ReadonlyArray<CanonicalColumn>> = {
   clients: [
+    // 基本 属性
     { key: "name", label: "氏名", required: true },
+    { key: "name_kana", label: "氏名カナ / フリガナ", required: false },
     { key: "email", label: "メールアドレス", required: true },
     { key: "phone", label: "電話番号", required: false },
-    { key: "name_kana", label: "氏名カナ", required: false },
-    { key: "intake_date", label: "受付日(YYYY-MM-DD)", required: false },
+    { key: "phone2", label: "副電話番号(電話番号 2)", required: false },
+    { key: "email2", label: "副メールアドレス(メール 2)", required: false },
+    { key: "birth_date", label: "生年月日(YYYY-MM-DD)", required: false },
+    { key: "gender", label: "性別", required: false },
+    { key: "nationality", label: "国籍", required: false },
+    { key: "marital_status", label: "配偶者 / 婚姻状況", required: false },
+    // 住所
+    { key: "postal_code", label: "郵便番号", required: false },
     { key: "prefecture", label: "都道府県", required: false },
+    { key: "city", label: "市区町村", required: false },
+    { key: "street", label: "番地 / 町名", required: false },
+    { key: "building", label: "建物 / マンション名", required: false },
+    // 現職 情報
+    { key: "current_employment_type", label: "現職雇用形態 / 雇用形態", required: false },
+    { key: "current_annual_income", label: "現年収 / 現在年収(万円)", required: false },
+    { key: "final_education", label: "最終学歴 / 学歴", required: false },
+    // 希望 条件
+    { key: "desired_industries", label: "希望業種(複数可)", required: false },
+    { key: "desired_occupations", label: "希望職種(複数可)", required: false },
+    { key: "desired_locations", label: "希望勤務地(複数可)", required: false },
+    { key: "desired_annual_income", label: "希望年収(万円)", required: false },
+    { key: "job_change_timing", label: "転職希望時期", required: false },
+    // 経験
+    { key: "experience_industries", label: "経験業種(複数可)", required: false },
+    { key: "experience_occupations", label: "経験職種(複数可)", required: false },
+    // 運用 キー日付
+    { key: "intake_date", label: "受付日(YYYY-MM-DD)", required: false },
+    { key: "first_meeting_date", label: "初回面談日(YYYY-MM-DD)", required: false },
+    // その他
     { key: "entry_site", label: "媒体 / エントリーサイト", required: false },
-    { key: "notes", label: "備考", required: false },
+    { key: "crm_tags", label: "CRM タグ(自由タグ、複数可)", required: false },
+    { key: "notes", label: "備考 / メモ", required: false },
+    // 担当 アドバイザー (別担当 に アサインしたい 時のみ)
+    { key: "assignee_email", label: "担当アドバイザーのメールアドレス", required: false },
   ],
   jobs: [
     { key: "company_name", label: "求人企業名 / 会社名", required: true },

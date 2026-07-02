@@ -73,6 +73,14 @@ const HEADER_ALIASES: Record<string, string[]> = {
   entry_site: ["媒体", "エントリーサイト", "entry_site"],
   notes: ["備考", "メモ", "notes"],
   crm_tags: ["タグ", "CRMタグ", "crm_tags"],
+  // 担当 アドバイザー ( 別担当 に アサインしたい 時のみ )
+  assignee_email: [
+    "担当者メールアドレス",
+    "担当メール",
+    "担当アドバイザー",
+    "担当アドバイザーメール",
+    "assignee_email",
+  ],
 };
 
 /** CSV セル → 数値。 「万円」 「,」 等 を 除去 して 数値 化。 空 or 変換 不能 は undefined。 */
@@ -188,6 +196,25 @@ export async function POST(request: Request) {
     }
   }
 
+  // 担当 アドバイザー の 割り当て 用 lookup。 CSV に 「assignee_email」 列 が あれば、
+  // その メール で 同 組織 の organization_members を 探して assigned_member_id に する。
+  // 一致 し ない 行 は 呼び出し ユーザー を 担当 に fallback ( 従来 挙動 )。
+  //
+  // auth.users.email は RLS で 保護 されて いる ため、 SECURITY DEFINER RPC
+  // list_organization_members_with_meta を 経由 する。 同 org メンバー のみ 見える 実装。
+  const memberEmailToId = new Map<string, string>();
+  {
+    const { data: memberRows } = await supabase.rpc("list_organization_members_with_meta", {
+      target_organization_id: role.organization.id,
+    });
+    for (const row of (memberRows ?? []) as Array<{
+      member_id: string;
+      email: string | null;
+    }>) {
+      if (row.email) memberEmailToId.set(row.email.toLowerCase(), row.member_id);
+    }
+  }
+
   const results: ImportResultRow[] = [];
   // 1 行ずつ validate → insert。バルク insert は失敗時の部分成功制御が難しいので
   // 1 件単位で回す(MAX_ROWS=500 件なので往復コストは許容範囲)。
@@ -236,9 +263,17 @@ export async function POST(request: Request) {
     }
 
     const d = parsed.data;
+
+    // 担当 アドバイザー の 割り当て:
+    //   ・CSV に 「担当 者 メール」 が あって、 同 組織 の メンバー なら その 人 を 担当
+    //   ・上記 以外 は 呼び出し ユーザー を 担当 に fallback ( 従来 挙動 )
+    const assigneeEmailLower = (normalized.assignee_email ?? "").toLowerCase().trim();
+    const resolvedAssigneeMemberId =
+      (assigneeEmailLower && memberEmailToId.get(assigneeEmailLower)) || role.member.id;
+
     const insertRow: Record<string, unknown> = {
       organization_id: role.organization.id,
-      assigned_member_id: role.member.id,
+      assigned_member_id: resolvedAssigneeMemberId,
       name: d.name,
       email: d.email,
       phone: d.phone || null,
