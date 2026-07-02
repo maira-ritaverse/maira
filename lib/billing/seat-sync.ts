@@ -186,3 +186,41 @@ export async function syncOrganizationSeatCount(args: {
 function pickExtraSeatPriceId(config: OrgStripeConfig, cycle: "monthly" | "yearly"): string {
   return cycle === "yearly" ? config.prices.extraSeatYearly : config.prices.extraSeatMonthly;
 }
+
+/**
+ * syncOrganizationSeatCount を 呼び、 失敗 したら seat_sync_failures に enqueue する。
+ * 呼び出し 元 (招待 受諾 / メンバー 削除) は 例外 を 投げず に 「後で cron が 直す」 モデル。
+ */
+export async function syncSeatCountOrEnqueueFailure(args: {
+  organizationId: string;
+  reason: "invitation_accepted" | "member_removed" | "manual";
+}): Promise<SyncSeatCountResult> {
+  const result = await syncOrganizationSeatCount(args);
+  if (result.ok) return result;
+
+  // 失敗 は 失敗 キュー に 積む (cron が 拾って リトライ する)
+  const admin = createServiceClient();
+  const memberCount = await countActiveMembers(admin, args.organizationId).catch(() => 0);
+  const { extraSeatQuantity } = computeExtraSeatQuantity(memberCount);
+  await admin.from("seat_sync_failures").insert({
+    organization_id: args.organizationId,
+    target_quantity: extraSeatQuantity,
+    error_message: result.error,
+    retry_count: 0,
+  });
+  return result;
+}
+
+/**
+ * 次回 リトライ 時刻 を 指数 バック オフ で 算出。
+ *   0 回 目 の 失敗 → 5 分 後
+ *   1 回 目       → 30 分 後
+ *   2 回 目       → 6 時間 後
+ *   3 回 目 以降  → 24 時間 後 で 打ち止め
+ */
+export function nextRetryDelayMs(retryCount: number): number {
+  if (retryCount <= 0) return 5 * 60 * 1000;
+  if (retryCount === 1) return 30 * 60 * 1000;
+  if (retryCount === 2) return 6 * 60 * 60 * 1000;
+  return 24 * 60 * 60 * 1000;
+}

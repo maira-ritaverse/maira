@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { syncSeatCountOrEnqueueFailure } from "@/lib/billing/seat-sync";
+import { createServiceClient } from "@/lib/supabase/service";
 
 /**
  * 招待受諾 Server Action
@@ -100,6 +102,24 @@ export async function acceptInvitation(token: string): Promise<AcceptInvitationR
       code: "unknown",
       message: "受諾に失敗しました。時間を置いて再度お試しください",
     };
+  }
+
+  // 席 数 を Stripe に 同期 (Extra Seat quantity を + 1)。
+  // 失敗 は seat_sync_failures に enqueue され、 cron が リトライ する ので
+  // ここ で は例外 を 呼び出し 元 に 伝播 させ ない (受諾 は 既に 成立 している)。
+  const admin = createServiceClient();
+  const { data: memberRow } = await admin
+    .from("organization_members")
+    .select("organization_id")
+    .eq("id", data as string)
+    .maybeSingle();
+  if (memberRow?.organization_id) {
+    await syncSeatCountOrEnqueueFailure({
+      organizationId: memberRow.organization_id,
+      reason: "invitation_accepted",
+    }).catch((e) => {
+      console.warn("[accept_invitation] seat sync enqueue failed", e);
+    });
   }
 
   // ロールが変わるので /agency と /app のレイアウトキャッシュを破棄する
