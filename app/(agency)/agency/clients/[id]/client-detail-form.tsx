@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { formatAgeLabel } from "@/lib/date/age";
 
 /**
  * クライアント詳細編集フォーム
@@ -77,6 +78,7 @@ export function ClientDetailForm({ client, seekerPhoto }: Props) {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<UpdateClientRequest>({
     // updateClientRequestSchema は EMPRO 拡張で 40+ フィールドに膨らんだ結果、
@@ -409,7 +411,17 @@ export function ClientDetailForm({ client, seekerPhoto }: Props) {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="birth_date">生年月日</Label>
+              <Label htmlFor="birth_date">
+                生年月日
+                {(() => {
+                  // watch で 入力 中 の 値 も 拾って リアル タイム に 「満 X 歳」 を 出す。
+                  const raw = watch("birth_date");
+                  const label = formatAgeLabel(typeof raw === "string" ? raw : undefined);
+                  return label ? (
+                    <span className="text-muted-foreground ml-2 text-xs">({label})</span>
+                  ) : null;
+                })()}
+              </Label>
               <Input id="birth_date" type="date" {...register("birth_date")} disabled={isPending} />
             </div>
             <div className="space-y-2">

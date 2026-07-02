@@ -31,17 +31,68 @@ const MAX_BYTES = 8 * 1024 * 1024;
 /**
  * CSV ヘッダー(日本語)→ DB / zod のキー(snake_case)へのマッピング。
  * エクスポート CSV のヘッダーと合わせている。複数表記を許容するため Array で持つ。
+ *
+ * 「求職者管理 で 編集 できる 項目 は CSV でも 入力 できる」 方針。 EMPRO 拡張 の
+ * 平文 カラム を 網羅 する ( 暗号化 対象 は 除外 = UI 側 で 1 件 ずつ 入力 )。
  */
 const HEADER_ALIASES: Record<string, string[]> = {
+  // 基本 属性
   name: ["氏名", "名前", "name"],
+  name_kana: ["氏名カナ", "カナ", "name_kana"],
   email: ["メール", "メールアドレス", "email"],
   phone: ["電話", "電話番号", "phone"],
-  name_kana: ["氏名カナ", "カナ", "name_kana"],
-  intake_date: ["受付日", "受付日時", "intake_date"],
+  phone2: ["副電話", "電話2", "phone2"],
+  email2: ["副メール", "メール2", "email2"],
+  birth_date: ["生年月日", "誕生日", "birth_date"],
+  gender: ["性別", "gender"],
+  nationality: ["国籍", "nationality"],
+  marital_status: ["配偶", "婚姻", "配偶者", "marital_status"],
+  // 住所
+  postal_code: ["郵便番号", "postal_code"],
   prefecture: ["都道府県", "prefecture"],
+  city: ["市区町村", "city"],
+  street: ["番地", "町名", "street"],
+  building: ["建物", "マンション", "building"],
+  // 現職 情報
+  current_employment_type: ["現職雇用形態", "雇用形態", "current_employment_type"],
+  current_annual_income: ["現年収", "現在年収", "current_annual_income"],
+  final_education: ["最終学歴", "学歴", "final_education"],
+  // 希望 条件
+  desired_industries: ["希望業種", "desired_industries"],
+  desired_occupations: ["希望職種", "desired_occupations"],
+  desired_locations: ["希望勤務地", "希望地", "desired_locations"],
+  desired_annual_income: ["希望年収", "desired_annual_income"],
+  job_change_timing: ["転職時期", "job_change_timing"],
+  // 経験
+  experience_industries: ["経験業種", "experience_industries"],
+  experience_occupations: ["経験職種", "experience_occupations"],
+  // 運用 キー 日付
+  intake_date: ["受付日", "受付日時", "intake_date"],
+  first_meeting_date: ["初回面談日", "初回面談", "first_meeting_date"],
+  // その他
   entry_site: ["媒体", "エントリーサイト", "entry_site"],
   notes: ["備考", "メモ", "notes"],
+  crm_tags: ["タグ", "CRMタグ", "crm_tags"],
 };
+
+/** CSV セル → 数値。 「万円」 「,」 等 を 除去 して 数値 化。 空 or 変換 不能 は undefined。 */
+function parseNumericField(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const cleaned = value.replace(/[,、円万￥¥\s]/g, "");
+  if (cleaned === "") return undefined;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/** CSV セル → 配列。 「/」 「,」 「;」 「、」 で split。 空要素 は 除去。 */
+function parseArrayField(value: string | undefined): string[] | undefined {
+  if (!value) return undefined;
+  const parts = value
+    .split(/[/,;、]/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  return parts.length > 0 ? parts : undefined;
+}
 
 /** CSV 行 1 件のキー(任意ヘッダー)を canonical key へ正規化する。 */
 function normalizeRow(row: Record<string, string>): Record<string, string> {
@@ -152,6 +203,13 @@ export async function POST(request: Request) {
     if (normalized.intake_date) {
       normalized.intake_date = normalizeDate(normalized.intake_date) ?? normalized.intake_date;
     }
+    if (normalized.birth_date) {
+      normalized.birth_date = normalizeDate(normalized.birth_date) ?? normalized.birth_date;
+    }
+    if (normalized.first_meeting_date) {
+      normalized.first_meeting_date =
+        normalizeDate(normalized.first_meeting_date) ?? normalized.first_meeting_date;
+    }
 
     // メールの重複チェック(in-batch 重複も既存と同じく "重複" として扱う)
     const emailLower = (normalized.email ?? "").toLowerCase();
@@ -192,9 +250,49 @@ export async function POST(request: Request) {
       name_kana: d.name_kana || null,
       intake_date: d.intake_date || null,
     };
-    // prefecture はスキーマ外なので直接渡す(zod で受け付けないが DB の列は存在)。
-    if (normalized.prefecture) {
-      insertRow.prefecture = normalized.prefecture;
+
+    // EMPRO 拡張 の 平文 列 を まとめて 追加。 createClientRequestSchema には ない
+    // 列 も DB には ある ので、 normalized から 直接 渡す ( 未 検証 だが 全部 text/enum/date
+    // で、 型 不一致 は DB 側 CHECK で 弾かれる )。
+    const passthroughText: Array<keyof typeof HEADER_ALIASES> = [
+      "phone2",
+      "email2",
+      "gender",
+      "nationality",
+      "marital_status",
+      "postal_code",
+      "prefecture",
+      "city",
+      "street",
+      "building",
+      "current_employment_type",
+      "final_education",
+      "job_change_timing",
+    ];
+    for (const key of passthroughText) {
+      if (normalized[key]) insertRow[key] = normalized[key];
+    }
+    if (normalized.birth_date) insertRow.birth_date = normalized.birth_date;
+    if (normalized.first_meeting_date) insertRow.first_meeting_date = normalized.first_meeting_date;
+
+    // 数値 系 ( 年収 は 万 円 単位 で 保存 )
+    const currentIncome = parseNumericField(normalized.current_annual_income);
+    if (currentIncome !== undefined) insertRow.current_annual_income = currentIncome;
+    const desiredIncome = parseNumericField(normalized.desired_annual_income);
+    if (desiredIncome !== undefined) insertRow.desired_annual_income = desiredIncome;
+
+    // 配列 系 ( タグ / 業種 / 職種 / 勤務 地 )
+    const passthroughArray: Array<keyof typeof HEADER_ALIASES> = [
+      "desired_industries",
+      "desired_occupations",
+      "desired_locations",
+      "experience_industries",
+      "experience_occupations",
+      "crm_tags",
+    ];
+    for (const key of passthroughArray) {
+      const parsedArr = parseArrayField(normalized[key]);
+      if (parsedArr) insertRow[key] = parsedArr;
     }
 
     const { data: insertedRow, error } = await supabase
