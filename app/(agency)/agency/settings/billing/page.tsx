@@ -12,7 +12,6 @@ import { PlanSelectForm } from "./plan-select-form";
 import { PlanStatusCard } from "./plan-status-card";
 import { SubscribedActionsCard } from "./subscribed-actions-card";
 import { TestCardsNotice } from "./test-cards-notice";
-import { TrialUpgradeChoiceForm } from "./trial-upgrade-choice-form";
 
 /**
  * /agency/settings/billing
@@ -143,16 +142,12 @@ export default async function AgencyBillingPage() {
                 currentPeriodEnd={plan.current_period_end}
               />
 
-              {plan.status === "trialing" && (
-                // 旧 トライアル アップグレード 選択 (Stripe 前) は Standard/Pro が
-                // 既に Stripe 側 で 決まって いる ため 実 効果 は 限定 的 だが、
-                // 「録音 / Premium を 将来 使い たい」 と いう 意思 表示 と して 残す。
-                <TrialUpgradeChoiceForm
-                  initialChoice={plan.trial_upgrade_choice}
-                  trialEndsAt={plan.trial_ends_at ?? ""}
-                  memberCount={memberCount}
-                />
-              )}
+              {/*
+                旧 TrialUpgradeChoiceForm (Stripe 導入 前 の トライアル 終了 後 tier
+                選択 フォーム) は Stripe 契約 下 で は 実効果 が 無い + 旧価格
+                (¥3,980/席 等) を 表示 して 実 課金 と 齟齬 を 生む ため 廃止。
+                AiBoostToggle が Stripe 側 で 即時 反映 を 兼ねる。
+              */}
             </>
           )}
         </>

@@ -38,6 +38,8 @@ type StripeEventType =
 type StripeEventEnvelope = {
   id: string;
   type: string;
+  // Stripe 側 で イベント が 作成 された Unix 秒。 順序 逆転 検知 用。
+  created: number;
   data: { object: unknown };
 };
 
@@ -264,13 +266,21 @@ async function claimEvent(
   eventType: string,
 ): Promise<"claimed" | "duplicate"> {
   const { error } = await admin.from("stripe_events").insert({ id: eventId, type: eventType });
-  if (error) {
-    // 23505 = unique_violation → 二重 配信
-    if ((error as { code?: string }).code === "23505") return "duplicate";
-    // その 他 の エラー は 一旦 duplicate 扱い で 二重 処理 を 避ける (fail-safe)
-    return "duplicate";
-  }
-  return "claimed";
+  if (!error) return "claimed";
+  // 23505 = unique_violation → 本当 の 二重 配信 な の で 200 で 返して OK
+  if ((error as { code?: string }).code === "23505") return "duplicate";
+  // それ 以外 の エラー (DB 一過性 障害 等) は throw して 外側 catch で 500 を 返し、
+  // Stripe に 再送 させる。 duplicate 扱い すると event を 永久 ロスト する。
+  throw new Error(`stripe_events insert failed: ${error.message}`);
+}
+
+/**
+ * 失敗 時 (500 応答) に 呼ぶ。 claim 済み の event 行 を 削除 して、
+ * Stripe の 次回 リトライ で 再度 claim できる ように する。
+ * これ を 怠る と リトライ が 常 に 23505 (duplicate) で 握り 潰される。
+ */
+async function releaseEventClaim(admin: AdminClient, eventId: string): Promise<void> {
+  await admin.from("stripe_events").delete().eq("id", eventId);
 }
 
 async function markEventProcessed(
@@ -316,11 +326,14 @@ async function handleCheckoutCompleted(
     return { ok: false, reason: "missing_customer_or_subscription" };
   }
 
+  // 免除 組織 は DB を 一切 触ら ない。 マイグレーション header の 契約
+  // 「is_billing_exempt=true の組織 は Webhook でも Item ID を 埋め ない」 を 満たす。
   const exempt = await isOrgExempt(admin, orgId);
   if (exempt) {
     console.warn(
-      `[stripe-webhook] Checkout completed for exempt org ${orgId}, subscription=${session.subscription}`,
+      `[stripe-webhook] Checkout skipped for exempt org ${orgId}, subscription=${session.subscription}`,
     );
+    return { ok: true, reason: "org_is_exempt" };
   }
 
   const { error } = await admin
@@ -340,6 +353,7 @@ async function handleSubscriptionSync(
   sub: StripeSubscription,
   eventType: StripeEventType,
   eventId: string,
+  eventCreatedAtSec: number,
   prices: OrgPriceMap,
 ): Promise<{ ok: boolean; reason?: string }> {
   const scope = sub.metadata?.scope;
@@ -351,6 +365,35 @@ async function handleSubscriptionSync(
   const parsed = parseOrgSubscription(sub, prices);
   if (!parsed) return { ok: false, reason: "no_base_line_item" };
 
+  // 免除 組織 は plan を 一切 触ら ない (マイグレーション header の 契約)
+  const exempt = await isOrgExempt(admin, orgId);
+  if (exempt) {
+    console.warn(
+      `[stripe-webhook] Subscription sync skipped for exempt org ${orgId}, event=${eventType}`,
+    );
+    return { ok: true, reason: "org_is_exempt" };
+  }
+
+  // 順序 保証 の た め、 UPDATE 前 に 「この event を 既に 適用 して いない か」 と
+  // 「もっと 新しい event が 既に 適用 済み で ない か」 を 確認 する。
+  // event.created (Stripe 側 の 発火 時刻) と last_synced_at を 突合。
+  const eventIsoAt = new Date(eventCreatedAtSec * 1000).toISOString();
+  const { data: existing } = await admin
+    .from("organization_plans")
+    .select("last_stripe_event_id, last_synced_at")
+    .eq("organization_id", orgId)
+    .maybeSingle();
+  if (existing?.last_stripe_event_id === eventId) {
+    return { ok: true, reason: "duplicate_event_id" };
+  }
+  if (existing?.last_synced_at) {
+    const lastSyncMs = new Date(existing.last_synced_at).getTime();
+    if (lastSyncMs > eventCreatedAtSec * 1000) {
+      // 新しい event で 既に 上書き 済み。 古い event を 反映 させて はいけない。
+      return { ok: true, reason: "stale_event" };
+    }
+  }
+
   const deleted = eventType === "customer.subscription.deleted";
   const status = mapOrgPlanStatus(sub.status, deleted);
 
@@ -358,13 +401,6 @@ async function handleSubscriptionSync(
     unix ? new Date(unix * 1000).toISOString() : null;
 
   const nextBilledAt = sub.cancel_at_period_end ? null : toIso(sub.current_period_end);
-
-  const exempt = await isOrgExempt(admin, orgId);
-  if (exempt) {
-    console.warn(
-      `[stripe-webhook] Subscription ${sub.id} event ${eventType} for exempt org ${orgId}`,
-    );
-  }
 
   // seat_count は 「管理者 含めた 総 席 数」 で、 line item の quantity は
   // Extra Seat = seat_count - 3 (Base に 3 席 込 み)。 DB に は 総 席 数 を 保存 する。
@@ -390,7 +426,8 @@ async function handleSubscriptionSync(
       next_billed_at: nextBilledAt,
       canceled_at: deleted ? new Date().toISOString() : toIso(sub.canceled_at),
       last_stripe_event_id: eventId,
-      last_synced_at: new Date().toISOString(),
+      // event.created を 保存 して 順序 判定 の source of truth に する
+      last_synced_at: eventIsoAt,
       updated_at: new Date().toISOString(),
     })
     .eq("organization_id", orgId);
@@ -406,14 +443,13 @@ async function handleTrialWillEnd(
   const orgId = sub.metadata?.organization_id;
   if (scope !== "organization" || !orgId) return { ok: true, reason: "not_organization_scope" };
 
-  // TODO(後続): admin 宛て メール 通知。 ここ で は last_synced_at のみ 更新。
-  console.info(
+  if (await isOrgExempt(admin, orgId)) return { ok: true, reason: "org_is_exempt" };
+
+  // TODO(後続): admin 宛て メール 通知。 現状 は ログ のみ (last_synced_at は
+  //   subscription.updated 側 で 順序 保証 付き で 更新 する ので ここ では 触ら ない)。
+  console.warn(
     `[stripe-webhook] Trial will end for org=${orgId}, subscription=${sub.id}, trial_end=${sub.trial_end}`,
   );
-  await admin
-    .from("organization_plans")
-    .update({ last_synced_at: new Date().toISOString() })
-    .eq("organization_id", orgId);
   return { ok: true };
 }
 
@@ -426,6 +462,8 @@ async function handleInvoicePaid(
   if (scope !== "organization" || !orgId) return { ok: true, reason: "not_organization_scope" };
   if (!invoice.subscription) return { ok: true, reason: "no_subscription" };
 
+  if (await isOrgExempt(admin, orgId)) return { ok: true, reason: "org_is_exempt" };
+
   const periodStart = invoice.period_start
     ? new Date(invoice.period_start * 1000).toISOString()
     : null;
@@ -437,12 +475,11 @@ async function handleInvoicePaid(
       status: "active",
       current_period_start: periodStart,
       current_period_end: periodEnd,
-      last_synced_at: new Date().toISOString(),
     })
     .eq("organization_id", orgId)
     .in("status", ["active", "past_due", "trialing"]);
   if (error) return { ok: false, reason: `db_update_failed:${error.message}` };
-  console.info(`[stripe-webhook] Invoice paid for org=${orgId}, invoice=${invoice.id}`);
+  console.warn(`[stripe-webhook] Invoice paid for org=${orgId}, invoice=${invoice.id}`);
   return { ok: true };
 }
 
@@ -454,11 +491,12 @@ async function handleInvoicePaymentFailed(
   const orgId = invoice.metadata?.organization_id;
   if (scope !== "organization" || !orgId) return { ok: true, reason: "not_organization_scope" };
 
+  if (await isOrgExempt(admin, orgId)) return { ok: true, reason: "org_is_exempt" };
+
   const { error } = await admin
     .from("organization_plans")
     .update({
       status: "past_due",
-      last_synced_at: new Date().toISOString(),
     })
     .eq("organization_id", orgId)
     .neq("status", "canceled");
@@ -539,20 +577,39 @@ export async function POST(request: Request): Promise<Response> {
 
   const admin = createServiceClient();
 
-  // Idempotency: 同じ event.id は 2 回 処理 しない
-  const claim = await claimEvent(admin, event.id, event.type);
+  // Idempotency: 同じ event.id は 2 回 処理 しない。 claimEvent 失敗 (DB 一過性
+  // 障害) は throw され て 外側 catch で 500 + releaseEventClaim に 落ちる。
+  let claim: "claimed" | "duplicate";
+  try {
+    claim = await claimEvent(admin, event.id, event.type);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "unknown";
+    return NextResponse.json({ error: "claim_failed", message: msg }, { status: 500 });
+  }
   if (claim === "duplicate") {
     return NextResponse.json({ ok: true, idempotent: true, event_id: event.id });
   }
 
   const type = event.type as StripeEventType;
 
+  /** ハンドラ が db_update_failed を 返した とき、 claim 行 を 削除 して
+   *  Stripe の 次回 リトライ で 再度 処理 させる。 200/400 は claim 行 を 残す
+   *  (成功 済み or 意図的な reject な の で リトライ 不要)。 */
+  const releaseOnRetryable = async (reason: string | null) => {
+    if (reason && reason.startsWith("db_update_failed")) {
+      await releaseEventClaim(admin, event.id);
+    }
+  };
+
   try {
     if (type === "checkout.session.completed") {
       const session = event.data.object as StripeCheckoutSession;
       const r = await handleCheckoutCompleted(admin, session);
       await markEventProcessed(admin, event.id, r.ok ? "processed" : "failed", r.reason ?? null);
-      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 });
+      if (!r.ok) {
+        await releaseOnRetryable(r.reason ?? null);
+        return NextResponse.json({ error: r.reason }, { status: 400 });
+      }
       return NextResponse.json({ ok: true, kind: "checkout" });
     }
 
@@ -565,10 +622,13 @@ export async function POST(request: Request): Promise<Response> {
       const scope = sub.metadata?.scope;
       const r =
         scope === "organization"
-          ? await handleSubscriptionSync(admin, sub, type, event.id, cfg.orgPrices)
+          ? await handleSubscriptionSync(admin, sub, type, event.id, event.created, cfg.orgPrices)
           : await handleAddonSubscription(admin, sub, type, cfg.addonPriceId);
       await markEventProcessed(admin, event.id, r.ok ? "processed" : "failed", r.reason ?? null);
-      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 });
+      if (!r.ok) {
+        await releaseOnRetryable(r.reason ?? null);
+        return NextResponse.json({ error: r.reason }, { status: 400 });
+      }
       return NextResponse.json({ ok: true, kind: scope === "organization" ? "org" : "addon" });
     }
 
@@ -576,6 +636,7 @@ export async function POST(request: Request): Promise<Response> {
       const sub = event.data.object as StripeSubscription;
       const r = await handleTrialWillEnd(admin, sub);
       await markEventProcessed(admin, event.id, r.ok ? "processed" : "failed", r.reason ?? null);
+      if (!r.ok) await releaseOnRetryable(r.reason ?? null);
       return NextResponse.json({ ok: r.ok, kind: "trial_will_end" });
     }
 
@@ -583,6 +644,7 @@ export async function POST(request: Request): Promise<Response> {
       const invoice = event.data.object as StripeInvoice;
       const r = await handleInvoicePaid(admin, invoice);
       await markEventProcessed(admin, event.id, r.ok ? "processed" : "failed", r.reason ?? null);
+      if (!r.ok) await releaseOnRetryable(r.reason ?? null);
       return NextResponse.json({ ok: r.ok, kind: "invoice_paid" });
     }
 
@@ -590,6 +652,7 @@ export async function POST(request: Request): Promise<Response> {
       const invoice = event.data.object as StripeInvoice;
       const r = await handleInvoicePaymentFailed(admin, invoice);
       await markEventProcessed(admin, event.id, r.ok ? "processed" : "failed", r.reason ?? null);
+      if (!r.ok) await releaseOnRetryable(r.reason ?? null);
       return NextResponse.json({ ok: r.ok, kind: "invoice_failed" });
     }
 
@@ -598,8 +661,10 @@ export async function POST(request: Request): Promise<Response> {
     return NextResponse.json({ ignored: event.type });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "unknown";
-    await markEventProcessed(admin, event.id, "failed", msg);
-    // 500 を 返す と Stripe が 自動 リトライ する
+    // ハンドラ 内 例外 は 一過性 DB / Stripe 障害 の 可能性 が 高い の で
+    // claim 行 を 削除 して Stripe の リトライ を 受け 付ける。
+    await releaseEventClaim(admin, event.id);
+    console.error(`[stripe-webhook] handler exception event=${event.id}: ${msg}`);
     return NextResponse.json({ error: "handler_exception", message: msg }, { status: 500 });
   }
 }

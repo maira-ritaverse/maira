@@ -77,9 +77,10 @@ export function createCheckoutSession(
   if (params.existingCustomerId) {
     body.set("customer", params.existingCustomerId);
   } else {
+    // subscription mode では customer_email から Stripe が Customer を
+    // 自動生成する (customer_creation パラメータは payment/setup 専用で、
+    // subscription に渡すと 400 で全 Checkout が失敗する)。
     body.set("customer_email", params.userEmail);
-    // 課金後に customer を残せるよう。default で残るが明示しておく。
-    body.set("customer_creation", "always");
   }
   return stripePost<CheckoutSession>(config.secretKey, "/checkout/sessions", body);
 }
@@ -358,8 +359,9 @@ export function createOrgCheckoutSession(
     body.set("customer_update[address]", "auto");
     body.set("customer_update[name]", "auto");
   } else {
+    // subscription mode では customer_email から自動生成される
+    // (customer_creation は subscription mode で使えない → 400)
     body.set("customer_email", params.adminEmail);
-    body.set("customer_creation", "always");
   }
 
   // トライアル ありでも カード 事前 登録 を 必須 に する

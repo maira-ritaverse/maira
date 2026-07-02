@@ -38,11 +38,16 @@ export async function POST(request: Request) {
     trial_upgrade_choice: string | null;
   };
 
+  // Stripe 契約 済み の 組織 (stripe_subscription_id NOT NULL) は Stripe
+  // Webhook が trialing → active 遷移 を 担う た め、 本 cron の 対象 外。
+  // ここ で 触る と last_synced_at の 順序 保証 を 破る 上、 CHECK 制約
+  // (ai_boost_enabled と tier の 整合) に 違反 して 永久 失敗 する。
   const { data, error } = await admin
     .from("organization_plans")
     .select("organization_id, tier, trial_upgrade_choice")
     .eq("status", "trialing")
     .lt("trial_ends_at", now.toISOString())
+    .is("stripe_subscription_id", null)
     .limit(100);
 
   if (error) {
@@ -59,6 +64,12 @@ export async function POST(request: Request) {
     // 未選択 (= null) なら Standard のみ。
     const newTier = row.trial_upgrade_choice ?? "standard";
 
+    // CHECK 制約 org_plans_ai_boost_matches_tier_check:
+    //   tier='standard_pro' <=> ai_boost_enabled=true
+    // に 従う。 ai_boost_enabled を 明示 しない と default(false) と
+    // tier='standard_pro' が 矛盾 して UPDATE が 永久 に 失敗 する。
+    const aiBoostEnabled = newTier === "standard_pro";
+
     const currentPeriodStart = now.toISOString();
     // MVP では 月次 固定で 30 日後を 次の period_end と する
     // (Stripe 契約後 は invoice 駆動 で 動的更新)
@@ -68,6 +79,7 @@ export async function POST(request: Request) {
       .from("organization_plans")
       .update({
         tier: newTier,
+        ai_boost_enabled: aiBoostEnabled,
         status: "active",
         current_period_start: currentPeriodStart,
         current_period_end: currentPeriodEnd,
