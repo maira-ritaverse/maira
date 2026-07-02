@@ -102,6 +102,142 @@ function parseArrayField(value: string | undefined): string[] | undefined {
   return parts.length > 0 ? parts : undefined;
 }
 
+/**
+ * enum 系 CSV セル の 日本語 → DB enum 値 変換 マップ。
+ *
+ * DB CHECK 制約 は 英語 スラッグ を 要求 する が、 CSV は 日本語 で 来る のが 普通。
+ * 未知 の 値 は undefined を 返し、 その 列 の insert を スキップ する ( エラー に しない )。
+ */
+const GENDER_MAP: Record<string, string> = {
+  男性: "male",
+  男: "male",
+  男の子: "male",
+  M: "male",
+  male: "male",
+  女性: "female",
+  女: "female",
+  女の子: "female",
+  F: "female",
+  female: "female",
+  その他: "other",
+  他: "other",
+  other: "other",
+  未回答: "prefer_not_to_say",
+  回答しない: "prefer_not_to_say",
+  無回答: "prefer_not_to_say",
+  prefer_not_to_say: "prefer_not_to_say",
+};
+
+const MARITAL_MAP: Record<string, string> = {
+  未婚: "single",
+  独身: "single",
+  single: "single",
+  既婚: "married",
+  married: "married",
+  未回答: "prefer_not_to_say",
+  回答しない: "prefer_not_to_say",
+  無回答: "prefer_not_to_say",
+  prefer_not_to_say: "prefer_not_to_say",
+};
+
+const EMPLOYMENT_TYPE_MAP: Record<string, string> = {
+  正社員: "full_time",
+  正規: "full_time",
+  full_time: "full_time",
+  契約社員: "contract",
+  契約: "contract",
+  contract: "contract",
+  派遣: "temporary",
+  派遣社員: "temporary",
+  temporary: "temporary",
+  パート: "part_time",
+  アルバイト: "part_time",
+  part_time: "part_time",
+  業務委託: "business_outsource",
+  委託: "business_outsource",
+  business_outsource: "business_outsource",
+  自営: "self_employed",
+  自営業: "self_employed",
+  個人事業主: "self_employed",
+  self_employed: "self_employed",
+  無職: "unemployed",
+  求職中: "unemployed",
+  unemployed: "unemployed",
+  学生: "student",
+  student: "student",
+  その他: "other",
+  他: "other",
+  other: "other",
+};
+
+const FINAL_EDUCATION_MAP: Record<string, string> = {
+  高校: "high_school",
+  高卒: "high_school",
+  高等学校: "high_school",
+  high_school: "high_school",
+  専門: "vocational",
+  専門学校: "vocational",
+  専修: "vocational",
+  vocational: "vocational",
+  短大: "junior_college",
+  短期大学: "junior_college",
+  junior_college: "junior_college",
+  大学: "university",
+  大卒: "university",
+  university: "university",
+  大学院: "graduate",
+  修士: "graduate",
+  graduate: "graduate",
+  博士: "doctorate",
+  博士課程: "doctorate",
+  doctorate: "doctorate",
+  その他: "other",
+  他: "other",
+  other: "other",
+};
+
+const JOB_CHANGE_TIMING_MAP: Record<string, string> = {
+  すぐ: "immediate",
+  すぐに: "immediate",
+  即: "immediate",
+  即時: "immediate",
+  immediate: "immediate",
+  "3ヶ月以内": "within_3months",
+  "3か月以内": "within_3months",
+  "3ヵ月以内": "within_3months",
+  三ヶ月以内: "within_3months",
+  within_3months: "within_3months",
+  "6ヶ月以内": "within_6months",
+  "6か月以内": "within_6months",
+  "6ヵ月以内": "within_6months",
+  半年以内: "within_6months",
+  within_6months: "within_6months",
+  "1年以内": "within_1year",
+  "1ヶ年以内": "within_1year",
+  一年以内: "within_1year",
+  within_1year: "within_1year",
+  未定: "undecided",
+  検討中: "undecided",
+  undecided: "undecided",
+};
+
+/**
+ * enum 値 の 正規化。 マップ に 一致 する 値 の みを 返し、
+ * それ 以外 は undefined ( = insert に 含めない、 エラー に せず 「無指定」 扱い )。
+ * 空白除去 + 大文字小文字 は マップ の キー が 全部 含む 前提。
+ */
+function normalizeEnum(value: string | undefined, map: Record<string, string>): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (trimmed === "") return undefined;
+  // 直接 マッチ
+  if (map[trimmed]) return map[trimmed];
+  // 小 文字 化 で 再試行 ( "MALE" 等 の 対策 )
+  const lower = trimmed.toLowerCase();
+  if (map[lower]) return map[lower];
+  return undefined;
+}
+
 /** CSV 行 1 件のキー(任意ヘッダー)を canonical key へ正規化する。 */
 function normalizeRow(row: Record<string, string>): Record<string, string> {
   const result: Record<string, string> = {};
@@ -286,29 +422,35 @@ export async function POST(request: Request) {
       intake_date: d.intake_date || null,
     };
 
-    // EMPRO 拡張 の 平文 列 を まとめて 追加。 createClientRequestSchema には ない
-    // 列 も DB には ある ので、 normalized から 直接 渡す ( 未 検証 だが 全部 text/enum/date
-    // で、 型 不一致 は DB 側 CHECK で 弾かれる )。
+    // EMPRO 拡張 の 平文 列 を まとめて 追加。
+    // 自由 テキスト 列 は そのまま passthrough。
     const passthroughText: Array<keyof typeof HEADER_ALIASES> = [
       "phone2",
       "email2",
-      "gender",
       "nationality",
-      "marital_status",
       "postal_code",
       "prefecture",
       "city",
       "street",
       "building",
-      "current_employment_type",
-      "final_education",
-      "job_change_timing",
     ];
     for (const key of passthroughText) {
       if (normalized[key]) insertRow[key] = normalized[key];
     }
     if (normalized.birth_date) insertRow.birth_date = normalized.birth_date;
     if (normalized.first_meeting_date) insertRow.first_meeting_date = normalized.first_meeting_date;
+
+    // enum 系 は 日本語 → DB enum 値 に 変換 ( 未 マッチ は insert に 含めず、 エラー にせ ず 「無指定」 扱い )
+    const gender = normalizeEnum(normalized.gender, GENDER_MAP);
+    if (gender) insertRow.gender = gender;
+    const marital = normalizeEnum(normalized.marital_status, MARITAL_MAP);
+    if (marital) insertRow.marital_status = marital;
+    const employment = normalizeEnum(normalized.current_employment_type, EMPLOYMENT_TYPE_MAP);
+    if (employment) insertRow.current_employment_type = employment;
+    const education = normalizeEnum(normalized.final_education, FINAL_EDUCATION_MAP);
+    if (education) insertRow.final_education = education;
+    const timing = normalizeEnum(normalized.job_change_timing, JOB_CHANGE_TIMING_MAP);
+    if (timing) insertRow.job_change_timing = timing;
 
     // 数値 系 ( 年収 は 万 円 単位 で 保存 )
     const currentIncome = parseNumericField(normalized.current_annual_income);
