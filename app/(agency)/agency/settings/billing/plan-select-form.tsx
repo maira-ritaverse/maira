@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { getErrorMessage } from "@/lib/api/client-fetch";
 import {
   computeStripePrice,
+  STRIPE_EXTRA_SEAT_MONTHLY_JPY,
   STRIPE_INCLUDED_SEATS,
   type StripeCycle,
   type StripeTier,
@@ -68,6 +69,12 @@ export function PlanSelectForm({ currentSeatCount }: Props) {
       <p className="text-muted-foreground mt-1 text-xs">
         30 日 の 無料 期間 付き。 期間 中 の 解約 は 一切 課金 されません。
       </p>
+      <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+        <span className="font-semibold">席 数 について:</span> 基本 料金 に 管理者 含めて{" "}
+        {STRIPE_INCLUDED_SEATS} 名 まで 含まれます。{STRIPE_INCLUDED_SEATS + 1}名 目 以降 は 1 席
+        あたり ¥{STRIPE_EXTRA_SEAT_MONTHLY_JPY.toLocaleString()} / 月 が 追加 されます (年払い は 10
+        ヶ月 分)。
+      </div>
 
       <div className="mt-4 space-y-3">
         <TierOption
