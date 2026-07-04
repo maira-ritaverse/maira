@@ -75,14 +75,14 @@ export function PlanSelectForm({ currentSeatCount }: Props) {
           selected={tier === "standard"}
           onSelect={() => setTier("standard")}
           title="Standard"
-          description="AI 月 500 回、 会議 録音 手動 アップロード"
+          description="AI 500 回 & CRM 機能"
         />
         <TierOption
           value="standard_pro"
           selected={tier === "standard_pro"}
           onSelect={() => setTier("standard_pro")}
           title="Standard + Pro"
-          description="AI 月 1,000 回 (+ 500 回)、 会議 録音 手動 アップロード"
+          description="AI 1,000 回 (+ 500 回) & CRM 機能"
         />
       </div>
 
