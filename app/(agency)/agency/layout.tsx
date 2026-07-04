@@ -4,10 +4,19 @@ import { AgencySidebar } from "@/components/features/agency/agency-sidebar";
 import { NotificationBell } from "@/components/features/notifications/notification-bell";
 import { PrivacyPolicyModal } from "@/components/features/privacy-policy-modal";
 import { UserMenu } from "@/components/features/user-menu";
+import {
+  getTrialCountdown,
+  isPlanReadOnly,
+  shouldShowTrialReminder,
+  type PlanReadState,
+} from "@/lib/billing/plan-status";
 import { getUserRole } from "@/lib/organizations/queries";
 import { getPolicyAcceptance, needsToAccept } from "@/lib/privacy/policy";
 import { resolveAvatarPublicUrl } from "@/lib/profile/avatar";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
+
+import { ReadOnlyBanner } from "./read-only-banner";
+import { TrialReminderModal } from "./trial-reminder-modal";
 
 /**
  * エージェント企業メンバー向けの共通レイアウト
@@ -42,12 +51,15 @@ export default async function AgencyLayout({ children }: { children: React.React
     redirect("/app");
   }
 
-  // 組織アーカイブ チェック(role が 揃ってから)
-  const { data: orgRow } = await supabase
-    .from("organizations")
-    .select("archived_at")
-    .eq("id", role.organization.id)
-    .single();
+  // 組織アーカイブ + 課金プラン を まとめて 取得 (別クエリを直列にしないため)
+  const [{ data: orgRow }, { data: planRow }] = await Promise.all([
+    supabase.from("organizations").select("archived_at").eq("id", role.organization.id).single(),
+    supabase
+      .from("organization_plans")
+      .select("status, trial_ends_at, stripe_subscription_id, is_billing_exempt")
+      .eq("organization_id", role.organization.id)
+      .maybeSingle(),
+  ]);
 
   // 運営者によってアーカイブされたユーザ / 組織はログイン不可。
   if (profile?.archived_at || orgRow?.archived_at) {
@@ -56,6 +68,27 @@ export default async function AgencyLayout({ children }: { children: React.React
   }
   const requirePolicy = needsToAccept(policyAcceptance);
   const hasPriorPolicy = policyAcceptance.acceptedAt !== null;
+
+  // 課金プランに基づくバナー / モーダル判定
+  const plan = (planRow ?? null) as PlanReadState | null;
+  const readOnly = isPlanReadOnly(plan);
+  const bannerStatus = !plan
+    ? null
+    : plan.status === "canceled"
+      ? "canceled"
+      : plan.status === "past_due"
+        ? "past_due"
+        : plan.status === "incomplete"
+          ? "incomplete"
+          : plan.status === "trialing" &&
+              plan.trial_ends_at &&
+              new Date(plan.trial_ends_at) < new Date() &&
+              !plan.stripe_subscription_id
+            ? "trial_expired"
+            : null;
+
+  const trialDays = getTrialCountdown(plan);
+  const showReminder = shouldShowTrialReminder(plan) && trialDays !== null && plan?.trial_ends_at;
 
   // 親 を h-screen overflow-hidden に する こと で:
   //   ・サイドバー は 100vh で 固定 され、 ページ スクロール しても 動か ない
@@ -78,9 +111,21 @@ export default async function AgencyLayout({ children }: { children: React.React
             )}
           />
         </header>
+        {bannerStatus && <ReadOnlyBanner status={bannerStatus} />}
         <main className="flex-1 overflow-auto p-6">{children}</main>
       </div>
       {requirePolicy && <PrivacyPolicyModal hasPrior={hasPriorPolicy} />}
+      {showReminder && plan && (
+        <TrialReminderModal
+          daysRemaining={trialDays!}
+          trialEndsAt={plan.trial_ends_at!}
+          hasSubscription={Boolean(plan.stripe_subscription_id)}
+        />
+      )}
+      {/* readOnly は 上部 バナー + 各 write API 側 の requireWritableOrgPlan で ガード する。
+          この layout では 参照 だけ 残して 直接 の redirect は し ない (「読み 取り 専用 で
+          既存 データ は 見られる」 が UX 要件 のため)。 */}
+      <span data-plan-read-only={readOnly ? "1" : "0"} className="hidden" aria-hidden />
     </div>
   );
 }
