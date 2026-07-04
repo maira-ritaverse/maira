@@ -57,10 +57,12 @@ export async function IntakeUploadSection({ clientRecordId, clientLinked, client
         <div className="flex items-center gap-2">
           <Lock className="text-muted-foreground h-4 w-4" aria-hidden />
           <h2 className="text-base font-semibold">AI ヒアリング</h2>
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
+            開発中
+          </span>
         </div>
         <p className="text-muted-foreground text-sm">
-          録音アップロード機能はデフォルト無効です。 ご利用希望の場合は運営 (maira-info@revorise.jp)
-          までご連絡ください。
+          録音アップロードによる AI ヒアリング機能は現在開発中です。近日提供予定。
         </p>
       </Card>
     );

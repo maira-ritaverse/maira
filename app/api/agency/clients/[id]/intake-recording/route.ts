@@ -63,8 +63,7 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json(
       {
         error: "recording_upload_not_enabled",
-        message:
-          "録音アップロード機能はデフォルト無効です。ご利用希望の場合は運営 (maira-info@revorise.jp) までご連絡ください。",
+        message: "録音アップロードによる AI ヒアリング機能は現在開発中です。近日提供予定。",
       },
       { status: 403 },
     );
