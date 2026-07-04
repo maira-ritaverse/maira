@@ -65,15 +65,15 @@ export function PlanSelectForm({ currentSeatCount }: Props) {
 
   return (
     <Card className="p-6">
-      <h2 className="text-base font-semibold">プラン に 加入 する</h2>
+      <h2 className="text-base font-semibold">プランに加入する</h2>
       <p className="text-muted-foreground mt-1 text-xs">
-        30 日 の 無料 期間 付き。 期間 中 の 解約 は 一切 課金 されません。
+        30日間の無料期間付き。期間中の解約は一切課金されません。
       </p>
-      <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-        <span className="font-semibold">席 数 について:</span> 基本 料金 に 管理者 含めて{" "}
-        {STRIPE_INCLUDED_SEATS} 名 まで 含まれます。{STRIPE_INCLUDED_SEATS + 1}名 目 以降 は 1 席
-        あたり ¥{STRIPE_EXTRA_SEAT_MONTHLY_JPY.toLocaleString()} / 月 が 追加 されます (年払い は 10
-        ヶ月 分)。
+      <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
+        <span className="font-semibold">席数について:</span>
+        基本料金に管理者含めて{STRIPE_INCLUDED_SEATS}名まで含まれます。
+        {STRIPE_INCLUDED_SEATS + 1}名目以降は1席あたり ¥
+        {STRIPE_EXTRA_SEAT_MONTHLY_JPY.toLocaleString()}／月が追加されます (年払いは10ヶ月分)。
       </div>
 
       <div className="mt-4 space-y-3">
@@ -157,7 +157,7 @@ export function PlanSelectForm({ currentSeatCount }: Props) {
 
       <div className="mt-6 flex justify-end">
         <Button onClick={startCheckout} disabled={loading}>
-          {loading ? "遷移 中…" : "決済 する"}
+          {loading ? "遷移中…" : "決済する"}
         </Button>
       </div>
     </Card>
