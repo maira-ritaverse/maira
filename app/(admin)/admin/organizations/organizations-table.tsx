@@ -29,6 +29,7 @@ type OrgRow = {
     notes: string | null;
     isDefault: boolean;
   };
+  recordingUploadEnabled: boolean;
 };
 
 type SortKey =
@@ -269,6 +270,7 @@ export function OrganizationsTable({ archived }: { archived: boolean }) {
                     onClick={toggleSort}
                   />
                   <th className="px-3 py-2.5 text-right">AI 月次上限</th>
+                  <th className="px-3 py-2.5 text-center">録音UP</th>
                 </>
               )}
               <th className="px-3 py-2.5 text-right">操作</th>
@@ -330,6 +332,20 @@ export function OrganizationsTable({ archived }: { archived: boolean }) {
                           setOrgs((prev) =>
                             prev.map((row) =>
                               row.id === o.id ? { ...row, aiMonthlyTotal: next } : row,
+                            ),
+                          )
+                        }
+                      />
+                    </td>
+                    <td className="px-3 py-2.5 text-center">
+                      <RecordingUploadToggle
+                        orgId={o.id}
+                        orgName={o.name}
+                        enabled={o.recordingUploadEnabled}
+                        onSaved={(enabled) =>
+                          setOrgs((prev) =>
+                            prev.map((row) =>
+                              row.id === o.id ? { ...row, recordingUploadEnabled: enabled } : row,
                             ),
                           )
                         }
@@ -556,6 +572,72 @@ function AiQuotaEditor({
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * 録音 アップロード 機能 の on/off トグル (運営 用 インライン)。
+ *
+ * デフォルト off。 有効 化 時 に 確認 ダイアログ で 「AI コスト が 発生 します」 を 明示。
+ * PATCH /api/admin/organizations/[id] { action: "set_recording_upload", enabled }
+ */
+function RecordingUploadToggle({
+  orgId,
+  orgName,
+  enabled,
+  onSaved,
+}: {
+  orgId: string;
+  orgName: string;
+  enabled: boolean;
+  onSaved: (enabled: boolean) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const { showToast } = useToast();
+
+  const toggle = async () => {
+    const next = !enabled;
+    if (next) {
+      const ok = confirm(
+        `「${orgName}」で 録音 アップロード 機能 を 有効 化 します。\n\n` +
+          `AI 転写 + 抽出 の 実 コスト が 発生 します。 続行 しますか?`,
+      );
+      if (!ok) return;
+    } else {
+      const ok = confirm(
+        `「${orgName}」で 録音 アップロード 機能 を 無効 化 します。 よろしい ですか?`,
+      );
+      if (!ok) return;
+    }
+    setSaving(true);
+    try {
+      await apiFetch(`/api/admin/organizations/${orgId}`, {
+        method: "PATCH",
+        json: { action: "set_recording_upload", enabled: next },
+      });
+      onSaved(next);
+      showToast("success", `録音アップロードを${next ? "有効化" : "無効化"}しました`);
+    } catch (err) {
+      showToast("error", `更新失敗: ${getErrorMessage(err)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      disabled={saving}
+      className={`rounded-full px-2.5 py-1 text-[10px] font-semibold transition-colors ${
+        enabled
+          ? "bg-emerald-100 text-emerald-900 hover:bg-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-200"
+          : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
+      } ${saving ? "opacity-60" : ""}`}
+      title={enabled ? "クリックで無効化" : "クリックで有効化"}
+    >
+      {saving ? "..." : enabled ? "有効" : "無効"}
+    </button>
   );
 }
 

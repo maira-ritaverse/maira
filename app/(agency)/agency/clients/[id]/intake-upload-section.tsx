@@ -8,8 +8,11 @@
  * サーバーコンポーネント:対象クライアントの過去アップロード一覧を取得して
  * クライアントコンポーネントに渡す。
  */
+import { Lock } from "lucide-react";
+
 import { Card } from "@/components/ui/card";
-import { createClient } from "@/lib/supabase/server";
+import { getUserRole } from "@/lib/organizations/queries";
+import { createClient, getCurrentUser } from "@/lib/supabase/server";
 
 import { IntakeUploadClient } from "./intake-upload-client";
 
@@ -31,6 +34,38 @@ export type AgencyIntakeRow = {
 
 export async function IntakeUploadSection({ clientRecordId, clientLinked, clientName }: Props) {
   const supabase = await createClient();
+
+  // 組織 の 録音 アップロード フラグ を 確認 (default false)。
+  // getUserRole で org id を 引く の は 少し 冗長 だが、 client_records の
+  // organization_id を 直接 引いて も 良い (今 回 は 既存 helper 流用)。
+  const user = await getCurrentUser();
+  const role = user ? await getUserRole(user.id) : null;
+  const orgId = role?.organization?.id ?? null;
+  let recordingUploadEnabled = false;
+  if (orgId) {
+    const { data: orgRow } = await supabase
+      .from("organizations")
+      .select("recording_upload_enabled")
+      .eq("id", orgId)
+      .maybeSingle();
+    recordingUploadEnabled = Boolean(orgRow?.recording_upload_enabled);
+  }
+
+  if (!recordingUploadEnabled) {
+    return (
+      <Card className="space-y-2 p-5">
+        <div className="flex items-center gap-2">
+          <Lock className="text-muted-foreground h-4 w-4" aria-hidden />
+          <h2 className="text-base font-semibold">AI ヒアリング</h2>
+        </div>
+        <p className="text-muted-foreground text-sm">
+          録音アップロード機能はデフォルト無効です。 ご利用希望の場合は運営 (maira-info@revorise.jp)
+          までご連絡ください。
+        </p>
+      </Card>
+    );
+  }
+
   const { data } = await supabase
     .from("career_intake_recordings")
     .select(

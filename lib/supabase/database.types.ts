@@ -3604,6 +3604,7 @@ export type Database = {
           created_at: string;
           id: string;
           name: string;
+          recording_upload_enabled: boolean;
           revoke_grace_days: number;
           slack_webhook_url: string | null;
           updated_at: string;
@@ -3614,6 +3615,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           name: string;
+          recording_upload_enabled?: boolean;
           revoke_grace_days?: number;
           slack_webhook_url?: string | null;
           updated_at?: string;
@@ -3624,6 +3626,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           name?: string;
+          recording_upload_enabled?: boolean;
           revoke_grace_days?: number;
           slack_webhook_url?: string | null;
           updated_at?: string;

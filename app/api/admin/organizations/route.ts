@@ -28,6 +28,7 @@ type OrgRow = {
   created_at: string;
   archived_at: string | null;
   archived_reason: string | null;
+  recording_upload_enabled: boolean;
 };
 type MemberRow = {
   organization_id: string;
@@ -56,7 +57,7 @@ export async function GET(request: Request) {
 
   const baseQuery = admin
     .from("organizations")
-    .select("id, name, created_at, archived_at, archived_reason");
+    .select("id, name, created_at, archived_at, archived_reason, recording_upload_enabled");
   const { data: orgsData, error: orgsErr } = await (showArchived
     ? baseQuery.not("archived_at", "is", null).order("archived_at", { ascending: false })
     : baseQuery.is("archived_at", null).order("created_at", { ascending: false }));
@@ -153,6 +154,7 @@ export async function GET(request: Request) {
         notes: aiTotal?.notes ?? null,
         isDefault: aiTotal === undefined,
       },
+      recordingUploadEnabled: o.recording_upload_enabled,
     };
   });
 

@@ -49,8 +49,26 @@ type RouteContext = { params: Promise<{ id: string }> };
 export async function POST(request: Request, context: RouteContext) {
   const guard = await requireOrgMember();
   if (!guard.ok) return guard.response;
-  const { user, supabase } = guard;
+  const { user, supabase, organization } = guard;
   const { id: clientRecordId } = await context.params;
+
+  // 録音 アップロード は 組織 単位 で 運営 が 手動 有効 化 する 機能。
+  // デフォルト 無効。 organizations.recording_upload_enabled を 確認。
+  const { data: orgRow } = await supabase
+    .from("organizations")
+    .select("recording_upload_enabled")
+    .eq("id", organization.id)
+    .maybeSingle();
+  if (!orgRow?.recording_upload_enabled) {
+    return NextResponse.json(
+      {
+        error: "recording_upload_not_enabled",
+        message:
+          "録音アップロード機能はデフォルト無効です。ご利用希望の場合は運営 (maira-info@revorise.jp) までご連絡ください。",
+      },
+      { status: 403 },
+    );
+  }
 
   // 対象クライアントが自組織のものか + linked_user_id 取得
   const { data: clientRow, error: clientErr } = await supabase

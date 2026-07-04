@@ -189,10 +189,19 @@ export async function GET(_request: Request, { params }: RouteParams) {
  * 監査ログ:admin_accessed_user を流用(action 自体は organization 単位だが
  *          audit テーブルの enum 制限を避ける目的で event_subtype で分ける)
  */
-const patchSchema = z.object({
-  action: z.enum(["archive", "unarchive"]),
-  reason: z.string().max(500).optional(),
-});
+const patchSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("archive"),
+    reason: z.string().max(500).optional(),
+  }),
+  z.object({
+    action: z.literal("unarchive"),
+  }),
+  z.object({
+    action: z.literal("set_recording_upload"),
+    enabled: z.boolean(),
+  }),
+]);
 
 export async function PATCH(request: Request, { params }: RouteParams) {
   const guard = await requireUser();
@@ -213,13 +222,25 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   const { id } = await params;
   const admin = createServiceClient();
 
-  const update =
-    parsed.data.action === "archive"
-      ? {
-          archived_at: new Date().toISOString(),
-          archived_reason: parsed.data.reason ?? null,
-        }
-      : { archived_at: null, archived_reason: null };
+  let update: Record<string, unknown>;
+  let auditSubtype: string;
+  let auditReason: string | null = null;
+  if (parsed.data.action === "archive") {
+    update = {
+      archived_at: new Date().toISOString(),
+      archived_reason: parsed.data.reason ?? null,
+    };
+    auditSubtype = "admin_archived_organization";
+    auditReason = parsed.data.reason ?? null;
+  } else if (parsed.data.action === "unarchive") {
+    update = { archived_at: null, archived_reason: null };
+    auditSubtype = "admin_unarchived_organization";
+  } else {
+    update = { recording_upload_enabled: parsed.data.enabled };
+    auditSubtype = parsed.data.enabled
+      ? "admin_enabled_recording_upload"
+      : "admin_disabled_recording_upload";
+  }
 
   const { error } = await admin.from("organizations").update(update).eq("id", id);
   if (error) {
@@ -230,12 +251,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     userId: actor.id,
     action: "admin_accessed_user",
     metadata: {
-      event_subtype:
-        parsed.data.action === "archive"
-          ? "admin_archived_organization"
-          : "admin_unarchived_organization",
+      event_subtype: auditSubtype,
       organization_id: id,
-      reason: parsed.data.reason ?? null,
+      reason: auditReason,
     },
     ipAddress: request.headers.get("x-forwarded-for"),
     userAgent: request.headers.get("user-agent"),
