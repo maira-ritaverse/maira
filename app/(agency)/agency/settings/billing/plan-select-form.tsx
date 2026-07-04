@@ -150,7 +150,7 @@ export function PlanSelectForm({ currentSeatCount }: Props) {
 
       <div className="mt-6 flex justify-end">
         <Button onClick={startCheckout} disabled={loading}>
-          {loading ? "遷移 中…" : "Stripe Checkout に 進む"}
+          {loading ? "遷移 中…" : "決済 する"}
         </Button>
       </div>
     </Card>
