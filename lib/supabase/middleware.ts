@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { safeNextOr } from "@/lib/auth/safe-next";
+import { isPlanReadOnly, type PlanReadState } from "@/lib/billing/plan-status";
 
 /**
  * Next.jsのmiddlewareで使用するSupabaseクライアントとセッション更新ヘルパー
@@ -15,6 +16,18 @@ import { safeNextOr } from "@/lib/auth/safe-next";
 // 認証ページ:未認証者専用。既ログインでアクセスしたら /app(または next= 先)に飛ばす。
 // /reset-password は意図的に含めない(下のロジックで早期 return している)。
 const AUTH_PAGES = ["/login", "/signup", "/forgot-password", "/verify-email"] as const;
+
+/**
+ * 読み取り専用モード中でも書き込みを許可する API パス。
+ *
+ * 主に「契約状態を復旧するための操作」= /agency/billing/*。
+ * これを塞ぐと read-only になった組織が Checkout/Portal に到達できず詰む。
+ */
+const WRITE_ALLOWED_WHEN_READONLY = [
+  "/api/agency/billing/", // 全 billing 系 API
+] as const;
+
+const WRITE_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -105,5 +118,57 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(new URL(defaultPath, request.nextUrl.origin));
   }
 
+  // 課金プランに基づく書き込みゲート:
+  //   /api/agency/** の POST/PATCH/PUT/DELETE のうち、billing 系以外は
+  //   isPlanReadOnly(plan) が true の組織からのリクエストを 403 で弾く。
+  //   これにより 108+ ある write route を個別に触らず、middleware 1 箇所で網羅。
+  //   ・GET は素通し (「読み取り専用」= 既存データの閲覧は OK)
+  //   ・未ログインは既存の 401 経路に任せる
+  //   ・organization_plans が無い / 免除 / active / trialing (期限内) は通す
+  if (
+    user &&
+    pathname.startsWith("/api/agency/") &&
+    WRITE_METHODS.has(request.method) &&
+    !WRITE_ALLOWED_WHEN_READONLY.some((prefix) => pathname.startsWith(prefix))
+  ) {
+    const readOnly = await checkPlanReadOnlyForUser(supabase, user.id);
+    if (readOnly) {
+      return NextResponse.json(
+        {
+          error: "plan_read_only",
+          message:
+            "無料期間終了 / 契約終了 / 決済失敗のため、現在は読み取り専用モードです。契約管理ページでご対応ください。",
+        },
+        { status: 403 },
+      );
+    }
+  }
+
   return supabaseResponse;
+}
+
+/**
+ * user_id から所属組織の plan を引いて read-only か判定。
+ * middleware 内から呼ぶ た め、RLS 経由 (anon key + user cookie) で 実行。
+ * 2 クエリ (members + plans) 走る が、write request のみ に 限定 して 呼ぶ。
+ */
+async function checkPlanReadOnlyForUser(
+  supabase: ReturnType<typeof createServerClient>,
+  userId: string,
+): Promise<boolean> {
+  const { data: memberRow } = await supabase
+    .from("organization_members")
+    .select("organization_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!memberRow) return false; // seeker or 未所属:個別 route の 401/403 に任せる
+
+  const orgId = (memberRow as { organization_id: string }).organization_id;
+  const { data: planRow } = await supabase
+    .from("organization_plans")
+    .select("status, trial_ends_at, stripe_subscription_id, is_billing_exempt")
+    .eq("organization_id", orgId)
+    .maybeSingle();
+
+  return isPlanReadOnly((planRow ?? null) as PlanReadState | null);
 }
