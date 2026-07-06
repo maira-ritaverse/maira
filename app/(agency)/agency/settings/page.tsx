@@ -72,6 +72,22 @@ export default async function SettingsPage() {
             </Link>
           </Card>
 
+          {/* LINE 自己紹介 */}
+          <Card className="p-4">
+            <Link
+              href="/agency/settings/line-intro"
+              className="hover:bg-accent -m-4 flex items-center gap-3 rounded-md p-4 transition-colors"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">LINE 自己紹介</p>
+                <p className="text-muted-foreground text-xs">
+                  顧客への LINE で 送る 顔写真 + プロフィール + エージェントとしての思い
+                </p>
+              </div>
+              <span className="text-muted-foreground text-sm">→</span>
+            </Link>
+          </Card>
+
           {/* パスワード 変更 */}
           <Card className="p-4">
             <Link

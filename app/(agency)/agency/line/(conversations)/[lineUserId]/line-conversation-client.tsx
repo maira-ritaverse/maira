@@ -8,6 +8,7 @@ import {
   Paperclip,
   Smile,
   Bot,
+  IdCard,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -333,6 +334,35 @@ export function LineConversationClient({
     setAiSuggestError(null);
   };
 
+  const onSendIntro = async () => {
+    if (unfollowed) {
+      setError("ブロック / 友達解除 された 相手 には 送信 できません");
+      return;
+    }
+    if (!confirm("自己紹介 (顔写真 + プロフィール) を LINE で 送信 しますか?")) return;
+    setSending(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/agency/line/conversations/${encodeURIComponent(lineUserId)}/send-intro`,
+        { method: "POST" },
+      );
+      const b = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+      } | null;
+      if (!res.ok || !b?.ok) {
+        throw new Error(b?.message ?? b?.error ?? `HTTP ${res.status}`);
+      }
+      await refresh();
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
     <>
       {/* 確定済 面談 バナー (未来 の もの のみ、 上 5 件) */}
@@ -502,16 +532,26 @@ export function LineConversationClient({
             )}
           </div>
         )}
-        <div className="mb-2 flex items-center justify-end">
+        <div className="mb-2 flex items-center justify-end gap-2">
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
+            onClick={onSendIntro}
+            disabled={sending || unfollowed}
+            title="自己紹介 (顔写真 + プロフィール) を 送信"
+            aria-label="自己紹介 を 送信"
+          >
+            <IdCard className="size-4" aria-hidden />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
             onClick={onGenerateSuggestion}
             disabled={aiSuggestBusy || unfollowed || messages.length === 0}
             title="会話 履歴 を もと に AI が 返信 案 を 提案 (AI 上限 に 1 回 カウント)"
+            aria-label="AI で 返信 案 を 生成"
           >
-            <Bot className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-            AI で 返信 案 を 生成
+            <Bot className="size-4" aria-hidden />
           </Button>
         </div>
         <div className="flex items-end gap-2">
