@@ -28,7 +28,7 @@ type LinkRow = {
   displayName: string | null;
   pictureUrl: string | null;
   linkedAt: string | null;
-  linkMethod: "manual" | "code" | "liff_login" | null;
+  linkMethod: "manual" | "code" | "liff_login" | "auto_name_match" | null;
   unfollowedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -246,6 +246,36 @@ function LinkRowItem({
     }
   };
 
+  // LINE 友達 を 元 に 新規 CRM 顧客 を 作成 して 自動 リンク
+  const onCreateClient = async () => {
+    if (
+      !window.confirm(
+        `「${link.displayName ?? "(名前なし)"}」 を CRM の 新規 顧客 として 追加 します。 よろしい ですか?`,
+      )
+    )
+      return;
+    setBusy(true);
+    setActionError(null);
+    try {
+      const res = await fetch(
+        `/api/agency/line/user-links/${encodeURIComponent(link.lineUserId)}/create-client`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+      );
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as {
+          error?: string;
+          message?: string;
+        } | null;
+        throw new Error(body?.message ?? body?.error ?? `HTTP ${res.status}`);
+      }
+      onChange();
+    } catch (e) {
+      setActionError(getErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <Card className="p-3">
       <div className="flex items-start gap-3">
@@ -313,6 +343,15 @@ function LinkRowItem({
                 >
                   コード 発行
                 </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={onCreateClient}
+                  disabled={busy}
+                  title="この LINE 友達 を 元に CRM に新規 顧客 を 作成"
+                >
+                  CRM に 追加
+                </Button>
               </div>
               {issuedCode && (
                 <p className="text-xs">
@@ -335,8 +374,11 @@ function LinkRowItem({
   );
 }
 
-function linkMethodLabel(m: "manual" | "code" | "liff_login"): string {
-  return m === "manual" ? "手動紐付け" : m === "code" ? "連携コード" : "LIFF ログイン";
+function linkMethodLabel(m: "manual" | "code" | "liff_login" | "auto_name_match"): string {
+  if (m === "manual") return "手動紐付け";
+  if (m === "code") return "連携コード";
+  if (m === "liff_login") return "LIFF ログイン";
+  return "自動 マッチ";
 }
 
 /**

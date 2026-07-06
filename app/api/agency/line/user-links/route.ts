@@ -17,7 +17,7 @@ type Row = {
   display_name: string | null;
   picture_url: string | null;
   linked_at: string | null;
-  link_method: "manual" | "code" | "liff_login" | null;
+  link_method: "manual" | "code" | "liff_login" | "auto_name_match" | null;
   unfollowed_at: string | null;
   created_at: string;
   updated_at: string;
