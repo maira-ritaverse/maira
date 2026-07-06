@@ -10,6 +10,7 @@ import {
   Bot,
   IdCard,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -81,6 +82,15 @@ export function LineConversationClient({
   } | null>(null);
   const [aiSuggestError, setAiSuggestError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // テキスト エリア を 内容 に 応じて 自動 リサイズ (min 44px、 max 240px)
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 44), 240)}px`;
+  }, [text]);
 
   // 最下部 へ スクロール
   useEffect(() => {
@@ -487,7 +497,19 @@ export function LineConversationClient({
       <div className="border-t bg-white p-2">
         {error && (
           <Alert variant="destructive" className="mb-2">
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>
+              {error}
+              {error.includes("自己紹介がまだ登録") && (
+                <div className="mt-1">
+                  <Link
+                    href="/agency/settings/line-intro"
+                    className="font-semibold underline hover:no-underline"
+                  >
+                    自己紹介の登録ページを開く →
+                  </Link>
+                </div>
+              )}
+            </AlertDescription>
           </Alert>
         )}
         {aiSuggestOpen && (
@@ -532,29 +554,11 @@ export function LineConversationClient({
             )}
           </div>
         )}
-        <div className="mb-2 flex items-center justify-end gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={onSendIntro}
-            disabled={sending || unfollowed}
-            title="自己紹介 (顔写真 + プロフィール) を 送信"
-            aria-label="自己紹介 を 送信"
-          >
-            <IdCard className="size-4" aria-hidden />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={onGenerateSuggestion}
-            disabled={aiSuggestBusy || unfollowed || messages.length === 0}
-            title="会話 履歴 を もと に AI が 返信 案 を 提案 (AI 上限 に 1 回 カウント)"
-            aria-label="AI で 返信 案 を 生成"
-          >
-            <Bot className="size-4" aria-hidden />
-          </Button>
-        </div>
-        <div className="flex items-end gap-2">
+        {/*
+          ツールバー (icon 群) を 1 行 に まとめて、 下 の 行 は textarea + 送信 を 全 幅 で。
+          左: 添付 系 (スタンプ / 画像 / 求人 / 面談)、 右: 補助 系 (自己紹介 / AI)
+        */}
+        <div className="mb-2 flex items-center gap-1.5">
           <Button
             variant="outline"
             size="icon"
@@ -564,6 +568,7 @@ export function LineConversationClient({
             }}
             disabled={unfollowed || sending}
             aria-label="スタンプ を 選ぶ"
+            title="スタンプ"
             className="shrink-0"
           >
             <Smile className="size-4" aria-hidden />
@@ -573,6 +578,7 @@ export function LineConversationClient({
               unfollowed || sending ? "pointer-events-none opacity-50" : ""
             }`}
             aria-label="画像 を 送信"
+            title="画像"
           >
             <ImageIcon className="size-4" aria-hidden />
             <input
@@ -596,6 +602,7 @@ export function LineConversationClient({
             }}
             disabled={unfollowed || sending}
             aria-label="求人 を 共有"
+            title="求人"
             className="shrink-0"
           >
             <Briefcase className="size-4" aria-hidden />
@@ -610,11 +617,39 @@ export function LineConversationClient({
             }}
             disabled={unfollowed || sending}
             aria-label="面談 日程 を 提案"
+            title="面談 日程"
             className="shrink-0"
           >
             <CalendarClock className="size-4" aria-hidden />
           </Button>
+          {/* スペーサー: 左 (添付 系) と 右 (補助 系) を 分離 */}
+          <div className="flex-1" />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={onSendIntro}
+            disabled={sending || unfollowed}
+            title="自己紹介 (顔写真 + プロフィール) を 送信"
+            aria-label="自己紹介 を 送信"
+            className="shrink-0"
+          >
+            <IdCard className="size-4" aria-hidden />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={onGenerateSuggestion}
+            disabled={aiSuggestBusy || unfollowed || messages.length === 0}
+            title="会話 履歴 を もと に AI が 返信 案 を 提案 (AI 上限 に 1 回 カウント)"
+            aria-label="AI で 返信 案 を 生成"
+            className="shrink-0"
+          >
+            <Bot className="size-4" aria-hidden />
+          </Button>
+        </div>
+        <div className="flex items-end gap-2">
           <textarea
+            ref={textareaRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={onKeyDown}
@@ -622,8 +657,8 @@ export function LineConversationClient({
               unfollowed ? "解除 された 相手 には 送信 できません" : "メッセージ を 入力..."
             }
             disabled={unfollowed || sending}
-            rows={2}
-            className="border-input bg-background min-h-11 flex-1 resize-none rounded-md border px-3 py-2 text-sm"
+            rows={1}
+            className="border-input bg-background max-h-60 min-h-11 flex-1 resize-none overflow-y-auto rounded-md border px-3 py-2 text-sm leading-relaxed"
           />
           <Button
             onClick={onSend}
