@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell } from "lucide-react";
+import { Bell, BellRing } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -45,7 +45,9 @@ type NotificationItem = {
   payload: NotificationPayload | null;
 };
 
-const POLL_INTERVAL_MS = 45_000;
+// ポーリング 間隔 を 30 秒 に 短縮 (旧 45 秒)。 加えて visibilitychange で
+// タブ 復帰 時 に 即時 再取得 する。 これ で 「新着 が 遅れて 気づく」 曖昧 さ を 解消。
+const POLL_INTERVAL_MS = 30_000;
 
 /**
  * 内部状態の単一化:items / unreadCount / hasLoaded を 1 つのオブジェクトに
@@ -105,9 +107,22 @@ export function NotificationBell() {
     loadCount();
     const interval = setInterval(loadCount, POLL_INTERVAL_MS);
 
+    // タブ が フォアグラウンド に 戻った / focus が 復帰 した 際 に 即時 未読数 再取得。
+    // 数 分 タブ を 離れた 後 の 「新着 バッジ が すぐ 出る」 UX を 実現。
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void loadCount();
+        void loadList();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onVisibility);
+
     return () => {
       cancelled = true;
       clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onVisibility);
     };
   }, []);
 
@@ -201,6 +216,8 @@ export function NotificationBell() {
     [refreshUnreadCount],
   );
 
+  const hasUnread = unreadCount > 0;
+
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger
@@ -208,13 +225,31 @@ export function NotificationBell() {
           <Button
             variant="ghost"
             size="icon"
-            className="relative h-9 w-9"
-            aria-label={unreadCount > 0 ? `通知 ${unreadCount}件の未読` : "通知"}
+            className={cn(
+              "relative h-9 w-9 transition-all",
+              // 未読 あり: 少し 目立つ 背景 + active 時 の 押し込み
+              hasUnread
+                ? "text-red-600 hover:bg-red-50 hover:text-red-700 active:scale-95"
+                : "hover:bg-accent active:scale-95",
+            )}
+            aria-label={hasUnread ? `通知 ${unreadCount}件の未読` : "通知"}
+            title={hasUnread ? `未読 ${unreadCount} 件` : "通知"}
           >
-            <Bell className="h-5 w-5" aria-hidden />
-            {unreadCount > 0 && (
+            {hasUnread ? (
+              // BellRing = 音符 付き の ベル で 「新着 あり」 を 視覚 的 に 明示
+              <BellRing className="h-5 w-5" aria-hidden strokeWidth={2.5} />
+            ) : (
+              <Bell className="h-5 w-5" aria-hidden />
+            )}
+            {hasUnread && (
               <span
-                className="bg-destructive text-destructive-foreground absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-semibold tabular-nums"
+                className={cn(
+                  "absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center",
+                  "rounded-full bg-red-600 px-1.5 text-[11px] leading-none font-bold text-white tabular-nums",
+                  "shadow-sm ring-2 ring-white",
+                  // 開いて い ない 時 だけ 静か に 脈打つ (開いた 状態 の 気 散らし を 防ぐ)
+                  !isOpen && "animate-pulse",
+                )}
                 aria-hidden
               >
                 {unreadCount > 99 ? "99+" : unreadCount}
