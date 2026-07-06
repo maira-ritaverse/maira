@@ -85,16 +85,29 @@ export async function POST(request: Request) {
     .eq("user_id", user.id)
     .eq("organization_id", organization.id);
   if (updErr) {
-    // ロールバック
-    void admin.storage.from(BUCKET).remove([newPath]);
+    // ロールバック: 新規 UP 済 の オブジェクト を 削除 (await + ログ)
+    const { error: rollbackErr } = await admin.storage.from(BUCKET).remove([newPath]);
+    if (rollbackErr) {
+      console.error(
+        `[line-intro/photo] rollback remove failed for ${newPath}: ${rollbackErr.message}`,
+      );
+    }
     return NextResponse.json(
       { error: "db_update_failed", message: updErr.message },
       { status: 500 },
     );
   }
 
+  // 旧 オブジェクト の 差し 替え 削除。 削除 失敗 は log の みで 200 は 返す
+  // (DB は 新 path に なって いる の で 古い オブジェクト の 残存 は 一過性)。
+  // ただし 削除 系 の DELETE endpoint は 失敗 時 500 (H5 修正 と 整合)。
   if (oldPath) {
-    void admin.storage.from(BUCKET).remove([oldPath]);
+    const { error: oldRmErr } = await admin.storage.from(BUCKET).remove([oldPath]);
+    if (oldRmErr) {
+      console.error(
+        `[line-intro/photo] old object cleanup failed for ${oldPath}: ${oldRmErr.message}`,
+      );
+    }
   }
 
   const { data: pub } = admin.storage.from(BUCKET).getPublicUrl(newPath);
@@ -116,6 +129,23 @@ export async function DELETE() {
     (memberRow as { line_intro_photo_storage_path: string | null } | null)
       ?.line_intro_photo_storage_path ?? null;
 
+  // 順序 は 「Storage 削除 成功 → DB null 化」 に する。
+  // 逆 に すると Storage 削除 失敗 で DB は null / URL 生存 = 削除 拒否 の PII 事故。
+  if (oldPath) {
+    const admin = createServiceClient();
+    const { error: rmErr } = await admin.storage.from(BUCKET).remove([oldPath]);
+    if (rmErr) {
+      // 削除 失敗 は 500 で 明示 (fire-and-forget 禁止)
+      console.error(`[line-intro/photo] remove failed: ${rmErr.message}`);
+      return NextResponse.json(
+        {
+          error: "storage_remove_failed",
+          message: "Storage の 削除 に 失敗 しました。 時間 を 置いて 再 試行 して ください。",
+        },
+        { status: 500 },
+      );
+    }
+  }
   const { error: updErr } = await supabase
     .from("organization_members")
     .update({
@@ -129,10 +159,6 @@ export async function DELETE() {
       { error: "db_update_failed", message: updErr.message },
       { status: 500 },
     );
-  }
-  if (oldPath) {
-    const admin = createServiceClient();
-    void admin.storage.from(BUCKET).remove([oldPath]);
   }
   return NextResponse.json({ ok: true });
 }

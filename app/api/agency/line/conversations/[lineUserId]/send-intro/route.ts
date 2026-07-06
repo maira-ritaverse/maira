@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireOrgMember } from "@/lib/api/auth-guards";
 import { decryptField } from "@/lib/crypto/field-encryption";
-import { sendMessages } from "@/lib/line/messaging";
+import { markConversationHandled, sendMessages } from "@/lib/line/messaging";
 import { getLineChannelByOrgId } from "@/lib/line/queries";
 import { resolveAvatarPublicUrl } from "@/lib/profile/avatar";
 import { createClient } from "@/lib/supabase/server";
@@ -65,9 +65,18 @@ export async function POST(_request: Request, context: RouteContext) {
   } | null;
 
   const headline = intro?.line_intro_headline?.trim() ?? "";
-  const bodyRaw = intro?.encrypted_line_intro_body
-    ? ((await decryptField(intro.encrypted_line_intro_body)) ?? "")
-    : "";
+  // 復号 失敗 (旧 バージョン 鍵 が env から 消えた 等) で 500 に なる の を 防ぐ。
+  // 本文 が 壊れて い ても headline / photo で 送信 は 継続 する。
+  let bodyRaw = "";
+  if (intro?.encrypted_line_intro_body) {
+    try {
+      bodyRaw = (await decryptField(intro.encrypted_line_intro_body)) ?? "";
+    } catch (e) {
+      console.warn(
+        `[send-intro] body decrypt failed for user ${user.id}: ${e instanceof Error ? e.message : "unknown"}`,
+      );
+    }
+  }
   const photoPath = intro?.line_intro_photo_storage_path ?? null;
 
   if (!headline && !bodyRaw && !photoPath) {
@@ -127,11 +136,14 @@ export async function POST(_request: Request, context: RouteContext) {
     messages,
   );
   if (!result.ok) {
-    return NextResponse.json(
-      { error: "send_failed", reason: "reason" in result ? result.reason : "unknown" },
-      { status: 502 },
-    );
+    // 他 の LINE 送信 API と 揃えて message で 原因 を UI に 渡す。
+    const reason = "reason" in result ? result.reason : "unknown";
+    return NextResponse.json({ error: "send_failed", message: reason, reason }, { status: 502 });
   }
+
+  // 送信 成功 = 対応 済み マーク。 他 の share-image / share-job / share-meeting と
+  // 同じ 挙動 で、 「要対応」 バッジ を 落とす。
+  await markConversationHandled(service, organization.id, lineUserId, user.id);
 
   return NextResponse.json({ ok: true, sendMethod: result.sendMethod });
 }

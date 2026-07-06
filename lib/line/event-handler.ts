@@ -290,56 +290,16 @@ async function handleFollow(
     return { ok: false, type: "follow", reason: `upsert_failed: ${error.message}` };
   }
 
-  // ===== 自動 マッチ: LINE display_name と CRM 顧客名 の 完全 一致 =====
-  // 未 リンク で 完全 一致 が 1 件 だけ の 場合 に 自動 で 紐付け、 監査 ログ に 残す。
-  // 誤 マッチ を 避ける ため 「他 の line_user_links が 同じ client_record を 掴んで い ない」
-  // 条件 も 付ける (二重 リンク 禁止)。
-  const currentDisplayName = display?.displayName?.trim() ?? null;
-  if (currentDisplayName) {
-    try {
-      const { data: existingLink } = await ctx.service
-        .from("line_user_links")
-        .select("client_record_id")
-        .eq("organization_id", ctx.organizationId)
-        .eq("line_user_id", lineUserId)
-        .maybeSingle();
-      const alreadyLinked = Boolean(
-        (existingLink as { client_record_id: string | null } | null)?.client_record_id,
-      );
-      if (!alreadyLinked) {
-        const { data: candidates } = await ctx.service
-          .from("client_records")
-          .select("id")
-          .eq("organization_id", ctx.organizationId)
-          .eq("name", currentDisplayName)
-          .limit(2);
-        const rows = (candidates ?? []) as Array<{ id: string }>;
-        if (rows.length === 1) {
-          const clientRecordId = rows[0].id;
-          // 二重 リンク 禁止 (別 の line_user が 既 に この client_record を 掴んで いる か)
-          const { data: otherLink } = await ctx.service
-            .from("line_user_links")
-            .select("id")
-            .eq("organization_id", ctx.organizationId)
-            .eq("client_record_id", clientRecordId)
-            .limit(1);
-          if (!otherLink || otherLink.length === 0) {
-            await ctx.service
-              .from("line_user_links")
-              .update({
-                client_record_id: clientRecordId,
-                linked_at: new Date().toISOString(),
-                link_method: "auto_name_match",
-              })
-              .eq("organization_id", ctx.organizationId)
-              .eq("line_user_id", lineUserId);
-          }
-        }
-      }
-    } catch {
-      // 自動 マッチ の 失敗 は follow 全体 を 潰さ ない (無視 して 続行)
-    }
-  }
+  // ===== display_name の 自動 リンク は 廃止 (成りすまし 対策) =====
+  //
+  // 従来 は 「LINE display_name が CRM 顧客名 に 完全 一致 する 場合、 1 件 だけ なら
+  // 自動 で 紐付ける」 実装 だった が、 攻撃者 が LINE 表示 名 を 実在 顧客 名 に 変えて
+  // 友達 追加 する だけ で 履歴書 案 / 求人 情報 の 全 outbound を 傍受 できる 経路 と
+  // 判明 (監査 H2)。 監査 ログ 上 も 正常 な マッチ として 記録 され 事後 検知 が 困難。
+  //
+  // 代替: link_code / LIFF login / 「CRM に 追加」 ボタン の 手動 導線 のみ に 集約。
+  // display_name の 完全 一致 検知 UI は 追って 「候補 提示 + admin 明示 承認」 で 復活
+  // 予定。 それ まで は 手動 リンク の 摩擦 を 受け 入れる。
 
   // 「友達追加 されました」を 会話履歴 に system メッセージ として 残す
   await ctx.service.from("line_messages").insert({

@@ -89,13 +89,19 @@ export async function POST(request: Request, context: RouteContext) {
     link.display_name?.trim() ||
     "LINE 友達";
 
-  // 顧客 作成 (name のみ 必須、 他 は null)
+  // client_records.email は NOT NULL の た め、 LINE 友達 由来 の 顧客 は
+  // ドメイン @line.local の 仮 email を セット (admin が 後で 実 メール で 上書き)。
+  // 実 メール で ない こと が 一目 で 分かる 表記 に する。
+  const placeholderEmail = `line_${lineUserId.slice(0, 20).replace(/[^a-zA-Z0-9_-]/g, "")}_${Date.now()}@line.local`;
+
+  // 顧客 作成 (name + email + 組織 が 必須)
   const { data: clientRow, error: clientErr } = await admin
     .from("client_records")
     .insert({
       organization_id: organization.id,
       name,
       name_kana: parsed.data.nameKana?.trim() || null,
+      email: placeholderEmail,
     })
     .select("id, name")
     .single();
@@ -120,12 +126,23 @@ export async function POST(request: Request, context: RouteContext) {
     .eq("line_user_id", lineUserId);
 
   if (linkUpdateErr) {
-    // 顧客 は 作成 済み だ が リンク で 失敗 = 呼 出 側 で 復旧 させる 想定
+    // ロールバック: 顧客 作成 は 成功 した が リンク で 失敗 した 場合、
+    // 顧客 だけ が 孤児 で 残る と 「同名 顧客 が 増える → 自動 マッチ が 沈黙 停止」
+    // する ので best-effort で 削除 する。 削除 失敗 は log のみ (2 次 障害 を 隠さない)。
+    const { error: deleteErr } = await admin
+      .from("client_records")
+      .delete()
+      .eq("id", newClient.id)
+      .eq("organization_id", organization.id);
+    if (deleteErr) {
+      console.error(
+        `[create-client] orphan cleanup failed for ${newClient.id}: ${deleteErr.message}`,
+      );
+    }
     return NextResponse.json(
       {
         error: "link_update_failed",
         message: linkUpdateErr.message,
-        clientRecordId: newClient.id,
       },
       { status: 500 },
     );
