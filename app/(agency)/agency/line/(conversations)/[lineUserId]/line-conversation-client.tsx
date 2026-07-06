@@ -7,6 +7,7 @@ import {
   Image as ImageIcon,
   Paperclip,
   Smile,
+  Sparkles,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -70,6 +71,14 @@ export function LineConversationClient({
   const [jobShareOpen, setJobShareOpen] = useState(false);
   const [selectedJobIds, setSelectedJobIds] = useState<string[]>([]);
   const [meetingProposeOpen, setMeetingProposeOpen] = useState(false);
+  // AI 返信 案 生成 の 状態
+  const [aiSuggestOpen, setAiSuggestOpen] = useState(false);
+  const [aiSuggestBusy, setAiSuggestBusy] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState<{
+    nextStep: string;
+    replyText: string;
+  } | null>(null);
+  const [aiSuggestError, setAiSuggestError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // 最下部 へ スクロール
@@ -279,6 +288,51 @@ export function LineConversationClient({
     }
   };
 
+  const onGenerateSuggestion = async () => {
+    setAiSuggestBusy(true);
+    setAiSuggestOpen(true);
+    setAiSuggestError(null);
+    setAiSuggestion(null);
+    try {
+      const res = await fetch(
+        `/api/agency/line/conversations/${encodeURIComponent(lineUserId)}/ai-suggest`,
+        { method: "POST" },
+      );
+      const body = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        nextStep?: string;
+        replyText?: string;
+        message?: string;
+        error?: string;
+      } | null;
+      if (!res.ok || !body?.ok) {
+        throw new Error(body?.message ?? body?.error ?? `HTTP ${res.status}`);
+      }
+      setAiSuggestion({
+        nextStep: body.nextStep ?? "",
+        replyText: body.replyText ?? "",
+      });
+    } catch (e) {
+      setAiSuggestError(getErrorMessage(e));
+    } finally {
+      setAiSuggestBusy(false);
+    }
+  };
+
+  const onAdoptSuggestion = () => {
+    if (aiSuggestion) {
+      setText(aiSuggestion.replyText);
+      setAiSuggestOpen(false);
+      setAiSuggestion(null);
+    }
+  };
+
+  const onDismissSuggestion = () => {
+    setAiSuggestOpen(false);
+    setAiSuggestion(null);
+    setAiSuggestError(null);
+  };
+
   return (
     <>
       {/* 確定済 面談 バナー (未来 の もの のみ、 上 5 件) */}
@@ -406,6 +460,60 @@ export function LineConversationClient({
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
+        {aiSuggestOpen && (
+          <div className="mb-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs">
+            <div className="mb-1 flex items-center justify-between">
+              <span className="flex items-center gap-1 font-semibold text-emerald-900">
+                <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                AI 返信 案
+              </span>
+              <button
+                type="button"
+                onClick={onDismissSuggestion}
+                className="text-muted-foreground hover:text-foreground text-[10px]"
+              >
+                閉じる
+              </button>
+            </div>
+            {aiSuggestBusy && <p className="text-muted-foreground">生成 中…</p>}
+            {aiSuggestError && <p className="text-red-700">{aiSuggestError}</p>}
+            {aiSuggestion && (
+              <div className="space-y-2">
+                <div>
+                  <div className="text-muted-foreground mb-0.5 text-[10px] font-semibold">
+                    次 の ステップ
+                  </div>
+                  <p className="text-slate-900">{aiSuggestion.nextStep}</p>
+                </div>
+                <div>
+                  <div className="text-muted-foreground mb-0.5 text-[10px] font-semibold">
+                    返信 案
+                  </div>
+                  <p className="rounded bg-white p-2 whitespace-pre-wrap text-slate-900">
+                    {aiSuggestion.replyText}
+                  </p>
+                </div>
+                <div className="flex justify-end">
+                  <Button size="sm" onClick={onAdoptSuggestion}>
+                    採用して 入力欄 に 貼る
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        <div className="mb-2 flex items-center justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onGenerateSuggestion}
+            disabled={aiSuggestBusy || unfollowed || messages.length === 0}
+            title="会話 履歴 を もと に AI が 返信 案 を 提案 (AI 上限 に 1 回 カウント)"
+          >
+            <Sparkles className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+            AI で 返信 案 を 生成
+          </Button>
+        </div>
         <div className="flex items-end gap-2">
           <Button
             variant="outline"
