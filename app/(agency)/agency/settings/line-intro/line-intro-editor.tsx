@@ -162,7 +162,7 @@ export function LineIntroEditor({
                 削除
               </Button>
             )}
-            <p className="text-muted-foreground text-[10px]">JPEG / PNG / WebP、3 MiB 以下</p>
+            <p className="text-muted-foreground text-[10px]">JPEG / PNG / WebP、5 MiB 以下</p>
           </div>
         </div>
       </div>

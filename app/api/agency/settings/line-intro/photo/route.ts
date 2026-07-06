@@ -13,7 +13,9 @@ import { createServiceClient } from "@/lib/supabase/service";
  *   ・写真 を 削除
  */
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
-const MAX_BYTES = 3 * 1024 * 1024; // 顔 写真 なので 3 MiB
+// バケット 上限 も 5 MiB に 引き 上げ 済 (migration 20260706000005)。
+// 顔 写真 は 元 画像 が 5〜6 MB の こと が 多い の で 実運用 に 合わせる。
+const MAX_BYTES = 5 * 1024 * 1024;
 const BUCKET = "avatar-images";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +42,7 @@ export async function POST(request: Request) {
   }
   if (file.size > MAX_BYTES) {
     return NextResponse.json(
-      { error: "file_too_large", message: "3 MiB 以下 の 画像 に して ください" },
+      { error: "file_too_large", message: "5 MiB 以下 の 画像 に して ください" },
       { status: 413 },
     );
   }
