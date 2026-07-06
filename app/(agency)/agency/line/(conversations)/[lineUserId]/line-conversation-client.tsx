@@ -7,7 +7,7 @@ import {
   Image as ImageIcon,
   Paperclip,
   Smile,
-  Sparkles,
+  Bot,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -464,7 +464,7 @@ export function LineConversationClient({
           <div className="mb-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs">
             <div className="mb-1 flex items-center justify-between">
               <span className="flex items-center gap-1 font-semibold text-emerald-900">
-                <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                <Bot className="h-3.5 w-3.5" aria-hidden />
                 AI 返信 案
               </span>
               <button
@@ -510,7 +510,7 @@ export function LineConversationClient({
             disabled={aiSuggestBusy || unfollowed || messages.length === 0}
             title="会話 履歴 を もと に AI が 返信 案 を 提案 (AI 上限 に 1 回 カウント)"
           >
-            <Sparkles className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+            <Bot className="mr-1.5 h-3.5 w-3.5" aria-hidden />
             AI で 返信 案 を 生成
           </Button>
         </div>
