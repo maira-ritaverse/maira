@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ImagePlus, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CheckCircle2, ImagePlus, Trash2 } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,21 @@ export function LineIntroEditor({
   const [photoBusy, setPhotoBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  // 「保存 完了 ✓」 を ボタン に 一時 表示 する ため の flag
+  const [justSaved, setJustSaved] = useState(false);
+
+  // 成功 メッセージ は 4 秒 で 自動 消滅
+  useEffect(() => {
+    if (!successMessage) return;
+    const t = setTimeout(() => setSuccessMessage(null), 4000);
+    return () => clearTimeout(t);
+  }, [successMessage]);
+  useEffect(() => {
+    if (!justSaved) return;
+    const t = setTimeout(() => setJustSaved(false), 2500);
+    return () => clearTimeout(t);
+  }, [justSaved]);
 
   const save = async () => {
     setBusy(true);
@@ -59,6 +74,8 @@ export function LineIntroEditor({
         throw new Error(b?.message ?? b?.error ?? `HTTP ${res.status}`);
       }
       setSavedAt(new Date());
+      setSuccessMessage("プロフィールを保存しました");
+      setJustSaved(true);
     } catch (e) {
       setError(getErrorMessage(e));
     } finally {
@@ -86,6 +103,7 @@ export function LineIntroEditor({
         throw new Error(b?.message ?? b?.error ?? `HTTP ${res.status}`);
       }
       setPhotoUrl(b.publicUrl ?? null);
+      setSuccessMessage("顔写真をアップロードしました");
     } catch (e) {
       setError(getErrorMessage(e));
     } finally {
@@ -109,6 +127,7 @@ export function LineIntroEditor({
         throw new Error(b?.message ?? b?.error ?? `HTTP ${res.status}`);
       }
       setPhotoUrl(null);
+      setSuccessMessage("顔写真を削除しました");
     } catch (e) {
       setError(getErrorMessage(e));
     } finally {
@@ -118,6 +137,18 @@ export function LineIntroEditor({
 
   return (
     <Card className="space-y-6 p-6">
+      {/* 保存 成功 の 通知 (4 秒 で 自動 消滅) */}
+      {successMessage && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900"
+        >
+          <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
+          {successMessage}
+        </div>
+      )}
+
       {/* 顔写真 */}
       <div className="space-y-2">
         <label className="block text-sm font-semibold">顔写真</label>
@@ -219,8 +250,21 @@ export function LineIntroEditor({
               ? `最終更新: ${new Date(updatedAt).toLocaleString("ja-JP")}`
               : "未保存"}
         </div>
-        <Button onClick={save} disabled={busy}>
-          {busy ? "保存中…" : "保存"}
+        <Button
+          onClick={save}
+          disabled={busy}
+          className={justSaved ? "bg-emerald-600 text-white hover:bg-emerald-600" : undefined}
+        >
+          {busy ? (
+            "保存中…"
+          ) : justSaved ? (
+            <span className="inline-flex items-center gap-1.5">
+              <CheckCircle2 className="h-4 w-4" aria-hidden />
+              保存 完了
+            </span>
+          ) : (
+            "保存"
+          )}
         </Button>
       </div>
     </Card>
