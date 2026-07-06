@@ -22,6 +22,8 @@ export type ConversationListItem = {
   lastMessagePreview: string | null;
   lastMessageDirection: "inbound" | "outbound" | null;
   unreadCount: number;
+  /** 最終 活動 時刻 (line_user_links.last_activity_at)。 「3 日 連絡 なし」 判定 用。 */
+  lastActivityAt: string | null;
 };
 
 export type ConversationMessage = {
@@ -63,7 +65,7 @@ export async function listConversations(supabase: SupabaseClient): Promise<Conve
   const { data: linkData } = await supabase
     .from("line_user_links")
     .select(
-      "line_user_id, client_record_id, display_name, custom_name, picture_url, unfollowed_at, handled_at",
+      "line_user_id, client_record_id, display_name, custom_name, picture_url, unfollowed_at, handled_at, last_activity_at",
     );
 
   type LinkRow = {
@@ -74,6 +76,7 @@ export async function listConversations(supabase: SupabaseClient): Promise<Conve
     picture_url: string | null;
     unfollowed_at: string | null;
     handled_at: string | null;
+    last_activity_at: string | null;
   };
   const links = (linkData ?? []) as LinkRow[];
 
@@ -130,6 +133,7 @@ export async function listConversations(supabase: SupabaseClient): Promise<Conve
         lastMessagePreview: preview,
         lastMessageDirection: direction,
         unreadCount: unreadRaw ?? 0,
+        lastActivityAt: link.last_activity_at,
       };
     }),
   );

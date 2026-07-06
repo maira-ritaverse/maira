@@ -126,6 +126,20 @@ export function ConversationListSidebar({ conversations, activeLineUserId }: Pro
                           紐付け: {c.clientName}
                         </p>
                       )}
+                      {(() => {
+                        // 3 日 連絡 なし の 赤 バッジ (handled 済み / ブロック 済み は 除外)
+                        if (c.handledAt || c.unfollowedAt || !c.lastActivityAt) return null;
+                        const days = Math.floor(
+                          (Date.now() - new Date(c.lastActivityAt).getTime()) /
+                            (1000 * 60 * 60 * 24),
+                        );
+                        if (days < 3) return null;
+                        return (
+                          <p className="mt-0.5 inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800">
+                            {days}日 連絡 なし
+                          </p>
+                        );
+                      })()}
                     </div>
                   </Link>
                 </li>

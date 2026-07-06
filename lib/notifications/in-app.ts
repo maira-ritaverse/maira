@@ -36,6 +36,7 @@ export type InAppPayload =
   | MeetingReminderPayload
   | MeetingCanceledPayload
   | LineMessageReceivedPayload
+  | LineStaleAlertPayload
   | AdvisorMessageToAgencyPayload
   | AdvisorMessageToSeekerPayload;
 
@@ -188,6 +189,19 @@ export type LineMessageReceivedPayload = {
   messageType: string;
 };
 
+/** LINE 会話 が 3 日 以上 連絡 なし の 時 の アラート (担当者 向け) */
+export type LineStaleAlertPayload = {
+  kind: "line_stale_alert";
+  title: string;
+  href: string;
+  lineUserId: string;
+  displayName: string | null;
+  clientRecordId: string | null;
+  clientName: string | null;
+  /** 最後 の 活動 から の 経過 日 数 (整数) */
+  daysSinceLastActivity: number;
+};
+
 type FireParams = {
   organizationId: string;
   /** 通知を送らないユーザー(変更操作の実行者本人)。 */
@@ -240,6 +254,8 @@ export async function fireInAppNotification(params: FireParams): Promise<void> {
     meeting_canceled: null,
     // LINE 新着 は 全 org メンバー が 知る べき (担当 分担 で 対応 する 想定)
     line_message_received: null,
+    // 3 日 連絡 なし アラート は 担当者 だけ に 送る (呼 出 側 で excludeUserId+単一送信 制御)
+    line_stale_alert: null,
     // advisor チャット の 新着 も 全 org メンバー が 知る (担当 分担 で 対応)
     advisor_message_to_agency: null,
     // 求職者 本人 向け は prefs gate 不要

@@ -37,6 +37,10 @@
     {
       "path": "/api/internal/billing/seat-reconcile",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/internal/line/stale-alerts",
+      "schedule": "*/30 * * * *"
     }
   ]
 }
