@@ -49,6 +49,7 @@ import { AgencyDocumentsSection } from "./documents-section";
 import { HearingSheetsSection } from "./hearing-sheets-section";
 import { InteractionsSection } from "./interactions-section";
 import { IntakeUploadSection } from "./intake-upload-section";
+import { LineStatusSection } from "./line-status-section";
 import { MeetingHistorySection } from "./meeting-history-section";
 import { ReferralSection } from "./referral-section";
 import { TasksSection } from "./tasks-section";
@@ -407,13 +408,17 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
       {activeTab === "crm" && (
         <SectionLayoutContainer
           storageKey="agency-client-detail-crm"
-          defaultOrder={["timeline", "interactions", "tasks"]}
+          defaultOrder={["line", "timeline", "interactions", "tasks"]}
           titles={{
+            line: "LINE 連携",
             timeline: "活動タイムライン",
             interactions: "対応履歴",
             tasks: "タスク",
           }}
           sections={{
+            line: (
+              <LineStatusSection clientRecordId={client.id} organizationId={role.organization.id} />
+            ),
             timeline: <ActivityTimelineSection events={activityEvents} />,
             interactions: (
               <InteractionsSection
