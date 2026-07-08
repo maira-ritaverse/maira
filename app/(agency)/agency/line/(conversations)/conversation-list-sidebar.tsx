@@ -1,7 +1,8 @@
 "use client";
 
+import { Search, X } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { ConversationListItem } from "@/lib/line/conversations";
 
@@ -24,13 +25,31 @@ type Tab = "all" | "needs_response" | "handled";
 
 export function ConversationListSidebar({ conversations, activeLineUserId }: Props) {
   const [tab, setTab] = useState<Tab>("all");
+  const [query, setQuery] = useState("");
 
-  const filtered = conversations.filter((c) => {
-    if (c.unfollowedAt) return tab === "all";
-    if (tab === "needs_response") return c.handledAt === null;
-    if (tab === "handled") return c.handledAt !== null;
-    return true;
-  });
+  // C1-1 修正: 検索 は 表示 名 / 紐 付け 済 顧客 名 / 直近 メッセージ プレビュー
+  // (復号 済) に 対して 部分 一致 で 行う。 空 白 で 区切った 複数 語 は AND 判定。
+  // 顧客 名 は 個人 情報 だが、 検索 は クライアント側 のみ で 完結 (追加 の
+  // ネットワーク 送信 なし) の ため、 既存 の 一覧 データ 上 の 絞り込み と 同 等 の 情報 経路。
+  const normalizedQuery = query.trim().toLowerCase();
+  const searchTokens = normalizedQuery.length > 0 ? normalizedQuery.split(/\s+/) : [];
+
+  const filtered = useMemo(() => {
+    return conversations.filter((c) => {
+      // タブ フィルタ (unfollowed は 「すべて」 のみ 表示)
+      if (c.unfollowedAt && tab !== "all") return false;
+      if (tab === "needs_response" && c.handledAt !== null) return false;
+      if (tab === "handled" && c.handledAt === null) return false;
+
+      // 検索 フィルタ (トークン ALL 一致)
+      if (searchTokens.length === 0) return true;
+      const haystack = [c.displayName, c.clientName, c.lastMessagePreview]
+        .filter((v): v is string => typeof v === "string" && v.length > 0)
+        .join(" ")
+        .toLowerCase();
+      return searchTokens.every((t) => haystack.includes(t));
+    });
+  }, [conversations, tab, searchTokens]);
 
   const needCount = conversations.filter((c) => c.handledAt === null && !c.unfollowedAt).length;
   const handledCount = conversations.filter((c) => c.handledAt !== null && !c.unfollowedAt).length;
@@ -41,13 +60,27 @@ export function ConversationListSidebar({ conversations, activeLineUserId }: Pro
       <div className="border-b">
         <div className="flex items-center gap-2 px-3 py-2.5">
           <span className="text-sm font-semibold">すべて</span>
-          <input
-            type="search"
-            placeholder="検索"
-            className="ml-auto w-32 rounded-md border border-slate-200 px-2 py-1 text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none"
-            disabled
-            aria-label="検索 (近日)"
-          />
+          <div className="relative ml-auto">
+            <Search className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="名前 / 顧客 / 本文"
+              className="w-40 rounded-md border border-slate-200 py-1 pr-6 pl-7 text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+              aria-label="会話 検索"
+            />
+            {query.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute top-1/2 right-1 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="検索 クリア"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex gap-1 border-t px-2 py-1.5">
           <TabBtn active={tab === "all"} onClick={() => setTab("all")}>
@@ -66,11 +99,13 @@ export function ConversationListSidebar({ conversations, activeLineUserId }: Pro
       <div className="flex-1 overflow-y-auto">
         {filtered.length === 0 ? (
           <p className="text-muted-foreground p-4 text-xs">
-            {tab === "needs_response"
-              ? "対応 が 必要 な トーク は ありません。"
-              : tab === "handled"
-                ? "対応済 の トーク は ありません。"
-                : "まだ 友達 が いません。"}
+            {searchTokens.length > 0
+              ? "検索 条件 に 一致 する トーク は ありません。"
+              : tab === "needs_response"
+                ? "対応 が 必要 な トーク は ありません。"
+                : tab === "handled"
+                  ? "対応済 の トーク は ありません。"
+                  : "まだ 友達 が いません。"}
           </p>
         ) : (
           <ul>
