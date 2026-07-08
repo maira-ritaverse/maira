@@ -1473,6 +1473,49 @@ export type Database = {
           },
         ];
       };
+      client_team_assignments: {
+        Row: {
+          assigned_at: string;
+          assigned_by_member_id: string | null;
+          client_record_id: string;
+          team_id: string;
+        };
+        Insert: {
+          assigned_at?: string;
+          assigned_by_member_id?: string | null;
+          client_record_id: string;
+          team_id: string;
+        };
+        Update: {
+          assigned_at?: string;
+          assigned_by_member_id?: string | null;
+          client_record_id?: string;
+          team_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "client_team_assignments_assigned_by_member_id_fkey";
+            columns: ["assigned_by_member_id"];
+            isOneToOne: false;
+            referencedRelation: "organization_members";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "client_team_assignments_client_record_id_fkey";
+            columns: ["client_record_id"];
+            isOneToOne: false;
+            referencedRelation: "client_records";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "client_team_assignments_team_id_fkey";
+            columns: ["team_id"];
+            isOneToOne: false;
+            referencedRelation: "organization_teams";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       client_view_states: {
         Row: {
           client_record_id: string;
@@ -3627,6 +3670,103 @@ export type Database = {
           },
         ];
       };
+      organization_team_members: {
+        Row: {
+          added_at: string;
+          added_by_member_id: string | null;
+          member_id: string;
+          role: string;
+          team_id: string;
+        };
+        Insert: {
+          added_at?: string;
+          added_by_member_id?: string | null;
+          member_id: string;
+          role?: string;
+          team_id: string;
+        };
+        Update: {
+          added_at?: string;
+          added_by_member_id?: string | null;
+          member_id?: string;
+          role?: string;
+          team_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "organization_team_members_added_by_member_id_fkey";
+            columns: ["added_by_member_id"];
+            isOneToOne: false;
+            referencedRelation: "organization_members";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_team_members_member_id_fkey";
+            columns: ["member_id"];
+            isOneToOne: false;
+            referencedRelation: "organization_members";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_team_members_team_id_fkey";
+            columns: ["team_id"];
+            isOneToOne: false;
+            referencedRelation: "organization_teams";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      organization_teams: {
+        Row: {
+          color: string | null;
+          created_at: string;
+          created_by_member_id: string | null;
+          description: string | null;
+          id: string;
+          name: string;
+          organization_id: string;
+          sort_order: number;
+          updated_at: string;
+        };
+        Insert: {
+          color?: string | null;
+          created_at?: string;
+          created_by_member_id?: string | null;
+          description?: string | null;
+          id?: string;
+          name: string;
+          organization_id: string;
+          sort_order?: number;
+          updated_at?: string;
+        };
+        Update: {
+          color?: string | null;
+          created_at?: string;
+          created_by_member_id?: string | null;
+          description?: string | null;
+          id?: string;
+          name?: string;
+          organization_id?: string;
+          sort_order?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "organization_teams_created_by_member_id_fkey";
+            columns: ["created_by_member_id"];
+            isOneToOne: false;
+            referencedRelation: "organization_members";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_teams_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       organizations: {
         Row: {
           archived_at: string | null;
@@ -4925,6 +5065,10 @@ export type Database = {
         Args: { p_client_record_id: string };
         Returns: undefined;
       };
+      assign_client_to_team: {
+        Args: { p_client_record_id: string; p_team_id: string };
+        Returns: undefined;
+      };
       auto_finalize_expired_revokes: { Args: never; Returns: number };
       cancel_client_invitation: {
         Args: { p_client_record_id: string };
@@ -4966,10 +5110,20 @@ export type Database = {
         Args: { p_month_start: string };
         Returns: number;
       };
+      create_team: {
+        Args: {
+          p_color?: string;
+          p_description?: string;
+          p_name: string;
+          p_sort_order?: number;
+        };
+        Returns: string;
+      };
       current_user_email: { Args: never; Returns: string };
       current_user_organization_id: { Args: never; Returns: string };
       current_user_organization_role: { Args: never; Returns: string };
       deactivate_member: { Args: { target_member_id: string }; Returns: string };
+      delete_team: { Args: { p_team_id: string }; Returns: undefined };
       get_client_distribution_stats: {
         Args: { p_organization_id: string };
         Returns: {
@@ -5207,6 +5361,10 @@ export type Database = {
         Args: { p_client_record_id: string };
         Returns: undefined;
       };
+      remove_team_member: {
+        Args: { p_member_id: string; p_team_id: string };
+        Returns: undefined;
+      };
       request_referral_as_seeker: {
         Args: { p_job_posting_id: string };
         Returns: string;
@@ -5216,6 +5374,10 @@ export type Database = {
         Returns: undefined;
       };
       revoke_invitation: { Args: { invitation_id: string }; Returns: undefined };
+      set_team_member: {
+        Args: { p_member_id: string; p_role?: string; p_team_id: string };
+        Returns: undefined;
+      };
       set_trial_upgrade_choice: {
         Args: {
           p_choice: Database["public"]["Enums"]["organization_plan_tier"];
@@ -5291,6 +5453,20 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      unassign_client_from_team: {
+        Args: { p_client_record_id: string; p_team_id: string };
+        Returns: undefined;
+      };
+      update_team: {
+        Args: {
+          p_color?: string;
+          p_description?: string;
+          p_name?: string;
+          p_sort_order?: number;
+          p_team_id: string;
+        };
+        Returns: undefined;
       };
       upsert_organization_ai_quota: {
         Args: { p_kind: string; p_monthly_limit: number };
