@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Card } from "@/components/ui/card";
+import { SettingsBackLink } from "@/components/features/settings/settings-back-link";
 import {
   AI_KIND_LABEL,
   getOrgAiTotalQuotaSummary,
@@ -58,12 +58,8 @@ export default async function AgencyAiUsagePage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-6">
+      <SettingsBackLink href="/agency/settings" />
       <div>
-        <p className="text-muted-foreground text-xs">
-          <Link href="/agency/settings" className="hover:underline">
-            ← 設定
-          </Link>
-        </p>
         <h1 className="mt-1 text-2xl font-bold">AI 利用状況</h1>
         <p className="text-muted-foreground mt-1 text-sm">
           今月({new Date(summary.monthStart).toLocaleDateString("ja-JP")} 以降)の組織内 AI

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
+import { SettingsBackLink } from "@/components/features/settings/settings-back-link";
 import { getBillingExemption } from "@/lib/billing/exemption";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient } from "@/lib/supabase/server";
@@ -91,6 +92,7 @@ export default async function AgencyBillingPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
+      <SettingsBackLink href="/agency/settings" />
       <div>
         <h1 className="text-2xl font-bold">課金 プラン</h1>
         <p className="text-muted-foreground mt-1 text-sm">

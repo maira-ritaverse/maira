@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { SettingsBackLink } from "@/components/features/settings/settings-back-link";
 import { checkIntakeLimit } from "@/lib/features/usage-limits";
 import { getActiveAddons } from "@/lib/features/entitlements";
 import {
@@ -64,12 +65,8 @@ export default async function AgencyIntegrationsPage({
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
+      <SettingsBackLink href="/agency/settings" />
       <div>
-        <p className="text-muted-foreground text-xs">
-          <Link href="/agency/settings" className="hover:underline">
-            ← 個人設定
-          </Link>
-        </p>
         <h1 className="mt-1 text-2xl font-bold">連携・アドオン</h1>
         <p className="text-muted-foreground mt-1 text-sm">
           Zoom / Google Meet を業務アカウントに連携して、面談予約や録画取り込みを自動化します。

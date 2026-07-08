@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Card } from "@/components/ui/card";
+import { SettingsBackLink } from "@/components/features/settings/settings-back-link";
 import { getMyLineChannel } from "@/lib/line/queries";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient } from "@/lib/supabase/server";
@@ -43,12 +43,8 @@ export default async function AgencyLineSettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
+      <SettingsBackLink href="/agency/settings/integrations" label="連携・アドオン" />
       <div>
-        <p className="text-muted-foreground text-xs">
-          <Link href="/agency/settings/integrations" className="hover:underline">
-            ← 連携・アドオン
-          </Link>
-        </p>
         <h1 className="mt-1 text-2xl font-bold">LINE 公式アカウント 連携</h1>
         <p className="text-muted-foreground mt-1 text-sm">
           御社の LINE 公式アカウント を Maira と 連携 し、 求職者との やり取り を Maira UI で 完結
