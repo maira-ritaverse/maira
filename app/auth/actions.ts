@@ -12,6 +12,7 @@ import { safeNextOr } from "@/lib/auth/safe-next";
 import { getSiteUrl } from "@/lib/config/site-url";
 import { isOpenSignupEnabled } from "@/lib/config/signup-mode";
 import { sendPasswordResetEmail } from "@/lib/email/password-reset";
+import { consumeRateLimit } from "@/lib/rate-limit/rate-limit";
 
 /**
  * 新規登録 Server Action
@@ -168,6 +169,36 @@ export async function logout() {
  */
 export async function requestPasswordReset(email: string) {
   const siteUrl = getSiteUrl();
+
+  // H3 修正: IP × email 複合 キー の sliding window レート 制限。
+  // 未認証 Server Action で generateLink + Resend 送信 を 呼び出す ため、
+  // 制限 が 無い と メール 砲 で Resend クォータ 枯渇 + ドメイン レピュテーション
+  // 崩壊 が 発生 する。 IP: 1 分 5 回、 email: 1 時間 3 回。
+  // 上限 超過 で も enumeration 対策 の ため success を 返す (メール は 送ら ない)。
+  const hdrs = await headers();
+  const ip = hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const [ipCheck, emailCheck] = await Promise.all([
+    consumeRateLimit({
+      namespace: "pw_reset:ip",
+      identifier: ip,
+      windowSeconds: 60,
+      maxCount: 5,
+    }),
+    consumeRateLimit({
+      namespace: "pw_reset:email",
+      identifier: email.toLowerCase(),
+      windowSeconds: 3600,
+      maxCount: 3,
+      hashIdentifier: true,
+    }),
+  ]);
+  if (ipCheck.limited || emailCheck.limited) {
+    console.warn("[requestPasswordReset] rate limited", {
+      ip_limited: ipCheck.limited,
+      email_limited: emailCheck.limited,
+    });
+    return { success: true as const };
+  }
 
   try {
     // generateLink は service_role が必須。anon クライアントでは呼べない。
