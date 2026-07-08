@@ -52,6 +52,21 @@ function mapRpcError(message: string): { status: number; code: string; message: 
       message: "現在の連携状態ではこの操作はできません",
     };
   }
+  // Batch 1 で client_records.email が nullable に なった 影響 で、 何らか の 理由 で
+  // route.ts 側 の 事前 検証 を すり抜けた 場合 に Postgres が NOT NULL 制約 違反 を
+  // 返す 可能性 が ある。 内部 詳細 は 出さず に 「メール 未 登録」 の 汎用 文言 に。
+  if (
+    message.includes("null value in column") ||
+    message.includes("violates not-null constraint") ||
+    /email/i.test(message)
+  ) {
+    return {
+      status: 400,
+      code: "no_email",
+      message:
+        "顧客 の メール アドレス が 未 登録 で 招待 メール を 送れ ませ ん。 詳細 画面 で メール アドレス を 補完 して から 再度 お試し ください。",
+    };
+  }
   return { status: 500, code: "unknown", message: "操作に失敗しました" };
 }
 
@@ -84,11 +99,56 @@ export async function POST(request: Request, { params }: RouteParams) {
   const guard = await ensureAgencyMember();
   if (!guard.ok) return guard.response;
 
-  // 1. トークン + 期限を発行(7 日)
+  // 1. 招待 に 必要 な 情報 (email / name / 組織 / 担当) を 先 に 取得。
+  //
+  //    修正 の 動機 (2026-07-08):
+  //    Batch 1 で client_records.email を nullable に して LINE 由来 の 顧客
+  //    (AI 抽出 で email が 埋まら なかった ケース) を 保存 できる ように した が、
+  //    RPC issue_client_invitation は 内部 で `insert into client_invitations
+  //    (email, ...) values (client_records.email, ...)` を 行い、 client_invitations.email
+  //    は NOT NULL の ため NULL の 顧客 で は Postgres 制約 違反 に なり RPC が
+  //    500 を 投げて mapRpcError が 「操作 に 失敗 しました」 に な って いた。
+  //    → RPC 呼び 出し 前 に email 有無 を 明示 検証 し、 400 no_email を 返す。
+  const service = createServiceClient();
+  const { data: clientRow } = await service
+    .from("client_records")
+    .select("name, email, assigned_member_id, organization_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!clientRow) {
+    return NextResponse.json(
+      { error: "not_found", message: "クライアント が 見つかり ませ ん" },
+      { status: 404 },
+    );
+  }
+
+  // 二重 防御: 別 組織 の 顧客 UUID を 掴まされ た 場合。 RPC 側 でも 検証 する が
+  // 事前 に 404 相当 で 弾く (record enumeration 対策)。
+  if (clientRow.organization_id !== guard.role.organization!.id) {
+    return NextResponse.json(
+      { error: "not_found", message: "クライアント が 見つかり ませ ん" },
+      { status: 404 },
+    );
+  }
+
+  const clientEmail = (clientRow as { email: string | null }).email;
+  if (!clientEmail || !clientEmail.trim()) {
+    return NextResponse.json(
+      {
+        error: "no_email",
+        message:
+          "顧客 の メール アドレス が 未 登録 で 招待 メール を 送れ ませ ん。 詳細 画面 で メール アドレス を 補完 して から 再度 お試し ください。",
+      },
+      { status: 400 },
+    );
+  }
+
+  // 2. トークン + 期限 を 発行 (7 日)
   const token = generateInvitationToken();
   const expiresAt = defaultInvitationExpiresAt();
 
-  // 2. RPC で 招待行 insert + client_records.link_status='invited' + 古い pending を revoke
+  // 3. RPC で 招待 行 insert + client_records.link_status='invited' + 古い pending を revoke
   const { data: invitationId, error } = await guard.supabase.rpc("issue_client_invitation", {
     p_client_record_id: id,
     p_token: token,
@@ -103,24 +163,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     );
   }
 
-  // 3. メール送信:client_records から email / name と 担当アドバイザー名 を取り出す
-  //    service_role で読む(認可は RPC で済んでいる)。
-  const service = createServiceClient();
-  const { data: clientRow } = await service
-    .from("client_records")
-    .select("name, email, assigned_member_id")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (!clientRow) {
-    // RPC が通って client_record が見つからないのは想定外。invitation_id は発行済み。
-    return NextResponse.json(
-      { success: true, invitationId, emailStatus: { sent: false, reason: "client_not_found" } },
-      { status: 201 },
-    );
-  }
-
-  // 担当アドバイザー名(任意)
+  // 4. 担当 アドバイザー 名 (任意)
   let advisorName: string | null = null;
   if (clientRow.assigned_member_id) {
     const { data: memberRow } = await service
@@ -144,18 +187,6 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   const organizationName = guard.role.organization!.name;
 
-  // email が 未 入力 (LINE 由来 で AI 抽出 でき なかった 等) の 場合 は 招待 でき ない。
-  const clientEmail = (clientRow as { email: string | null }).email;
-  if (!clientEmail || !clientEmail.trim()) {
-    return NextResponse.json(
-      {
-        error: "no_email",
-        message:
-          "顧客 の メール アドレス が 未 登録 で 招待 メール を 送れ ません。 詳細 画面 で 補完 して ください。",
-      },
-      { status: 400 },
-    );
-  }
   const emailResult = await sendClientInvitationEmail({
     toEmail: clientEmail,
     seekerName: (clientRow.name as string) ?? "",
