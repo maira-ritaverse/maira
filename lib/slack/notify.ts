@@ -21,29 +21,46 @@ export type SendSlackArgs = {
   text: string;
 };
 
+import { isNetworkError, isRetryableStatus, withRetry } from "@/lib/retry/with-retry";
+
 export async function sendSlackMessage(args: SendSlackArgs): Promise<SendSlackResult> {
   if (!args.webhookUrl || args.webhookUrl.trim() === "") {
     return { sent: false, reason: "no_url" };
   }
 
-  try {
-    const res = await fetch(args.webhookUrl, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text: args.text }),
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      return { sent: false, reason: "failed", error: `HTTP ${res.status}: ${body}` };
-    }
-    return { sent: true };
-  } catch (err) {
-    return {
-      sent: false,
-      reason: "failed",
-      error: err instanceof Error ? err.message : String(err),
-    };
-  }
+  // C2-1 修正: 従来 は 1 回 の fetch で 完結 して おり、 Slack Webhook 側 の
+  // 一時 障害 (429 / 5xx / 短 時間 の ネットワーク エラー) で 全て 失敗 と なって
+  // いた。 指数 バック オフ で 3 回 まで リトライ する。 テキスト メッセージ の
+  // 冪等 性 は 「同 内容 が 二 度 届く 可能性 が ある」 程度 で 実害 が 小さい ため
+  // OK と 判断。 リトライ 判定 は HTTP 429 / 5xx / ネットワーク エラー のみ。
+  const result = await withRetry<null>(
+    async () => {
+      try {
+        const res = await fetch(args.webhookUrl!, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ text: args.text }),
+        });
+        if (res.ok) return { retry: false, ok: true, value: null };
+        const body = await res.text().catch(() => "");
+        const message = `HTTP ${res.status}: ${body.slice(0, 200)}`;
+        if (isRetryableStatus(res.status)) {
+          return { retry: true, reason: "slack_http_retryable", error: message };
+        }
+        return { retry: false, ok: false, reason: "slack_http_permanent", error: message };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (isNetworkError(err)) {
+          return { retry: true, reason: "slack_network", error: message };
+        }
+        return { retry: false, ok: false, reason: "slack_exception", error: message };
+      }
+    },
+    { label: "slack.sendMessage", maxAttempts: 3, initialDelayMs: 200, maxDelayMs: 1200 },
+  );
+
+  if (result.ok) return { sent: true };
+  return { sent: false, reason: "failed", error: result.error ?? result.reason };
 }
 
 /**
