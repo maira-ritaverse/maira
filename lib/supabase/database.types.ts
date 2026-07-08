@@ -2153,8 +2153,11 @@ export type Database = {
           error_message: string | null;
           failed_count: number;
           id: string;
+          last_error_at: string | null;
           message_type: Database["public"]["Enums"]["line_message_type"];
+          next_retry_at: string | null;
           organization_id: string;
+          retry_count: number;
           scheduled_for: string | null;
           sent_at: string | null;
           sent_count: number;
@@ -2169,8 +2172,11 @@ export type Database = {
           error_message?: string | null;
           failed_count?: number;
           id?: string;
+          last_error_at?: string | null;
           message_type: Database["public"]["Enums"]["line_message_type"];
+          next_retry_at?: string | null;
           organization_id: string;
+          retry_count?: number;
           scheduled_for?: string | null;
           sent_at?: string | null;
           sent_count?: number;
@@ -2185,8 +2191,11 @@ export type Database = {
           error_message?: string | null;
           failed_count?: number;
           id?: string;
+          last_error_at?: string | null;
           message_type?: Database["public"]["Enums"]["line_message_type"];
+          next_retry_at?: string | null;
           organization_id?: string;
+          retry_count?: number;
           scheduled_for?: string | null;
           sent_at?: string | null;
           sent_count?: number;

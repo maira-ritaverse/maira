@@ -15,13 +15,30 @@ import { createServiceClient } from "@/lib/supabase/service";
 /**
  * POST/GET /api/internal/line/broadcasts-dispatch
  *
- * 予約配信 (status='queued' かつ scheduled_for ≤ now()) を 拾って 実行 する cron。
- * 1 tick で 5 件 まで 同時 処理 (LINE quota 暴走 を 防ぐ ため 控えめ)。
+ * 予約 配信 (status='queued' かつ scheduled_for / next_retry_at ≤ now()) を
+ * 拾って 実行 する cron。 Vercel Cron で 1 分 ごと 起動 想定。
  *
- * Vercel Cron で 1 分 ごと 起動 想定。
+ * C2-2 修正 (2026-07-08):
+ *   ・単純 な MAX_PER_TICK=5 制限 だけ だと 予約 数 1,000 件 で 200 分 以上 かかる。
+ *     加え て、 1 件 の 中 で LINE API が 一時 障害 を 返した 場合 に 即 failed
+ *     と なり 再試行 手段 が 無かった。
+ *   ・adaptive batching + wall-clock 制限 で 「function 時間 予算 が 尽きる
+ *     直前 に 抜ける」 方針 に。
+ *   ・一時 障害 (network / http_5xx) は status を queued に 戻し、 指数 バック
+ *     オフ (retry_count 依存) で 次回 tick に 拾い 直す。 上限 到達 で failed。
+ *
+ * 数値 の 意図:
+ *   - TICK_TIME_BUDGET_MS = 45s: Vercel Pro の 60s function 上限 に 対して
+ *     safe margin を 取る (LINE API の 平均 応答 500ms、 15 件 で 7.5s 想定)
+ *   - HARD_MAX_PER_TICK = 30: 極端 な 数 の 小 配信 が 積まれて い た 場合 の 天井
+ *   - MAX_RETRIES = 3: 一時 障害 が 3 回 連続 したら 手動 判断 に 委ねる
+ *   - RETRY_BACKOFF_MS = [60_000, 300_000, 900_000] = 1 / 5 / 15 分
  */
 const SLICE_SIZE = 500;
-const MAX_PER_TICK = 5;
+const HARD_MAX_PER_TICK = 30;
+const TICK_TIME_BUDGET_MS = 45_000;
+const MAX_RETRIES = 3;
+const RETRY_BACKOFF_MS = [60_000, 300_000, 900_000] as const;
 
 export async function POST(request: Request) {
   const auth = checkCronAuth(request);
@@ -36,16 +53,39 @@ export async function POST(request: Request) {
   }
 
   const admin = createServiceClient();
+  const tickStartedAt = Date.now();
   const nowIso = new Date().toISOString();
 
-  // queued + 時間 到達 を 拾う
-  const { data: dueRows } = await admin
+  // queued + (scheduled_for か next_retry_at) の どちら か が now() 以前 を 拾う。
+  // Supabase の filter は 単純 OR が 書き にくい ので、 まず next_retry_at IS NULL
+  // 系 (scheduled_for 到達 の 通常 の 予約) を 拾い、 足り なく なったら 別 クエリ で
+  // リトライ 待ち を 補う。 HARD_MAX_PER_TICK が 天井。
+  const { data: primaryRows } = await admin
     .from("line_broadcasts")
-    .select("id, organization_id, encrypted_content, message_type, target_filter, target_count")
+    .select(
+      "id, organization_id, encrypted_content, message_type, target_filter, target_count, retry_count, scheduled_for, next_retry_at",
+    )
     .eq("status", "queued")
+    .is("next_retry_at", null)
     .lte("scheduled_for", nowIso)
     .order("scheduled_for", { ascending: true })
-    .limit(MAX_PER_TICK);
+    .limit(HARD_MAX_PER_TICK);
+
+  let dueRows = primaryRows ?? [];
+  if (dueRows.length < HARD_MAX_PER_TICK) {
+    const remaining = HARD_MAX_PER_TICK - dueRows.length;
+    const { data: retryRows } = await admin
+      .from("line_broadcasts")
+      .select(
+        "id, organization_id, encrypted_content, message_type, target_filter, target_count, retry_count, scheduled_for, next_retry_at",
+      )
+      .eq("status", "queued")
+      .not("next_retry_at", "is", null)
+      .lte("next_retry_at", nowIso)
+      .order("next_retry_at", { ascending: true })
+      .limit(remaining);
+    dueRows = [...dueRows, ...(retryRows ?? [])];
+  }
 
   type Row = {
     id: string;
@@ -58,6 +98,9 @@ export async function POST(request: Request) {
       jobIds?: string[];
     };
     target_count: number;
+    retry_count: number;
+    scheduled_for: string | null;
+    next_retry_at: string | null;
   };
   const broadcasts = (dueRows ?? []) as Row[];
 
@@ -67,9 +110,18 @@ export async function POST(request: Request) {
     sentCount: number;
     failedCount: number;
     error?: string;
+    retryCount?: number;
   }> = [];
 
+  let elapsedBudgetExceeded = false;
+
   for (const bc of broadcasts) {
+    // wall-clock guard: 予算 超過 なら 未 処理 の 残り は 次 の tick に 任せる。
+    // ここ で break する と Vercel function timeout で 途中 打ち切り よりも 綺麗 に 抜けられる。
+    if (Date.now() - tickStartedAt > TICK_TIME_BUDGET_MS) {
+      elapsedBudgetExceeded = true;
+      break;
+    }
     // status='sending' に 進める (二重 起動 防止)
     const { error: lockErr } = await admin
       .from("line_broadcasts")
@@ -166,15 +218,21 @@ export async function POST(request: Request) {
     let sentCount = 0;
     let failedCount = 0;
     let lastErrorMessage: string | null = null;
+    let allSlicesRetryable = true; // 全 slice が 「retryable な エラー」 で 落ちた か
+    let anySliceExecuted = false;
+
     for (let i = 0; i < userIds.length; i += SLICE_SIZE) {
       const slice = userIds.slice(i, i + SLICE_SIZE);
       const result = await multicastMessage(channel.channelAccessToken, slice, [message]);
+      anySliceExecuted = true;
       if (result.ok) {
         sentCount += slice.length;
+        allSlicesRetryable = false; // 1 slice でも 成功 したら リトライ すると 重複 送信 に なる
       } else {
         failedCount += slice.length;
         const cls = classifyLineError(result.status, result.message);
         lastErrorMessage = `${cls.kind}: ${cls.message}`;
+        if (!cls.retryable) allSlicesRetryable = false;
         if (cls.kind === "quota_exceeded" || cls.kind === "unauthorized") {
           for (let j = i + SLICE_SIZE; j < userIds.length; j += SLICE_SIZE) {
             const remaining = userIds.slice(j, j + SLICE_SIZE);
@@ -183,6 +241,41 @@ export async function POST(request: Request) {
           break;
         }
       }
+    }
+
+    // C2-2: 「全 slice が retryable エラー で 落ちた + sent が 0 + retry_count 未 到達」
+    // の 場合 は 再試行 予約 に する。 部分 送信 済 の 配信 を リトライ する と 重複 送信
+    // に なる ため、 sentCount > 0 の 場合 は 「一部 送信 済」 と して sent 扱い に する。
+    const canRetry =
+      anySliceExecuted &&
+      sentCount === 0 &&
+      failedCount > 0 &&
+      allSlicesRetryable &&
+      bc.retry_count < MAX_RETRIES;
+
+    if (canRetry) {
+      const backoffMs =
+        RETRY_BACKOFF_MS[Math.min(bc.retry_count, RETRY_BACKOFF_MS.length - 1)] ?? 60_000;
+      const nextRetryIso = new Date(Date.now() + backoffMs).toISOString();
+      await admin
+        .from("line_broadcasts")
+        .update({
+          status: "queued",
+          retry_count: bc.retry_count + 1,
+          next_retry_at: nextRetryIso,
+          last_error_at: new Date().toISOString(),
+          error_message: lastErrorMessage,
+        })
+        .eq("id", bc.id);
+      processed.push({
+        id: bc.id,
+        status: "queued(retry)",
+        sentCount,
+        failedCount,
+        retryCount: bc.retry_count + 1,
+        error: lastErrorMessage ?? undefined,
+      });
+      continue;
     }
 
     const finalStatus = failedCount === 0 ? "sent" : sentCount > 0 ? "sent" : "failed";
@@ -202,13 +295,28 @@ export async function POST(request: Request) {
       status: finalStatus,
       sentCount,
       failedCount,
+      retryCount: bc.retry_count,
       error: lastErrorMessage ?? undefined,
     });
   }
 
+  const durationMs = Date.now() - tickStartedAt;
+  // 停滞 検知 の ため に 集計 ログ を 残す (Vercel Function Logs)
+  console.warn("[broadcasts-dispatch] tick summary", {
+    fetched: broadcasts.length,
+    processed: processed.length,
+    remaining: broadcasts.length - processed.length,
+    durationMs,
+    budgetExceeded: elapsedBudgetExceeded,
+  });
+
   return NextResponse.json({
     ok: true,
     processed: processed.length,
+    fetched: broadcasts.length,
+    remaining: broadcasts.length - processed.length,
+    durationMs,
+    budgetExceeded: elapsedBudgetExceeded,
     results: processed,
   });
 }
