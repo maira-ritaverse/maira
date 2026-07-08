@@ -576,6 +576,25 @@ async function confirmMeetingProposal(
     return { ok: false, type: "postback", reason: "user_mismatch" };
   }
 
+  // L5 修正: 2 連打 / LINE 再 配信 で Zoom / meeting_schedules が 二重 作成 されて
+  // 課金 が 倍 に なる の を 防ぐ。 Zoom を 叩く 前 に atomic な check-and-set で
+  // 「consumed_at IS NULL」 を 確認 し、 レース 勝者 だけ が 続行 する。
+  // consumed_slot_index / consumed_meeting_schedule_id は 後段 で 更新 する。
+  const nowIso = new Date().toISOString();
+  const { data: claimed } = await ctx.service
+    .from("line_meeting_proposals")
+    .update({ consumed_at: nowIso })
+    .eq("id", proposal.id)
+    .is("consumed_at", null)
+    .select("id");
+  if (!claimed || (claimed as Array<{ id: string }>).length === 0) {
+    // 別 リクエスト が 先 に 消費 した (もしくは 期限切れ で 既 に 消費)
+    await replyMessage(ctx.accessToken, event.replyToken, [
+      { type: "text", text: "この 提案 は 既に 確定 済みです。" },
+    ]);
+    return { ok: false, type: "postback", reason: "race_lost" };
+  }
+
   const slot = proposal.candidates[slotIndex];
 
   // 議題 を 復号
@@ -677,11 +696,10 @@ async function confirmMeetingProposal(
   }
   const meetingScheduleId = (msRow as { id: string }).id;
 
-  // 提案 を 消費 状態 に
+  // 提案 の 補足 情報 を 更新 (consumed_at は 上 の claim step で 既 に セット済)
   await ctx.service
     .from("line_meeting_proposals")
     .update({
-      consumed_at: new Date().toISOString(),
       consumed_slot_index: slotIndex,
       consumed_meeting_schedule_id: meetingScheduleId,
     })
