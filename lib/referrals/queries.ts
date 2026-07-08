@@ -26,6 +26,8 @@ type ReferralRow = {
   job_posting_id: string;
   status: string;
   notes: string | null;
+  scheduled_interview_at: string | null;
+  interview_note: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -38,6 +40,8 @@ function rowToReferral(row: ReferralRow): Referral {
     jobPostingId: row.job_posting_id,
     status: row.status as ReferralStatus,
     notes: row.notes,
+    scheduledInterviewAt: row.scheduled_interview_at,
+    interviewNote: row.interview_note,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

@@ -54,11 +54,18 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     );
   }
 
-  // undefined のフィールドは更新対象に含めない(部分更新)
+  // undefined の フィールド は 更新 対象 に 含め ない (部分 更新)
   const updateData: Record<string, unknown> = {};
   const d = parsed.data;
   if (d.status !== undefined) updateData.status = d.status;
   if (d.notes !== undefined) updateData.notes = d.notes || null;
+  if (d.scheduled_interview_at !== undefined) {
+    // 空文字 / null は 「予定 取り消し」 と 扱う
+    updateData.scheduled_interview_at = d.scheduled_interview_at ?? null;
+  }
+  if (d.interview_note !== undefined) {
+    updateData.interview_note = d.interview_note || null;
+  }
 
   if (Object.keys(updateData).length === 0) {
     return NextResponse.json({ success: true });

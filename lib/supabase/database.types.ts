@@ -4152,9 +4152,11 @@ export type Database = {
           client_record_id: string;
           created_at: string;
           id: string;
+          interview_note: string | null;
           job_posting_id: string;
           notes: string | null;
           organization_id: string;
+          scheduled_interview_at: string | null;
           status: string;
           updated_at: string;
         };
@@ -4162,9 +4164,11 @@ export type Database = {
           client_record_id: string;
           created_at?: string;
           id?: string;
+          interview_note?: string | null;
           job_posting_id: string;
           notes?: string | null;
           organization_id: string;
+          scheduled_interview_at?: string | null;
           status?: string;
           updated_at?: string;
         };
@@ -4172,9 +4176,11 @@ export type Database = {
           client_record_id?: string;
           created_at?: string;
           id?: string;
+          interview_note?: string | null;
           job_posting_id?: string;
           notes?: string | null;
           organization_id?: string;
+          scheduled_interview_at?: string | null;
           status?: string;
           updated_at?: string;
         };

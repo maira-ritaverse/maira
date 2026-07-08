@@ -95,6 +95,13 @@ export type Referral = {
   jobPostingId: string;
   status: ReferralStatus;
   notes: string | null;
+  /**
+   * 企業 と の 直近 面接 予定 日時 (ISO 8601)。 null なら 未設定。
+   * カレンダー 画面 の 「企業 面接」 表示 の ソース。
+   */
+  scheduledInterviewAt: string | null;
+  /** 面接 の 補足 (「1 次 対面 @ 品川」 等)。 平文。 */
+  interviewNote: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -133,6 +140,12 @@ export type CreateReferralRequest = z.infer<typeof createReferralRequestSchema>;
 export const updateReferralRequestSchema = z.object({
   status: referralStatusEnum.optional(),
   notes: z.string().max(2000).optional().or(z.literal("")),
+  /**
+   * 企業 と の 面接 予定 日時 (ISO 8601)。 null / 空文字 で 未設定 に 戻す。
+   * カレンダー 画面 の 「企業 面接」 表示 の 元。
+   */
+  scheduled_interview_at: z.string().datetime({ offset: true }).nullable().optional(),
+  interview_note: z.string().max(200).optional().or(z.literal("")),
 });
 
 export type UpdateReferralRequest = z.infer<typeof updateReferralRequestSchema>;
