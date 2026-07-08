@@ -49,12 +49,34 @@ export async function GET(_request: Request, context: RouteContext) {
 export async function DELETE(_request: Request, context: RouteContext) {
   const guard = await requireOrgMember();
   if (!guard.ok) return guard.response;
-  const { user, supabase } = guard;
+  const { user, supabase, member } = guard;
   const { id } = await context.params;
 
   // schedule の view と external_meeting_id を同時に取る
   const meeting = await getMeetingScheduleById(supabase, id);
   if (!meeting) return NextResponse.json({ error: "not_found" }, { status: 404 });
+
+  // host_user_id は view に 含まれ ない の で 直接 引く
+  const { data: hostRow } = await supabase
+    .from("meeting_schedules")
+    .select("host_user_id")
+    .eq("id", id)
+    .maybeSingle();
+  const meetingHostUserId = (hostRow as { host_user_id: string } | null)?.host_user_id ?? null;
+
+  // M2 修正: host / admin 以外 の 削除 を 拒否。 旧 挙動 で は 同 org の 別 advisor が
+  // ホスト の meeting を DELETE で 叩く と、 攻撃者 の Zoom トークン で 他人 の
+  // 会議 を 削除 API に 叩き、 一方 DB は RLS で silent no-op で success=true が
+  // 返り 事故 化 した。
+  if (meetingHostUserId !== user.id && member.role !== "admin") {
+    return NextResponse.json(
+      {
+        error: "forbidden",
+        message: "この 会議 の 削除 は ホスト 本人 か 管理者 のみ 可能 です。",
+      },
+      { status: 403 },
+    );
+  }
 
   const { data: extRow } = await supabase
     .from("meeting_schedules")
@@ -164,7 +186,7 @@ const patchSchema = z.object({
 export async function PATCH(request: Request, context: RouteContext) {
   const guard = await requireOrgMember();
   if (!guard.ok) return guard.response;
-  const { user, supabase } = guard;
+  const { user, supabase, member } = guard;
   const { id } = await context.params;
 
   const bodyResult = await readJsonBody(request);
@@ -181,6 +203,25 @@ export async function PATCH(request: Request, context: RouteContext) {
   // 既存予約を取得
   const meeting = await getMeetingScheduleById(supabase, id);
   if (!meeting) return NextResponse.json({ error: "not_found" }, { status: 404 });
+
+  // host_user_id は view に 含まれ ない の で 直接 引く
+  const { data: hostRow } = await supabase
+    .from("meeting_schedules")
+    .select("host_user_id")
+    .eq("id", id)
+    .maybeSingle();
+  const meetingHostUserId = (hostRow as { host_user_id: string } | null)?.host_user_id ?? null;
+
+  // M2 修正: host / admin 以外 の 変更 を 拒否 (DELETE と 同 パターン)。
+  if (meetingHostUserId !== user.id && member.role !== "admin") {
+    return NextResponse.json(
+      {
+        error: "forbidden",
+        message: "この 会議 の 変更 は ホスト 本人 か 管理者 のみ 可能 です。",
+      },
+      { status: 403 },
+    );
+  }
 
   const { data: extRow } = await supabase
     .from("meeting_schedules")

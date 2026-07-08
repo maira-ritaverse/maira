@@ -238,8 +238,18 @@ export async function updateMeetingStatus(
   id: string,
   status: MeetingScheduleRow["status"],
 ): Promise<void> {
-  const { error } = await client.from("meeting_schedules").update({ status }).eq("id", id);
+  // M2 修正: 0 行 更新 (= RLS で 弾かれた / 別 host で 触れない) を silent success に
+  // させ ない。 呼び 出し 元 は 事前 に host / admin 検証 して いる はず だ が、
+  // 二重 防御 で 実 更新 の 行 数 を 確認 する。
+  const { data, error } = await client
+    .from("meeting_schedules")
+    .update({ status })
+    .eq("id", id)
+    .select("id");
   if (error) throw new Error(`meeting_schedules status update failed: ${error.message}`);
+  if (!data || data.length === 0) {
+    throw new Error("meeting_schedules status update matched 0 rows (RLS blocked or wrong id)");
+  }
 }
 
 /**
