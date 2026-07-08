@@ -37,10 +37,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <PageHeading
-        title="個人設定"
-        description="通知 の 受け取り方 や 各種 連携 を 変更 でき ます"
-      />
+      <PageHeading title="個人設定" description="通知の受け取り方や各種連携を変更できます" />
 
       {/*
         2 カラム レイアウト:
@@ -141,10 +138,9 @@ export default async function SettingsPage() {
                 className="hover:bg-accent -m-4 flex items-center gap-3 rounded-md p-4 transition-colors"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium">team 管理 (管理者 向け)</p>
+                  <p className="font-medium">リスト表管理(管理者向け)</p>
                   <p className="text-muted-foreground text-xs">
-                    組織 内 の team を 作成 し、 顧客 リスト を チーム 別 に 分離。 大規模
-                    エージェント 向け
+                    組織内のリスト表を作成し、顧客リストをチーム別に分離。大規模エージェント向け
                   </p>
                 </div>
                 <span className="text-muted-foreground text-sm">→</span>
@@ -159,9 +155,9 @@ export default async function SettingsPage() {
                 className="hover:bg-accent -m-4 flex items-center gap-3 rounded-md p-4 transition-colors"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium">組織 の 全体 像 (管理者 向け)</p>
+                  <p className="font-medium">組織の全体像(管理者向け)</p>
                   <p className="text-muted-foreground text-xs">
-                    組織 → team → member の 隚層 と 顧客 の 割 当 状況 を ツリー で 可視 化
+                    組織 → リスト表 → メンバー の階層と顧客の割当状況をツリーで可視化
                   </p>
                 </div>
                 <span className="text-muted-foreground text-sm">→</span>

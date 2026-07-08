@@ -10,15 +10,15 @@ import { Card } from "@/components/ui/card";
 import type { OrganizationTeam } from "@/lib/teams/types";
 
 /**
- * 顧客 詳細 の 「所属 team」 セクション。
- * 現在 の 所属 を チップ 表示 + 追加 / 削除 の チェックボックス。
- * 保存 は PATCH /api/agency/clients/[id]/teams で 差分 更新。
+ * 顧客詳細の「所属リスト表」セクション。
+ * 現在の所属をチップ表示 + 追加/削除のチェックボックス。
+ * 保存は PATCH /api/agency/clients/[id]/teams で差分更新。
  */
 type Props = {
   clientRecordId: string;
-  /** 現在 の 割 当 team_ids (SSR で 渡す) */
+  /** 現在の割当リスト表 ID(SSR で渡す) */
   initialTeamIds: string[];
-  /** 組織 内 の 全 team (選択 候補) */
+  /** 組織内の全リスト表(選択候補) */
   organizationTeams: OrganizationTeam[];
 };
 
@@ -54,7 +54,7 @@ export function ClientTeamsSection({ clientRecordId, initialTeamIds, organizatio
         });
         if (!res.ok) {
           const j = (await res.json().catch(() => ({}))) as { message?: string };
-          throw new Error(j.message ?? "保存 に 失敗 しました");
+          throw new Error(j.message ?? "保存に失敗しました");
         }
         setIsEditing(false);
         router.refresh();
@@ -79,7 +79,7 @@ export function ClientTeamsSection({ clientRecordId, initialTeamIds, organizatio
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Users className="text-muted-foreground h-4 w-4" />
-          <h3 className="text-sm font-medium">所属 team</h3>
+          <h3 className="text-sm font-medium">所属リスト表</h3>
         </div>
         {!isEditing && (
           <Button
@@ -96,7 +96,7 @@ export function ClientTeamsSection({ clientRecordId, initialTeamIds, organizatio
 
       {organizationTeams.length === 0 ? (
         <p className="text-muted-foreground text-xs">
-          組織 に team が 未 作成 です。 team を 作る と 顧客 リスト を 分離 でき ます。
+          組織にリスト表が未作成です。リスト表を作ると顧客リストを分離できます。
         </p>
       ) : isEditing ? (
         <div className="space-y-2">
@@ -144,7 +144,9 @@ export function ClientTeamsSection({ clientRecordId, initialTeamIds, organizatio
           )}
         </div>
       ) : currentTeams.length === 0 ? (
-        <p className="text-muted-foreground text-xs">未 割 当 (全 org member に 可視 の 状態)。</p>
+        <p className="text-muted-foreground text-xs">
+          未割当(組織メンバー全員から閲覧できる状態)。
+        </p>
       ) : (
         <div className="flex flex-wrap gap-1.5">
           {currentTeams.map((team) => (

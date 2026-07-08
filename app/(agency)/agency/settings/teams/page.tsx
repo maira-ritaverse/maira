@@ -47,11 +47,9 @@ export default async function TeamsSettingsPage() {
     <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
       <SettingsBackLink href="/agency/settings" />
       <div>
-        <h1 className="text-2xl font-semibold">team 管理</h1>
+        <h1 className="text-2xl font-semibold">リスト表管理</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          組織 内 の team を 作成 / 編集 し、 顧客 リスト を 分離 します。 team を 割り当てた 顧客
-          は 同じ team の member のみ が 閲覧 でき、 未 割当 の 顧客 は 従来 通り 全員 が 閲覧 でき
-          ます。 admin は 常に 全 顧客 を 閲覧 でき ます。
+          組織内のリスト表を作成・編集して顧客を分離できます。リスト表に割り当てた顧客は同じリスト表のメンバーだけが閲覧でき、未割当の顧客は従来どおり全員が閲覧できます。管理者は常にすべての顧客を閲覧できます。
         </p>
       </div>
 

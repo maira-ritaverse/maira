@@ -55,7 +55,7 @@ export function TeamsAdminClient({ initialTeams, allMembers, teamMemberships }: 
 
   const createTeam = () =>
     submitAction(async () => {
-      if (!newName.trim()) throw new Error("team 名 を 入力 して ください");
+      if (!newName.trim()) throw new Error("リスト表名を入力してください");
       const res = await fetch("/api/agency/teams", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -66,7 +66,7 @@ export function TeamsAdminClient({ initialTeams, allMembers, teamMemberships }: 
       });
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { message?: string };
-        throw new Error(j.message ?? "作成 に 失敗 しました");
+        throw new Error(j.message ?? "作成に失敗しました");
       }
       setNewName("");
       setNewColor("");
@@ -76,7 +76,7 @@ export function TeamsAdminClient({ initialTeams, allMembers, teamMemberships }: 
     submitAction(async () => {
       if (
         !window.confirm(
-          `「${teamName}」 を 削除 し ます。 割 当 済 顧客 は 未 割 当 pool に 戻り、 全 org member に 可視 に なり ます。 実行 しま す か?`,
+          `「${teamName}」を削除します。割当済の顧客は未割当に戻り、組織メンバー全員から閲覧できるようになります。実行しますか?`,
         )
       ) {
         return;
@@ -84,7 +84,7 @@ export function TeamsAdminClient({ initialTeams, allMembers, teamMemberships }: 
       const res = await fetch(`/api/agency/teams/${teamId}`, { method: "DELETE" });
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { message?: string };
-        throw new Error(j.message ?? "削除 に 失敗 しました");
+        throw new Error(j.message ?? "削除に失敗しました");
       }
     });
 
@@ -97,7 +97,7 @@ export function TeamsAdminClient({ initialTeams, allMembers, teamMemberships }: 
       });
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { message?: string };
-        throw new Error(j.message ?? "追加 に 失敗 しました");
+        throw new Error(j.message ?? "追加に失敗しました");
       }
     });
 
@@ -109,7 +109,7 @@ export function TeamsAdminClient({ initialTeams, allMembers, teamMemberships }: 
       );
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { message?: string };
-        throw new Error(j.message ?? "削除 に 失敗 しました");
+        throw new Error(j.message ?? "削除に失敗しました");
       }
     });
 
@@ -121,9 +121,9 @@ export function TeamsAdminClient({ initialTeams, allMembers, teamMemberships }: 
         </Alert>
       )}
 
-      {/* 新規 team 作成 */}
+      {/* 新規リスト表作成 */}
       <Card className="space-y-3 p-4">
-        <h2 className="text-sm font-semibold">新規 team 作成</h2>
+        <h2 className="text-sm font-semibold">新規リスト表作成</h2>
         <div className="flex flex-wrap items-end gap-2">
           <div className="min-w-[200px] flex-1">
             <Label htmlFor="new-team-name">名前</Label>
@@ -132,7 +132,7 @@ export function TeamsAdminClient({ initialTeams, allMembers, teamMemberships }: 
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="例: 東京 チーム / IT 担当"
+              placeholder="例:東京チーム / IT担当"
               maxLength={100}
               disabled={isPending}
               className="border-input bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
@@ -156,11 +156,11 @@ export function TeamsAdminClient({ initialTeams, allMembers, teamMemberships }: 
         </div>
       </Card>
 
-      {/* 既存 team 一覧 */}
+      {/* 既存リスト表一覧 */}
       {initialTeams.length === 0 ? (
         <Card className="p-6 text-center">
           <p className="text-muted-foreground text-sm">
-            まだ team が ありません。 上 の フォーム から 最初 の team を 作成 して ください。
+            まだリスト表がありません。上のフォームから最初のリスト表を作成してください。
           </p>
         </Card>
       ) : (
@@ -180,7 +180,7 @@ export function TeamsAdminClient({ initialTeams, allMembers, teamMemberships }: 
                     />
                     <span className="font-medium">{team.name}</span>
                     <span className="text-muted-foreground text-xs">
-                      member {team.memberCount} / client {team.clientCount}
+                      メンバー {team.memberCount}名 / 顧客 {team.clientCount}件
                     </span>
                   </div>
                   <Button
@@ -200,11 +200,11 @@ export function TeamsAdminClient({ initialTeams, allMembers, teamMemberships }: 
                   <p className="text-muted-foreground text-xs">{team.description}</p>
                 )}
 
-                {/* team 内 の member 一覧 */}
+                {/* リスト表内のメンバー一覧 */}
                 <div className="space-y-1">
                   {members.length === 0 ? (
                     <p className="text-muted-foreground text-xs">
-                      まだ member が いません。 下 の 追加 リスト から 選んで ください。
+                      まだメンバーがいません。下の追加リストから選んでください。
                     </p>
                   ) : (
                     members.map((m) => {
@@ -215,9 +215,9 @@ export function TeamsAdminClient({ initialTeams, allMembers, teamMemberships }: 
                           className="flex items-center justify-between rounded border px-2 py-1 text-sm"
                         >
                           <div className="flex items-center gap-2">
-                            <span>{info?.displayName ?? "(削除 済 メンバー)"}</span>
+                            <span>{info?.displayName ?? "(削除済メンバー)"}</span>
                             <span className="text-muted-foreground text-xs">
-                              [{m.role === "lead" ? "lead" : "member"}]
+                              [{m.role === "lead" ? "リーダー" : "メンバー"}]
                             </span>
                           </div>
                           <Button
@@ -237,12 +237,12 @@ export function TeamsAdminClient({ initialTeams, allMembers, teamMemberships }: 
                   )}
                 </div>
 
-                {/* member 追加 */}
+                {/* メンバー追加 */}
                 {candidates.length > 0 && (
                   <div className="flex flex-wrap items-center gap-2 border-t pt-2">
                     <span className="text-muted-foreground text-xs">追加:</span>
                     <select
-                      aria-label="追加 する member"
+                      aria-label="追加するメンバー"
                       disabled={isPending}
                       defaultValue=""
                       onChange={(e) => {
@@ -253,16 +253,16 @@ export function TeamsAdminClient({ initialTeams, allMembers, teamMemberships }: 
                       }}
                       className="border-input bg-background rounded-md border px-2 py-1 text-xs"
                     >
-                      <option value="">member を 選ぶ...</option>
+                      <option value="">メンバーを選ぶ…</option>
                       {candidates.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.displayName}
-                          {c.role === "admin" ? " (org admin)" : ""}
+                          {c.role === "admin" ? "(組織管理者)" : ""}
                         </option>
                       ))}
                     </select>
                     <span className="text-muted-foreground text-xs">
-                      <UserPlus className="inline h-3 w-3" /> 役割 変更 は member 追加 後 に 一覧 で
+                      <UserPlus className="inline h-3 w-3" /> 役割変更は追加後に一覧から
                     </span>
                   </div>
                 )}

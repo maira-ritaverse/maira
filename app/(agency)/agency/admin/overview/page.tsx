@@ -37,10 +37,10 @@ export default async function OrgOverviewPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-4 sm:p-6">
       <div>
-        <h1 className="text-2xl font-semibold">組織 の 全体 像</h1>
+        <h1 className="text-2xl font-semibold">組織の全体像</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          組織 → team → member の 隚層 と、 顧客 の 割 当 状況 を 可視 化 します。 team を 作って
-          顧客 を 割 当 すると、 分離 の 効果 が 数字 で 見えます。
+          組織 → リスト表 →
+          メンバーの階層と顧客の割当状況を可視化します。リスト表を作って顧客を割り当てると、分離の効果が数字で見えます。
         </p>
       </div>
 
