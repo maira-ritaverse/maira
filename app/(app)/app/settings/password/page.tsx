@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { Button } from "@/components/ui/button";
+import { SettingsBackLink } from "@/components/features/settings/settings-back-link";
 import { PasswordForm } from "./password-form";
 
 /**
@@ -21,16 +20,12 @@ export default async function PasswordSettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">パスワード変更</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            ログインに使用するパスワードを変更します
-          </p>
-        </div>
-        <Button render={<Link href="/app/settings" />} variant="outline" size="sm">
-          設定に戻る
-        </Button>
+      <SettingsBackLink href="/app/settings" label="設定" />
+      <div>
+        <h1 className="text-2xl font-bold">パスワード変更</h1>
+        <p className="text-muted-foreground mt-1 text-sm">
+          ログインに使用するパスワードを変更します
+        </p>
       </div>
 
       <PasswordForm />

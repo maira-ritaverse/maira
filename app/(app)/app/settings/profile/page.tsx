@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AvatarUploader } from "@/components/features/profile/avatar-uploader";
-import { Button } from "@/components/ui/button";
+import { SettingsBackLink } from "@/components/features/settings/settings-back-link";
 import { resolveAvatarPublicUrl } from "@/lib/profile/avatar";
 import { createClient } from "@/lib/supabase/server";
 
@@ -37,14 +36,10 @@ export default async function ProfileSettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">プロフィール</h1>
-          <p className="text-muted-foreground mt-1 text-sm">表示名 と アイコン 画像 を 編集</p>
-        </div>
-        <Button render={<Link href="/app/settings" />} variant="outline" size="sm">
-          設定 に 戻る
-        </Button>
+      <SettingsBackLink href="/app/settings" label="設定" />
+      <div>
+        <h1 className="text-2xl font-bold">プロフィール</h1>
+        <p className="text-muted-foreground mt-1 text-sm">表示名 と アイコン 画像 を 編集</p>
       </div>
 
       <AvatarUploader
