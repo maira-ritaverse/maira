@@ -8,6 +8,8 @@
  * lead-request.ts と 同様 の パターン だが、 試算 結果 ( 年間 効果 額 等 ) も
  * メール 本文 に 載せる ので 申込 者 が 経営 層 に 共有 し やすい 形 に する。
  */
+import { sendResendEmail } from "@/lib/email/resend-client";
+
 import { renderEmailLayout } from "./layout";
 
 export type RoiSubmissionPayload = {
@@ -46,9 +48,8 @@ const yen = (n: number) => "¥" + Math.round(n).toLocaleString("ja-JP");
 export async function sendRoiSubmissionNotificationToOperator(
   payload: RoiSubmissionPayload,
 ): Promise<SendRoiSubmissionResult> {
-  const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
-  if (!apiKey || !from || !OPERATOR_INBOX) {
+  if (!from || !OPERATOR_INBOX) {
     return { sent: false, reason: "not_configured" };
   }
 
@@ -88,16 +89,15 @@ export async function sendRoiSubmissionNotificationToOperator(
     bodyHtml: `<pre style="font-family: monospace; font-size: 13px; line-height: 1.7; white-space: pre-wrap;">${escape(text)}</pre>`,
   });
 
-  return await sendViaResend({ apiKey, from, to: OPERATOR_INBOX, subject, text, html });
+  return await sendViaResend({ from, to: OPERATOR_INBOX, subject, text, html }, "operator");
 }
 
 /** 申込 者 宛: 試算 結果 + 詳細 資料 の 案内 */
 export async function sendRoiSubmissionAutoReply(
   payload: RoiSubmissionPayload,
 ): Promise<SendRoiSubmissionResult> {
-  const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
-  if (!apiKey || !from) {
+  if (!from) {
     return { sent: false, reason: "not_configured" };
   }
 
@@ -131,7 +131,7 @@ export async function sendRoiSubmissionAutoReply(
     bodyHtml: `<pre style="font-family: 'Hiragino Sans', sans-serif; font-size: 14px; line-height: 1.8; white-space: pre-wrap;">${escape(text)}</pre>`,
   });
 
-  return await sendViaResend({ apiKey, from, to: payload.email, subject, text, html });
+  return await sendViaResend({ from, to: payload.email, subject, text, html }, "auto-reply");
 }
 
 function escape(s: string): string {
@@ -143,40 +143,22 @@ function escape(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-async function sendViaResend(args: {
-  apiKey: string;
-  from: string;
-  to: string;
-  subject: string;
-  text: string;
-  html: string;
-}): Promise<SendRoiSubmissionResult> {
-  try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${args.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: args.from,
-        to: [args.to],
-        subject: args.subject,
-        text: args.text,
-        html: args.html,
-      }),
-    });
-    if (!res.ok) {
-      const errText = await res.text().catch(() => "");
-      return { sent: false, reason: "send_failed", error: `${res.status}: ${errText}` };
-    }
-    const j = (await res.json().catch(() => null)) as { id?: string | null } | null;
-    return { sent: true, messageId: j?.id ?? null };
-  } catch (e) {
-    return {
-      sent: false,
-      reason: "send_failed",
-      error: e instanceof Error ? e.message : String(e),
-    };
-  }
+async function sendViaResend(
+  args: { from: string; to: string; subject: string; text: string; html: string },
+  variant: "operator" | "auto-reply",
+): Promise<SendRoiSubmissionResult> {
+  // C2-1: 共通 Resend wrapper 経由 で リトライ 付き 送信 に 移行。
+  const result = await sendResendEmail(
+    {
+      from: args.from,
+      to: [args.to],
+      subject: args.subject,
+      text: args.text,
+      html: args.html,
+    },
+    { label: `email.roi-${variant}` },
+  );
+  if (result.sent) return { sent: true, messageId: result.messageId };
+  if (result.reason === "not_configured") return { sent: false, reason: "not_configured" };
+  return { sent: false, reason: "send_failed", error: result.error };
 }

@@ -8,6 +8,8 @@
  * 資料 (PDF) は 当面 「営業 担当 が 手動 で 返信」 想定。 申込 者 宛 は 受領
  * の 確認 + 連絡 が 行く 旨 を 約束 する だけ で、 直接 添付 は しない。
  */
+import { sendResendEmail } from "@/lib/email/resend-client";
+
 import { escapeHtml, infoCard, infoRow, primaryButton, renderEmailLayout } from "./layout";
 
 export type LeadRequestPayload = {
@@ -31,9 +33,8 @@ const OPERATOR_INBOX = process.env.LEAD_REQUEST_INBOX || process.env.EMAIL_FROM 
 export async function sendLeadRequestNotificationToOperator(
   payload: LeadRequestPayload,
 ): Promise<SendLeadRequestResult> {
-  const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
-  if (!apiKey || !from || !OPERATOR_INBOX) {
+  if (!from || !OPERATOR_INBOX) {
     return { sent: false, reason: "not_configured" };
   }
 
@@ -71,22 +72,26 @@ ${
 <p style="margin:20px 0 0;font-size:12px;color:#888;">24 時間 以内 の 返信 が 期待 され て いま す。</p>
 `.trim();
 
-  return resendSend(apiKey, {
-    from,
-    to: [OPERATOR_INBOX],
-    subject,
-    text,
-    html: renderEmailLayout({ previewTitle: subject, bodyHtml: body }),
-  });
+  return toResult(
+    await sendResendEmail(
+      {
+        from,
+        to: [OPERATOR_INBOX],
+        subject,
+        text,
+        html: renderEmailLayout({ previewTitle: subject, bodyHtml: body }),
+      },
+      { label: "email.lead-request-operator" },
+    ),
+  );
 }
 
 /** 申込 者 宛: 自動 返信 (= 受領 確認) */
 export async function sendLeadRequestAutoReply(
   payload: LeadRequestPayload,
 ): Promise<SendLeadRequestResult> {
-  const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
-  if (!apiKey || !from) {
+  if (!from) {
     return { sent: false, reason: "not_configured" };
   }
 
@@ -120,36 +125,23 @@ export async function sendLeadRequestAutoReply(
 <p style="margin:24px 0 0;font-size:12px;color:#888;">Maira 運営 チーム</p>
 `.trim();
 
-  return resendSend(apiKey, {
-    from,
-    to: [payload.email],
-    subject,
-    text,
-    html: renderEmailLayout({ previewTitle: subject, bodyHtml: body }),
-  });
+  return toResult(
+    await sendResendEmail(
+      {
+        from,
+        to: [payload.email],
+        subject,
+        text,
+        html: renderEmailLayout({ previewTitle: subject, bodyHtml: body }),
+      },
+      { label: "email.lead-request-auto-reply" },
+    ),
+  );
 }
 
-async function resendSend(
-  apiKey: string,
-  args: { from: string; to: string[]; subject: string; text: string; html: string },
-): Promise<SendLeadRequestResult> {
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify(args),
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      return { sent: false, reason: "send_failed", error: errorText };
-    }
-    const json = (await response.json()) as { id?: string };
-    return { sent: true, messageId: json.id ?? null };
-  } catch (err) {
-    return {
-      sent: false,
-      reason: "send_failed",
-      error: err instanceof Error ? err.message : "unknown",
-    };
-  }
+// C2-1: sendResendEmail の 結果 型 を lead-request 内 用 の Union 型 に 変換。
+function toResult(r: Awaited<ReturnType<typeof sendResendEmail>>): SendLeadRequestResult {
+  if (r.sent) return { sent: true, messageId: r.messageId };
+  if (r.reason === "not_configured") return { sent: false, reason: "not_configured" };
+  return { sent: false, reason: "send_failed", error: r.error };
 }

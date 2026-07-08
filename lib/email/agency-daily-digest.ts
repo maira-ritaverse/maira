@@ -12,6 +12,8 @@
  *   ・「平和な 朝」 (全 0) は 送らない (= 数 ヶ月 後 に 開封 率 を 守る ため)
  */
 import type { DailyDigestSummary } from "@/lib/agency/daily-digest";
+import { sendResendEmail } from "@/lib/email/resend-client";
+
 import { escapeHtml, infoCard, infoRow, primaryButton, renderEmailLayout } from "./layout";
 
 export type SendDailyDigestResult =
@@ -33,9 +35,8 @@ export type SendDailyDigestArgs = {
 export async function sendDailyDigestEmail(
   args: SendDailyDigestArgs,
 ): Promise<SendDailyDigestResult> {
-  const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
-  if (!apiKey || !from) return { sent: false, reason: "not_configured" };
+  if (!from) return { sent: false, reason: "not_configured" };
 
   const { summary, memberDisplayName, organizationName, todayLabel } = args;
   const subjectParts: string[] = [];
@@ -102,32 +103,12 @@ ${infoCard(
 
   const html = renderEmailLayout({ previewTitle: subject, bodyHtml: body });
 
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        from,
-        to: [args.toEmail],
-        subject,
-        text,
-        html,
-      }),
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      return { sent: false, reason: "send_failed", error: errorText };
-    }
-    const json = (await response.json()) as { id?: string };
-    return { sent: true, messageId: json.id ?? null };
-  } catch (err) {
-    return {
-      sent: false,
-      reason: "send_failed",
-      error: err instanceof Error ? err.message : "unknown",
-    };
-  }
+  // C2-1: Resend wrapper 経由 (リトライ 込 み)。
+  const result = await sendResendEmail(
+    { from, to: [args.toEmail], subject, text, html },
+    { label: "email.agency-daily-digest" },
+  );
+  if (result.sent) return { sent: true, messageId: result.messageId };
+  if (result.reason === "not_configured") return { sent: false, reason: "not_configured" };
+  return { sent: false, reason: "send_failed", error: result.error };
 }
