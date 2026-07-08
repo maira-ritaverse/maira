@@ -9,6 +9,7 @@ import {
   listClientRecordsWithUpdateBadge,
 } from "@/lib/clients/queries";
 import { listOrganizationMembers } from "@/lib/agency-tasks/queries";
+import { listAllClientTeamsMap, listTeams } from "@/lib/teams/queries";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ExportDialog } from "./export-dialog";
@@ -45,11 +46,18 @@ export default async function ClientsPage() {
   // viewerUserId = 自分(認証済みメンバー)。判定対象は linked または期限内 revoke_requested。
   // 失注理由・チャネル別の分布サマリも並列で取得(別クエリだが小さい)。
   // members は一括操作(担当者一括変更ドロップダウン)で使う。
-  const [clients, distribution, members] = await Promise.all([
+  const [clients, distribution, members, teams, clientTeamsMap] = await Promise.all([
     listClientRecordsWithUpdateBadge(role.organization.id, user.id),
     getClientDistributionStats(role.organization.id),
     listOrganizationMembers(role.organization.id),
+    listTeams(role.organization.id),
+    listAllClientTeamsMap(role.organization.id),
   ]);
+  // 顧客 ごと の team_ids を Map で 保持 (client_id → team_id[])。
+  // 一覧 の team フィルタ (P4) で 使う。
+  const clientTeamIdsByClientId = Object.fromEntries(
+    Array.from(clientTeamsMap.entries()).map(([k, v]) => [k, v]),
+  );
   const showExport = canExport(role);
 
   return (
@@ -88,7 +96,12 @@ export default async function ClientsPage() {
             entrySites={distribution.entrySites}
             totalClients={distribution.totalClients}
           />
-          <ClientsViewTabs clients={clients} members={members} />
+          <ClientsViewTabs
+            clients={clients}
+            members={members}
+            teams={teams.map((t) => ({ id: t.id, name: t.name, color: t.color }))}
+            clientTeamIdsByClientId={clientTeamIdsByClientId}
+          />
         </>
       )}
     </div>

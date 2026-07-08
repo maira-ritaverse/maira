@@ -39,6 +39,10 @@ type ClientsViewTabsProps = {
   clients: ClientRecordWithUpdateBadge[];
   /** 組織メンバー(担当者一括変更のドロップダウン用)。空配列 OK。 */
   members: Array<{ memberId: string; displayName: string | null }>;
+  /** 組織 の team 一覧 (P4 - team フィルタ 用)。 空配列 なら team ピッカー を 隠す。 */
+  teams?: Array<{ id: string; name: string; color: string | null }>;
+  /** client_id → 所属 team_id[] の マップ。 team フィルタ の 判定 に 使う。 */
+  clientTeamIdsByClientId?: Record<string, string[]>;
 };
 
 type ViewMode = "table" | "kanban";
@@ -75,7 +79,12 @@ function parseSilenceFromParam(raw: string | null): SilenceFilter {
   return (VALID_SILENCE_KEYS as Set<string>).has(raw) ? (raw as SilenceFilter) : "all";
 }
 
-export function ClientsViewTabs({ clients, members }: ClientsViewTabsProps) {
+export function ClientsViewTabs({
+  clients,
+  members,
+  teams = [],
+  clientTeamIdsByClientId = {},
+}: ClientsViewTabsProps) {
   const searchParams = useSearchParams();
   // URL パラメータ ?silence=30d 等から初期フィルタを決める(沈黙アラートカードからの導線)。
   // 初回マウント時のみ評価したいので useMemo + 初期 state で参照する。
@@ -98,6 +107,9 @@ export function ClientsViewTabs({ clients, members }: ClientsViewTabsProps) {
   const [silenceFilter, setSilenceFilter] = useState<SilenceFilter>(initialSilenceFilter);
   // CRM 自由タグフィルタ(AND 条件)。空配列は絞らない。
   const [tagFilter, setTagFilter] = useState<string[]>([]);
+  // P4: team フィルタ。 "all" = 全 (現状 通り 何 も 絞ら ない)、
+  //     "unassigned" = 未 割 当 pool のみ、 team_id = その team に 所属 する 顧客 のみ。
+  const [teamFilter, setTeamFilter] = useState<string>("all");
 
   // ─── 列設定(localStorage 永続化、マウント後にロード) ─────────
   // 初期値はデフォルト(SSR と初回 render で order が一致)。
@@ -270,9 +282,17 @@ export function ClientsViewTabs({ clients, members }: ClientsViewTabsProps) {
   const employmentTypeOptions = useMemo(() => buildEmploymentTypeOptions(clients), [clients]);
   const crmTagOptions = useMemo(() => buildCrmTagOptions(clients), [clients]);
 
+  const teamFilteredClients = useMemo(() => {
+    if (teamFilter === "all") return clients;
+    if (teamFilter === "unassigned") {
+      return clients.filter((c) => (clientTeamIdsByClientId[c.id] ?? []).length === 0);
+    }
+    return clients.filter((c) => (clientTeamIdsByClientId[c.id] ?? []).includes(teamFilter));
+  }, [clients, clientTeamIdsByClientId, teamFilter]);
+
   const filteredSorted = useMemo(
     () =>
-      applyClientsFilterSort(clients, {
+      applyClientsFilterSort(teamFilteredClients, {
         searchQuery,
         statusFilter,
         entrySiteFilter,
@@ -285,7 +305,7 @@ export function ClientsViewTabs({ clients, members }: ClientsViewTabsProps) {
         sortDirection,
       }),
     [
-      clients,
+      teamFilteredClients,
       searchQuery,
       statusFilter,
       entrySiteFilter,
@@ -332,6 +352,53 @@ export function ClientsViewTabs({ clients, members }: ClientsViewTabsProps) {
         </div>
         <span className="text-muted-foreground text-sm">{filteredSorted.length}件</span>
       </div>
+
+      {/* P4: team ピッカー (組織 に team が 1 つ 以上 あれば 表示) */}
+      {teams.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-muted-foreground text-xs whitespace-nowrap">team:</span>
+          <button
+            type="button"
+            onClick={() => setTeamFilter("all")}
+            className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+              teamFilter === "all"
+                ? "bg-primary text-primary-foreground border-primary"
+                : "hover:bg-accent border-input"
+            }`}
+          >
+            すべて
+          </button>
+          <button
+            type="button"
+            onClick={() => setTeamFilter("unassigned")}
+            className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+              teamFilter === "unassigned"
+                ? "bg-primary text-primary-foreground border-primary"
+                : "hover:bg-accent border-input"
+            }`}
+          >
+            未 割当
+          </button>
+          {teams.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTeamFilter(t.id)}
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+                teamFilter === t.id
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "hover:bg-accent border-input"
+              }`}
+            >
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ backgroundColor: t.color ?? "#94a3b8" }}
+              />
+              {t.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* マイビュー(保存ビュー)バー:現在のフィルタを名前付きで保存 / ロード / 削除 */}
       <div className="flex flex-wrap items-center gap-2">

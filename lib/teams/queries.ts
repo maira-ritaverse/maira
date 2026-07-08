@@ -149,3 +149,37 @@ export async function listClientTeamAssignments(
     };
   });
 }
+
+/**
+ * 組織 内 の 全 client_team_assignments (顧客 一覧 側 で team フィルタ に 使う)。
+ * RLS で 呼び 出し 者 が 見え る 顧客 の 割当 のみ 返る。
+ * 出力: Map<client_record_id, team_id[]>。
+ */
+export async function listAllClientTeamsMap(
+  organizationId: string,
+): Promise<Map<string, string[]>> {
+  const supabase = await createClient();
+  // 組織 の team を 経由 して 割当 を 全 件 取得。 RLS で 自動 絞り 込 み される。
+  const { data: teamRows } = await supabase
+    .from("organization_teams")
+    .select("id")
+    .eq("organization_id", organizationId);
+  const teamIds = (teamRows ?? []).map((r) => (r as { id: string }).id);
+  if (teamIds.length === 0) return new Map();
+
+  const { data: assignmentRows } = await supabase
+    .from("client_team_assignments")
+    .select("client_record_id, team_id")
+    .in("team_id", teamIds);
+
+  const map = new Map<string, string[]>();
+  for (const row of (assignmentRows ?? []) as Array<{
+    client_record_id: string;
+    team_id: string;
+  }>) {
+    const existing = map.get(row.client_record_id) ?? [];
+    existing.push(row.team_id);
+    map.set(row.client_record_id, existing);
+  }
+  return map;
+}
