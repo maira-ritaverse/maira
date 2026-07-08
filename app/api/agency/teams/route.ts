@@ -39,7 +39,7 @@ export async function POST(request: Request) {
   if (!guard.ok) return guard.response;
   if (guard.role.member?.role !== "admin") {
     return NextResponse.json(
-      { error: "forbidden", message: "team 作成 は 組織 admin のみ 可能 です" },
+      { error: "forbidden", message: "リスト表の作成は組織管理者のみ可能です" },
       { status: 403 },
     );
   }
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     }
     if (error.code === "23505" || error.message?.includes("unique")) {
       return NextResponse.json(
-        { error: "duplicate_name", message: "同じ 名前 の team が 既に あります" },
+        { error: "duplicate_name", message: "同じ名前のリスト表がすでにあります" },
         { status: 409 },
       );
     }
@@ -76,7 +76,7 @@ export async function POST(request: Request) {
       message: error.message,
     });
     return NextResponse.json(
-      { error: "unknown", message: "team 作成 に 失敗 しま した" },
+      { error: "unknown", message: "リスト表の作成に失敗しました" },
       { status: 500 },
     );
   }

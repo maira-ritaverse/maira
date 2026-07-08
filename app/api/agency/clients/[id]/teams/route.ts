@@ -87,7 +87,10 @@ function handleRpcError(error: { code?: string; message?: string }): Response {
   const msg = error.message ?? "";
   if (msg.includes("forbidden")) {
     return NextResponse.json(
-      { error: "forbidden", message: "team 割当 は admin / 主担当 / team lead のみ 可能 です" },
+      {
+        error: "forbidden",
+        message: "リスト表への割当は管理者・主担当・リーダーのみ可能です",
+      },
       { status: 403 },
     );
   }
@@ -96,9 +99,7 @@ function handleRpcError(error: { code?: string; message?: string }): Response {
   }
   console.error("[client-teams] rpc failed", { code: error.code, message: msg });
   return NextResponse.json(
-    { error: "unknown", message: "team 割当 に 失敗 しま した" },
-    {
-      status: 500,
-    },
+    { error: "unknown", message: "リスト表の割当に失敗しました" },
+    { status: 500 },
   );
 }

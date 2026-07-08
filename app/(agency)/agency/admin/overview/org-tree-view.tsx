@@ -19,12 +19,12 @@ export function OrgTreeView({ graph }: Props) {
   return (
     <div className="space-y-4">
       <Card className="p-4">
-        {/* 組織 レベル */}
+        {/* 組織レベル */}
         <div className="flex items-center gap-2">
           <Building2 className="h-5 w-5 text-emerald-700" />
           <span className="font-semibold">{graph.name}</span>
           <span className="text-muted-foreground text-xs">
-            members {graph.totalMembers} / clients {graph.totalClients}
+            メンバー {graph.totalMembers}名 / 顧客 {graph.totalClients}件
           </span>
         </div>
 
@@ -36,8 +36,7 @@ export function OrgTreeView({ graph }: Props) {
       </Card>
 
       <p className="text-muted-foreground text-xs">
-        ※ 「未 割 当 pool」 は どの team にも 属 して い ない 顧客 の 集合 で、 全 org member から
-        見 えます。 team を 作って 割 当 する と 徐々 に 分離 が 進みます。
+        ※「未割当」は、どのリスト表にも属していない顧客の集合で、組織メンバー全員から閲覧できます。リスト表を作って割り当てると、徐々に分離が進みます。
       </p>
     </div>
   );
@@ -76,7 +75,7 @@ function TreeNode({ node, depth }: { node: OrgGraphNode; depth: number }) {
             <Users className="h-4 w-4 text-slate-600" />
             <span className="font-medium">{node.name}</span>
             <span className="text-muted-foreground text-xs">
-              members {node.memberCount} / clients {node.clientCount}
+              メンバー {node.memberCount}名 / 顧客 {node.clientCount}件
             </span>
             <span className="text-muted-foreground ml-auto text-xs">{open ? "▼" : "▶"}</span>
           </button>
@@ -89,7 +88,7 @@ function TreeNode({ node, depth }: { node: OrgGraphNode; depth: number }) {
           )}
           {open && node.children.length === 0 && (
             <p className="text-muted-foreground pl-6 text-xs">
-              member 未登録。 team 管理 画面 で 追加 して ください。
+              メンバー未登録。リスト表管理画面から追加してください。
             </p>
           )}
         </div>
@@ -99,8 +98,8 @@ function TreeNode({ node, depth }: { node: OrgGraphNode; depth: number }) {
       return (
         <div className="flex items-center gap-2 rounded-md bg-slate-50 px-2 py-1 dark:bg-slate-900/40">
           <UserSquare2 className="h-4 w-4 text-slate-500" />
-          <span className="text-sm">未 割 当 pool</span>
-          <span className="text-muted-foreground text-xs">clients {node.clientCount}</span>
+          <span className="text-sm">未割当</span>
+          <span className="text-muted-foreground text-xs">顧客 {node.clientCount}件</span>
         </div>
       );
 
@@ -115,11 +114,11 @@ function TreeNode({ node, depth }: { node: OrgGraphNode; depth: number }) {
           <span>{node.displayName}</span>
           {node.teamRole === "lead" && (
             <span className="rounded bg-amber-100 px-1 text-[10px] text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-              lead
+              リーダー
             </span>
           )}
           <span className="text-muted-foreground ml-auto text-xs">
-            主担当 clients {node.assignedClientCount}
+            主担当 {node.assignedClientCount}件
           </span>
         </div>
       );

@@ -61,7 +61,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     }
     if (error.code === "23505") {
       return NextResponse.json(
-        { error: "duplicate_name", message: "同じ 名前 の team が 既に あります" },
+        { error: "duplicate_name", message: "同じ名前のリスト表がすでにあります" },
         { status: 409 },
       );
     }

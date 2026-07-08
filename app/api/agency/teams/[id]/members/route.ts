@@ -57,7 +57,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     }
     if (error.message?.includes("member_not_in_org")) {
       return NextResponse.json(
-        { error: "member_not_in_org", message: "組織 に 存在 しない メンバー です" },
+        { error: "member_not_in_org", message: "組織に存在しないメンバーです" },
         { status: 400 },
       );
     }
