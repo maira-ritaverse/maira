@@ -80,8 +80,21 @@ export async function POST(request: Request) {
     );
   }
 
-  // job_postings + line_channels の 組織一致 を 確認
+  // H2 修正: lineChannelId が body 由来 で 攻撃者 が 別 の 自 Channel 経由 で
+  // 被害 組織 に inbound を 注入 できる の を 塞ぐ。 line_channels を 参照 し、
+  // 「organization_id = orgId かつ line_channel_id = lineChannelId かつ is_active」
+  // で 一致 確認 が 通ら なけ れ ば 401。
   const admin = createServiceClient();
+  const { data: channelRow } = await admin
+    .from("line_channels")
+    .select("id, is_active")
+    .eq("organization_id", orgId)
+    .eq("line_channel_id", lineChannelId)
+    .maybeSingle();
+  if (!channelRow || !(channelRow as { is_active: boolean }).is_active) {
+    return NextResponse.json({ error: "channel_org_mismatch" }, { status: 401 });
+  }
+  // job_postings の 組織一致 を 確認
   const { data: jobRow } = await admin
     .from("job_postings")
     .select("id, organization_id, status, company_name, position")

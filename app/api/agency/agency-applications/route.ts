@@ -24,7 +24,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const guard = await requireOrgMember();
   if (!guard.ok) return guard.response;
-  const { organization, member } = guard;
+  const { organization, member, supabase } = guard;
 
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
@@ -34,6 +34,33 @@ export async function POST(request: Request) {
       { error: "validation_failed", details: parsed.error.format() },
       { status: 400 },
     );
+  }
+
+  // cross-org record binding 防止: client_records と referrals の 両方 を 検証
+  // (referrals API は 検証 済 だ が こちら は 実装 漏れ で 通せる)。
+  const [clientRes, referralRes] = await Promise.all([
+    supabase
+      .from("client_records")
+      .select("id, organization_id")
+      .eq("id", parsed.data.client_record_id)
+      .maybeSingle(),
+    supabase
+      .from("referrals")
+      .select("id, organization_id")
+      .eq("id", parsed.data.referral_id)
+      .maybeSingle(),
+  ]);
+  if (
+    !clientRes.data ||
+    (clientRes.data as { organization_id: string }).organization_id !== organization.id
+  ) {
+    return NextResponse.json({ error: "client_record_not_in_organization" }, { status: 403 });
+  }
+  if (
+    !referralRes.data ||
+    (referralRes.data as { organization_id: string }).organization_id !== organization.id
+  ) {
+    return NextResponse.json({ error: "referral_not_in_organization" }, { status: 403 });
   }
 
   const result = await createAgencyApplication({

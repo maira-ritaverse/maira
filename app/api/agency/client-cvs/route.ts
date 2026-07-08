@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const guard = await requireOrgMember();
   if (!guard.ok) return guard.response;
-  const { organization, member } = guard;
+  const { organization, member, supabase } = guard;
 
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
@@ -32,6 +32,19 @@ export async function POST(request: Request) {
       { error: "validation_failed", details: parsed.error.format() },
       { status: 400 },
     );
+  }
+
+  // cross-org record binding 防止 (from-recording と 同 パターン)
+  const { data: clientRow } = await supabase
+    .from("client_records")
+    .select("id, organization_id")
+    .eq("id", parsed.data.client_record_id)
+    .maybeSingle();
+  if (
+    !clientRow ||
+    (clientRow as { organization_id: string }).organization_id !== organization.id
+  ) {
+    return NextResponse.json({ error: "client_record_not_in_organization" }, { status: 403 });
   }
 
   const result = await createAgencyClientCv({
