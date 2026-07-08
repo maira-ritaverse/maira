@@ -137,6 +137,41 @@ export default async function SettingsPage() {
           {isAdmin && (
             <Card className="p-4">
               <Link
+                href="/agency/settings/teams"
+                className="hover:bg-accent -m-4 flex items-center gap-3 rounded-md p-4 transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">team 管理 (管理者 向け)</p>
+                  <p className="text-muted-foreground text-xs">
+                    組織 内 の team を 作成 し、 顧客 リスト を チーム 別 に 分離。 大規模
+                    エージェント 向け
+                  </p>
+                </div>
+                <span className="text-muted-foreground text-sm">→</span>
+              </Link>
+            </Card>
+          )}
+
+          {isAdmin && (
+            <Card className="p-4">
+              <Link
+                href="/agency/admin/overview"
+                className="hover:bg-accent -m-4 flex items-center gap-3 rounded-md p-4 transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">組織 の 全体 像 (管理者 向け)</p>
+                  <p className="text-muted-foreground text-xs">
+                    組織 → team → member の 隚層 と 顧客 の 割 当 状況 を ツリー で 可視 化
+                  </p>
+                </div>
+                <span className="text-muted-foreground text-sm">→</span>
+              </Link>
+            </Card>
+          )}
+
+          {isAdmin && (
+            <Card className="p-4">
+              <Link
                 href="/agency/settings/ai-usage"
                 className="hover:bg-accent -m-4 flex items-center gap-3 rounded-md p-4 transition-colors"
               >
