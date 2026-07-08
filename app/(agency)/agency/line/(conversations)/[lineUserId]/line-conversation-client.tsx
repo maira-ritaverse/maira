@@ -300,6 +300,10 @@ export function LineConversationClient({
   };
 
   const onGenerateSuggestion = async () => {
+    // L1: 多重 発火 防止。 busy 中 の 呼び出し は 無視。 サーバ 側 の check→generate→
+    // record が 非 アトミック な の で、 3 タブ 連打 で AI 上限 ±数 件 超過 する 問題
+    // を UI 側 で 潰す。 サーバ 側 の 原子 化 は 全 AI feature 横断 の 大 リファクタ。
+    if (aiSuggestBusy) return;
     setAiSuggestBusy(true);
     setAiSuggestOpen(true);
     setAiSuggestError(null);
@@ -326,7 +330,9 @@ export function LineConversationClient({
     } catch (e) {
       setAiSuggestError(getErrorMessage(e));
     } finally {
-      setAiSuggestBusy(false);
+      // 1 秒 の クール ダウン を 挟んで から busy 解除。 リクエスト が 高速 に 完了
+      // した ケース でも 連打 防止 に なる。
+      setTimeout(() => setAiSuggestBusy(false), 1000);
     }
   };
 

@@ -24,6 +24,10 @@ export function LineLinkCodeButton({ clientRecordId }: Props) {
   const [copied, setCopied] = useState(false);
 
   const issue = async () => {
+    // L3: 秒 単位 で 連打 して 新規 コード を 大量 発行 する と、 顧客 が 最初 に
+    // コピー した コード が 別 発行 で 失効 する 混乱 が 生じる。 UI 側 で 連打 を
+    // 防ぐ。 サーバ 側 の 「60 秒 以内 の 既存 コード は 再利用」 は 後日 RPC で 対応。
+    if (busy) return;
     setBusy(true);
     setError(null);
     setCopied(false);
@@ -42,7 +46,8 @@ export function LineLinkCodeButton({ clientRecordId }: Props) {
     } catch (e) {
       setError(getErrorMessage(e));
     } finally {
-      setBusy(false);
+      // 1 秒 クール ダウン
+      setTimeout(() => setBusy(false), 1000);
     }
   };
 

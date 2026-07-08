@@ -223,7 +223,8 @@ function LinkRowItem({
   };
 
   const onIssueCode = async () => {
-    if (!selectedClientId) return;
+    // L3: 連打 防止 (詳細 は line-link-code-button の コメント 参照)
+    if (busy || !selectedClientId) return;
     setBusy(true);
     setActionError(null);
     setIssuedCode(null);
@@ -242,7 +243,8 @@ function LinkRowItem({
     } catch (e) {
       setActionError(getErrorMessage(e));
     } finally {
-      setBusy(false);
+      // 1 秒 クール ダウン
+      setTimeout(() => setBusy(false), 1000);
     }
   };
 
