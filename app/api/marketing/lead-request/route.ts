@@ -6,6 +6,7 @@ import {
   sendLeadRequestNotificationToOperator,
   type LeadRequestPayload,
 } from "@/lib/email/lead-request";
+import { consumeRateLimit, extractClientIp } from "@/lib/rate-limit/rate-limit";
 
 /**
  * POST /api/marketing/lead-request
@@ -35,6 +36,35 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  // H4 修正: 未認証 エンドポイント で honeypot のみ で bot 対策 が 不十分 だった。
+  // 10,000 件 の 実在 メール リスト で POST さ れる と 「ROI 試算 結果」 が スパム
+  // 大 量 送信 に なり Resend の SPF/DKIM 評価 と maira.pro ドメイン 評価 が
+  // 崩壊 する リスク が あった。 IP 1 分 3 回、 IP 1 時間 10 回 に 制限。
+  const ip = extractClientIp(request);
+  const [ipMinute, ipHour] = await Promise.all([
+    consumeRateLimit({
+      namespace: "marketing_lead:ip_minute",
+      identifier: ip,
+      windowSeconds: 60,
+      maxCount: 3,
+    }),
+    consumeRateLimit({
+      namespace: "marketing_lead:ip_hour",
+      identifier: ip,
+      windowSeconds: 3600,
+      maxCount: 10,
+    }),
+  ]);
+  if (ipMinute.limited || ipHour.limited) {
+    return NextResponse.json(
+      {
+        error: "rate_limited",
+        message: "送信 回数 が 多 すぎ ます。 時間 を おいて お試し ください。",
+      },
+      { status: 429 },
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -52,6 +82,18 @@ export async function POST(request: Request) {
 
   // honeypot 検出 = 200 を 返す (= bot に 「成功 した」 と 誤認 さ せる)
   if (parsed.data.website && parsed.data.website.trim() !== "") {
+    return NextResponse.json({ ok: true });
+  }
+
+  // email 単位 の 制限 (同 email に 過剰 な 自動 返信 を 送ら ない)
+  const emailCheck = await consumeRateLimit({
+    namespace: "marketing_lead:email",
+    identifier: parsed.data.email.toLowerCase(),
+    windowSeconds: 3600,
+    maxCount: 3,
+    hashIdentifier: true,
+  });
+  if (emailCheck.limited) {
     return NextResponse.json({ ok: true });
   }
 

@@ -25,6 +25,7 @@ import {
   type RoiSubmissionPayload,
 } from "@/lib/email/roi-submission";
 import { calculateRoi, type RoiInput } from "@/lib/marketing/roi";
+import { consumeRateLimit, extractClientIp } from "@/lib/rate-limit/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,33 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  // H4 修正: honeypot のみ で は 大量 送信 の 抑止 に なら ない ため、 IP × email
+  // ベース の sliding window 制限 を 追加。 上限 超過 で 429。
+  const ip = extractClientIp(request);
+  const [ipMinute, ipHour] = await Promise.all([
+    consumeRateLimit({
+      namespace: "marketing_roi:ip_minute",
+      identifier: ip,
+      windowSeconds: 60,
+      maxCount: 3,
+    }),
+    consumeRateLimit({
+      namespace: "marketing_roi:ip_hour",
+      identifier: ip,
+      windowSeconds: 3600,
+      maxCount: 10,
+    }),
+  ]);
+  if (ipMinute.limited || ipHour.limited) {
+    return NextResponse.json(
+      {
+        error: "rate_limited",
+        message: "送信 回数 が 多 すぎ ます。 時間 を おいて お試し ください。",
+      },
+      { status: 429 },
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -67,6 +95,18 @@ export async function POST(request: Request) {
 
   // honeypot 検出 = 「成功」 を 返して bot に 誤認 さ せる
   if (parsed.data.website && parsed.data.website.trim() !== "") {
+    return NextResponse.json({ ok: true });
+  }
+
+  const emailCheck = await consumeRateLimit({
+    namespace: "marketing_roi:email",
+    identifier: parsed.data.email.toLowerCase(),
+    windowSeconds: 3600,
+    maxCount: 3,
+    hashIdentifier: true,
+  });
+  if (emailCheck.limited) {
+    // 同 email に 何 度 も 自動 返信 を 送ら ない。 UI 側 は 通常 通り 成功 扱い。
     return NextResponse.json({ ok: true });
   }
 

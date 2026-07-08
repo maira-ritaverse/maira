@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { sendContactNotificationEmail } from "@/lib/email/contact";
+import { consumeRateLimit, extractClientIp } from "@/lib/rate-limit/rate-limit";
 import { createServiceClient } from "@/lib/supabase/service";
 
 /**
@@ -27,39 +28,18 @@ const contactSchema = z.object({
   message: z.string().min(10).max(2000),
 });
 
-// IP 単位の簡易レート制限(モジュールスコープのメモリ)。
-// Vercel サーバーレスは同一インスタンスが暫く再利用されるので、最小限の連投抑止には機能する。
-const RATE_LIMIT_WINDOW_MS = 60_000; // 60秒
-const RATE_LIMIT_MAX = 3; // 60秒に3通まで
-const rateLimitBuckets = new Map<string, number[]>();
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const windowStart = now - RATE_LIMIT_WINDOW_MS;
-  const history = (rateLimitBuckets.get(ip) ?? []).filter((t) => t > windowStart);
-  if (history.length >= RATE_LIMIT_MAX) {
-    rateLimitBuckets.set(ip, history);
-    return false;
-  }
-  history.push(now);
-  rateLimitBuckets.set(ip, history);
-  return true;
-}
-
-function getClientIp(request: Request): string {
-  // Vercel/Cloudflare 経由の場合は x-forwarded-for に元 IP が入る。
-  // 直接アクセス時(開発環境)は unknown でも構わない。
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    return forwarded.split(",")[0]?.trim() || "unknown";
-  }
-  return request.headers.get("x-real-ip") || "unknown";
-}
-
 export async function POST(request: Request) {
-  // 1) レート制限
-  const ip = getClientIp(request);
-  if (!checkRateLimit(ip)) {
+  // M5 修正: モジュール スコープ の Map は Vercel の lambda スケール アウト で
+  // インスタンス 間 の 状態 共有 が でき ず、 100 並列 POST で 実質 バイパス
+  // される。 Supabase テーブル に イベント を 記録 する sliding window 方式 に 移行。
+  const ip = extractClientIp(request);
+  const rate = await consumeRateLimit({
+    namespace: "contact:ip",
+    identifier: ip,
+    windowSeconds: 60,
+    maxCount: 3,
+  });
+  if (rate.limited) {
     return NextResponse.json(
       { ok: false, error: "送信回数が多すぎます。時間をおいて再度お試しください。" },
       { status: 429 },

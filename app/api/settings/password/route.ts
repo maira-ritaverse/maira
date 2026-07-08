@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { recordAuditLog } from "@/lib/audit/audit-log";
+import { consumeRateLimit } from "@/lib/rate-limit/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { changePasswordRequestSchema } from "@/lib/settings/types";
 
@@ -25,6 +26,25 @@ export async function POST(request: Request) {
   // user.email が無いケース(OAuth 等)は将来対応:今はメール/パスワード認証のみ
   if (!user || !user.email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // L1 修正: user_id 単位 の レート 制限 (5 分 に 5 回)。 セッション cookie 窃取
+  // 前提 で current_password を 総当り する 攻撃 の 抑制。 Supabase auth 側 の
+  // 制限 (~30 req/h) が 効く 前 に 独自 で 早めに 弾く。
+  const rate = await consumeRateLimit({
+    namespace: "settings_password:user",
+    identifier: user.id,
+    windowSeconds: 300,
+    maxCount: 5,
+  });
+  if (rate.limited) {
+    return NextResponse.json(
+      {
+        error: "rate_limited",
+        message: "試行 回数 が 多 すぎ ます。 数 分 後 に お試し ください。",
+      },
+      { status: 429 },
+    );
   }
 
   let body: unknown;
