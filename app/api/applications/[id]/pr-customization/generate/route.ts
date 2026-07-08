@@ -5,6 +5,7 @@ import { z } from "zod";
 import { readJsonBody, requireUser } from "@/lib/api/auth-guards";
 import { getModel, MODELS } from "@/lib/ai/client";
 import { aiErrorToStatusCode, categorizeAIError } from "@/lib/ai/error-handler";
+import { recordAnthropic429Event } from "@/lib/ai/rate-limit-monitor";
 import { buildJobTailoredPrPrompt, jobTailoredPrSchema } from "@/lib/ai/prompts/job-tailored-pr";
 import { getApplication } from "@/lib/applications/queries";
 import { getApplicationPrCustomization } from "@/lib/applications/pr-customizations";
@@ -137,6 +138,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     });
   } catch (err) {
     const info = categorizeAIError(err);
+    if (info.category === "rate_limit") void recordAnthropic429Event();
     return NextResponse.json(
       {
         error: "ai_generation_failed",

@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { getModel, MODELS } from "@/lib/ai/client";
 import { aiErrorToStatusCode, categorizeAIError } from "@/lib/ai/error-handler";
+import { recordAnthropic429Event } from "@/lib/ai/rate-limit-monitor";
 import {
   buildRecommendationLetterDraftPrompt,
   splitRecommendationLetterOutput,
@@ -152,6 +153,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("[recommendation-letter draft] generation error:", error);
     const info = categorizeAIError(error);
+    if (info.category === "rate_limit") void recordAnthropic429Event();
     return NextResponse.json(
       {
         error: "Failed to generate draft",

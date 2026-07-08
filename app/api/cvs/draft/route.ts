@@ -5,6 +5,7 @@ import { getCareerProfile } from "@/lib/career/conversations";
 import { checkAiUsageLimit, recordAiUsage } from "@/lib/features/ai-usage";
 import { getModel, MODELS } from "@/lib/ai/client";
 import { aiErrorToStatusCode, categorizeAIError } from "@/lib/ai/error-handler";
+import { recordAnthropic429Event } from "@/lib/ai/rate-limit-monitor";
 import {
   buildCvDraftPrompt,
   skillCandidatesSchema,
@@ -186,6 +187,7 @@ export async function POST(request: Request) {
     console.error("CV draft generation error:", error);
 
     const info = categorizeAIError(error);
+    if (info.category === "rate_limit") void recordAnthropic429Event();
     return NextResponse.json(
       {
         error: "Failed to generate draft",

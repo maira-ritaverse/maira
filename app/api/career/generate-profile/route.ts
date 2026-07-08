@@ -2,6 +2,7 @@ import { generateObject } from "ai";
 import { NextResponse } from "next/server";
 import { getModel, MODELS } from "@/lib/ai/client";
 import { aiErrorToStatusCode, categorizeAIError } from "@/lib/ai/error-handler";
+import { recordAnthropic429Event } from "@/lib/ai/rate-limit-monitor";
 import { CAREER_PROFILE_GENERATOR_SYSTEM_PROMPT } from "@/lib/ai/prompts/career-profile-generator";
 import { careerProfileSchema } from "@/lib/career/profile-schema";
 import {
@@ -81,8 +82,9 @@ ${conversationText}`,
   } catch (error) {
     console.error("Profile generation error:", error);
 
-    // categorizeAIError でエラーを分類し、ユーザー向け文言と HTTP ステータスを統一
+    // categorizeAIError で エラー を 分類 し、 ユーザー 向け 文言 と HTTP ステータス を 統一
     const info = categorizeAIError(error);
+    if (info.category === "rate_limit") void recordAnthropic429Event();
     return NextResponse.json(
       {
         error: "Failed to generate profile",

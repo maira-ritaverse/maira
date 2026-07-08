@@ -2,6 +2,7 @@ import { generateText } from "ai";
 import { NextResponse } from "next/server";
 import { getModel, MODELS } from "@/lib/ai/client";
 import { aiErrorToStatusCode, categorizeAIError } from "@/lib/ai/error-handler";
+import { recordAnthropic429Event } from "@/lib/ai/rate-limit-monitor";
 import { buildDocumentPrompt } from "@/lib/ai/prompts/document-writer";
 import { generateDocumentRequestSchema, requiresJobInfo } from "@/lib/documents/types";
 import { createClient } from "@/lib/supabase/server";
@@ -116,8 +117,9 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Document generation error:", error);
 
-    // categorizeAIError でエラーを分類し、ユーザー向け文言と HTTP ステータスを統一
+    // categorizeAIError でエラーを分類し、 ユーザー 向け 文言 と HTTP ステータス を 統一
     const info = categorizeAIError(error);
+    if (info.category === "rate_limit") void recordAnthropic429Event();
     return NextResponse.json(
       {
         error: "Failed to generate document",

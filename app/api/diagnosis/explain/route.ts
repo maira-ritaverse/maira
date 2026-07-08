@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getModel, MODELS } from "@/lib/ai/client";
 import { aiErrorToStatusCode, categorizeAIError } from "@/lib/ai/error-handler";
+import { recordAnthropic429Event } from "@/lib/ai/rate-limit-monitor";
 import {
   buildDiagnosisExplainUserPrompt,
   DIAGNOSIS_EXPLAIN_SYSTEM_PROMPT,
@@ -105,6 +106,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Diagnosis explanation error:", error);
     const info = categorizeAIError(error);
+    if (info.category === "rate_limit") void recordAnthropic429Event();
     return NextResponse.json(
       {
         error: "Failed to generate explanation",
