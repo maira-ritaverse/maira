@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { SettingsBackLink } from "@/components/features/settings/settings-back-link";
 import { decryptField } from "@/lib/crypto/field-encryption";
 import { getUserRole } from "@/lib/organizations/queries";
 import { resolveAvatarPublicUrl } from "@/lib/profile/avatar";
@@ -66,6 +67,7 @@ export default async function LineIntroSettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
+      <SettingsBackLink href="/agency/settings" />
       <div>
         <h1 className="text-2xl font-bold">LINE 自己紹介</h1>
         <p className="text-muted-foreground mt-1 text-sm">

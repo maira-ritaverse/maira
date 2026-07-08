@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { SettingsBackLink } from "@/components/features/settings/settings-back-link";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { rowToIntakeForm, type IntakeForm } from "@/lib/intake-forms/types";
@@ -42,6 +43,7 @@ export default async function IntakeFormsPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
+      <SettingsBackLink href="/agency/settings" />
       <div>
         <h1 className="text-2xl font-bold">埋め込みフォーム</h1>
         <p className="text-muted-foreground mt-1 text-sm">

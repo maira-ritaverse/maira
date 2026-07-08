@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { SettingsBackLink } from "@/components/features/settings/settings-back-link";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { rowToEmailTemplate, type EmailTemplate } from "@/lib/email-templates/templates";
@@ -41,6 +42,7 @@ export default async function EmailTemplatesPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
+      <SettingsBackLink href="/agency/settings" />
       <div>
         <h1 className="text-2xl font-bold">メールテンプレート</h1>
         <p className="text-muted-foreground mt-1 text-sm">

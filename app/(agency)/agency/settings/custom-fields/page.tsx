@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { SettingsBackLink } from "@/components/features/settings/settings-back-link";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { rowToCustomFieldDefinition, type CustomFieldDefinition } from "@/lib/custom-fields/types";
@@ -36,6 +37,7 @@ export default async function CustomFieldsPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
+      <SettingsBackLink href="/agency/settings" />
       <div>
         <h1 className="text-2xl font-bold">カスタムフィールド</h1>
         <p className="text-muted-foreground mt-1 text-sm">

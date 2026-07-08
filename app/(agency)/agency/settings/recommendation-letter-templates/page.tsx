@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { SettingsBackLink } from "@/components/features/settings/settings-back-link";
 import { getUserRole } from "@/lib/organizations/queries";
 import { listTemplates } from "@/lib/recommendation-letters/queries";
 import { createClient } from "@/lib/supabase/server";
@@ -29,6 +30,7 @@ export default async function RecommendationLetterTemplatesPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-4 px-4 py-6 lg:px-6">
+      <SettingsBackLink href="/agency/settings" />
       <div>
         <h1 className="text-2xl font-bold">推薦文テンプレート</h1>
         <p className="text-muted-foreground mt-1 text-sm">
