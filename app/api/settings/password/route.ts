@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordAuditLog } from "@/lib/audit/audit-log";
 import { createClient } from "@/lib/supabase/server";
 import { changePasswordRequestSchema } from "@/lib/settings/types";
 
@@ -70,6 +71,15 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+
+  // M1 修正: パスワード 変更 の 監査 ログ を 残す。 乗っ取り 事案 の 事後 追跡 用。
+  await recordAuditLog({
+    userId: user.id,
+    action: "password_changed",
+    metadata: { flow: "settings" },
+    ipAddress: request.headers.get("x-forwarded-for"),
+    userAgent: request.headers.get("user-agent"),
+  });
 
   return NextResponse.json({ success: true });
 }

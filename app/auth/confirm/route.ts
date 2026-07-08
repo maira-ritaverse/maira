@@ -1,6 +1,7 @@
 import { type EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
+import { issuePwResetTicket } from "@/lib/auth/pw-reset-ticket";
 import { safeNextOr } from "@/lib/auth/safe-next";
 import { createClient } from "@/lib/supabase/server";
 
@@ -42,5 +43,27 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
   }
 
-  return NextResponse.redirect(`${origin}${next}`);
+  const res = NextResponse.redirect(`${origin}${next}`);
+
+  // H1 修正: type='recovery' で 認証 が 通った 場合 だけ、 短命 の パスワード リセット
+  // チケット を 発行 する。 updatePassword server action は この チケット を 必須 化
+  // する ため、 通常 ログイン セッション だけ で は 現 パスワード なし の 変更 が
+  // できない よう に なる。
+  if (type === "recovery") {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const ticket = issuePwResetTicket(user.id);
+      res.cookies.set(ticket.name, ticket.value, {
+        maxAge: ticket.maxAge,
+        httpOnly: ticket.httpOnly,
+        secure: ticket.secure,
+        sameSite: ticket.sameSite,
+        path: ticket.path,
+      });
+    }
+  }
+
+  return res;
 }

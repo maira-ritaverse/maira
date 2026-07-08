@@ -1,12 +1,13 @@
 "use server";
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { SignupInput, LoginInput } from "@/lib/validations/auth";
 import { recordAuditLog } from "@/lib/audit/audit-log";
+import { PW_RESET_TICKET_COOKIE, verifyPwResetTicket } from "@/lib/auth/pw-reset-ticket";
 import { safeNextOr } from "@/lib/auth/safe-next";
 import { getSiteUrl } from "@/lib/config/site-url";
 import { isOpenSignupEnabled } from "@/lib/config/signup-mode";
@@ -240,6 +241,17 @@ export async function updatePassword(newPassword: string) {
     };
   }
 
+  // H1 修正: recovery セッション 経由 かどうか を チケット cookie で 検証。
+  // 通常 ログイン セッション で /reset-password に 直行 する セッション 乗っ取り 経路 を 塞ぐ。
+  const cookieStore = await cookies();
+  const ticket = cookieStore.get(PW_RESET_TICKET_COOKIE)?.value;
+  if (!verifyPwResetTicket(ticket, user.id)) {
+    return {
+      error:
+        "パスワード変更 の 有効 期限 が 切れて い ます。 /forgot-password から やり 直し てください。",
+    };
+  }
+
   const { error } = await supabase.auth.updateUser({
     password: newPassword,
   });
@@ -254,6 +266,14 @@ export async function updatePassword(newPassword: string) {
       error: "パスワードの更新に失敗しました。お手数ですが再度お試しください。",
     };
   }
+
+  // 監査 ログ (M1) + チケット の 使い 切り 削除
+  await recordAuditLog({
+    userId: user.id,
+    action: "password_changed",
+    metadata: { flow: "reset" },
+  });
+  cookieStore.delete(PW_RESET_TICKET_COOKIE);
 
   return { success: true as const };
 }
