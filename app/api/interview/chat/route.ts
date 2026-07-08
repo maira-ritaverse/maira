@@ -2,7 +2,7 @@ import { streamText, convertToModelMessages, type UIMessage } from "ai";
 import { NextResponse } from "next/server";
 
 import { getModel, MODELS } from "@/lib/ai/client";
-import { categorizeAIError } from "@/lib/ai/error-handler";
+import { logAiStreamError } from "@/lib/ai/rate-limit-monitor";
 import { buildInterviewSystemPrompt } from "@/lib/ai/prompts/mock-interview";
 import { createClient } from "@/lib/supabase/server";
 
@@ -48,8 +48,8 @@ export async function POST(request: Request) {
     system: buildInterviewSystemPrompt(positionContext),
     messages: modelMessages,
     onError: ({ error }) => {
-      const info = categorizeAIError(error);
-      console.error("[interview chat] streaming error:", info.category, info.userMessage, error);
+      // C2-3: 分類 + サーバー ログ + 429 の 場合 は 監視 テーブル に 記録
+      logAiStreamError(error, "[interview chat]");
     },
   });
 

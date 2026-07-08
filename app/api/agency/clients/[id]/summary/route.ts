@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { streamText } from "ai";
 import { getModel, MODELS } from "@/lib/ai/client";
 import { aiErrorToStatusCode, categorizeAIError } from "@/lib/ai/error-handler";
+import { logAiStreamError, recordAnthropic429Event } from "@/lib/ai/rate-limit-monitor";
 import {
   AGENCY_CLIENT_SUMMARY_SYSTEM_PROMPT,
   buildAgencyClientSummaryPrompt,
@@ -118,15 +119,8 @@ export async function POST(_request: Request, { params }: RouteParams) {
       system: AGENCY_CLIENT_SUMMARY_SYSTEM_PROMPT,
       prompt: userPrompt,
       onError: ({ error }) => {
-        // ストリーム途中のエラーはサーバログに分類して残す。
-        // クライアント側にはストリーム途切れとして見える。
-        const info = categorizeAIError(error);
-        console.error(
-          "Agency client summary streaming error:",
-          info.category,
-          info.userMessage,
-          error,
-        );
+        // C2-3: 分類 + サーバー ログ + 429 の 場合 は 監視 テーブル に 記録
+        logAiStreamError(error, "Agency client summary");
       },
     });
 
@@ -137,9 +131,9 @@ export async function POST(_request: Request, { params }: RouteParams) {
     // プレーンテキストストリームを返す(useChat 不要・fetch + ReadableStream で読む)
     return result.toTextStreamResponse();
   } catch (err) {
-    // ストリーム開始前の同期エラーは JSON で返す。
-    // 内部スキーマや API キーの状態は漏らさず、汎用文言に倒す。
+    // ストリーム 開始 前 の 同期 エラー は JSON で 返す。 429 の 場合 は 監視 記録 も。
     const info = categorizeAIError(err);
+    if (info.category === "rate_limit") void recordAnthropic429Event();
     return NextResponse.json(
       {
         error: info.userMessage,

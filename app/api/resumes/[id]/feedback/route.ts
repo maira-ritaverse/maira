@@ -2,7 +2,7 @@ import { streamText } from "ai";
 import { NextResponse } from "next/server";
 
 import { getModel, MODELS } from "@/lib/ai/client";
-import { categorizeAIError } from "@/lib/ai/error-handler";
+import { logAiStreamError } from "@/lib/ai/rate-limit-monitor";
 import { RESUME_FEEDBACK_SYSTEM_PROMPT } from "@/lib/ai/prompts/resume-feedback";
 import { getResume } from "@/lib/resumes/queries";
 import { createClient } from "@/lib/supabase/server";
@@ -59,8 +59,8 @@ ${resume.personalRequests || "(未入力)"}
 
 ${resumeText}`,
     onError: ({ error }) => {
-      const info = categorizeAIError(error);
-      console.error("[resume feedback] streaming error:", info.category, info.userMessage, error);
+      // C2-3: 分類 + ログ + 429 の 場合 は 監視 テーブル に 記録
+      logAiStreamError(error, "[resume feedback]");
     },
   });
 
