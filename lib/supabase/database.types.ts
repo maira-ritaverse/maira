@@ -792,6 +792,7 @@ export type Database = {
           client_record_id: string | null;
           created_at: string;
           duration_seconds: number | null;
+          encrypted_download_token: string | null;
           encrypted_extraction: string | null;
           encrypted_transcript: string | null;
           external_download_url: string | null;
@@ -816,6 +817,7 @@ export type Database = {
           client_record_id?: string | null;
           created_at?: string;
           duration_seconds?: number | null;
+          encrypted_download_token?: string | null;
           encrypted_extraction?: string | null;
           encrypted_transcript?: string | null;
           external_download_url?: string | null;
@@ -840,6 +842,7 @@ export type Database = {
           client_record_id?: string | null;
           created_at?: string;
           duration_seconds?: number | null;
+          encrypted_download_token?: string | null;
           encrypted_extraction?: string | null;
           encrypted_transcript?: string | null;
           external_download_url?: string | null;
@@ -1297,7 +1300,7 @@ export type Database = {
           desired_industries: string[] | null;
           desired_locations: string[] | null;
           desired_occupations: string[] | null;
-          email: string;
+          email: string | null;
           email_distribution_enabled: boolean;
           email2: string | null;
           encrypted_contact_method_preference: string | null;
@@ -1354,7 +1357,7 @@ export type Database = {
           desired_industries?: string[] | null;
           desired_locations?: string[] | null;
           desired_occupations?: string[] | null;
-          email: string;
+          email?: string | null;
           email_distribution_enabled?: boolean;
           email2?: string | null;
           encrypted_contact_method_preference?: string | null;
@@ -1411,7 +1414,7 @@ export type Database = {
           desired_industries?: string[] | null;
           desired_locations?: string[] | null;
           desired_occupations?: string[] | null;
-          email?: string;
+          email?: string | null;
           email_distribution_enabled?: boolean;
           email2?: string | null;
           encrypted_contact_method_preference?: string | null;
@@ -2612,11 +2615,13 @@ export type Database = {
           handled_at: string | null;
           handled_by_user_id: string | null;
           id: string;
+          last_activity_at: string;
           line_user_id: string;
           link_method: string | null;
           linked_at: string | null;
           organization_id: string;
           picture_url: string | null;
+          stale_alerted_at: string | null;
           status_message: string | null;
           unfollowed_at: string | null;
           updated_at: string;
@@ -2632,11 +2637,13 @@ export type Database = {
           handled_at?: string | null;
           handled_by_user_id?: string | null;
           id?: string;
+          last_activity_at?: string;
           line_user_id: string;
           link_method?: string | null;
           linked_at?: string | null;
           organization_id: string;
           picture_url?: string | null;
+          stale_alerted_at?: string | null;
           status_message?: string | null;
           unfollowed_at?: string | null;
           updated_at?: string;
@@ -2652,11 +2659,13 @@ export type Database = {
           handled_at?: string | null;
           handled_by_user_id?: string | null;
           id?: string;
+          last_activity_at?: string;
           line_user_id?: string;
           link_method?: string | null;
           linked_at?: string | null;
           organization_id?: string;
           picture_url?: string | null;
+          stale_alerted_at?: string | null;
           status_message?: string | null;
           unfollowed_at?: string | null;
           updated_at?: string;
@@ -3460,7 +3469,11 @@ export type Database = {
       organization_members: {
         Row: {
           created_at: string;
+          encrypted_line_intro_body: string | null;
           id: string;
+          line_intro_headline: string | null;
+          line_intro_photo_storage_path: string | null;
+          line_intro_updated_at: string | null;
           notification_prefs: Json;
           organization_id: string;
           role: string;
@@ -3469,7 +3482,11 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
+          encrypted_line_intro_body?: string | null;
           id?: string;
+          line_intro_headline?: string | null;
+          line_intro_photo_storage_path?: string | null;
+          line_intro_updated_at?: string | null;
           notification_prefs?: Json;
           organization_id: string;
           role?: string;
@@ -3478,7 +3495,11 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          encrypted_line_intro_body?: string | null;
           id?: string;
+          line_intro_headline?: string | null;
+          line_intro_photo_storage_path?: string | null;
+          line_intro_updated_at?: string | null;
           notification_prefs?: Json;
           organization_id?: string;
           role?: string;
@@ -3925,6 +3946,24 @@ export type Database = {
           recovery_key_created_at?: string;
           recovery_key_hint?: string | null;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      rate_limit_events: {
+        Row: {
+          bucket_key: string;
+          id: string;
+          occurred_at: string;
+        };
+        Insert: {
+          bucket_key: string;
+          id?: string;
+          occurred_at?: string;
+        };
+        Update: {
+          bucket_key?: string;
+          id?: string;
+          occurred_at?: string;
         };
         Relationships: [];
       };
@@ -4895,6 +4934,14 @@ export type Database = {
           p_organization_id: string;
         };
         Returns: string;
+      };
+      consume_rate_limit: {
+        Args: {
+          p_bucket_key: string;
+          p_max_count: number;
+          p_window_seconds: number;
+        };
+        Returns: boolean;
       };
       count_org_ai_usage_this_month: {
         Args: { p_kind: string; p_month_start: string };

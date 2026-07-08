@@ -366,14 +366,19 @@ async function handleCheckoutCompleted(
     return { ok: true, reason: "org_is_exempt" };
   }
 
-  const { error } = await admin
-    .from("organization_plans")
-    .update({
+  // M3 修正: organization_plans 行 が 存在 しない 組織 は upsert で 補完 する。
+  // 従来 は .update() で 0 row silent skip → Stripe 課金 開始 済 なのに DB 未反映
+  // という 不整合 が 発生 する 可能性 が あった。 subscription.updated 側 で 本 更新
+  // が 走る が、 それ より 前 に 参照 された 場合 に UI が 空 に なる の を 防ぐ。
+  const { error } = await admin.from("organization_plans").upsert(
+    {
+      organization_id: orgId,
       stripe_customer_id: session.customer,
       stripe_subscription_id: session.subscription,
       updated_at: new Date().toISOString(),
-    })
-    .eq("organization_id", orgId);
+    },
+    { onConflict: "organization_id" },
+  );
   if (error) return { ok: false, reason: `db_update_failed:${error.message}` };
   return { ok: true };
 }
@@ -413,26 +418,14 @@ async function handleSubscriptionSync(
     return { ok: true, reason: "org_is_exempt" };
   }
 
-  // 順序 保証 の た め、 UPDATE 前 に 「この event を 既に 適用 して いない か」 と
-  // 「もっと 新しい event が 既に 適用 済み で ない か」 を 確認 する。
-  // event.created (Stripe 側 の 発火 時刻) と last_synced_at を 突合。
+  // H2 + M3 修正: SELECT+UPDATE の check-then-update だと 行 ロック が 無く、
+  // Stripe が バースト 配信 した 際 に 両 lambda が stale ゲート を 通過 して
+  // 後勝ち で 古い スナップ ショット が 残る 恐れ が あった。 また 組織 作成 時 の
+  // organization_plans insert が 失敗 して いる 組織 では UPDATE が 0 row silent
+  // skip に なり Stripe 課金 だけ 開始 する バグ が あった。
+  // apply_stripe_subscription_sync RPC は SELECT FOR UPDATE + UPSERT + idempotency
+  // を 一体 で 処理 する ため、 両 問題 を 同時 に 解消 できる。
   const eventIsoAt = new Date(eventCreatedAtSec * 1000).toISOString();
-  const { data: existing } = await admin
-    .from("organization_plans")
-    .select("last_stripe_event_id, last_synced_at")
-    .eq("organization_id", orgId)
-    .maybeSingle();
-  if (existing?.last_stripe_event_id === eventId) {
-    return { ok: true, reason: "duplicate_event_id" };
-  }
-  if (existing?.last_synced_at) {
-    const lastSyncMs = new Date(existing.last_synced_at).getTime();
-    if (lastSyncMs > eventCreatedAtSec * 1000) {
-      // 新しい event で 既に 上書き 済み。 古い event を 反映 させて はいけない。
-      return { ok: true, reason: "stale_event" };
-    }
-  }
-
   const deleted = eventType === "customer.subscription.deleted";
   const status = mapOrgPlanStatus(sub.status, deleted);
 
@@ -445,32 +438,39 @@ async function handleSubscriptionSync(
   // Extra Seat = seat_count - 3 (Base に 3 席 込 み)。 DB に は 総 席 数 を 保存 する。
   const totalSeats = parsed.seatCount + 3;
 
-  const { error } = await admin
-    .from("organization_plans")
-    .update({
-      tier: parsed.tier,
-      cycle: parsed.cycle,
-      status,
-      seat_count: totalSeats,
-      ai_boost_enabled: parsed.aiBoostEnabled,
-      stripe_customer_id: sub.customer,
-      stripe_subscription_id: sub.id,
-      stripe_subscription_item_id_base: parsed.itemIds.base,
-      stripe_subscription_item_id_extra_seat: parsed.itemIds.extraSeat,
-      stripe_subscription_item_id_ai_boost: parsed.itemIds.aiBoost,
-      trial_started_at: toIso(sub.trial_start),
-      trial_ends_at: toIso(sub.trial_end),
-      current_period_start: toIso(sub.current_period_start),
-      current_period_end: toIso(sub.current_period_end),
-      next_billed_at: nextBilledAt,
-      canceled_at: deleted ? new Date().toISOString() : toIso(sub.canceled_at),
-      last_stripe_event_id: eventId,
-      // event.created を 保存 して 順序 判定 の source of truth に する
-      last_synced_at: eventIsoAt,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("organization_id", orgId);
+  const { error } = await admin.rpc("apply_stripe_subscription_sync", {
+    p_organization_id: orgId,
+    p_event_id: eventId,
+    p_event_created_at: eventIsoAt,
+    p_tier: parsed.tier,
+    p_cycle: parsed.cycle,
+    p_status: status,
+    p_seat_count: totalSeats,
+    p_ai_boost_enabled: parsed.aiBoostEnabled,
+    p_stripe_customer_id: sub.customer,
+    p_stripe_subscription_id: sub.id,
+    p_stripe_item_base: parsed.itemIds.base,
+    p_stripe_item_extra_seat: parsed.itemIds.extraSeat,
+    p_stripe_item_ai_boost: parsed.itemIds.aiBoost,
+    p_current_period_start: toIso(sub.current_period_start),
+    p_current_period_end: toIso(sub.current_period_end),
+    p_next_billed_at: nextBilledAt,
+    p_canceled_at: deleted ? new Date().toISOString() : toIso(sub.canceled_at),
+  });
   if (error) return { ok: false, reason: `db_update_failed:${error.message}` };
+
+  // RPC の 引数 に 含まれ ない trial 日時 は、 通過 (idempotency ゲート 通過) 後 に
+  // 別 UPDATE で 補完 する。 event 順序 チェック は RPC が last_synced_at を 更新
+  // した 直後 なので、 このタイミング で 上書き して 安全。
+  const trialStart = toIso(sub.trial_start);
+  const trialEnd = toIso(sub.trial_end);
+  if (trialStart !== null || trialEnd !== null) {
+    await admin
+      .from("organization_plans")
+      .update({ trial_started_at: trialStart, trial_ends_at: trialEnd })
+      .eq("organization_id", orgId)
+      .eq("last_stripe_event_id", eventId);
+  }
   return { ok: true };
 }
 
@@ -492,14 +492,33 @@ async function handleTrialWillEnd(
   return { ok: true };
 }
 
+/**
+ * invoice event から organization_id を 逆引き する。
+ *
+ * M2 修正 の 背景: Stripe は subscription.metadata を invoice.metadata に コピー
+ * しない 仕様 の ため、 従来 の `invoice.metadata.scope === "organization"` チェック
+ * は 常 に false と なり silent skip して いた。
+ * 代替 と して invoice.subscription を 使い organization_plans を 逆引き する。
+ */
+async function resolveOrgIdFromInvoice(
+  admin: AdminClient,
+  invoice: StripeInvoice,
+): Promise<string | null> {
+  if (!invoice.subscription) return null;
+  const { data } = await admin
+    .from("organization_plans")
+    .select("organization_id")
+    .eq("stripe_subscription_id", invoice.subscription)
+    .maybeSingle();
+  return data?.organization_id ?? null;
+}
+
 async function handleInvoicePaid(
   admin: AdminClient,
   invoice: StripeInvoice,
 ): Promise<{ ok: boolean; reason?: string }> {
-  const scope = invoice.metadata?.scope;
-  const orgId = invoice.metadata?.organization_id;
-  if (scope !== "organization" || !orgId) return { ok: true, reason: "not_organization_scope" };
-  if (!invoice.subscription) return { ok: true, reason: "no_subscription" };
+  const orgId = await resolveOrgIdFromInvoice(admin, invoice);
+  if (!orgId) return { ok: true, reason: "no_org_link" };
 
   if (await isOrgExempt(admin, orgId)) return { ok: true, reason: "org_is_exempt" };
 
@@ -508,7 +527,10 @@ async function handleInvoicePaid(
     : null;
   const periodEnd = invoice.period_end ? new Date(invoice.period_end * 1000).toISOString() : null;
 
-  const { error } = await admin
+  // M3 修正: .select("organization_id") で 影響 行数 を 検知 し、
+  // 0 row (organization_plans が 未作成) の 場合 は 明示 的 に silent_skip を 返す。
+  // subscription.updated 側 で 状態 更新 が 走る ため、 ここ で は fatal 化 し ない。
+  const { data, error } = await admin
     .from("organization_plans")
     .update({
       status: "active",
@@ -516,8 +538,15 @@ async function handleInvoicePaid(
       current_period_end: periodEnd,
     })
     .eq("organization_id", orgId)
-    .in("status", ["active", "past_due", "trialing"]);
+    .in("status", ["active", "past_due", "trialing"])
+    .select("organization_id");
   if (error) return { ok: false, reason: `db_update_failed:${error.message}` };
+  if (!data || data.length === 0) {
+    console.warn(
+      `[stripe-webhook] Invoice paid but no matching plan row org=${orgId}, invoice=${invoice.id}`,
+    );
+    return { ok: true, reason: "no_plan_row_or_status_gate" };
+  }
   console.warn(`[stripe-webhook] Invoice paid for org=${orgId}, invoice=${invoice.id}`);
   return { ok: true };
 }
@@ -526,21 +555,26 @@ async function handleInvoicePaymentFailed(
   admin: AdminClient,
   invoice: StripeInvoice,
 ): Promise<{ ok: boolean; reason?: string }> {
-  const scope = invoice.metadata?.scope;
-  const orgId = invoice.metadata?.organization_id;
-  if (scope !== "organization" || !orgId) return { ok: true, reason: "not_organization_scope" };
+  const orgId = await resolveOrgIdFromInvoice(admin, invoice);
+  if (!orgId) return { ok: true, reason: "no_org_link" };
 
   if (await isOrgExempt(admin, orgId)) return { ok: true, reason: "org_is_exempt" };
 
-  const { error } = await admin
+  const { data, error } = await admin
     .from("organization_plans")
     .update({
       status: "past_due",
     })
     .eq("organization_id", orgId)
-    .neq("status", "canceled");
+    .neq("status", "canceled")
+    .select("organization_id");
   if (error) return { ok: false, reason: `db_update_failed:${error.message}` };
-
+  if (!data || data.length === 0) {
+    console.warn(
+      `[stripe-webhook] Invoice payment failed but no matching plan row org=${orgId}, invoice=${invoice.id}`,
+    );
+    return { ok: true, reason: "no_plan_row_or_canceled" };
+  }
   console.warn(
     `[stripe-webhook] Invoice payment failed org=${orgId}, invoice=${invoice.id}, attempt=${invoice.attempt_count}`,
   );

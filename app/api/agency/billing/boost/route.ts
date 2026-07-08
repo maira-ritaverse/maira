@@ -131,6 +131,9 @@ export async function POST() {
     });
 
     // DB 反映 (Webhook でも 反映 され るが、 UI 即応 の ため 先 に 更新)
+    // M4 修正: last_synced_at を 現在時刻 で 番兵 更新 する。 Stripe が この API
+    // 呼び出し 前 に 生成 した 古い customer.subscription.updated (event.created <
+    // now()) が 順序 逆転 で 到着 して も RPC の stale ゲート で 弾かれる ように する。
     const admin = createServiceClient();
     await admin
       .from("organization_plans")
@@ -138,6 +141,7 @@ export async function POST() {
         stripe_subscription_item_id_ai_boost: created.id,
         ai_boost_enabled: true,
         tier: "standard_pro",
+        last_synced_at: new Date().toISOString(),
       })
       .eq("organization_id", organization.id);
 
@@ -193,6 +197,7 @@ export async function DELETE() {
     });
 
     // tier と ai_boost_enabled を 同時 更新 (CHECK 制約 で 整合 が 保た れる)
+    // M4 修正: POST 側 と 同じ 理由 で last_synced_at を 番兵 更新。
     const admin = createServiceClient();
     await admin
       .from("organization_plans")
@@ -200,6 +205,7 @@ export async function DELETE() {
         stripe_subscription_item_id_ai_boost: null,
         ai_boost_enabled: false,
         tier: "standard",
+        last_synced_at: new Date().toISOString(),
       })
       .eq("organization_id", organization.id);
 
