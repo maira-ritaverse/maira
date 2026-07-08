@@ -20,7 +20,8 @@ export type DuplicateMatchReason = "email" | "phone" | "name_birthdate" | "name_
 export type ClientForDuplicateDetection = {
   id: string;
   name: string;
-  email: string;
+  /** LINE 由来 で 未 入力 の 場合 は null。 null は dedup キー から 除外 する。 */
+  email: string | null;
   phone: string | null;
   nameKana: string | null;
   birthDate: string | null;
@@ -104,8 +105,9 @@ export function findDuplicateClientGroups<T extends ClientForDuplicateDetection>
   for (let i = 0; i < n; i++) {
     const c = clients[i];
 
-    // (1) email
-    const emailKey = c.email.trim().toLowerCase();
+    // (1) email。 null は dedup 対象 外 (LINE 由来 で 未 入力 の 顧客 が 全員 同じ グループ
+    // に なる 事故 を 避ける)。
+    const emailKey = c.email?.trim().toLowerCase() ?? "";
     if (emailKey) {
       const prev = emailIndex.get(emailKey);
       if (prev !== undefined) {

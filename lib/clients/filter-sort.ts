@@ -44,7 +44,7 @@ export type StatusFilter = ClientStatus | "all";
  */
 export type ClientForFilterSort = {
   name: string;
-  email: string;
+  email: string | null;
   status: ClientStatus;
   createdAt: string;
   entrySite: string | null;
@@ -149,7 +149,7 @@ export function applyClientsFilterSort<T extends ClientForFilterSort>(
   if (q) {
     result = result.filter((c) => {
       if (c.name.toLowerCase().includes(q)) return true;
-      if (c.email.toLowerCase().includes(q)) return true;
+      if (c.email && c.email.toLowerCase().includes(q)) return true;
       if (c.nameKana && c.nameKana.toLowerCase().includes(q)) return true;
       return false;
     });
@@ -227,7 +227,7 @@ function compareByColumn<T extends ClientForFilterSort>(a: T, b: T, col: SortCol
     case "nameKana":
       return nullableLocaleCompare(a.nameKana, b.nameKana);
     case "email":
-      return a.email.localeCompare(b.email);
+      return nullableLocaleCompare(a.email, b.email);
     case "phone":
       return nullableLocaleCompare(a.phone ?? null, b.phone ?? null);
     case "prefecture":

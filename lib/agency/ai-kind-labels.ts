@@ -20,6 +20,7 @@ export const AI_KIND_LABEL: Record<string, string> = {
   agency_recording_processed: "面談録音 AI 処理(月 50 件)",
   agency_client_summary: "クライアント詳細 AI 状況サマリー",
   agency_line_reply_suggest: "LINE 返信案 AI 提案",
+  agency_line_client_extract: "LINE 会話から CRM 情報 抽出",
 };
 
 /** 上限設定 UI で「組織横断」「求職者 1 人あたり」を 表示する分類 */
@@ -35,6 +36,7 @@ export const AI_KIND_SCOPE_LABEL: Record<string, "agency_org" | "seeker_per_user
   agency_recording_processed: "agency_org",
   agency_client_summary: "agency_org",
   agency_line_reply_suggest: "agency_org",
+  agency_line_client_extract: "agency_org",
 };
 
 /**
@@ -53,6 +55,7 @@ export const AI_KIND_UNIT_COST_USD: Record<string, number> = {
   agency_recording_processed: 0.58, // Whisper $0.36 (60min) + Claude $0.22 (3 コール)
   agency_client_summary: 0.015, // 軽量 ストリーミング (約 2k input + 800 output 想定)
   agency_line_reply_suggest: 0.012, // Claude 短会話 (約 1.5k input + 500 output 想定)
+  agency_line_client_extract: 0.015, // 会話 全 30 件 + JSON 出力 (約 2k input + 500 output 想定)
 };
 
 export function estimateCostUsd(byKind: Record<string, number>): number {

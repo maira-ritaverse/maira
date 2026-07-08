@@ -69,7 +69,7 @@ export async function POST(request: Request, { params }: RouteParams) {
   const client = clientRow as {
     id: string;
     name: string;
-    email: string;
+    email: string | null;
     email_distribution_enabled: boolean;
   };
 
@@ -77,6 +77,12 @@ export async function POST(request: Request, { params }: RouteParams) {
   if (!client.email_distribution_enabled) {
     return NextResponse.json(
       { error: "このクライアントは配信停止に設定されています" },
+      { status: 400 },
+    );
+  }
+  if (!client.email || !client.email.trim()) {
+    return NextResponse.json(
+      { error: "顧客のメールアドレスが未登録です。詳細画面で補完してください。" },
       { status: 400 },
     );
   }

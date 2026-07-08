@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   AGENCY_CLIENT_SUMMARY_FREE_MONTHLY,
   AGENCY_CV_DRAFT_FREE_MONTHLY,
+  AGENCY_LINE_CLIENT_EXTRACT_FREE_MONTHLY,
   AGENCY_LINE_REPLY_SUGGEST_FREE_MONTHLY,
   AGENCY_RESUME_DRAFT_FREE_MONTHLY,
   CSV_COLUMN_MAPPING_FREE_MONTHLY,
@@ -164,6 +165,7 @@ export const AI_KIND_FREE_DEFAULT: Record<AiUsageKind, number> = {
   agency_recording_processed: 0,
   agency_client_summary: AGENCY_CLIENT_SUMMARY_FREE_MONTHLY,
   agency_line_reply_suggest: AGENCY_LINE_REPLY_SUGGEST_FREE_MONTHLY,
+  agency_line_client_extract: AGENCY_LINE_CLIENT_EXTRACT_FREE_MONTHLY,
 };
 
 export type AiQuotaRow = {

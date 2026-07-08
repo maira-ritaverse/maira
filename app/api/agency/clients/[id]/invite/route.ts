@@ -144,8 +144,20 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   const organizationName = guard.role.organization!.name;
 
+  // email が 未 入力 (LINE 由来 で AI 抽出 でき なかった 等) の 場合 は 招待 でき ない。
+  const clientEmail = (clientRow as { email: string | null }).email;
+  if (!clientEmail || !clientEmail.trim()) {
+    return NextResponse.json(
+      {
+        error: "no_email",
+        message:
+          "顧客 の メール アドレス が 未 登録 で 招待 メール を 送れ ません。 詳細 画面 で 補完 して ください。",
+      },
+      { status: 400 },
+    );
+  }
   const emailResult = await sendClientInvitationEmail({
-    toEmail: clientRow.email as string,
+    toEmail: clientEmail,
     seekerName: (clientRow.name as string) ?? "",
     organizationName,
     advisorName,

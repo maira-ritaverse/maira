@@ -30,7 +30,7 @@ const requestSchema = z.object({
 
 type Outcome = {
   clientId: string;
-  status: "sent" | "suppressed_distribution_off" | "failed";
+  status: "sent" | "suppressed_distribution_off" | "suppressed_no_email" | "failed";
   message?: string;
 };
 
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
   type Row = {
     id: string;
     name: string;
-    email: string;
+    email: string | null;
     email_distribution_enabled: boolean;
   };
   const rows = clientRows as Row[];
@@ -108,6 +108,13 @@ export async function POST(request: Request) {
     if (!c.email_distribution_enabled) {
       slots[index] = {
         result: { clientId: c.id, status: "suppressed_distribution_off" },
+        interaction: null,
+      };
+      return;
+    }
+    if (!c.email || !c.email.trim()) {
+      slots[index] = {
+        result: { clientId: c.id, status: "suppressed_no_email" },
         interaction: null,
       };
       return;

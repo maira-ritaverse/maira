@@ -142,7 +142,7 @@ export type ClientRecord = {
   organizationId: string;
   assignedMemberId: string | null;
   name: string;
-  email: string;
+  email: string | null;
   phone: string | null;
   status: ClientStatus;
   linkStatus: ClientLinkStatus;

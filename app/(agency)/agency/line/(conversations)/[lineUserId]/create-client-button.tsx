@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { UserPlus } from "lucide-react";
+import { Sparkles, UserPlus } from "lucide-react";
 
 import { getErrorMessage } from "@/lib/api/client-fetch";
 
@@ -24,7 +24,12 @@ export function CreateClientButton({ lineUserId, displayName }: Props) {
 
   const onClick = async () => {
     const name = displayName ?? "(名前なし)";
-    if (!window.confirm(`「${name}」を CRM の 新規 顧客 として 追加 します。 よろしい ですか?`)) {
+    if (
+      !window.confirm(
+        `「${name}」を CRM の 新規 顧客 として 追加 します。\n\n` +
+          `LINE 会話 から AI が フリガナ / メール / 電話 / 希望 条件 / メモ を 抽出 して 自動 入力 します。 続行 しますか?`,
+      )
+    ) {
       return;
     }
     setBusy(true);
@@ -56,10 +61,19 @@ export function CreateClientButton({ lineUserId, displayName }: Props) {
         onClick={onClick}
         disabled={busy}
         className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-900 transition-colors hover:bg-emerald-100 disabled:opacity-50"
-        title="LINE 友達 を CRM 顧客 として 追加"
+        title="LINE 友達 を CRM 顧客 として 追加 (AI で 会話 から 情報 抽出)"
       >
-        <UserPlus className="h-3 w-3" aria-hidden />
-        {busy ? "追加中…" : "CRM に 追加"}
+        {busy ? (
+          <>
+            <Sparkles className="h-3 w-3 animate-pulse" aria-hidden />
+            AI 抽出中…
+          </>
+        ) : (
+          <>
+            <UserPlus className="h-3 w-3" aria-hidden />
+            CRM に 追加
+          </>
+        )}
       </button>
       {error && <p className="text-[10px] text-red-600">{error}</p>}
     </div>

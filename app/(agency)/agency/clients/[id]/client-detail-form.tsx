@@ -89,7 +89,7 @@ export function ClientDetailForm({ client, seekerPhoto }: Props) {
     resolver: zodResolver(updateClientRequestSchema) as unknown as Resolver<UpdateClientRequest>,
     defaultValues: {
       name: client.name,
-      email: client.email,
+      email: client.email ?? "",
       phone: client.phone ?? "",
       status: client.status,
       notes: client.notes ?? "",
