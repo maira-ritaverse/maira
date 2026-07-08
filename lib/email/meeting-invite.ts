@@ -12,6 +12,8 @@
  *   ・添付 .ics は呼び出し側で buildIcsEvent() で組み立てて渡す
  *   ・暗号化された agenda はメールには載せない(求職者向けには title 中心)
  */
+import { sendResendEmail } from "@/lib/email/resend-client";
+
 import { escapeHtml, infoCard, infoRow, primaryButton, renderEmailLayout } from "./layout";
 
 export type SendMeetingInviteResult =
@@ -166,9 +168,8 @@ function buildBody(args: SendMeetingInviteArgs): string {
 export async function sendMeetingInviteEmail(
   args: SendMeetingInviteArgs,
 ): Promise<SendMeetingInviteResult> {
-  const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
-  if (!apiKey || !from) {
+  if (!from) {
     return { sent: false, reason: "not_configured" };
   }
 
@@ -176,46 +177,31 @@ export async function sendMeetingInviteEmail(
   const text = buildBody(args);
   const html = buildHtml(args);
 
-  // .ics は base64 で attach。Resend は filename + content(base64) 形式。
+  // .ics は base64 で attach。 Resend は filename + content (base64) 形式。
   const icsBase64 = Buffer.from(args.icsContent, "utf-8").toString("base64");
   const filename = args.variant === "cancel" ? "cancel.ics" : "invite.ics";
 
-  try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        from,
-        to: [args.toEmail],
-        subject,
-        html,
-        text,
-        attachments: [
-          {
-            filename,
-            content: icsBase64,
-            content_type: "text/calendar; charset=utf-8; method=PUBLISH",
-          },
-        ],
-      }),
-    });
-
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      return { sent: false, reason: "send_failed", error: `HTTP ${res.status}: ${body}` };
-    }
-    const data = (await res.json().catch(() => ({}))) as { id?: string };
-    return { sent: true, messageId: data.id ?? null };
-  } catch (err) {
-    return {
-      sent: false,
-      reason: "send_failed",
-      error: err instanceof Error ? err.message : String(err),
-    };
-  }
+  // C2-1: Resend wrapper 経由 で リトライ 付き 送信。
+  const result = await sendResendEmail(
+    {
+      from,
+      to: [args.toEmail],
+      subject,
+      html,
+      text,
+      attachments: [
+        {
+          filename,
+          content: icsBase64,
+          content_type: "text/calendar; charset=utf-8; method=PUBLISH",
+        },
+      ],
+    },
+    { label: "email.meeting-invite" },
+  );
+  if (result.sent) return { sent: true, messageId: result.messageId };
+  if (result.reason === "not_configured") return { sent: false, reason: "not_configured" };
+  return { sent: false, reason: "send_failed", error: result.error };
 }
 
 // テスト容易性のため subject/body 構築だけ export しておく

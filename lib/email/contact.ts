@@ -12,6 +12,8 @@
  * - reply_to に問い合わせ者のメールアドレスを入れて、運営が直接返信できるようにする。
  */
 
+import { sendResendEmail } from "@/lib/email/resend-client";
+
 export type SendContactNotificationResult =
   | { sent: true; messageId: string | null }
   | { sent: false; reason: "not_configured" | "send_failed"; error?: string };
@@ -26,18 +28,16 @@ export type SendContactNotificationArgs = {
 export async function sendContactNotificationEmail(
   args: SendContactNotificationArgs,
 ): Promise<SendContactNotificationResult> {
-  const apiKey = process.env.RESEND_API_KEY;
   const to = process.env.CONTACT_NOTIFICATION_TO;
   const from = process.env.CONTACT_NOTIFICATION_FROM;
-
-  if (!apiKey || !to || !from) {
+  if (!to || !from) {
     return { sent: false, reason: "not_configured" };
   }
 
   const subject = `【Maira】お問い合わせ:${args.company} ${args.name}`;
 
-  // プレーンテキスト本文。ユーザー入力はそのまま埋め込んで OK
-  // (HTML として解釈されないので XSS のリスクなし)。
+  // プレーンテキスト本文。ユーザー入力 は そのまま 埋め込んで OK
+  // (HTML と して 解釈 されない ので XSS の リスク なし)。
   const text =
     `Maira LP の問い合わせフォームから新しい問い合わせが届きました。\n` +
     `\n` +
@@ -52,35 +52,25 @@ export async function sendContactNotificationEmail(
     `\n` +
     `この通知メールに返信すると、問い合わせ者(${args.email})宛てに直接返信されます。\n`;
 
-  try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        from,
-        to: [to],
-        subject,
-        text,
-        // 運営が「返信」するだけで問い合わせ者にメールが届くようにする。
-        reply_to: [args.email],
-      }),
-    });
+  // C2-1 修正: 直接 fetch を 書いて い た の を Resend wrapper 経由 に 変更。
+  // 5xx / 429 / ネットワーク 一時 障害 で 自動 リトライ (指数 バック オフ 3 回)。
+  const result = await sendResendEmail(
+    {
+      from,
+      to: [to],
+      subject,
+      text,
+      // 運営 が 「返信」 する だけ で 問い合わせ 者 に メール が 届く よう に する。
+      reply_to: [args.email],
+    },
+    { label: "email.contact" },
+  );
 
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      return { sent: false, reason: "send_failed", error: `HTTP ${res.status}: ${body}` };
-    }
-
-    const data = (await res.json().catch(() => ({}))) as { id?: string };
-    return { sent: true, messageId: data.id ?? null };
-  } catch (err) {
-    return {
-      sent: false,
-      reason: "send_failed",
-      error: err instanceof Error ? err.message : String(err),
-    };
+  if (result.sent) {
+    return { sent: true, messageId: result.messageId };
   }
+  if (result.reason === "not_configured") {
+    return { sent: false, reason: "not_configured" };
+  }
+  return { sent: false, reason: "send_failed", error: result.error };
 }

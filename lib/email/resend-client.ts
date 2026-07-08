@@ -10,6 +10,14 @@
  */
 import { isNetworkError, isRetryableStatus, withRetry } from "@/lib/retry/with-retry";
 
+export type ResendAttachment = {
+  filename: string;
+  /** base64 エンコード 済 の 添付 内容。 */
+  content: string;
+  /** MIME type + charset (例 "text/calendar; charset=utf-8; method=PUBLISH")。 */
+  content_type?: string;
+};
+
 export type ResendSendPayload = {
   from: string;
   to: string[];
@@ -18,6 +26,7 @@ export type ResendSendPayload = {
   text?: string;
   html?: string;
   reply_to?: string[];
+  attachments?: ResendAttachment[];
 };
 
 export type ResendSendResult =

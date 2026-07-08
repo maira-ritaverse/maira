@@ -9,6 +9,8 @@
  * RESEND_API_KEY と EMAIL_FROM のどちらか未設定なら no-op で返す。
  * (本番では両方必須、CI / 開発で未設定でも送信を試みないようにする)
  */
+import { sendResendEmail } from "@/lib/email/resend-client";
+
 import { escapeHtml, infoCard, infoRow, primaryButton, renderEmailLayout } from "./layout";
 
 export type SendClientInvitationResult =
@@ -30,9 +32,8 @@ export type SendClientInvitationArgs = {
 export async function sendClientInvitationEmail(
   args: SendClientInvitationArgs,
 ): Promise<SendClientInvitationResult> {
-  const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
-  if (!apiKey || !from) return { sent: false, reason: "not_configured" };
+  if (!from) return { sent: false, reason: "not_configured" };
 
   const expiresLabel = args.expiresAt.toLocaleString("ja-JP", {
     timeZone: "Asia/Tokyo",
@@ -101,23 +102,12 @@ ${infoCard(
 
   const html = renderEmailLayout({ previewTitle: subject, bodyHtml: body });
 
-  try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-      body: JSON.stringify({ from, to: [args.toEmail], subject, html, text }),
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      return { sent: false, reason: "send_failed", error: `HTTP ${res.status}: ${body}` };
-    }
-    const data = (await res.json().catch(() => ({}))) as { id?: string };
-    return { sent: true, messageId: data.id ?? null };
-  } catch (err) {
-    return {
-      sent: false,
-      reason: "send_failed",
-      error: err instanceof Error ? err.message : String(err),
-    };
-  }
+  // C2-1: Resend wrapper 経由 で リトライ 付き 送信。
+  const result = await sendResendEmail(
+    { from, to: [args.toEmail], subject, html, text },
+    { label: "email.client-invitation" },
+  );
+  if (result.sent) return { sent: true, messageId: result.messageId };
+  if (result.reason === "not_configured") return { sent: false, reason: "not_configured" };
+  return { sent: false, reason: "send_failed", error: result.error };
 }
