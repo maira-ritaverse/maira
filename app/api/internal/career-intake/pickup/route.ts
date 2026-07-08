@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { checkCronAuth } from "@/lib/api/cron-auth";
 import { notifyShareFromAgencyIntake } from "@/lib/career-intake/post-process";
 import { runIntakeProcessing } from "@/lib/career-intake/process";
+import { decryptField } from "@/lib/crypto/field-encryption";
 import { recordAgencyRecordingUsage } from "@/lib/features/ai-usage";
 import { getGoogleAccessToken } from "@/lib/integrations/google-token";
 import { getZoomAccessToken } from "@/lib/integrations/zoom-token";
@@ -95,7 +96,7 @@ async function pickAndProcessExternal(
     .eq("id", candidateId)
     .eq("status", "external_pending")
     .select(
-      "id, user_id, original_filename, external_download_url, external_source, transcript_purpose",
+      "id, user_id, original_filename, external_download_url, encrypted_download_token, external_source, transcript_purpose",
     )
     .maybeSingle();
   if (!locked) return { picked: 0, message: "race" };
@@ -104,6 +105,7 @@ async function pickAndProcessExternal(
     user_id: string;
     original_filename: string;
     external_download_url: string | null;
+    encrypted_download_token: string | null;
     external_source: string | null;
     transcript_purpose: "self_intake" | "agency_interview" | null;
   };
@@ -113,8 +115,22 @@ async function pickAndProcessExternal(
     return { picked: 1, ok: false, id: rec.id };
   }
 
-  // ダウンロード(Zoom は webhook で発行された download_token が短期失効するため、
-  // 失効後は access_token を refresh して Authorization ヘッダで再試行する)
+  // M1 修正: 分離 保存 された encrypted_download_token を 復号 して 使う。
+  // 復号 失敗 (鍵 ローテーション 中 など) の 場合 は refresh 経路 で fallback。
+  let webhookDownloadToken: string | null = null;
+  if (rec.encrypted_download_token) {
+    try {
+      webhookDownloadToken = await decryptField(rec.encrypted_download_token);
+    } catch (err) {
+      console.warn("[pickup] decrypt download_token failed", {
+        id: rec.id,
+        error: err instanceof Error ? err.name : "unknown",
+      });
+    }
+  }
+
+  // ダウンロード (Zoom は webhook で 発行 された download_token が 短期 失効 する ため、
+  // 失効 後 は access_token を refresh して Authorization ヘッダ で 再試行 する)
   let blob: Blob;
   try {
     blob = await downloadExternal({
@@ -122,6 +138,7 @@ async function pickAndProcessExternal(
       url: rec.external_download_url,
       source: rec.external_source,
       userId: rec.user_id,
+      webhookDownloadToken,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -309,8 +326,13 @@ async function downloadExternal(args: {
   url: string;
   source: string | null;
   userId: string;
+  /**
+   * M1 修正: Zoom Webhook で 発行 された 短命 download_token を 復号 済 で 渡す。
+   * URL クエリ に 埋め込ま ず Authorization ヘッダ で 渡す。
+   */
+  webhookDownloadToken?: string | null;
 }): Promise<Blob> {
-  // Google Drive は最初から Bearer 必須
+  // Google Drive は 最初 から Bearer 必須
   if (args.source === "google_drive") {
     const token = await getGoogleAccessToken({ service: args.service, userId: args.userId });
     const res = await fetch(args.url, {
@@ -320,18 +342,31 @@ async function downloadExternal(args: {
     return await res.blob();
   }
 
-  // それ以外:まずは素のまま
-  const first = await fetch(args.url);
-  if (first.ok) return await first.blob();
-
-  // Zoom の 401 / 403 だったら refresh して Authorization ヘッダ付きで再試行
-  if (args.source === "zoom" && (first.status === 401 || first.status === 403)) {
-    const token = await getZoomAccessToken({ service: args.service, byUserId: args.userId });
-    const retry = await fetch(args.url, {
-      headers: { Authorization: `Bearer ${token.accessToken}` },
+  // Zoom: webhook で 受け 取った download_token が あれば 最初 から Authorization
+  // ヘッダ で 使う。 URL に token を 埋め ない (M1)。
+  if (args.source === "zoom" && args.webhookDownloadToken) {
+    const first = await fetch(args.url, {
+      headers: { Authorization: `Bearer ${args.webhookDownloadToken}` },
     });
-    if (retry.ok) return await retry.blob();
-    throw new Error(`Zoom 再試行も失敗 HTTP ${retry.status}`);
+    if (first.ok) return await first.blob();
+    // 401 / 403 で failed → refresh 経路 に fallback
+    if (first.status !== 401 && first.status !== 403) {
+      throw new Error(`Zoom download failed HTTP ${first.status}`);
+    }
+  } else {
+    // それ 以外: まずは 素 のまま (旧 行 の 移行 期間 用 の 保険)
+    const first = await fetch(args.url);
+    if (first.ok) return await first.blob();
+    if (args.source !== "zoom" || (first.status !== 401 && first.status !== 403)) {
+      throw new Error(`HTTP ${first.status}`);
+    }
   }
-  throw new Error(`HTTP ${first.status}`);
+
+  // Zoom の 401 / 403 だったら refresh して Authorization ヘッダ 付き で 再試行
+  const token = await getZoomAccessToken({ service: args.service, byUserId: args.userId });
+  const retry = await fetch(args.url, {
+    headers: { Authorization: `Bearer ${token.accessToken}` },
+  });
+  if (retry.ok) return await retry.blob();
+  throw new Error(`Zoom 再試行 も 失敗 HTTP ${retry.status}`);
 }

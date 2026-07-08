@@ -11,6 +11,7 @@
  * Webhook ハンドラは速度命なので、ここでは DB 行作成だけに留める。
  * 実際のダウンロード + 処理は Pickup endpoint 側に任せる。
  */
+import { encryptField } from "@/lib/crypto/field-encryption";
 import type { createServiceClient } from "@/lib/supabase/service";
 
 export type ZoomRecordingFile = {
@@ -93,10 +94,14 @@ export async function enqueueZoomRecording(params: {
     return { enqueued: 0, skipped: 1, reason: "duplicate" };
   }
 
-  // download URL に download_token を付与(Zoom Webhook V2 で必要)
-  const downloadUrl = payload.download_token
-    ? `${file.download_url}?access_token=${encodeURIComponent(payload.download_token)}`
-    : file.download_url;
+  // M1 修正: 従来 は `${url}?access_token=${token}` の 形 で 平文 保存 して いた が、
+  // token は Zoom の bearer 相当 で 短命 と は いえ 平文 で 残す のは NG (CLAUDE.md
+  // 「平文 を DB に 保存 しない」)。 URL 本体 は 平文 の まま、 token は 分離 して
+  // AES-256-GCM で 暗号化 保存 する。 pickup 側 で 復号 し Authorization ヘッダ に 付ける。
+  const downloadUrl = file.download_url;
+  const encryptedDownloadToken = payload.download_token
+    ? await encryptField(payload.download_token)
+    : null;
 
   const userId = (conn as { user_id: string }).user_id;
   const filename = `${(obj.topic ?? "Zoom Meeting").slice(0, 60)}.${guessExt(file.file_type, file.download_url)}`;
@@ -144,6 +149,7 @@ export async function enqueueZoomRecording(params: {
       external_meeting_id: obj.uuid ?? obj.id ?? null,
       external_recording_id: file.id,
       external_download_url: downloadUrl,
+      encrypted_download_token: encryptedDownloadToken,
       meeting_schedule_id: meetingScheduleId,
       client_record_id: clientRecordId,
       transcript_purpose: transcriptPurpose,
