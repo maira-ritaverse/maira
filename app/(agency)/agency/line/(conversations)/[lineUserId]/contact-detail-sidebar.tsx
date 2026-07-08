@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { ActivitySection } from "./activity-section";
 import { AssigneeSection } from "./assignee-section";
+import { CreateClientButton } from "./create-client-button";
 import { DisplayNameEditor } from "./display-name-editor";
 import { NotesSection } from "./notes-section";
 import { ProfileRefreshButton } from "./profile-refresh-button";
@@ -87,7 +88,10 @@ export function ContactDetailSidebar({
               {clientName ?? "(クライアント名なし)"}
             </Link>
           ) : (
-            <span className="text-muted-foreground">未紐付け</span>
+            <div className="flex flex-col items-end gap-1">
+              <span className="text-muted-foreground">未紐付け</span>
+              <CreateClientButton lineUserId={lineUserId} displayName={customName ?? displayName} />
+            </div>
           )}
         </Row>
         {linkMethod && <Row label="紐付け方法">{linkMethodLabel(linkMethod)}</Row>}
