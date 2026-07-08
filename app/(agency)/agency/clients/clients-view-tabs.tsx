@@ -353,10 +353,10 @@ export function ClientsViewTabs({
         <span className="text-muted-foreground text-sm">{filteredSorted.length}件</span>
       </div>
 
-      {/* P4: team ピッカー (組織 に team が 1 つ 以上 あれば 表示) */}
+      {/* リスト表ピッカー(組織にリスト表が1つ以上あれば表示) */}
       {teams.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-muted-foreground text-xs whitespace-nowrap">team:</span>
+          <span className="text-muted-foreground text-xs whitespace-nowrap">リスト表:</span>
           <button
             type="button"
             onClick={() => setTeamFilter("all")}
@@ -377,7 +377,7 @@ export function ClientsViewTabs({
                 : "hover:bg-accent border-input"
             }`}
           >
-            未 割当
+            未割当
           </button>
           {teams.map((t) => (
             <button
@@ -649,6 +649,7 @@ export function ClientsViewTabs({
         <BulkActionBar
           selectedIds={Array.from(selectedIds)}
           members={members}
+          teams={teams}
           onClear={clearSelection}
         />
       )}

@@ -8,16 +8,27 @@ import { Input } from "@/components/ui/input";
 import { clientStatusLabels, type ClientStatus } from "@/lib/clients/types";
 
 type OrgMember = { memberId: string; displayName: string | null };
+type TeamSummary = { id: string; name: string; color: string | null };
 
 type BulkActionBarProps = {
   /** 選択中のクライアント ID 群 */
   selectedIds: string[];
   members: OrgMember[];
+  /** 組織のリスト表(旧: team)。空配列なら リスト表 系ボタンを非表示 */
+  teams?: TeamSummary[];
   /** 操作完了後に選択を解除する callback(親で setSelectedIds([])) */
   onClear: () => void;
 };
 
-type ActionMode = "idle" | "status" | "assignee" | "add_tags" | "remove_tags" | "email";
+type ActionMode =
+  | "idle"
+  | "status"
+  | "assignee"
+  | "add_tags"
+  | "remove_tags"
+  | "add_teams"
+  | "remove_teams"
+  | "email";
 
 /**
  * 一括操作バー(画面下部に常駐 sticky)。
@@ -29,7 +40,7 @@ type ActionMode = "idle" | "status" | "assignee" | "add_tags" | "remove_tags" | 
  * 監査ログは API ルートで自動記録される(変更があった行のみ)。
  * 成功後 router.refresh() で一覧の値を更新する。
  */
-export function BulkActionBar({ selectedIds, members, onClear }: BulkActionBarProps) {
+export function BulkActionBar({ selectedIds, members, teams = [], onClear }: BulkActionBarProps) {
   const router = useRouter();
   const [mode, setMode] = useState<ActionMode>("idle");
   const [submitting, setSubmitting] = useState(false);
@@ -39,6 +50,7 @@ export function BulkActionBar({ selectedIds, members, onClear }: BulkActionBarPr
   const [pendingStatus, setPendingStatus] = useState<ClientStatus>("initial_meeting");
   const [pendingAssignee, setPendingAssignee] = useState<string>("");
   const [pendingTags, setPendingTags] = useState<string>("");
+  const [pendingTeamIds, setPendingTeamIds] = useState<Set<string>>(new Set());
   const [emailSubject, setEmailSubject] = useState<string>("");
   const [emailBody, setEmailBody] = useState<string>("");
   const [emailSummary, setEmailSummary] = useState<{
@@ -89,10 +101,28 @@ export function BulkActionBar({ selectedIds, members, onClear }: BulkActionBarPr
       .map((t) => t.trim())
       .filter((t) => t !== "");
     if (tags.length === 0) {
-      setError("タグを 1 つ以上入力してください");
+      setError("タグを1つ以上入力してください");
       return;
     }
     submit({ action, ids: selectedIds, tags });
+  };
+
+  const submitTeams = (action: "add_teams" | "remove_teams") => {
+    const teamIds = [...pendingTeamIds];
+    if (teamIds.length === 0) {
+      setError("リスト表を1つ以上選択してください");
+      return;
+    }
+    submit({ action, ids: selectedIds, teamIds });
+  };
+
+  const toggleTeamSelection = (teamId: string) => {
+    setPendingTeamIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(teamId)) next.delete(teamId);
+      else next.add(teamId);
+      return next;
+    });
   };
 
   const submitEmail = async () => {
@@ -170,6 +200,24 @@ export function BulkActionBar({ selectedIds, members, onClear }: BulkActionBarPr
           >
             タグ削除
           </Button>
+          {teams.length > 0 && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setMode(mode === "add_teams" ? "idle" : "add_teams")}
+              >
+                リスト表に追加
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setMode(mode === "remove_teams" ? "idle" : "remove_teams")}
+              >
+                リスト表から外す
+              </Button>
+            </>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -246,6 +294,46 @@ export function BulkActionBar({ selectedIds, members, onClear }: BulkActionBarPr
                   ? `${selectedIds.length} 件に追加`
                   : `${selectedIds.length} 件から削除`}
             </Button>
+          </div>
+        )}
+
+        {(mode === "add_teams" || mode === "remove_teams") && (
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-1.5">
+              {teams.map((team) => {
+                const active = pendingTeamIds.has(team.id);
+                return (
+                  <button
+                    key={team.id}
+                    type="button"
+                    onClick={() => toggleTeamSelection(team.id)}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+                      active
+                        ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40"
+                        : "hover:bg-accent border-input"
+                    }`}
+                  >
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: team.color ?? "#94a3b8" }}
+                    />
+                    {team.name}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" onClick={() => submitTeams(mode)} disabled={submitting}>
+                {submitting
+                  ? "適用中…"
+                  : mode === "add_teams"
+                    ? `${selectedIds.length}件の顧客をリスト表に追加`
+                    : `${selectedIds.length}件の顧客をリスト表から外す`}
+              </Button>
+              <p className="text-muted-foreground text-xs">
+                権限のない行(自分が担当・リーダーではない顧客)はスキップされます。
+              </p>
+            </div>
           </div>
         )}
 

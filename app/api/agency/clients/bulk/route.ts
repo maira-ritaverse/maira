@@ -63,11 +63,23 @@ const removeTagsSchema = baseSchema.extend({
   tags: z.array(z.string().min(1).max(50)).min(1).max(MAX_TAGS),
 });
 
+const MAX_TEAMS = 20;
+const addTeamsSchema = baseSchema.extend({
+  action: z.literal("add_teams"),
+  teamIds: z.array(z.string().uuid()).min(1).max(MAX_TEAMS),
+});
+const removeTeamsSchema = baseSchema.extend({
+  action: z.literal("remove_teams"),
+  teamIds: z.array(z.string().uuid()).min(1).max(MAX_TEAMS),
+});
+
 const requestSchema = z.discriminatedUnion("action", [
   setStatusSchema,
   setAssigneeSchema,
   addTagsSchema,
   removeTagsSchema,
+  addTeamsSchema,
+  removeTeamsSchema,
 ]);
 
 export async function POST(request: Request) {
@@ -120,9 +132,10 @@ export async function POST(request: Request) {
   // 取得カラムは action 種類で必要なものに絞る。
   // 動的な select 文字列は Supabase 型推論で表現できないため、unknown 経由で受け取る。
   const selectCols = pickSelectColumns(parsed.data.action);
+  const selectExpr = selectCols.length === 0 ? "id" : `id, ${selectCols.join(",")}`;
   const { data: oldRowsData, error: oldErr } = await supabase
     .from("client_records")
-    .select(`id, ${selectCols.join(",")}`)
+    .select(selectExpr)
     .in("id", ids)
     .eq("organization_id", organizationId);
   if (oldErr || !oldRowsData) {
@@ -187,6 +200,47 @@ export async function POST(request: Request) {
           newValue,
         });
       }
+    }
+  } else if (parsed.data.action === "add_teams" || parsed.data.action === "remove_teams") {
+    // リスト表(team) の 割 当 は SECURITY DEFINER RPC を 通す。
+    // RPC 内 で admin / 主担当 / lead 判定 が 行われる ため、 権限 不足 の 行 は
+    // 各 呼び出し で 拒否 され、 その 行 は 変更 されない (エラー を 集計 して 返す)。
+    const isAdd = parsed.data.action === "add_teams";
+    const rpcName = isAdd ? "assign_client_to_team" : "unassign_client_from_team";
+    let successCount = 0;
+    let forbiddenCount = 0;
+    let otherErrorCount = 0;
+    for (const clientId of targetIds) {
+      for (const teamId of parsed.data.teamIds) {
+        const { error } = await supabase.rpc(rpcName, {
+          p_client_record_id: clientId,
+          p_team_id: teamId,
+        });
+        if (error) {
+          if (error.message?.includes("forbidden")) forbiddenCount += 1;
+          else otherErrorCount += 1;
+          continue;
+        }
+        successCount += 1;
+        auditChanges.push({
+          clientRecordId: clientId,
+          fieldName: isAdd ? "team_added" : "team_removed",
+          oldValue: null,
+          newValue: teamId,
+        });
+      }
+    }
+    if (successCount === 0 && (forbiddenCount > 0 || otherErrorCount > 0)) {
+      return NextResponse.json(
+        {
+          error: forbiddenCount > 0 ? "forbidden" : "failed",
+          message:
+            forbiddenCount > 0
+              ? "リスト表への割当権限がありません(admin/主担当/リーダーのみ可能)"
+              : "リスト表の一括更新に失敗しました",
+        },
+        { status: forbiddenCount > 0 ? 403 : 500 },
+      );
     }
   } else if (parsed.data.action === "add_tags" || parsed.data.action === "remove_tags") {
     // タグは行ごとに集合演算が必要なので 1 件ずつ UPDATE する。
@@ -256,7 +310,7 @@ export async function POST(request: Request) {
 
 /** UPDATE 前に取得する列を action 別に決める。 */
 function pickSelectColumns(
-  action: "set_status" | "set_assignee" | "add_tags" | "remove_tags",
+  action: "set_status" | "set_assignee" | "add_tags" | "remove_tags" | "add_teams" | "remove_teams",
 ): string[] {
   switch (action) {
     case "set_status":
@@ -266,6 +320,10 @@ function pickSelectColumns(
     case "add_tags":
     case "remove_tags":
       return ["crm_tags"];
+    case "add_teams":
+    case "remove_teams":
+      // リスト表 割 当 は client_records 自体 の 列 変更 では ない ため 「id」 だけ 引く。
+      return [];
   }
 }
 
