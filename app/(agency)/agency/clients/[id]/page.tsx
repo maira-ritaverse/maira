@@ -26,6 +26,7 @@ import { listTasksByClient, listOrganizationMembers } from "@/lib/agency-tasks/q
 import { listCollaboratorsForClient } from "@/lib/clients/collaborators";
 import { listClientAuditLog } from "@/lib/audit/client-audit-log";
 import { createClient } from "@/lib/supabase/server";
+import { listClientTeamAssignments, listTeams } from "@/lib/teams/queries";
 import { buildActivityTimeline } from "@/lib/clients/activity-timeline";
 import { rowToCustomFieldDefinition, type CustomFieldDefinition } from "@/lib/custom-fields/types";
 import { SectionLayoutContainer } from "@/components/features/layout/section-layout-container";
@@ -34,6 +35,7 @@ import { getLinkedSeekerLatestPhoto } from "@/lib/agency/seeker-photo";
 import { ActivityTimelineSection } from "./activity-timeline-section";
 import { AuditLogSection } from "./audit-log-section";
 import { ClientDetailForm } from "./client-detail-form";
+import { ClientTeamsSection } from "./client-teams-section";
 import { CollaboratorsSection } from "./collaborators-section";
 import { CustomFieldsSection } from "./custom-fields-section";
 import { AiMatchingSection } from "./ai-matching-section";
@@ -177,6 +179,11 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
       .maybeSingle(),
     // 副 担当 ( 共同 担当 ) 一覧
     listCollaboratorsForClient(client.id),
+  ]);
+  // team 割 当 + 組織 の team 一覧 (P3 - 顧客 詳細 の 所属 team セクション 用)
+  const [clientTeamAssignments, organizationTeams] = await Promise.all([
+    listClientTeamAssignments(client.id),
+    listTeams(role.organization.id),
   ]);
   type LineLink = { line_user_id: string; unfollowed_at: string | null };
   const lineLink = (lineLinkRes.data as LineLink | null) ?? null;
@@ -347,6 +354,13 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
         members={members}
         viewerMemberId={role.member.id}
         viewerRole={role.member.role}
+      />
+
+      {/* P3: 所属 team セクション。 team 分離 の 割当 UI。 */}
+      <ClientTeamsSection
+        clientRecordId={client.id}
+        initialTeamIds={clientTeamAssignments.map((a) => a.teamId)}
+        organizationTeams={organizationTeams}
       />
 
       {/* ─── タブナビ ─────────────────────────────────────────────
