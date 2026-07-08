@@ -54,17 +54,26 @@ function mapRpcError(message: string): { status: number; code: string; message: 
   }
   // Batch 1 で client_records.email が nullable に なった 影響 で、 何らか の 理由 で
   // route.ts 側 の 事前 検証 を すり抜けた 場合 に Postgres が NOT NULL 制約 違反 を
-  // 返す 可能性 が ある。 内部 詳細 は 出さず に 「メール 未 登録」 の 汎用 文言 に。
-  if (
-    message.includes("null value in column") ||
-    message.includes("violates not-null constraint") ||
-    /email/i.test(message)
-  ) {
+  // 返す 可能性 が ある。 「null value in column "email"」 に 特定 する こと で 他 の
+  // NOT NULL 違反 (organization_id 等) と 混同 しない。
+  if (/null value in column "email"/i.test(message)) {
     return {
       status: 400,
       code: "no_email",
       message:
         "顧客 の メール アドレス が 未 登録 で 招待 メール を 送れ ませ ん。 詳細 画面 で メール アドレス を 補完 して から 再度 お試し ください。",
+    };
+  }
+  // Batch 1 で 追加 した immutable trigger が SECURITY DEFINER RPC 経由 の 正当 な
+  // 更新 も ブロック する 症状 (20260708000007 で 修正 済) の 生存 確認 用。
+  // 万一 マイグレーション 未 適用 の 環境 で 発生 して も 「操作 に 失敗 しました」
+  // で は 意味 が わから ない ため、 明確 な 文言 で 案内 する。
+  if (/is immutable via direct update/i.test(message)) {
+    return {
+      status: 500,
+      code: "trigger_immutable",
+      message:
+        "内部 エラー: 連携 情報 の 更新 が 権限 で ブロック さ れ ました。 マイグレーション 20260708000007 が 未 適用 の 可能性 が あり ます。",
     };
   }
   return { status: 500, code: "unknown", message: "操作に失敗しました" };
@@ -157,6 +166,17 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   if (error) {
     const mapped = mapRpcError(error.message ?? "");
+    // mapRpcError が unknown に fallback した ケース は 「想定 外 の エラー」 な の で
+    // 診断 の ため に 生 メッセージ を server ログ に 残す (client レスポンス に は 出さない)。
+    if (mapped.code === "unknown") {
+      console.error("[client-invite] issue_client_invitation failed with unmapped error", {
+        clientRecordId: id,
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+    }
     return NextResponse.json(
       { error: mapped.code, message: mapped.message },
       { status: mapped.status },
