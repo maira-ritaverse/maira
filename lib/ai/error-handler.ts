@@ -7,14 +7,15 @@
  */
 
 export type AIErrorCategory =
-  | "rate_limit" // 429: リクエスト過多
-  | "auth" // 401: API Key失効等
-  | "input_too_long" // 400: トークン上限超過
-  | "policy" // 400: Usage Policy違反
-  | "server_error" // 5xx: Anthropic側障害
-  | "network" // ネットワーク到達不能
-  | "timeout" // 応答タイムアウト
-  | "unknown"; // 分類不能
+  | "not_configured" // ANTHROPIC_API_KEY 未設定 (C1-5)
+  | "rate_limit" // 429: リクエスト 過多
+  | "auth" // 401: API Key 失効 等
+  | "input_too_long" // 400: トークン 上限 超過
+  | "policy" // 400: Usage Policy 違反
+  | "server_error" // 5xx: Anthropic 側 障害
+  | "network" // ネットワーク 到達 不能
+  | "timeout" // 応答 タイム アウト
+  | "unknown"; // 分類 不能
 
 export type AIErrorInfo = {
   category: AIErrorCategory;
@@ -41,7 +42,18 @@ export function categorizeAIError(error: unknown): AIErrorInfo {
   const errorName = error instanceof Error ? error.name : "";
   const lowerMessage = errorMessage.toLowerCase();
 
-  // レート制限(429)
+  // C1-5: ANTHROPIC_API_KEY 未設定 は 認証 エラー と 別枠 で 分類。
+  // 運用 側 に 「本番 env 未設定」 と 「Key 失効」 を 区別 させたい。
+  if (errorName === "AnthropicNotConfiguredError") {
+    return {
+      category: "not_configured",
+      userMessage:
+        "AI サービス の 設定 が 完了 して い ません。 運営 側 で 設定 が 必要 です。 サポート に お問い合わせ ください。",
+      retryable: false,
+    };
+  }
+
+  // レート 制限 (429)
   if (lowerMessage.includes("rate") && lowerMessage.includes("limit")) {
     return {
       category: "rate_limit",
@@ -137,6 +149,7 @@ export function aiErrorToStatusCode(category: AIErrorCategory): number {
   switch (category) {
     case "rate_limit":
       return 429;
+    case "not_configured":
     case "auth":
       return 503;
     case "input_too_long":
