@@ -11,6 +11,8 @@
  *
  * 共通レイアウト(./layout)で他のメールとデザイン統一。
  */
+import { sendResendEmail } from "@/lib/email/resend-client";
+
 import { escapeHtml, infoCard, infoRow, primaryButton, renderEmailLayout } from "./layout";
 
 export type SendPasswordResetEmailResult =
@@ -26,9 +28,8 @@ export type SendPasswordResetEmailArgs = {
 export async function sendPasswordResetEmail(
   args: SendPasswordResetEmailArgs,
 ): Promise<SendPasswordResetEmailResult> {
-  const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
-  if (!apiKey || !from) return { sent: false, reason: "not_configured" };
+  if (!from) return { sent: false, reason: "not_configured" };
 
   const subject = "【Maira】パスワードの再設定リンクをお送りします";
 
@@ -67,23 +68,12 @@ ${infoCard(infoRow("リクエスト先メールアドレス", args.toEmail) + in
 
   const html = renderEmailLayout({ previewTitle: subject, bodyHtml: body });
 
-  try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-      body: JSON.stringify({ from, to: [args.toEmail], subject, html, text }),
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      return { sent: false, reason: "send_failed", error: `HTTP ${res.status}: ${body}` };
-    }
-    const data = (await res.json().catch(() => ({}))) as { id?: string };
-    return { sent: true, messageId: data.id ?? null };
-  } catch (err) {
-    return {
-      sent: false,
-      reason: "send_failed",
-      error: err instanceof Error ? err.message : String(err),
-    };
-  }
+  // C2-1: Resend wrapper 経由 (リトライ 込 み)。
+  const result = await sendResendEmail(
+    { from, to: [args.toEmail], subject, html, text },
+    { label: "email.password-reset" },
+  );
+  if (result.sent) return { sent: true, messageId: result.messageId };
+  if (result.reason === "not_configured") return { sent: false, reason: "not_configured" };
+  return { sent: false, reason: "send_failed", error: result.error };
 }

@@ -9,6 +9,8 @@
  *   ・本文 プレビュー は 短縮済 (40 字程度) を 渡す
  *   ・機密 内容 ベタ書き は 避ける (リンクで Maira 内 で 確認 する 動線)
  */
+import { sendResendEmail } from "@/lib/email/resend-client";
+
 import { escapeHtml, infoCard, infoRow, primaryButton, renderEmailLayout } from "./layout";
 
 export type SendLineMessageResult =
@@ -29,9 +31,8 @@ export type SendLineMessageArgs = {
 export async function sendLineMessageEmail(
   args: SendLineMessageArgs,
 ): Promise<SendLineMessageResult> {
-  const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
-  if (!apiKey || !from) return { sent: false, reason: "not_configured" };
+  if (!from) return { sent: false, reason: "not_configured" };
 
   const subject = `【Maira / LINE】${args.senderLabel} さん から 新着`;
 
@@ -68,32 +69,12 @@ ${infoCard(infoRow("差出人", args.senderLabel) + infoRow("プレビュー", a
 
   const html = renderEmailLayout({ previewTitle: subject, bodyHtml: body });
 
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        from,
-        to: [args.toEmail],
-        subject,
-        text,
-        html,
-      }),
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      return { sent: false, reason: "send_failed", error: errorText };
-    }
-    const json = (await response.json()) as { id?: string };
-    return { sent: true, messageId: json.id ?? null };
-  } catch (err) {
-    return {
-      sent: false,
-      reason: "send_failed",
-      error: err instanceof Error ? err.message : "unknown",
-    };
-  }
+  // C2-1: Resend wrapper 経由 で リトライ 付き 送信。
+  const result = await sendResendEmail(
+    { from, to: [args.toEmail], subject, text, html },
+    { label: "email.line-message-received" },
+  );
+  if (result.sent) return { sent: true, messageId: result.messageId };
+  if (result.reason === "not_configured") return { sent: false, reason: "not_configured" };
+  return { sent: false, reason: "send_failed", error: result.error };
 }

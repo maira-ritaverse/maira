@@ -9,6 +9,8 @@
  *
  * HTML は共通レイアウト(./layout)で他のメールとデザイン統一。
  */
+import { sendResendEmail } from "@/lib/email/resend-client";
+
 import { escapeHtml, infoCard, infoRow, primaryButton, renderEmailLayout } from "./layout";
 
 export type SendSeekerActionEmailArgs = {
@@ -29,9 +31,8 @@ export type SendSeekerActionEmailResult =
 export async function sendSeekerActionEmail(
   args: SendSeekerActionEmailArgs,
 ): Promise<SendSeekerActionEmailResult> {
-  const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
-  if (!apiKey || !from) return { sent: false, reason: "not_configured" };
+  if (!from) return { sent: false, reason: "not_configured" };
 
   const subject = `[${args.organizationName}] ${args.clientName} さんが ${args.jobLabel} に「${args.actionLabel}」`;
   const text = [
@@ -55,28 +56,14 @@ export async function sendSeekerActionEmail(
     href: args.href,
   });
 
-  try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ from, to: [args.toEmail], subject, text, html }),
-    });
-    if (!res.ok) {
-      const t = await res.text().catch(() => "");
-      return { sent: false, reason: "send_failed", error: `${res.status} ${t.slice(0, 200)}` };
-    }
-    const json = (await res.json().catch(() => null)) as { id?: string } | null;
-    return { sent: true, messageId: json?.id ?? null };
-  } catch (err) {
-    return {
-      sent: false,
-      reason: "send_failed",
-      error: err instanceof Error ? err.message : "unknown",
-    };
-  }
+  // C2-1: Resend wrapper 経由 で リトライ 付き 送信。
+  const result = await sendResendEmail(
+    { from, to: [args.toEmail], subject, text, html },
+    { label: "email.seeker-action" },
+  );
+  if (result.sent) return { sent: true, messageId: result.messageId };
+  if (result.reason === "not_configured") return { sent: false, reason: "not_configured" };
+  return { sent: false, reason: "send_failed", error: result.error };
 }
 
 /**
