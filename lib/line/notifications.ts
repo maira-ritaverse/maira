@@ -13,6 +13,7 @@
  */
 import { buildAbsoluteUrl } from "@/lib/config/site-url";
 import { sendLineMessageEmail } from "@/lib/email/line-message-received";
+import { maskEmail } from "@/lib/logging/mask";
 import { isEmailEnabled, isSubscribed, type NotificationPrefs } from "@/lib/notifications/prefs";
 import { fireInAppNotification } from "@/lib/notifications/in-app";
 import { sendSlackMessage } from "@/lib/slack/notify";
@@ -83,7 +84,13 @@ async function fireSlackSafe(
       (orgRow as { slack_webhook_url: string | null } | null)?.slack_webhook_url ?? null;
     if (!slackUrl) return;
 
-    const text = `:speech_balloon: *${senderLabel}* さん から LINE 新着 (${args.messageType})\n> ${args.preview}\n${buildAbsoluteUrl(`/agency/line/${encodeURIComponent(args.lineUserId)}`)}`;
+    // M6 修正: 復号 済 本文 プレビュー を Slack Webhook に 平文 送信 して いた ため、
+    // 管理者 が 個人 Slack Workspace の Webhook を 誤 設定 した 場合 に 求職者 の
+    // 相談 内容 冒頭 が 外部 SaaS に 蓄積 する 恐れ が あった。 ADR 0006 の 「本人
+    // 同意 済 の 範囲」 外 で 個人 情報 保護 法 上 の リスク に なる ため、 Slack
+    // 側 には 本文 抜粋 を 一切 含めず 「新着 メッセージ が 届きました」 のみ を 送信 する。
+    // メッセージ 本文 は Maira 内 の UI で 復号 して 確認 して もらう 前提。
+    const text = `:speech_balloon: *${senderLabel}* さん から LINE 新着 メッセージ が 届きました (${args.messageType})\n${buildAbsoluteUrl(`/agency/line/${encodeURIComponent(args.lineUserId)}`)}`;
     const result = await sendSlackMessage({ webhookUrl: slackUrl, text });
     if (!result.sent && result.reason === "failed") {
       console.warn("[line/notify/slack] failed:", result.error);
@@ -140,7 +147,8 @@ async function fireEmailsSafe(
           conversationUrl: buildAbsoluteUrl(href),
         }).then((r) => {
           if (!r.sent && r.reason === "send_failed") {
-            console.warn("[line/notify/email] failed", { to, error: r.error });
+            // L3 修正: 平文 email を そのまま ログ に 出さ ない (maskEmail)。
+            console.warn("[line/notify/email] failed", { to: maskEmail(to), error: r.error });
           }
         }),
       ),

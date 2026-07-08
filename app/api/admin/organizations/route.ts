@@ -7,6 +7,7 @@ import { readJsonBody, requireUser } from "@/lib/api/auth-guards";
 import { getSiteUrl } from "@/lib/config/site-url";
 import { sendAgencyAdminInviteEmail } from "@/lib/email/agency-admin-invite";
 import { PLATFORM_AI_TOTAL_FREE_MONTHLY } from "@/lib/features/ai-usage";
+import { maskEmail } from "@/lib/logging/mask";
 import { createServiceClient } from "@/lib/supabase/service";
 
 /**
@@ -311,11 +312,12 @@ export async function POST(request: Request) {
     actionLink,
   });
   if (!emailResult.sent) {
+    // L3 修正: 平文 email を そのまま ログ に 残さ ない (maskEmail)。
     console.warn("[admin/organizations] invite email send failed", {
       reason: emailResult.reason,
       error: "error" in emailResult ? emailResult.error : undefined,
       organizationId,
-      adminEmail,
+      adminEmail: maskEmail(adminEmail),
     });
   }
 

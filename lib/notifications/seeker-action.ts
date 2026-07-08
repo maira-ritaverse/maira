@@ -12,6 +12,7 @@
  */
 import { buildAbsoluteUrl } from "@/lib/config/site-url";
 import { sendSeekerActionEmail } from "@/lib/email/seeker-action";
+import { maskEmail } from "@/lib/logging/mask";
 import { fireInAppNotification } from "@/lib/notifications/in-app";
 import { isEmailEnabled, isSubscribed, type NotificationPrefs } from "@/lib/notifications/prefs";
 import { sendSlackMessage } from "@/lib/slack/notify";
@@ -189,7 +190,8 @@ async function fireEmailsSafe(
           href: buildAbsoluteUrl(href),
         }).then((r) => {
           if (!r.sent && r.reason === "send_failed") {
-            console.warn("[seeker-action/email] failed", { to, error: r.error });
+            // L3 修正: email を maskEmail で 短縮 して ログ 出力。
+            console.warn("[seeker-action/email] failed", { to: maskEmail(to), error: r.error });
           }
         }),
       ),
