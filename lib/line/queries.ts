@@ -42,21 +42,42 @@ export async function getMyLineChannel(supabase: SupabaseClient): Promise<LineCh
 }
 
 /**
+ * webhook_token から org の Channel を 引く 際 の 結果 型。
+ *
+ * C1-2 修正: is_active=false と 「そもそも 存在 しない」 を 呼び出し 側 で 区別
+ * できる よう 情報 を 残す。 従来 は 両者 とも null で 帰って いた ため、 「LINE
+ * 側 では 送信 して いる のに Maira 側 で 通知 が 来ない」 という 事象 の 一次
+ * 切り 分け が でき ず 運用 上 の 盲点 と なって いた。
+ */
+export type LineChannelLookupResult =
+  | { kind: "found"; channel: LineChannelDecrypted }
+  | { kind: "inactive"; organizationId: string }
+  | { kind: "decrypt_failed"; organizationId: string }
+  | { kind: "not_found" };
+
+/**
  * service_role キー で webhook_token から org の Channel を 取得 + Token 復号。
- * Webhook 受信時 / 送信時 に 使う。
+ * Webhook 受信時 / 送信時 に 使う。 状態 別 に 詳細 な 結果 を 返す。
  */
 export async function getLineChannelByWebhookToken(
   adminSupabase: SupabaseClient,
   webhookToken: string,
-): Promise<LineChannelDecrypted | null> {
+): Promise<LineChannelLookupResult> {
   const { data, error } = await adminSupabase
     .from("line_channels")
     .select("*")
     .eq("webhook_token", webhookToken)
-    .eq("is_active", true)
     .maybeSingle();
-  if (error || !data) return null;
-  return await decryptChannel(data as DbLineChannelFull);
+  if (error || !data) return { kind: "not_found" };
+  const row = data as DbLineChannelFull;
+  if (!row.is_active) {
+    return { kind: "inactive", organizationId: row.organization_id };
+  }
+  const decrypted = await decryptChannel(row);
+  if (!decrypted) {
+    return { kind: "decrypt_failed", organizationId: row.organization_id };
+  }
+  return { kind: "found", channel: decrypted };
 }
 
 /**

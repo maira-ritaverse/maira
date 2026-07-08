@@ -43,11 +43,37 @@ export async function POST(request: Request, context: RouteContext) {
 
   // 2) webhookToken から Channel を 引く (Token 復号 含む)
   const admin = createServiceClient();
-  const channel = await getLineChannelByWebhookToken(admin, webhookToken);
-  if (!channel) {
-    // 不正な トークン or 無効化された Channel。 200 ではなく 401 で 拒否。
+  const lookup = await getLineChannelByWebhookToken(admin, webhookToken);
+
+  if (lookup.kind !== "found") {
+    // C1-2 修正: 従来 は inactive と 未 存在 を 同じ 401 で 返し ログ も 出て い
+    // なかった ため、 「LINE 側 で 送信 して いる のに Maira 側 で 通知 が 来ない」
+    // 事象 の 一次 切り 分け が でき なかった。 状態 別 に 分岐 して 詳細 ログ を 残す。
+    if (lookup.kind === "inactive") {
+      console.warn("[line/webhook] rejected: channel_inactive", {
+        organizationId: lookup.organizationId,
+        tokenPrefix: webhookToken.slice(0, 8),
+      });
+      return NextResponse.json(
+        { error: "channel_inactive", message: "Channel is not active" },
+        { status: 401 },
+      );
+    }
+    if (lookup.kind === "decrypt_failed") {
+      // 暗号化 鍵 の ローテーション ミス 等。 監視 が 必要 な 状態 な の で 目立つ ように 残す。
+      console.error("[line/webhook] rejected: token_decrypt_failed", {
+        organizationId: lookup.organizationId,
+        tokenPrefix: webhookToken.slice(0, 8),
+      });
+      return NextResponse.json({ error: "channel_config_error" }, { status: 500 });
+    }
+    console.warn("[line/webhook] rejected: channel_not_found", {
+      tokenPrefix: webhookToken.slice(0, 8),
+    });
     return NextResponse.json({ error: "channel_not_found" }, { status: 401 });
   }
+
+  const channel = lookup.channel;
 
   // 3) 署名 検証
   const signature = request.headers.get("x-line-signature");
