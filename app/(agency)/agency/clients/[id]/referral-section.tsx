@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, FilePlus, PenLine } from "lucide-react";
+import { CalendarClock, CheckCircle2, FilePlus, PenLine } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { JobPosting } from "@/lib/jobs/types";
@@ -225,6 +225,8 @@ function ReferralRow({
         </Alert>
       )}
 
+      <ScheduledInterviewEditor referral={referral} onUpdated={onUpdated} />
+
       <RecommendationLetterEntry referralId={referral.id} latestLetter={latestLetter} />
 
       <StatusHistoryBlock histories={histories} />
@@ -236,6 +238,169 @@ function ReferralRow({
         onChanged={onUpdated}
       />
     </li>
+  );
+}
+
+// ============================================
+// 企業 と の 面接 予定 (referrals.scheduled_interview_at) 編集 ブロック
+//
+// カレンダー 画面 の 「企業 面接」 バッジ の 元 になる。 開閉 式 の 小 フォーム
+// (datetime-local + 補足 テキスト) で 直近 の 1 件 を 保持 する。
+// ============================================
+function toDatetimeLocal(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatJst(iso: string | null): string {
+  if (!iso) return "";
+  return new Date(iso).toLocaleString("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    weekday: "short",
+  });
+}
+
+function ScheduledInterviewEditor({
+  referral,
+  onUpdated,
+}: {
+  referral: ReferralWithJob;
+  onUpdated: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [when, setWhen] = useState<string>(toDatetimeLocal(referral.scheduledInterviewAt));
+  const [note, setNote] = useState<string>(referral.interviewNote ?? "");
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const hasSchedule = Boolean(referral.scheduledInterviewAt);
+
+  const submit = (mode: "save" | "clear") => {
+    startTransition(async () => {
+      setError(null);
+      try {
+        const payload: {
+          scheduled_interview_at: string | null;
+          interview_note?: string;
+        } =
+          mode === "clear"
+            ? { scheduled_interview_at: null, interview_note: "" }
+            : {
+                scheduled_interview_at: new Date(when).toISOString(),
+                interview_note: note,
+              };
+        const res = await fetch(`/api/agency/referrals/${referral.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const errData = (await res.json()) as { error?: string; message?: string };
+          throw new Error(errData.message ?? errData.error ?? "更新 に 失敗 しま した");
+        }
+        setOpen(false);
+        onUpdated();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unknown error");
+      }
+    });
+  };
+
+  return (
+    <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-800 dark:bg-slate-900/40">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-xs">
+          <CalendarClock className="text-muted-foreground h-3.5 w-3.5" />
+          <span className="text-muted-foreground">企業 面接:</span>
+          {hasSchedule ? (
+            <>
+              <span className="font-medium">{formatJst(referral.scheduledInterviewAt)}</span>
+              {referral.interviewNote && (
+                <span className="text-muted-foreground">({referral.interviewNote})</span>
+              )}
+            </>
+          ) : (
+            <span className="text-muted-foreground">未設定</span>
+          )}
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-6 px-2 text-xs"
+          onClick={() => setOpen((v) => !v)}
+        >
+          {open ? "閉じる" : hasSchedule ? "変更" : "設定"}
+        </Button>
+      </div>
+      {open && (
+        <div className="mt-2 space-y-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div>
+              <Label htmlFor={`interview-date-${referral.id}`} className="text-xs">
+                面接 日時
+              </Label>
+              <input
+                id={`interview-date-${referral.id}`}
+                type="datetime-local"
+                value={when}
+                onChange={(e) => setWhen(e.target.value)}
+                className="border-input bg-background mt-1 w-full rounded-md border px-2 py-1 text-xs"
+              />
+            </div>
+            <div>
+              <Label htmlFor={`interview-note-${referral.id}`} className="text-xs">
+                補足 (任意)
+              </Label>
+              <input
+                id={`interview-note-${referral.id}`}
+                type="text"
+                placeholder="1 次 対面 @ 品川 / オンライン (Zoom) 等"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                maxLength={200}
+                className="border-input bg-background mt-1 w-full rounded-md border px-2 py-1 text-xs"
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              className="h-7 text-xs"
+              disabled={isPending || !when}
+              onClick={() => submit("save")}
+            >
+              {isPending ? "保存 中..." : "保存"}
+            </Button>
+            {hasSchedule && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-red-600 hover:text-red-700"
+                disabled={isPending}
+                onClick={() => submit("clear")}
+              >
+                削除
+              </Button>
+            )}
+          </div>
+          {error && (
+            <Alert variant="destructive" className="mt-1">
+              <AlertDescription>エラー: {error}</AlertDescription>
+            </Alert>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

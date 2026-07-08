@@ -23,6 +23,7 @@ const KIND_LABEL: Record<CalendarEventKind, string> = {
   task_due: "タスク",
   interaction: "対応",
   meeting: "Web面談",
+  company_interview: "企業面接",
   external_google: "Google",
 };
 
@@ -32,6 +33,7 @@ const KIND_TONE: Record<CalendarEventKind, string> = {
   task_due: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
   interaction: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
   meeting: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  company_interview: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
   external_google: "bg-sky-100/70 text-sky-700/80 dark:bg-sky-950/60 dark:text-sky-300/80",
 };
 

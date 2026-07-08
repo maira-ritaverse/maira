@@ -187,6 +187,8 @@ describe("buildAgencyClientSummaryPrompt — referrals", () => {
     jobPosition: "エンジニア",
     status: "interview",
     notes: null,
+    scheduledInterviewAt: null,
+    interviewNote: null,
     createdAt: "2026-06-01T00:00:00Z",
     updatedAt: "2026-06-10T00:00:00Z",
   };

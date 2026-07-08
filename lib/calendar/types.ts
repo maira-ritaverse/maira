@@ -7,31 +7,37 @@
  */
 
 export type CalendarEventKind =
-  | "first_meeting" // クライアントの初回面談予定 (client_records.first_meeting_date)
-  | "intake" // 受付日(client_records.intake_date) — 過去になりがちだが集計用に
-  | "task_due" // agency_tasks.due_at(未完了タスクの期限)
-  | "interaction" // client_interactions.occurred_at(対応履歴)
-  | "meeting" // meeting_schedules.starts_at(Maira 内で予約した Zoom/Meet 面談)
-  | "external_google"; // Google Calendar から取り込んだ予定(本人接続の Primary)
+  | "first_meeting" // クライアント の 初回 面談 予定 (client_records.first_meeting_date)
+  | "intake" // 受付 日 (client_records.intake_date) — 過去 に なりがち だが 集計 用 に
+  | "task_due" // agency_tasks.due_at (未完了 タスク の 期限)
+  | "interaction" // client_interactions.occurred_at (対応 履歴)
+  | "meeting" // meeting_schedules.starts_at (Maira 内 で 予約 した Zoom/Meet 面談)
+  | "company_interview" // referrals.scheduled_interview_at (企業 と の 面接 予定)
+  | "external_google"; // Google Calendar から 取り込んだ 予定 (本人 接続 の Primary)
 
 export type CalendarEvent = {
-  /** React の key 用に kind + 元 id を連結 */
+  /** React の key 用 に kind + 元 id を 連結 */
   id: string;
   kind: CalendarEventKind;
-  /** YYYY-MM-DD 形式の日付(タイムゾーン依存はしない)。occurred_at は時刻部分を切り落とす */
+  /** YYYY-MM-DD 形式 の 日付。 occurred_at は 時刻 部分 を 切り 落とす */
   dateKey: string;
-  /** イベントの ISO 文字列(時刻が意味を持つ task_due / interaction で使う) */
+  /** イベント の ISO 文字列 (時刻 が 意味 を 持つ task_due / interaction / company_interview で 使う) */
   occurredAt: string | null;
   title: string;
-  /** 詳細ページへの遷移用(Google 由来は null) */
+  /** 詳細 ページ へ の 遷移 用 (Google 由来 は null) */
   clientRecordId: string | null;
-  /** 詳細ページへの直接リンクラベル(Google 由来は organizer の表示名) */
+  /** 詳細 ページ へ の 直接 リンク ラベル (Google 由来 は organizer の 表示 名) */
   clientName: string;
-  /** meeting/external_google でのみ使う任意フィールド */
+  /** meeting / external_google で のみ 使う 任意 フィールド */
   meetingScheduleId?: string;
   joinUrl?: string;
-  /** Google 由来のときの event.id(編集 / 削除に使う) */
+  /** Google 由来 の 場合 の event.id (編集 / 削除 に 使う) */
   externalEventId?: string;
-  /** 終了時刻(時間枠表示用、ISO) */
+  /** 終了 時刻 (時間 枠 表示 用、 ISO) */
   endsAt?: string;
+  /** company_interview で 使う: 企業 名 + ポジション */
+  companyName?: string;
+  jobPosition?: string;
+  /** company_interview で 使う: 面接 の 補足 メモ (「1 次 対面」 「オンライン」 等) */
+  interviewNote?: string;
 };

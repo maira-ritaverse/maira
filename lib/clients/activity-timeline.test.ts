@@ -81,6 +81,8 @@ function referral(overrides: Partial<ReferralWithJob> = {}): ReferralWithJob {
     jobPostingId: "job-1",
     status: "planned",
     notes: null,
+    scheduledInterviewAt: null,
+    interviewNote: null,
     createdAt: "2026-06-08T08:00:00.000Z",
     updatedAt: "2026-06-08T08:00:00.000Z",
     jobCompanyName: "サンプル株式会社",
