@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { PasswordForm } from "@/app/(app)/app/settings/password/password-form";
-import { Button } from "@/components/ui/button";
 import { PageHeading } from "@/components/ui/page-heading";
+import { SettingsBackLink } from "@/components/features/settings/settings-back-link";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient } from "@/lib/supabase/server";
 
@@ -29,15 +28,11 @@ export default async function AgencyPasswordSettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <PageHeading
-          title="パスワード変更"
-          description="ログイン に 使用 する パスワード を 変更 します"
-        />
-        <Button render={<Link href="/agency/settings" />} variant="outline" size="sm">
-          設定 に 戻る
-        </Button>
-      </div>
+      <SettingsBackLink href="/agency/settings" />
+      <PageHeading
+        title="パスワード変更"
+        description="ログイン に 使用 する パスワード を 変更 します"
+      />
 
       <PasswordForm />
     </div>

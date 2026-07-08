@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Card } from "@/components/ui/card";
+import { SettingsBackLink } from "@/components/features/settings/settings-back-link";
 import { checkAiUsageLimit } from "@/lib/features/ai-usage";
 import { checkIntakeLimit } from "@/lib/features/usage-limits";
 import { createClient } from "@/lib/supabase/server";
@@ -28,12 +28,8 @@ export default async function UsageStatusPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
+      <SettingsBackLink href="/app/settings" label="設定" />
       <div>
-        <p className="text-muted-foreground text-xs">
-          <Link href="/app/settings" className="hover:underline">
-            ← 設定
-          </Link>
-        </p>
         <h1 className="mt-1 text-2xl font-bold">AI 利用状況</h1>
         <p className="text-muted-foreground mt-1 text-sm">
           今月の AI 機能の利用回数と上限を確認できます。

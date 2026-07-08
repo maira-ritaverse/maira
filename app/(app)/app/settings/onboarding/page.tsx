@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isOnboardingCompleted } from "@/lib/onboarding/queries";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { SettingsBackLink } from "@/components/features/settings/settings-back-link";
 import { OnboardingReplayButton } from "./replay-button";
 
 /**
@@ -28,16 +27,12 @@ export default async function OnboardingSettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">オンボーディングツアー</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Mairaの使い方ツアーをいつでも再表示できます
-          </p>
-        </div>
-        <Button render={<Link href="/app/settings" />} variant="outline" size="sm">
-          設定に戻る
-        </Button>
+      <SettingsBackLink href="/app/settings" label="設定" />
+      <div>
+        <h1 className="text-2xl font-bold">オンボーディングツアー</h1>
+        <p className="text-muted-foreground mt-1 text-sm">
+          Mairaの使い方ツアーをいつでも再表示できます
+        </p>
       </div>
 
       <Card className="p-6">

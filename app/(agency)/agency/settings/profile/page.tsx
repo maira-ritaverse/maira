@@ -1,10 +1,9 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { ProfileForm } from "@/app/(app)/app/settings/profile/profile-form";
 import { AvatarUploader } from "@/components/features/profile/avatar-uploader";
-import { Button } from "@/components/ui/button";
 import { PageHeading } from "@/components/ui/page-heading";
+import { SettingsBackLink } from "@/components/features/settings/settings-back-link";
 import { getUserRole } from "@/lib/organizations/queries";
 import { resolveAvatarPublicUrl } from "@/lib/profile/avatar";
 import { createClient } from "@/lib/supabase/server";
@@ -47,12 +46,8 @@ export default async function AgencyProfileSettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <PageHeading title="プロフィール" description="表示名 と アイコン 画像 を 編集" />
-        <Button render={<Link href="/agency/settings" />} variant="outline" size="sm">
-          設定 に 戻る
-        </Button>
-      </div>
+      <SettingsBackLink href="/agency/settings" />
+      <PageHeading title="プロフィール" description="表示名 と アイコン 画像 を 編集" />
 
       <AvatarUploader
         initialPublicUrl={avatarPublicUrl}
