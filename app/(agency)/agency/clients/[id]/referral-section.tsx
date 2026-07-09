@@ -21,6 +21,7 @@ import {
   paymentStatusConfig,
 } from "@/lib/placements/types";
 import { type PlacementAggregate, aggregatePlacements } from "@/lib/placements/aggregate";
+import { InterviewsBlock } from "./interviews-block";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -233,6 +234,9 @@ function ReferralRow({
       )}
 
       <RecommendationLetterEntry referralId={referral.id} latestLetter={latestLetter} />
+
+      {/* #3: 面接 ラウンド 一覧 + 結果 記録。 1 応募 × N 回 面接 の 業務 フロー を 完 結。 */}
+      <InterviewsBlock referralId={referral.id} />
 
       <StatusHistoryBlock histories={histories} />
 
