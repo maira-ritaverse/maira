@@ -131,8 +131,9 @@ export function ConversationListSidebar({ conversations, activeLineUserId }: Pro
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline justify-between gap-1">
+                        {/* CRM 側で紐付けた顧客名を優先。 未紐付けの場合は LINE プロフィール名。 */}
                         <p className="truncate text-sm font-medium">
-                          {c.displayName ?? "(名前なし)"}
+                          {c.clientName ?? c.displayName ?? "(名前なし)"}
                         </p>
                         <span className="text-muted-foreground shrink-0 text-[10px]">
                           {c.lastMessageAt
@@ -156,9 +157,9 @@ export function ConversationListSidebar({ conversations, activeLineUserId }: Pro
                           </span>
                         )}
                       </div>
-                      {c.clientName && (
-                        <p className="mt-0.5 truncate text-[10px] text-emerald-700">
-                          紐付け: {c.clientName}
+                      {c.clientName && c.displayName && (
+                        <p className="text-muted-foreground mt-0.5 truncate text-[10px]">
+                          LINE表示名: {c.displayName}
                         </p>
                       )}
                       {(() => {

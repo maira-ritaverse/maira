@@ -161,29 +161,49 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
       .eq("organization_id", role.organization.id),
     getOrgMemberAvatarMaps(supabase, role.organization.id),
   ]);
-  // 表示名 (email から ローカル部) を 取得 する ため service_role で auth.users を 引く
+  // 表示名は profiles.display_name を優先し、無い場合は email のローカル部で fallback。
+  // 従来は「arakaki1211 (admin)」のように ID + role を出していたが、
+  // 実運用では 「重盛 二郎」 のような登録氏名で表示したい (画面の視認性向上)。
   const memberOptions = await (async () => {
     const rows = (membersData ?? []) as Array<{ user_id: string; role: string }>;
     if (rows.length === 0) return [];
-    try {
-      const admin = createServiceClient();
-      const lookups = await Promise.all(rows.map((r) => admin.auth.admin.getUserById(r.user_id)));
-      return rows.map((r, i) => {
-        const email = lookups[i].data?.user?.email ?? null;
-        const label = email ? email.split("@")[0] : `(${r.role})`;
-        return {
-          userId: r.user_id,
-          displayName: `${label} (${r.role})`,
-          avatarUrl: avatarMaps.byUserId.get(r.user_id) ?? null,
-        };
-      });
-    } catch {
-      return rows.map((r) => ({
-        userId: r.user_id,
-        displayName: r.role,
-        avatarUrl: avatarMaps.byUserId.get(r.user_id) ?? null,
-      }));
+    const admin = createServiceClient();
+    const userIds = rows.map((r) => r.user_id);
+    const [profilesRes, authLookups] = await Promise.all([
+      admin.from("profiles").select("id, display_name").in("id", userIds),
+      // display_name が未登録の場合の fallback 用に email を並行取得。
+      // 失敗しても admin.auth.admin.getUserById は個別 API なので try/catch は 個別に
+      Promise.all(
+        rows.map((r) =>
+          admin.auth.admin
+            .getUserById(r.user_id)
+            .then((res) => res.data?.user?.email ?? null)
+            .catch(() => null),
+        ),
+      ),
+    ]);
+    const displayNameByUserId = new Map<string, string | null>();
+    for (const row of (profilesRes.data ?? []) as Array<{
+      id: string;
+      display_name: string | null;
+    }>) {
+      displayNameByUserId.set(row.id, row.display_name);
     }
+    return rows.map((r, i) => {
+      const displayName = displayNameByUserId.get(r.user_id);
+      const email = authLookups[i];
+      const label =
+        (displayName && displayName.trim().length > 0
+          ? displayName.trim()
+          : email
+            ? email.split("@")[0]
+            : null) ?? "(名前 未設定)";
+      return {
+        userId: r.user_id,
+        displayName: label,
+        avatarUrl: avatarMaps.byUserId.get(r.user_id) ?? null,
+      };
+    });
   })();
 
   return (
@@ -205,9 +225,12 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
             <div className="h-9 w-9 shrink-0 rounded-full bg-slate-200" />
           )}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold">{link.display_name ?? "(名前なし)"}</p>
+            {/* CRM 側で紐付けた顧客名を優先。 未紐付けの場合は LINE プロフィール名を表示。 */}
+            <p className="truncate text-sm font-semibold">
+              {clientName ?? link.display_name ?? "(名前なし)"}
+            </p>
             <p className="text-muted-foreground truncate text-[10px]">
-              {clientName ? `紐付け: ${clientName}` : "未紐付け"}
+              {clientName ? `LINE表示名: ${link.display_name ?? "(なし)"}` : "未紐付け"}
               {link.unfollowed_at && " · 解除済"}
             </p>
           </div>
