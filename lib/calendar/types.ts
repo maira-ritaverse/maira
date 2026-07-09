@@ -40,4 +40,13 @@ export type CalendarEvent = {
   jobPosition?: string;
   /** company_interview で 使う: 面接 の 補足 メモ (「1 次 対面」 「オンライン」 等) */
   interviewNote?: string;
+  /**
+   * meeting kind で 使う: 会議 録音 の 状態。 M5 の 「録音 ワンクリック」 UI で 使用。
+   *   - "planned"  : 録音 予定 フラグ が 立っている が まだ アップロード されて いない
+   *   - "recorded" : career_intake_recordings に アップロード 済 (recording_id あり)
+   *   - null       : 録音 予定 も アップロード も 無い
+   */
+  recordingState?: "planned" | "recorded" | null;
+  /** 録音 済 の 場合 の career_intake_recordings.id。 clients/[id] 詳細 へ の 導線 に 使う */
+  recordingId?: string | null;
 };

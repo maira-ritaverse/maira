@@ -63,7 +63,7 @@ export async function listCalendarEvents(
     supabase
       .from("meeting_schedules")
       .select(
-        "id, title, starts_at, ends_at, status, provider, join_url, client_record_id, invitee_name",
+        "id, title, starts_at, ends_at, status, provider, join_url, client_record_id, invitee_name, recording_planned, recording_id",
       )
       .eq("organization_id", opts.organizationId)
       .gte("starts_at", opts.rangeStart)
@@ -223,6 +223,8 @@ export async function listCalendarEvents(
       join_url: string;
       client_record_id: string | null;
       invitee_name: string | null;
+      recording_planned: boolean | null;
+      recording_id: string | null;
     }>) {
       const dateKey = isoDateOnly(m.starts_at);
       if (!dateKey) continue;
@@ -233,6 +235,15 @@ export async function listCalendarEvents(
       const displayName = m.client_record_id
         ? (clientNameMap.get(m.client_record_id) ?? "(顧客名未取得)")
         : (m.invitee_name ?? (m.provider === "zoom" ? "Zoom" : "Google Meet"));
+      // 録音 状態:
+      //   ・recording_id が セット されて いれば "recorded" (アップロード 済)
+      //   ・recording_planned が true なら "planned" (予約 のみ)
+      //   ・どちら も 無ければ null (表示 抑制)
+      const recordingState: "planned" | "recorded" | null = m.recording_id
+        ? "recorded"
+        : m.recording_planned
+          ? "planned"
+          : null;
       events.push({
         id: `meeting:${m.id}`,
         kind: "meeting",
@@ -244,6 +255,8 @@ export async function listCalendarEvents(
         meetingScheduleId: m.id,
         joinUrl: m.join_url,
         endsAt: m.ends_at,
+        recordingState,
+        recordingId: m.recording_id,
       });
     }
   }
