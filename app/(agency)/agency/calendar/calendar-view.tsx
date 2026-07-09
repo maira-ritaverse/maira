@@ -13,7 +13,10 @@ import type { CalendarEvent, CalendarEventKind } from "@/lib/calendar/types";
 
 import { DayEventsDialog } from "./day-events-dialog";
 import { GoogleEventDialog } from "./google-event-dialog";
+import { ManualMeetingDialog } from "./manual-meeting-dialog";
 import { WeekDayView } from "./week-day-view";
+
+type ClientOption = { id: string; name: string };
 
 type CalendarViewProps = {
   /** 初期表示の月(YYYY-MM)。サーバー側で「現在月」を渡す。 */
@@ -22,6 +25,8 @@ type CalendarViewProps = {
   initialAnchorDate: string;
   /** 初期月のイベント。月切替時はクライアントから再フェッチする。 */
   initialEvents: CalendarEvent[];
+  /** #5b: 手動 会議 予定 作成 ダイアログ の 顧客 セレクタ 用 */
+  clientOptions: ClientOption[];
 };
 
 const KIND_LABEL: Record<CalendarEventKind, string> = {
@@ -89,6 +94,7 @@ export function CalendarView({
   initialMonth,
   initialAnchorDate,
   initialEvents,
+  clientOptions,
 }: CalendarViewProps) {
   const router = useRouter();
   // M1: viewMode / anchor 中心 の 状態 管理 に 移行。
@@ -111,6 +117,11 @@ export function CalendarView({
   const [dialog, setDialog] = useState<DialogState>({ open: false });
   // Q1: DayEventsDialog の state。 従来 の 「+N件」 デッド リンク の 置き換え。
   const [dayDialog, setDayDialog] = useState<{ open: boolean; dateKey: string }>({
+    open: false,
+    dateKey: "",
+  });
+  // #5b: 手動 会議 予定 作成 ダイアログ (「+ 会議 を 追加」 ボタン / 空 セル + hover)
+  const [manualDialog, setManualDialog] = useState<{ open: boolean; dateKey: string }>({
     open: false,
     dateKey: "",
   });
@@ -315,6 +326,19 @@ export function CalendarView({
     }
   };
 
+  // #5b: 手動 予定 の 作成 / 編集 後 に Maira 側 の カレンダー イベント を 再 fetch。
+  const refreshMaira = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/agency/calendar?month=${yearMonth}`);
+      if (!res.ok) return;
+      const json = (await res.json()) as { events: CalendarEvent[] };
+      setEvents(json.events ?? []);
+      setFetchedMonth(yearMonth);
+    } catch {
+      // 再 fetch 失敗 は カレンダー 全体 の 描画 を 壊さ ない よう 握り 潰す
+    }
+  }, [yearMonth]);
+
   const refresh = async () => {
     await fetchGoogleEvents(yearMonth);
   };
@@ -402,6 +426,18 @@ export function CalendarView({
         {error && <span className="text-xs text-red-600 dark:text-red-300">{error}</span>}
 
         <div className="ml-auto flex items-center gap-2">
+          {/* #5b: Zoom/Meet 提供者 経由 で は なく Maira 側 で 予定 を 追加 */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              const today = new Date();
+              const dateKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+              setManualDialog({ open: true, dateKey });
+            }}
+          >
+            + 会議 を 追加
+          </Button>
           {googleStatus === "connected" && (
             <Button
               size="sm"
@@ -463,6 +499,21 @@ export function CalendarView({
         />
       )}
 
+      {/* #5b: 手動 会議 予定 作成 ダイアログ (「+ 会議 を 追加」 or 空 セル hover の +)。
+          key で リマウント させ、 dateKey が 変わった 時 に フォーム 初期 値 が 更新 される。 */}
+      {manualDialog.open && (
+        <ManualMeetingDialog
+          key={manualDialog.dateKey}
+          open={manualDialog.open}
+          onClose={() => setManualDialog({ open: false, dateKey: "" })}
+          initialDateKey={manualDialog.dateKey || undefined}
+          clientOptions={clientOptions}
+          onCreated={() => {
+            void refreshMaira();
+          }}
+        />
+      )}
+
       {/* Q1: 「+N件」 クリック で 当日 の 全イベント を 時刻順表示 */}
       <DayEventsDialog
         open={dayDialog.open}
@@ -502,17 +553,31 @@ export function CalendarView({
               >
                 <div className="flex items-center justify-between">
                   <div className="text-xs tabular-nums">{cell.day}</div>
-                  {googleStatus === "connected" && (
+                  {/* #5b: 空 セル hover で 手動 会議 追加。 Google 連携 時 は 追加 で +G ボタン。 */}
+                  <div className="hidden gap-1 group-hover:flex">
                     <button
                       type="button"
-                      onClick={() => setDialog({ open: true, mode: "new", dateKey: cell.dateKey })}
-                      className="text-muted-foreground/40 hover:text-foreground hidden text-xs leading-none group-hover:inline"
-                      aria-label="この日に予定を追加"
-                      title="Google カレンダーに予定を追加"
+                      onClick={() => setManualDialog({ open: true, dateKey: cell.dateKey })}
+                      className="text-muted-foreground/60 hover:text-foreground text-xs leading-none"
+                      aria-label="この日に会議を追加"
+                      title="Maira に 会議 予定 を 追加"
                     >
                       +
                     </button>
-                  )}
+                    {googleStatus === "connected" && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDialog({ open: true, mode: "new", dateKey: cell.dateKey })
+                        }
+                        className="text-muted-foreground/40 hover:text-foreground text-xs leading-none"
+                        aria-label="この日に Google 予定を追加"
+                        title="Google カレンダーに予定を追加"
+                      >
+                        +G
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {eventsOfDay.slice(0, 4).map((ev) => {
                   const conflict = overlappingIds.has(ev.id);

@@ -44,7 +44,7 @@ export default async function CalendarPage() {
   const rangeStart = toIsoDate(start);
   const rangeEnd = toIsoDate(end);
 
-  const [events, googleStatus, nextMeeting] = await Promise.all([
+  const [events, googleStatus, nextMeeting, clientsRes] = await Promise.all([
     listCalendarEvents({
       organizationId: role.organization.id,
       rangeStart,
@@ -52,7 +52,18 @@ export default async function CalendarPage() {
     }),
     getGoogleConnectionStatus(supabase, user.id),
     getNextMeetingForHost(supabase, user.id, { withinHours: 24 }),
+    // #5b: ManualMeetingDialog の 顧客 セレクタ 用 に 一覧 を server 側 で 取得。
+    // RLS で 自 組織 の 顧客 のみ 返る。 上限 500 件 (それ 以上 は 型 選択 UX が 破綻)。
+    supabase
+      .from("client_records")
+      .select("id, name")
+      .eq("organization_id", role.organization.id)
+      .order("name", { ascending: true })
+      .limit(500),
   ]);
+  const clientOptions = ((clientsRes.data ?? []) as Array<{ id: string; name: string }>).map(
+    (c) => ({ id: c.id, name: c.name }),
+  );
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
@@ -71,6 +82,7 @@ export default async function CalendarPage() {
         initialMonth={initialMonth}
         initialAnchorDate={initialAnchorDate}
         initialEvents={events}
+        clientOptions={clientOptions}
       />
     </div>
   );
