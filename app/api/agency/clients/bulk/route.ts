@@ -234,7 +234,7 @@ export async function POST(request: Request) {
     const successClientIds = new Set<string>();
     for (const clientId of targetIds) {
       for (const teamId of parsed.data.teamIds) {
-        const { error } = await supabase.rpc(rpcName, {
+        const { data: applied, error } = await supabase.rpc(rpcName, {
           p_client_record_id: clientId,
           p_team_id: teamId,
         });
@@ -248,14 +248,19 @@ export async function POST(request: Request) {
           failedByClient.set(clientId, bucket);
           continue;
         }
+        // RPC は権限 OK なら 「実際 に INSERT / DELETE が 発生 したか」 を boolean で返す。
+        // successCount は 「権限があり呼び出しが通った顧客」 の数として集計する。
         successCount += 1;
         successClientIds.add(clientId);
-        auditChanges.push({
-          clientRecordId: clientId,
-          fieldName: isAdd ? "team_added" : "team_removed",
-          oldValue: null,
-          newValue: teamId,
-        });
+        // 監査ログは 実際に変化があった場合のみ push (重複割当 / 対象なしは skip)。
+        if (applied === true) {
+          auditChanges.push({
+            clientRecordId: clientId,
+            fieldName: isAdd ? "team_added" : "team_removed",
+            oldValue: null,
+            newValue: teamId,
+          });
+        }
       }
     }
 

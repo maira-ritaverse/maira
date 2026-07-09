@@ -5067,7 +5067,7 @@ export type Database = {
       };
       assign_client_to_team: {
         Args: { p_client_record_id: string; p_team_id: string };
-        Returns: undefined;
+        Returns: boolean;
       };
       auto_finalize_expired_revokes: { Args: never; Returns: number };
       cancel_client_invitation: {
@@ -5456,7 +5456,7 @@ export type Database = {
       };
       unassign_client_from_team: {
         Args: { p_client_record_id: string; p_team_id: string };
-        Returns: undefined;
+        Returns: boolean;
       };
       update_team: {
         Args: {
