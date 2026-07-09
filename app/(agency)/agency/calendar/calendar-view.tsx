@@ -8,14 +8,18 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { compareByStartTime, detectOverlaps } from "@/lib/calendar/overlap";
+import { formatPeriodLabel, getWeekRange, shiftAnchor, type ViewMode } from "@/lib/calendar/period";
 import type { CalendarEvent, CalendarEventKind } from "@/lib/calendar/types";
 
 import { DayEventsDialog } from "./day-events-dialog";
 import { GoogleEventDialog } from "./google-event-dialog";
+import { WeekDayView } from "./week-day-view";
 
 type CalendarViewProps = {
   /** 初期表示の月(YYYY-MM)。サーバー側で「現在月」を渡す。 */
   initialMonth: string;
+  /** 初期アンカー日 (YYYY-MM-DD)。 M1 週 / 日ビューの中心日として使う。 */
+  initialAnchorDate: string;
   /** 初期月のイベント。月切替時はクライアントから再フェッチする。 */
   initialEvents: CalendarEvent[];
 };
@@ -71,9 +75,19 @@ type DialogState =
   | { open: true; mode: "edit"; initial: GoogleApiEvent }
   | { open: true; mode: "new"; dateKey: string };
 
-export function CalendarView({ initialMonth, initialEvents }: CalendarViewProps) {
+export function CalendarView({
+  initialMonth,
+  initialAnchorDate,
+  initialEvents,
+}: CalendarViewProps) {
   const router = useRouter();
-  const [yearMonth, setYearMonth] = useState<string>(initialMonth);
+  // M1: viewMode / anchor 中心 の 状態 管理 に 移行。
+  //   ・yearMonth (fetch key) は anchor から 導出。
+  //   ・shiftAnchor / rangeForView / formatPeriodLabel は lib/calendar/period.ts。
+  const [viewMode, setViewMode] = useState<ViewMode>("month");
+  const [anchor, setAnchor] = useState<string>(initialAnchorDate);
+  const yearMonth = useMemo(() => anchor.slice(0, 7), [anchor]);
+  const [fetchedMonth, setFetchedMonth] = useState<string>(initialMonth);
   const [events, setEvents] = useState<CalendarEvent[]>(initialEvents);
   const [googleEvents, setGoogleEvents] = useState<GoogleApiEvent[]>([]);
   /** Google 連携の状態(初回 fetch までは null) */
@@ -227,24 +241,63 @@ export function CalendarView({ initialMonth, initialEvents }: CalendarViewProps)
     void fetchGoogleEvents(yearMonth);
   }, [fetchGoogleEvents, yearMonth]);
 
+  // M1: viewMode ごとに shiftAnchor で アンカー を シフト し、 その アンカー を
+  //     含む 月 の データ を fetch (未 fetch の 月 のみ)。
+  //     週 / 日 view で は 「その 月 の」 データ が rangeStart/End を 内包 する。
   const navigate = async (delta: number) => {
-    const next = shiftMonth(yearMonth, delta);
-    setYearMonth(next);
+    const nextAnchor = shiftAnchor(anchor, viewMode, delta);
+    setAnchor(nextAnchor);
+    const nextMonth = nextAnchor.slice(0, 7);
+    if (nextMonth === fetchedMonth) {
+      // 同 月 内 シフト は fetch 不要 (週/日 の 場合 の 多く)
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const [mairaRes] = await Promise.all([
-        fetch(`/api/agency/calendar?month=${next}`),
-        fetchGoogleEvents(next),
+        fetch(`/api/agency/calendar?month=${nextMonth}`),
+        fetchGoogleEvents(nextMonth),
       ]);
       if (!mairaRes.ok) throw new Error(`HTTP ${mairaRes.status}`);
       const json = (await mairaRes.json()) as { events: CalendarEvent[] };
       setEvents(json.events ?? []);
+      setFetchedMonth(nextMonth);
     } catch (err) {
       const message = err instanceof Error ? err.message : "不明なエラー";
       setError(`イベント取得失敗: ${message}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 「今日」 に 戻る ボタン用。 fetch は 必要 に 応じて 発火。
+  const goToday = () => {
+    // Date.now() は client 側 のみ 使用 (SSR 前 は 走らない)
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, "0");
+    const d = String(today.getDate()).padStart(2, "0");
+    const todayYmd = `${y}-${m}-${d}`;
+    setAnchor(todayYmd);
+    const nextMonth = `${y}-${m}`;
+    if (nextMonth !== fetchedMonth) {
+      void (async () => {
+        setLoading(true);
+        try {
+          const [mairaRes] = await Promise.all([
+            fetch(`/api/agency/calendar?month=${nextMonth}`),
+            fetchGoogleEvents(nextMonth),
+          ]);
+          if (mairaRes.ok) {
+            const json = (await mairaRes.json()) as { events: CalendarEvent[] };
+            setEvents(json.events ?? []);
+            setFetchedMonth(nextMonth);
+          }
+        } finally {
+          setLoading(false);
+        }
+      })();
     }
   };
 
@@ -263,16 +316,44 @@ export function CalendarView({ initialMonth, initialEvents }: CalendarViewProps)
 
   return (
     <Card className="space-y-4 p-5">
-      {/* ヘッダ:月切替 + フィルタ */}
+      {/* ヘッダ:期間切替 + view mode タブ + フィルタ */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1">
           <Button size="sm" variant="outline" onClick={() => navigate(-1)} disabled={loading}>
-            ← 前月
+            ← {viewMode === "month" ? "前月" : viewMode === "week" ? "前週" : "前日"}
           </Button>
-          <h2 className="px-3 text-lg font-semibold tabular-nums">{formatMonth(yearMonth)}</h2>
+          <h2 className="px-3 text-lg font-semibold tabular-nums">
+            {formatPeriodLabel(anchor, viewMode)}
+          </h2>
           <Button size="sm" variant="outline" onClick={() => navigate(1)} disabled={loading}>
-            翌月 →
+            {viewMode === "month" ? "翌月" : viewMode === "week" ? "翌週" : "翌日"} →
           </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={goToday}
+            disabled={loading}
+            className="ml-1 text-xs"
+          >
+            今日
+          </Button>
+        </div>
+        {/* M1: view mode 切替 タブ */}
+        <div className="flex items-center rounded-md border p-0.5">
+          {(["month", "week", "day"] as ViewMode[]).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setViewMode(m)}
+              className={`rounded px-2 py-0.5 text-xs ${
+                viewMode === m
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {m === "month" ? "月" : m === "week" ? "週" : "日"}
+            </button>
+          ))}
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-muted-foreground text-xs">表示:</span>
@@ -341,19 +422,21 @@ export function CalendarView({ initialMonth, initialEvents }: CalendarViewProps)
         </div>
       </div>
 
-      {/* 曜日ラベル */}
-      <div className="grid grid-cols-7 gap-px text-xs">
-        {WEEK_LABELS.map((wk, i) => (
-          <div
-            key={wk}
-            className={`bg-muted/40 px-2 py-1 text-center font-medium ${
-              i === 0 ? "text-red-600" : i === 6 ? "text-blue-600" : ""
-            }`}
-          >
-            {wk}
-          </div>
-        ))}
-      </div>
+      {/* 曜日ラベル (月ビューのみ。 週/日ビューは WeekDayView 側 で 列 ヘッダを持つ) */}
+      {viewMode === "month" && (
+        <div className="grid grid-cols-7 gap-px text-xs">
+          {WEEK_LABELS.map((wk, i) => (
+            <div
+              key={wk}
+              className={`bg-muted/40 px-2 py-1 text-center font-medium ${
+                i === 0 ? "text-red-600" : i === 6 ? "text-blue-600" : ""
+              }`}
+            >
+              {wk}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Google イベント編集 / 新規作成ダイアログ */}
       {dialog.open && (
@@ -378,83 +461,144 @@ export function CalendarView({ initialMonth, initialEvents }: CalendarViewProps)
         onEventClick={handleEventClick}
       />
 
+      {/* M1: 週 / 日ビュー (時間軸 タイムライン) */}
+      {viewMode !== "month" && (
+        <WeekDayView
+          mode={viewMode}
+          columns={buildTimelineColumns(anchor, viewMode)}
+          eventsByDate={eventsByDate}
+          overlappingIds={overlappingIds}
+          kindLabel={KIND_LABEL}
+          kindTone={KIND_TONE}
+          onEventClick={handleEventClick}
+        />
+      )}
+
       {/* 月グリッド(6 週 = 42 セル) */}
-      <div className="grid grid-cols-7 gap-px">
-        {monthCells.map((cell) => {
-          const eventsOfDay = eventsByDate.get(cell.dateKey) ?? [];
-          return (
-            <div
-              key={cell.dateKey}
-              className={`bg-background group ring-foreground/5 min-h-20 space-y-1 p-1.5 ring-1 ring-inset ${
-                cell.inMonth ? "" : "text-muted-foreground/50 bg-muted/10"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="text-xs tabular-nums">{cell.day}</div>
-                {googleStatus === "connected" && (
+      {viewMode === "month" && (
+        <div className="grid grid-cols-7 gap-px">
+          {monthCells.map((cell) => {
+            const eventsOfDay = eventsByDate.get(cell.dateKey) ?? [];
+            return (
+              <div
+                key={cell.dateKey}
+                className={`bg-background group ring-foreground/5 min-h-20 space-y-1 p-1.5 ring-1 ring-inset ${
+                  cell.inMonth ? "" : "text-muted-foreground/50 bg-muted/10"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="text-xs tabular-nums">{cell.day}</div>
+                  {googleStatus === "connected" && (
+                    <button
+                      type="button"
+                      onClick={() => setDialog({ open: true, mode: "new", dateKey: cell.dateKey })}
+                      className="text-muted-foreground/40 hover:text-foreground hidden text-xs leading-none group-hover:inline"
+                      aria-label="この日に予定を追加"
+                      title="Google カレンダーに予定を追加"
+                    >
+                      +
+                    </button>
+                  )}
+                </div>
+                {eventsOfDay.slice(0, 4).map((ev) => {
+                  const conflict = overlappingIds.has(ev.id);
+                  // M5: 録音 状態 に 応じて mic アイコン を 添える (meeting kind のみ)。
+                  //   ・recorded → 緑 mic (アップロード 済、 クリック で 詳細 へ)
+                  //   ・planned → アンバー mic (予定 のみ、 未 アップロード の 催促)
+                  const recState = ev.kind === "meeting" ? ev.recordingState : null;
+                  return (
+                    <button
+                      key={ev.id}
+                      type="button"
+                      onClick={() => handleEventClick(ev)}
+                      className={`flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[10px] ${
+                        KIND_TONE[ev.kind]
+                      } hover:opacity-80 ${conflict ? "ring-1 ring-red-500" : ""}`}
+                      title={`${KIND_LABEL[ev.kind]}: ${ev.clientName} — ${ev.title}${
+                        conflict ? " (時刻衝突)" : ""
+                      }${
+                        recState === "recorded"
+                          ? " (録音 済)"
+                          : recState === "planned"
+                            ? " (録音 予定)"
+                            : ""
+                      }`}
+                    >
+                      {conflict && <AlertTriangle className="h-2.5 w-2.5 shrink-0 text-red-600" />}
+                      {recState === "recorded" && (
+                        <Mic
+                          className="h-2.5 w-2.5 shrink-0 text-emerald-700"
+                          aria-label="録音済"
+                        />
+                      )}
+                      {recState === "planned" && (
+                        <Mic
+                          className="h-2.5 w-2.5 shrink-0 text-amber-600"
+                          aria-label="録音予定"
+                        />
+                      )}
+                      <span className="truncate">
+                        {ev.kind === "external_google" ? ev.title : `${ev.clientName}:${ev.title}`}
+                      </span>
+                    </button>
+                  );
+                })}
+                {eventsOfDay.length > 4 && (
                   <button
                     type="button"
-                    onClick={() => setDialog({ open: true, mode: "new", dateKey: cell.dateKey })}
-                    className="text-muted-foreground/40 hover:text-foreground hidden text-xs leading-none group-hover:inline"
-                    aria-label="この日に予定を追加"
-                    title="Google カレンダーに予定を追加"
+                    onClick={() => setDayDialog({ open: true, dateKey: cell.dateKey })}
+                    className="text-muted-foreground hover:text-foreground text-[10px] underline-offset-4 hover:underline"
                   >
-                    +
+                    +{eventsOfDay.length - 4}件
                   </button>
                 )}
               </div>
-              {eventsOfDay.slice(0, 4).map((ev) => {
-                const conflict = overlappingIds.has(ev.id);
-                // M5: 録音 状態 に 応じて mic アイコン を 添える (meeting kind のみ)。
-                //   ・recorded → 緑 mic (アップロード 済、 クリック で 詳細 へ)
-                //   ・planned → アンバー mic (予定 のみ、 未 アップロード の 催促)
-                const recState = ev.kind === "meeting" ? ev.recordingState : null;
-                return (
-                  <button
-                    key={ev.id}
-                    type="button"
-                    onClick={() => handleEventClick(ev)}
-                    className={`flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[10px] ${
-                      KIND_TONE[ev.kind]
-                    } hover:opacity-80 ${conflict ? "ring-1 ring-red-500" : ""}`}
-                    title={`${KIND_LABEL[ev.kind]}: ${ev.clientName} — ${ev.title}${
-                      conflict ? " (時刻衝突)" : ""
-                    }${
-                      recState === "recorded"
-                        ? " (録音 済)"
-                        : recState === "planned"
-                          ? " (録音 予定)"
-                          : ""
-                    }`}
-                  >
-                    {conflict && <AlertTriangle className="h-2.5 w-2.5 shrink-0 text-red-600" />}
-                    {recState === "recorded" && (
-                      <Mic className="h-2.5 w-2.5 shrink-0 text-emerald-700" aria-label="録音済" />
-                    )}
-                    {recState === "planned" && (
-                      <Mic className="h-2.5 w-2.5 shrink-0 text-amber-600" aria-label="録音予定" />
-                    )}
-                    <span className="truncate">
-                      {ev.kind === "external_google" ? ev.title : `${ev.clientName}:${ev.title}`}
-                    </span>
-                  </button>
-                );
-              })}
-              {eventsOfDay.length > 4 && (
-                <button
-                  type="button"
-                  onClick={() => setDayDialog({ open: true, dateKey: cell.dateKey })}
-                  className="text-muted-foreground hover:text-foreground text-[10px] underline-offset-4 hover:underline"
-                >
-                  +{eventsOfDay.length - 4}件
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </Card>
   );
+}
+
+/**
+ * 週 / 日ビュー用の列データ (dateKey + ヘッダ ラベル + isToday) を組み立てる。
+ * 純粋関数。 anchor が YYYY-MM-DD、 mode が "week" | "day" を想定。
+ */
+function buildTimelineColumns(
+  anchor: string,
+  mode: "week" | "day",
+): Array<{ dateKey: string; label: string; isToday: boolean }> {
+  const today = new Date();
+  const todayYmd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+  if (mode === "day") {
+    const [y, m, d] = anchor.split("-").map(Number);
+    const dt = new Date(y, m - 1, d);
+    const label = dt.toLocaleDateString("ja-JP", {
+      month: "short",
+      day: "numeric",
+      weekday: "short",
+    });
+    return [{ dateKey: anchor, label, isToday: anchor === todayYmd }];
+  }
+
+  // week: 日曜開始 の 7 日
+  const { rangeStart } = getWeekRange(anchor);
+  const [y, m, d] = rangeStart.split("-").map(Number);
+  const start = new Date(y, m - 1, d);
+  const cols: Array<{ dateKey: string; label: string; isToday: boolean }> = [];
+  for (let i = 0; i < 7; i++) {
+    const dt = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    const ymd = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+    const label = dt.toLocaleDateString("ja-JP", {
+      month: "numeric",
+      day: "numeric",
+      weekday: "short",
+    });
+    cols.push({ dateKey: ymd, label, isToday: ymd === todayYmd });
+  }
+  return cols;
 }
 
 // ────────────────────────────────────────────
@@ -462,16 +606,6 @@ export function CalendarView({ initialMonth, initialEvents }: CalendarViewProps)
 // ────────────────────────────────────────────
 
 type MonthCell = { dateKey: string; day: number; inMonth: boolean };
-
-/** YYYY-MM を翌月 / 前月にシフト(delta = ±1) */
-function shiftMonth(yearMonth: string, delta: number): string {
-  const [y, m] = yearMonth.split("-").map(Number);
-  if (!y || !m) return yearMonth;
-  const next = new Date(y, m - 1 + delta, 1);
-  const ny = next.getFullYear();
-  const nm = next.getMonth() + 1;
-  return `${ny}-${String(nm).padStart(2, "0")}`;
-}
 
 /** 6 週 × 7 = 42 セルの月グリッドを返す。日曜始まり。 */
 function buildMonthCells(yearMonth: string): MonthCell[] {
@@ -492,9 +626,4 @@ function buildMonthCells(yearMonth: string): MonthCell[] {
     });
   }
   return cells;
-}
-
-function formatMonth(yearMonth: string): string {
-  const [y, m] = yearMonth.split("-");
-  return `${y}年${Number(m)}月`;
 }

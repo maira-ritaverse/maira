@@ -36,6 +36,8 @@ export default async function CalendarPage() {
   const year = now.getFullYear();
   const month = now.getMonth() + 1; // 1-12
   const initialMonth = `${year}-${String(month).padStart(2, "0")}`;
+  // M1: 週 / 日ビューの初期アンカー日 (今日の日付)。month view でも参照される。
+  const initialAnchorDate = `${initialMonth}-${String(now.getDate()).padStart(2, "0")}`;
   // クエリ範囲は当月 + 前後 1 週(月をまたぐ予定が表示される)
   const start = new Date(year, month - 1, 1 - 7);
   const end = new Date(year, month, 7);
@@ -65,7 +67,11 @@ export default async function CalendarPage() {
         connected={googleStatus.connected}
         needsReauth={googleStatus.needsReauth}
       />
-      <CalendarView initialMonth={initialMonth} initialEvents={events} />
+      <CalendarView
+        initialMonth={initialMonth}
+        initialAnchorDate={initialAnchorDate}
+        initialEvents={events}
+      />
     </div>
   );
 }
