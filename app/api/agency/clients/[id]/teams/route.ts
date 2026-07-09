@@ -1,24 +1,35 @@
 import { NextResponse } from "next/server";
 
+import type { AuthedUserContext } from "@/lib/api/auth-guards";
 import { readJsonBody, requireUser } from "@/lib/api/auth-guards";
+import { createServiceClient } from "@/lib/supabase/service";
 import { getUserRole } from "@/lib/organizations/queries";
 import { assignClientTeamsRequestSchema } from "@/lib/teams/types";
 
 /**
  * PATCH /api/agency/clients/[id]/teams
  *
- * body: { teamIds: string[] }  - 顧客 に 属する team 全集合 を セット する (差分 更新)。
+ * body: { teamIds: string[] } - 顧客に属するリスト表の全集合をセットする(差分更新)。
  *
- * 権限: assign_client_to_team / unassign_client_from_team RPC 側 で
- *   admin / 主担当 / team lead を 判定 する。
+ * 権限: assign_client_to_team / unassign_client_from_team RPC 側で
+ *   admin / 主担当 / リーダー を判定する。
  *
- * 差分 実装:
- *   現在 の assignments を SELECT → 差集合 で ADD / REMOVE を それぞれ RPC 呼び 出し。
- *   1 request 内 で N-1 呼び 出し に なる が、 team 数 は 上限 20 なの で 実用 上 問題 なし。
+ * 実装方針:
+ *   1. clientRecordId が呼び出し者の組織に属するかを service_role で事前検証
+ *      (RLS を通す前の情報漏洩防止)
+ *   2. teamIds も同じ組織に属するかを事前検証(部分適用後の権限エラーで
+ *      中途半端な状態が残るのを防ぐ)
+ *   3. 現状の assignments を SELECT → 差集合で ADD / REMOVE を計算
+ *   4. すべての RPC を最後まで実行し、成功 / 失敗を集計して返す
+ *      (途中中断せず、部分適用が発生した場合も呼び出し元に伝える)
  */
 type RouteContext = { params: Promise<{ id: string }> };
 
-async function requireAgencyMember() {
+type Guard =
+  | { ok: true; supabase: AuthedUserContext["supabase"]; organizationId: string }
+  | { ok: false; response: Response };
+
+async function requireAgencyMember(): Promise<Guard> {
   const guard = await requireUser();
   if (!guard.ok) return guard;
   const role = await getUserRole(guard.user.id);
@@ -28,7 +39,7 @@ async function requireAgencyMember() {
       response: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
     };
   }
-  return { ok: true as const, supabase: guard.supabase };
+  return { ok: true as const, supabase: guard.supabase, organizationId: role.organization.id };
 }
 
 export async function PATCH(request: Request, { params }: RouteContext) {
@@ -47,7 +58,53 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     );
   }
 
-  // 現状 の assignments (RLS で 同 org のみ SELECT 可)
+  // clientRecordId が呼び出し者の組織に属するかを service_role で確認する。
+  // service_role を使うのは、RLS が team scope で「別 org の顧客が SELECT で 0 行になる」ため、
+  // route レベルで「not_found」を明示的に返して 挙動を統一するため。
+  const service = createServiceClient();
+  const { data: clientRow } = await service
+    .from("client_records")
+    .select("organization_id")
+    .eq("id", clientRecordId)
+    .maybeSingle();
+  if (!clientRow) {
+    return NextResponse.json(
+      { error: "not_found", message: "顧客が見つかりません" },
+      { status: 404 },
+    );
+  }
+  if ((clientRow as { organization_id: string }).organization_id !== g.organizationId) {
+    // クロス組織の情報漏洩を防ぐため 404 で応答 (403 だと存在情報が漏れる)
+    return NextResponse.json(
+      { error: "not_found", message: "顧客が見つかりません" },
+      { status: 404 },
+    );
+  }
+
+  // teamIds が全て同じ組織のリスト表かを事前検証。
+  // 別 org の team_id が混ざっている場合は 400 で拒否 (RPC の not_found で
+  // 中断されると差分適用済の状態が残るため事前に弾く)。
+  if (parsed.data.teamIds.length > 0) {
+    const { data: teamRows } = await service
+      .from("organization_teams")
+      .select("id")
+      .in("id", parsed.data.teamIds)
+      .eq("organization_id", g.organizationId);
+    const validTeamIds = new Set(((teamRows ?? []) as Array<{ id: string }>).map((r) => r.id));
+    const invalidTeamIds = parsed.data.teamIds.filter((id) => !validTeamIds.has(id));
+    if (invalidTeamIds.length > 0) {
+      return NextResponse.json(
+        {
+          error: "teams_not_in_org",
+          message: "指定されたリスト表の一部が組織内に存在しません",
+          invalid_team_ids: invalidTeamIds,
+        },
+        { status: 400 },
+      );
+    }
+  }
+
+  // 現状の assignments (RLS で 同 org のみ SELECT 可)
   const { data: currentRows, error: fetchErr } = await g.supabase
     .from("client_team_assignments")
     .select("team_id")
@@ -63,43 +120,67 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const toAdd = [...targetIds].filter((id) => !currentIds.has(id));
   const toRemove = [...currentIds].filter((id) => !targetIds.has(id));
 
-  // 逐次 実行 (RPC 上限 に 引っかかる まで の 心配 は 20 件 なので 皆無)。
-  // 失敗 時 は 中断 し、 これ まで の 変更 は 残る (transactional でない 点 は 割り切り)。
+  // すべての RPC を実行してから集計して返す (途中で中断しない)。
+  // これにより「Team1 は追加できたが Team2 で権限拒否」といった部分成功の状況を
+  // 呼び出し元にも正確に伝えられる。RLS が引き受ける安全な範囲での楽観並行制御。
+  const addedTeamIds: string[] = [];
+  const removedTeamIds: string[] = [];
+  const failures: Array<{ teamId: string; op: "add" | "remove"; reason: string }> = [];
+
   for (const teamId of toAdd) {
     const { error } = await g.supabase.rpc("assign_client_to_team", {
       p_client_record_id: clientRecordId,
       p_team_id: teamId,
     });
-    if (error) return handleRpcError(error);
+    if (error) {
+      failures.push({ teamId, op: "add", reason: classifyRpcError(error) });
+      continue;
+    }
+    addedTeamIds.push(teamId);
   }
   for (const teamId of toRemove) {
     const { error } = await g.supabase.rpc("unassign_client_from_team", {
       p_client_record_id: clientRecordId,
       p_team_id: teamId,
     });
-    if (error) return handleRpcError(error);
+    if (error) {
+      failures.push({ teamId, op: "remove", reason: classifyRpcError(error) });
+      continue;
+    }
+    removedTeamIds.push(teamId);
   }
 
-  return NextResponse.json({ ok: true, added: toAdd.length, removed: toRemove.length });
-}
+  const partial = failures.length > 0 && addedTeamIds.length + removedTeamIds.length > 0;
+  const allFailed = failures.length > 0 && addedTeamIds.length === 0 && removedTeamIds.length === 0;
 
-function handleRpcError(error: { code?: string; message?: string }): Response {
-  const msg = error.message ?? "";
-  if (msg.includes("forbidden")) {
+  if (allFailed) {
+    const forbidden = failures.some((f) => f.reason === "forbidden");
     return NextResponse.json(
       {
-        error: "forbidden",
-        message: "リスト表への割当は管理者・主担当・リーダーのみ可能です",
+        error: forbidden ? "forbidden" : "failed",
+        message: forbidden
+          ? "リスト表への割当は管理者・主担当・リーダーのみ可能です"
+          : "リスト表の割当に失敗しました",
+        failures,
       },
-      { status: 403 },
+      { status: forbidden ? 403 : 500 },
     );
   }
-  if (msg.includes("not_found")) {
-    return NextResponse.json({ error: "not_found" }, { status: 404 });
-  }
+
+  return NextResponse.json({
+    ok: true,
+    added: addedTeamIds.length,
+    removed: removedTeamIds.length,
+    partial_failure: partial,
+    failures,
+  });
+}
+
+/** RPC エラーを 'forbidden' | 'not_found' | 'other' に分類。 */
+function classifyRpcError(error: { code?: string; message?: string }): string {
+  const msg = error.message ?? "";
+  if (error.code === "42501" || msg.includes("forbidden")) return "forbidden";
+  if (error.code === "P0002" || msg.includes("not_found")) return "not_found";
   console.error("[client-teams] rpc failed", { code: error.code, message: msg });
-  return NextResponse.json(
-    { error: "unknown", message: "リスト表の割当に失敗しました" },
-    { status: 500 },
-  );
+  return "other";
 }

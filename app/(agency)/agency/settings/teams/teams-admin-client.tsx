@@ -72,7 +72,9 @@ export function TeamsAdminClient({ initialTeams, allMembers, teamMemberships }: 
       setNewColor("");
     });
 
-  const deleteTeam = (teamId: string, teamName: string) =>
+  const deleteTeam = (teamId: string, teamName: string) => {
+    // 進行中の操作があるときは連打による多重送信を防ぐ。
+    if (isPending) return;
     submitAction(async () => {
       if (
         !window.confirm(
@@ -87,8 +89,10 @@ export function TeamsAdminClient({ initialTeams, allMembers, teamMemberships }: 
         throw new Error(j.message ?? "削除に失敗しました");
       }
     });
+  };
 
-  const addMember = (teamId: string, memberId: string, role: "member" | "lead") =>
+  const addMember = (teamId: string, memberId: string, role: "member" | "lead") => {
+    if (isPending) return;
     submitAction(async () => {
       const res = await fetch(`/api/agency/teams/${teamId}/members`, {
         method: "POST",
@@ -100,8 +104,10 @@ export function TeamsAdminClient({ initialTeams, allMembers, teamMemberships }: 
         throw new Error(j.message ?? "追加に失敗しました");
       }
     });
+  };
 
-  const removeMember = (teamId: string, memberId: string) =>
+  const removeMember = (teamId: string, memberId: string) => {
+    if (isPending) return;
     submitAction(async () => {
       const res = await fetch(
         `/api/agency/teams/${teamId}/members?memberId=${encodeURIComponent(memberId)}`,
@@ -112,6 +118,7 @@ export function TeamsAdminClient({ initialTeams, allMembers, teamMemberships }: 
         throw new Error(j.message ?? "削除に失敗しました");
       }
     });
+  };
 
   return (
     <div className="space-y-6">

@@ -107,9 +107,16 @@ export function ClientsViewTabs({
   const [silenceFilter, setSilenceFilter] = useState<SilenceFilter>(initialSilenceFilter);
   // CRM 自由タグフィルタ(AND 条件)。空配列は絞らない。
   const [tagFilter, setTagFilter] = useState<string[]>([]);
-  // P4: team フィルタ。 "all" = 全 (現状 通り 何 も 絞ら ない)、
-  //     "unassigned" = 未 割 当 pool のみ、 team_id = その team に 所属 する 顧客 のみ。
+  // リスト表フィルタ。"all" = 全て、"unassigned" = 未割当のみ、
+  //   その他は team_id そのもの (該当リスト表のみ表示)。
   const [teamFilter, setTeamFilter] = useState<string>("all");
+  // リスト表が削除されたり teams prop から消えたりした場合、そのフィルタを保持し続けると
+  // 「常に0件」の状態になってしまう。derived な effectiveTeamFilter を作って
+  // 表示 / フィルタに使い、useEffect + setState の同期を回避する。
+  const effectiveTeamFilter = useMemo(() => {
+    if (teamFilter === "all" || teamFilter === "unassigned") return teamFilter;
+    return teams.some((t) => t.id === teamFilter) ? teamFilter : "all";
+  }, [teamFilter, teams]);
 
   // ─── 列設定(localStorage 永続化、マウント後にロード) ─────────
   // 初期値はデフォルト(SSR と初回 render で order が一致)。
@@ -283,12 +290,14 @@ export function ClientsViewTabs({
   const crmTagOptions = useMemo(() => buildCrmTagOptions(clients), [clients]);
 
   const teamFilteredClients = useMemo(() => {
-    if (teamFilter === "all") return clients;
-    if (teamFilter === "unassigned") {
+    if (effectiveTeamFilter === "all") return clients;
+    if (effectiveTeamFilter === "unassigned") {
       return clients.filter((c) => (clientTeamIdsByClientId[c.id] ?? []).length === 0);
     }
-    return clients.filter((c) => (clientTeamIdsByClientId[c.id] ?? []).includes(teamFilter));
-  }, [clients, clientTeamIdsByClientId, teamFilter]);
+    return clients.filter((c) =>
+      (clientTeamIdsByClientId[c.id] ?? []).includes(effectiveTeamFilter),
+    );
+  }, [clients, clientTeamIdsByClientId, effectiveTeamFilter]);
 
   const filteredSorted = useMemo(
     () =>
@@ -361,7 +370,7 @@ export function ClientsViewTabs({
             type="button"
             onClick={() => setTeamFilter("all")}
             className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
-              teamFilter === "all"
+              effectiveTeamFilter === "all"
                 ? "bg-primary text-primary-foreground border-primary"
                 : "hover:bg-accent border-input"
             }`}
@@ -372,7 +381,7 @@ export function ClientsViewTabs({
             type="button"
             onClick={() => setTeamFilter("unassigned")}
             className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
-              teamFilter === "unassigned"
+              effectiveTeamFilter === "unassigned"
                 ? "bg-primary text-primary-foreground border-primary"
                 : "hover:bg-accent border-input"
             }`}
@@ -385,7 +394,7 @@ export function ClientsViewTabs({
               type="button"
               onClick={() => setTeamFilter(t.id)}
               className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
-                teamFilter === t.id
+                effectiveTeamFilter === t.id
                   ? "bg-primary text-primary-foreground border-primary"
                   : "hover:bg-accent border-input"
               }`}
