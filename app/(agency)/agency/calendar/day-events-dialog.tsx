@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Clock, ExternalLink, X } from "lucide-react";
+import { AlertTriangle, Clock, ExternalLink, Mic, X } from "lucide-react";
 import Link from "next/link";
 import { useRef } from "react";
 
@@ -91,6 +91,8 @@ export function DayEventsDialog({
           <ul className="max-h-[60vh] space-y-1.5 overflow-y-auto">
             {events.map((ev) => {
               const conflict = overlappingIds.has(ev.id);
+              // M5: 会議 kind に 録音 状態 バッジ を 追加。
+              const recState = ev.kind === "meeting" ? ev.recordingState : null;
               return (
                 <li key={ev.id}>
                   <button
@@ -116,6 +118,18 @@ export function DayEventsDialog({
                         {formatTime(ev.occurredAt)}
                         {ev.endsAt && ` - ${formatTime(ev.endsAt)}`}
                       </span>
+                      {recState === "recorded" && (
+                        <span className="flex items-center gap-0.5 text-[10px] text-emerald-700">
+                          <Mic className="h-3 w-3" />
+                          録音済
+                        </span>
+                      )}
+                      {recState === "planned" && (
+                        <span className="flex items-center gap-0.5 text-[10px] text-amber-600">
+                          <Mic className="h-3 w-3" />
+                          録音予定
+                        </span>
+                      )}
                       {conflict && (
                         <span className="ml-auto flex items-center gap-1 text-[10px] text-red-600">
                           <AlertTriangle className="h-3 w-3" />

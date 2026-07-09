@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Mic } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -151,6 +151,13 @@ export function CalendarView({ initialMonth, initialEvents }: CalendarViewProps)
       if (ev.kind === "external_google" && ev.externalEventId) {
         const g = googleEvents.find((x) => x.externalEventId === ev.externalEventId);
         if (g) setDialog({ open: true, mode: "edit", initial: g });
+        return;
+      }
+      // M5: 会議 (meeting) で 録音 済 or 予定 が ある なら、 顧客 詳細 の 録音
+      // セクション に アンカー 付き で 遷移。 顧客 未紐付け の 場合 は 通常 の
+      // meeting 挙動 (URL / clients ページ) に fallback。
+      if (ev.kind === "meeting" && ev.clientRecordId && ev.recordingState) {
+        router.push(`/agency/clients/${ev.clientRecordId}#intake-recordings`);
         return;
       }
       // Maira クライアント有り → クライアント詳細へ
@@ -398,6 +405,10 @@ export function CalendarView({ initialMonth, initialEvents }: CalendarViewProps)
               </div>
               {eventsOfDay.slice(0, 4).map((ev) => {
                 const conflict = overlappingIds.has(ev.id);
+                // M5: 録音 状態 に 応じて mic アイコン を 添える (meeting kind のみ)。
+                //   ・recorded → 緑 mic (アップロード 済、 クリック で 詳細 へ)
+                //   ・planned → アンバー mic (予定 のみ、 未 アップロード の 催促)
+                const recState = ev.kind === "meeting" ? ev.recordingState : null;
                 return (
                   <button
                     key={ev.id}
@@ -408,9 +419,21 @@ export function CalendarView({ initialMonth, initialEvents }: CalendarViewProps)
                     } hover:opacity-80 ${conflict ? "ring-1 ring-red-500" : ""}`}
                     title={`${KIND_LABEL[ev.kind]}: ${ev.clientName} — ${ev.title}${
                       conflict ? " (時刻衝突)" : ""
+                    }${
+                      recState === "recorded"
+                        ? " (録音 済)"
+                        : recState === "planned"
+                          ? " (録音 予定)"
+                          : ""
                     }`}
                   >
                     {conflict && <AlertTriangle className="h-2.5 w-2.5 shrink-0 text-red-600" />}
+                    {recState === "recorded" && (
+                      <Mic className="h-2.5 w-2.5 shrink-0 text-emerald-700" aria-label="録音済" />
+                    )}
+                    {recState === "planned" && (
+                      <Mic className="h-2.5 w-2.5 shrink-0 text-amber-600" aria-label="録音予定" />
+                    )}
                     <span className="truncate">
                       {ev.kind === "external_google" ? ev.title : `${ev.clientName}:${ev.title}`}
                     </span>

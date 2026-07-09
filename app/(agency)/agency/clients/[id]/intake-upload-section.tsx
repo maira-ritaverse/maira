@@ -111,7 +111,9 @@ export async function IntakeUploadSection({ clientRecordId, clientLinked, client
   }
 
   return (
-    <Card className="space-y-4 p-5">
+    // id="intake-recordings" は カレンダー の 録音 バッジ から の アンカー 遷移 用
+    // (calendar-view.tsx から /agency/clients/[id]#intake-recordings で 到達)
+    <Card id="intake-recordings" className="scroll-mt-4 space-y-4 p-5">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold">AI ヒアリング</h2>
