@@ -1,13 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { compareByStartTime, detectOverlaps } from "@/lib/calendar/overlap";
 import type { CalendarEvent, CalendarEventKind } from "@/lib/calendar/types";
 
+import { DayEventsDialog } from "./day-events-dialog";
 import { GoogleEventDialog } from "./google-event-dialog";
 
 type CalendarViewProps = {
@@ -82,6 +85,11 @@ export function CalendarView({ initialMonth, initialEvents }: CalendarViewProps)
   // kind フィルタ:何も選ばれていない = 全表示。
   const [activeKinds, setActiveKinds] = useState<Set<CalendarEventKind>>(new Set());
   const [dialog, setDialog] = useState<DialogState>({ open: false });
+  // Q1: DayEventsDialog の state。 従来 の 「+N件」 デッド リンク の 置き換え。
+  const [dayDialog, setDayDialog] = useState<{ open: boolean; dateKey: string }>({
+    open: false,
+    dateKey: "",
+  });
 
   // Google 由来イベントを CalendarEvent 形にマージ(useMemo)
   const allEvents = useMemo<CalendarEvent[]>(() => {
@@ -108,10 +116,55 @@ export function CalendarView({ initialMonth, initialEvents }: CalendarViewProps)
       arr.push(ev);
       m.set(ev.dateKey, arr);
     }
+    // 各日のイベントを時刻順にソート。 時刻無しは末尾。
+    for (const arr of m.values()) {
+      arr.sort((a, b) =>
+        compareByStartTime(
+          { id: a.id, startsAt: a.occurredAt ?? "", endsAt: a.endsAt ?? null },
+          { id: b.id, startsAt: b.occurredAt ?? "", endsAt: b.endsAt ?? null },
+        ),
+      );
+    }
     return m;
   }, [allEvents, activeKinds]);
 
+  // Q1: 全イベントの時刻重複を検出 (グループキーなし = 同一 org 内の Double-book を全体で判定)。
+  // 将来 M1 で担当者別 groupKey を渡す拡張を予定。
+  const overlappingIds = useMemo(() => {
+    return detectOverlaps(
+      allEvents
+        .filter((ev) => ev.occurredAt !== null)
+        .map((ev) => ({
+          id: ev.id,
+          startsAt: ev.occurredAt as string,
+          endsAt: ev.endsAt ?? null,
+        })),
+    );
+  }, [allEvents]);
+
   const monthCells = useMemo(() => buildMonthCells(yearMonth), [yearMonth]);
+
+  // イベントクリック時の共通ハンドラ。セル内のチップと DayEventsDialog から共有。
+  const handleEventClick = useCallback(
+    (ev: CalendarEvent) => {
+      // Google 由来 → 編集ダイアログを開く
+      if (ev.kind === "external_google" && ev.externalEventId) {
+        const g = googleEvents.find((x) => x.externalEventId === ev.externalEventId);
+        if (g) setDialog({ open: true, mode: "edit", initial: g });
+        return;
+      }
+      // Maira クライアント有り → クライアント詳細へ
+      if (ev.clientRecordId) {
+        router.push(`/agency/clients/${ev.clientRecordId}`);
+        return;
+      }
+      // Web 面談で URL があれば参加
+      if (ev.joinUrl) {
+        window.open(ev.joinUrl, "_blank", "noopener,noreferrer");
+      }
+    },
+    [googleEvents, router],
+  );
 
   const monthRange = useCallback((ym: string): { from: string; to: string } => {
     const [y, m] = ym.split("-").map(Number);
@@ -306,6 +359,18 @@ export function CalendarView({ initialMonth, initialEvents }: CalendarViewProps)
         />
       )}
 
+      {/* Q1: 「+N件」 クリック で 当日 の 全イベント を 時刻順表示 */}
+      <DayEventsDialog
+        open={dayDialog.open}
+        onOpenChange={(open) => setDayDialog((prev) => ({ ...prev, open }))}
+        dateKey={dayDialog.dateKey}
+        events={eventsByDate.get(dayDialog.dateKey) ?? []}
+        overlappingIds={overlappingIds}
+        kindLabel={KIND_LABEL}
+        kindTone={KIND_TONE}
+        onEventClick={handleEventClick}
+      />
+
       {/* 月グリッド(6 週 = 42 セル) */}
       <div className="grid grid-cols-7 gap-px">
         {monthCells.map((cell) => {
@@ -313,7 +378,7 @@ export function CalendarView({ initialMonth, initialEvents }: CalendarViewProps)
           return (
             <div
               key={cell.dateKey}
-              className={`bg-background group ring-foreground/5 min-h-[5rem] space-y-1 p-1.5 ring-1 ring-inset ${
+              className={`bg-background group ring-foreground/5 min-h-20 space-y-1 p-1.5 ring-1 ring-inset ${
                 cell.inMonth ? "" : "text-muted-foreground/50 bg-muted/10"
               }`}
             >
@@ -331,40 +396,35 @@ export function CalendarView({ initialMonth, initialEvents }: CalendarViewProps)
                   </button>
                 )}
               </div>
-              {eventsOfDay.slice(0, 4).map((ev) => (
-                <button
-                  key={ev.id}
-                  type="button"
-                  onClick={() => {
-                    // Google 由来 → 編集ダイアログを開く
-                    if (ev.kind === "external_google" && ev.externalEventId) {
-                      const g = googleEvents.find((x) => x.externalEventId === ev.externalEventId);
-                      if (g) setDialog({ open: true, mode: "edit", initial: g });
-                      return;
-                    }
-                    // Maira クライアント有り → クライアント詳細へ
-                    if (ev.clientRecordId) {
-                      router.push(`/agency/clients/${ev.clientRecordId}`);
-                      return;
-                    }
-                    // Web 面談で URL があれば参加
-                    if (ev.joinUrl) {
-                      window.open(ev.joinUrl, "_blank", "noopener,noreferrer");
-                    }
-                  }}
-                  className={`block w-full truncate rounded px-1 py-0.5 text-left text-[10px] ${KIND_TONE[ev.kind]} hover:opacity-80`}
-                  title={`${KIND_LABEL[ev.kind]}: ${ev.clientName} — ${ev.title}`}
-                >
-                  {ev.kind === "external_google" ? ev.title : `${ev.clientName}:${ev.title}`}
-                </button>
-              ))}
+              {eventsOfDay.slice(0, 4).map((ev) => {
+                const conflict = overlappingIds.has(ev.id);
+                return (
+                  <button
+                    key={ev.id}
+                    type="button"
+                    onClick={() => handleEventClick(ev)}
+                    className={`flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[10px] ${
+                      KIND_TONE[ev.kind]
+                    } hover:opacity-80 ${conflict ? "ring-1 ring-red-500" : ""}`}
+                    title={`${KIND_LABEL[ev.kind]}: ${ev.clientName} — ${ev.title}${
+                      conflict ? " (時刻衝突)" : ""
+                    }`}
+                  >
+                    {conflict && <AlertTriangle className="h-2.5 w-2.5 shrink-0 text-red-600" />}
+                    <span className="truncate">
+                      {ev.kind === "external_google" ? ev.title : `${ev.clientName}:${ev.title}`}
+                    </span>
+                  </button>
+                );
+              })}
               {eventsOfDay.length > 4 && (
-                <Link
-                  href={`/agency/clients?silence=all`}
+                <button
+                  type="button"
+                  onClick={() => setDayDialog({ open: true, dateKey: cell.dateKey })}
                   className="text-muted-foreground hover:text-foreground text-[10px] underline-offset-4 hover:underline"
                 >
                   +{eventsOfDay.length - 4}件
-                </Link>
+                </button>
               )}
             </div>
           );
