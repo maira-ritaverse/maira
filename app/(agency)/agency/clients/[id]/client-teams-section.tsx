@@ -25,9 +25,18 @@ type Props = {
 export function ClientTeamsSection({ clientRecordId, initialTeamIds, organizationTeams }: Props) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
+  // 「編集」開始時に prop の initialTeamIds を再取り込みする方針。
+  // これにより router.refresh() 後の最新 prop が編集の起点になり、古い state で
+  // 上書き送信される問題を避けられる (useEffect による同期は不要)。
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(initialTeamIds));
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  const startEditing = () => {
+    setSelectedIds(new Set(initialTeamIds));
+    setIsEditing(true);
+    setError(null);
+  };
 
   const teamMap = useMemo(
     () => new Map(organizationTeams.map((t) => [t.id, t])),
@@ -87,7 +96,7 @@ export function ClientTeamsSection({ clientRecordId, initialTeamIds, organizatio
             size="sm"
             variant="ghost"
             className="h-6 text-xs"
-            onClick={() => setIsEditing(true)}
+            onClick={startEditing}
           >
             編集
           </Button>

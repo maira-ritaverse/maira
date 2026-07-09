@@ -70,13 +70,29 @@ export function BulkActionBar({ selectedIds, members, teams = [], onClear }: Bul
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+        updated?: number;
+        partial_failure?: boolean;
+        failed_client_ids?: string[];
+        forbidden_count?: number;
+      };
       if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j.error ?? `HTTP ${res.status}`);
+        throw new Error(json.message ?? json.error ?? `HTTP ${res.status}`);
       }
       router.refresh();
-      setMode("idle");
-      onClear();
+      // 部分失敗の場合は「一部の顧客に反映できませんでした」を出し、選択は解除しない。
+      // 全成功の場合は通常通り mode リセット + 選択解除。
+      if (json.partial_failure) {
+        const failed = json.failed_client_ids ?? [];
+        setError(
+          `${json.updated ?? 0}件に反映しました。権限や状態の問題で${failed.length}件は反映できませんでした。`,
+        );
+      } else {
+        setMode("idle");
+        onClear();
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "不明なエラー";
       setError(`一括操作に失敗: ${message}`);
@@ -123,6 +139,17 @@ export function BulkActionBar({ selectedIds, members, teams = [], onClear }: Bul
       else next.add(teamId);
       return next;
     });
+  };
+
+  // リスト表選択の state は「add_teams/remove_teams モード中」だけ保持したい。
+  // useEffect で同期すると react-hooks/set-state-in-effect にひっかかるため、
+  // mode 変更のハンドラで明示的にリセットする。
+  const changeMode = (next: ActionMode) => {
+    if (next !== "add_teams" && next !== "remove_teams") {
+      setPendingTeamIds(new Set());
+    }
+    setMode(next);
+    setError(null);
   };
 
   const submitEmail = async () => {
@@ -175,28 +202,28 @@ export function BulkActionBar({ selectedIds, members, teams = [], onClear }: Bul
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setMode(mode === "status" ? "idle" : "status")}
+            onClick={() => changeMode(mode === "status" ? "idle" : "status")}
           >
             ステータス変更
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setMode(mode === "assignee" ? "idle" : "assignee")}
+            onClick={() => changeMode(mode === "assignee" ? "idle" : "assignee")}
           >
             担当変更
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setMode(mode === "add_tags" ? "idle" : "add_tags")}
+            onClick={() => changeMode(mode === "add_tags" ? "idle" : "add_tags")}
           >
             タグ追加
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setMode(mode === "remove_tags" ? "idle" : "remove_tags")}
+            onClick={() => changeMode(mode === "remove_tags" ? "idle" : "remove_tags")}
           >
             タグ削除
           </Button>
@@ -205,14 +232,14 @@ export function BulkActionBar({ selectedIds, members, teams = [], onClear }: Bul
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setMode(mode === "add_teams" ? "idle" : "add_teams")}
+                onClick={() => changeMode(mode === "add_teams" ? "idle" : "add_teams")}
               >
                 リスト表に追加
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setMode(mode === "remove_teams" ? "idle" : "remove_teams")}
+                onClick={() => changeMode(mode === "remove_teams" ? "idle" : "remove_teams")}
               >
                 リスト表から外す
               </Button>
@@ -222,7 +249,7 @@ export function BulkActionBar({ selectedIds, members, teams = [], onClear }: Bul
             variant="outline"
             size="sm"
             onClick={() => {
-              setMode(mode === "email" ? "idle" : "email");
+              changeMode(mode === "email" ? "idle" : "email");
               setEmailSummary(null);
             }}
           >

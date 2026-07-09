@@ -202,14 +202,36 @@ export async function POST(request: Request) {
       }
     }
   } else if (parsed.data.action === "add_teams" || parsed.data.action === "remove_teams") {
-    // リスト表(team) の 割 当 は SECURITY DEFINER RPC を 通す。
-    // RPC 内 で admin / 主担当 / lead 判定 が 行われる ため、 権限 不足 の 行 は
-    // 各 呼び出し で 拒否 され、 その 行 は 変更 されない (エラー を 集計 して 返す)。
+    // リスト表への割当は SECURITY DEFINER RPC で権限判定を行う。
+    // 権限拒否は clientId 単位で集計し、部分成功でも呼び出し元が状況を把握できるように
+    // 詳細サマリを返す(response.partial_failure = true)。
     const isAdd = parsed.data.action === "add_teams";
     const rpcName = isAdd ? "assign_client_to_team" : "unassign_client_from_team";
+
+    // 事前に teamIds が呼び出し者と同じ組織のリスト表かを一括検証。
+    // 他組織の team_id を混ぜて送っても RPC の not_found で弾かれるが、
+    // route 側で早期に 400 で拒否したほうが挙動が明確 (info disclosure も抑制)。
+    const { data: orgTeamRows } = await supabase
+      .from("organization_teams")
+      .select("id")
+      .in("id", parsed.data.teamIds)
+      .eq("organization_id", organizationId);
+    const validTeamIds = new Set(((orgTeamRows ?? []) as Array<{ id: string }>).map((r) => r.id));
+    const invalidTeamIds = parsed.data.teamIds.filter((id) => !validTeamIds.has(id));
+    if (invalidTeamIds.length > 0) {
+      return NextResponse.json(
+        {
+          error: "teams_not_in_org",
+          message: "指定されたリスト表の一部が組織内に存在しません",
+          invalid_team_ids: invalidTeamIds,
+        },
+        { status: 400 },
+      );
+    }
+
     let successCount = 0;
-    let forbiddenCount = 0;
-    let otherErrorCount = 0;
+    const failedByClient = new Map<string, { forbidden: number; other: number }>();
+    const successClientIds = new Set<string>();
     for (const clientId of targetIds) {
       for (const teamId of parsed.data.teamIds) {
         const { error } = await supabase.rpc(rpcName, {
@@ -217,11 +239,17 @@ export async function POST(request: Request) {
           p_team_id: teamId,
         });
         if (error) {
-          if (error.message?.includes("forbidden")) forbiddenCount += 1;
-          else otherErrorCount += 1;
+          const bucket = failedByClient.get(clientId) ?? { forbidden: 0, other: 0 };
+          if (error.code === "42501" || error.message?.includes("forbidden")) {
+            bucket.forbidden += 1;
+          } else {
+            bucket.other += 1;
+          }
+          failedByClient.set(clientId, bucket);
           continue;
         }
         successCount += 1;
+        successClientIds.add(clientId);
         auditChanges.push({
           clientRecordId: clientId,
           fieldName: isAdd ? "team_added" : "team_removed",
@@ -230,18 +258,37 @@ export async function POST(request: Request) {
         });
       }
     }
-    if (successCount === 0 && (forbiddenCount > 0 || otherErrorCount > 0)) {
+
+    // 全件失敗のケースは既存挙動を維持 (403 or 500)。
+    if (successCount === 0 && failedByClient.size > 0) {
+      const totalForbidden = [...failedByClient.values()].reduce((s, b) => s + b.forbidden, 0);
+      const totalOther = [...failedByClient.values()].reduce((s, b) => s + b.other, 0);
       return NextResponse.json(
         {
-          error: forbiddenCount > 0 ? "forbidden" : "failed",
+          error: totalForbidden > 0 ? "forbidden" : "failed",
           message:
-            forbiddenCount > 0
-              ? "リスト表への割当権限がありません(admin/主担当/リーダーのみ可能)"
+            totalForbidden > 0
+              ? "リスト表への割当権限がありません(管理者/主担当/リーダーのみ可能)"
               : "リスト表の一括更新に失敗しました",
+          forbidden_count: totalForbidden,
+          error_count: totalOther,
         },
-        { status: forbiddenCount > 0 ? 403 : 500 },
+        { status: totalForbidden > 0 ? 403 : 500 },
       );
     }
+
+    // 部分成功 / 全成功のケース: response で partial_failure を明示する。
+    const failedClientIds = [...failedByClient.keys()];
+    const partialFailure = failedClientIds.length > 0;
+    return NextResponse.json({
+      // updated は「割当が変わった client-team ペア数」ではなく「操作が反映された顧客数」を返す。
+      updated: successClientIds.size,
+      ids: [...successClientIds],
+      partial_failure: partialFailure,
+      failed_client_ids: failedClientIds,
+      forbidden_count: [...failedByClient.values()].reduce((s, b) => s + b.forbidden, 0),
+      error_count: [...failedByClient.values()].reduce((s, b) => s + b.other, 0),
+    });
   } else if (parsed.data.action === "add_tags" || parsed.data.action === "remove_tags") {
     // タグは行ごとに集合演算が必要なので 1 件ずつ UPDATE する。
     // 行数上限が 200 なので往復は許容範囲。
