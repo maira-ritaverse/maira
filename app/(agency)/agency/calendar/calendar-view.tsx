@@ -30,7 +30,9 @@ const KIND_LABEL: Record<CalendarEventKind, string> = {
   task_due: "タスク",
   interaction: "対応",
   meeting: "Web面談",
+  meeting_tentative: "候補",
   company_interview: "企業面接",
+  interview_round: "面接",
   external_google: "Google",
 };
 
@@ -40,7 +42,12 @@ const KIND_TONE: Record<CalendarEventKind, string> = {
   task_due: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
   interaction: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
   meeting: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  // C: 未 確定 候補 は 淡い / 破線 で 「まだ 決まって いない」 感 を 出す
+  meeting_tentative:
+    "border border-dashed border-emerald-400 bg-emerald-50/60 text-emerald-700/80 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300/80",
   company_interview: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+  // B: interview_round は company_interview より 濃い 赤 で 「実 施 予定」 の 強調
+  interview_round: "bg-rose-200 text-rose-900 dark:bg-rose-900 dark:text-rose-100",
   external_google: "bg-sky-100/70 text-sky-700/80 dark:bg-sky-950/60 dark:text-sky-300/80",
 };
 
@@ -174,6 +181,10 @@ export function CalendarView({
         router.push(`/agency/clients/${ev.clientRecordId}#intake-recordings`);
         return;
       }
+      // interview_round / company_interview → 顧客 詳細 の 応募 セクション へ 遷移
+      // (referrals ブロック に アンカー を 置け ば さらに 精度 UP。 現状 は 顧客 詳細 の
+      //  トップ に 応募 一覧 が ある ため # 付き で 遷移 は 保留)。
+      // meeting_tentative → クライアント の LINE 会話 or 顧客 詳細 へ (承諾 確認 導線)。
       // Maira クライアント有り → クライアント詳細へ
       if (ev.clientRecordId) {
         router.push(`/agency/clients/${ev.clientRecordId}`);
