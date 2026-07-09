@@ -71,13 +71,34 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(_request: Request, { params }: RouteContext) {
+export async function DELETE(request: Request, { params }: RouteContext) {
   const { id } = await params;
   const g = await guardAdmin();
   if (!g.ok) return g.response;
 
-  const { error } = await g.supabase.rpc("delete_team", { p_team_id: id });
+  // 2 段階削除フロー:
+  //   1 回目 (?force なし) は 割当 client が 1 件でもあれば 409 で拒否。
+  //   UI は 割当件数を表示して再確認 → force=true で再送する運用。
+  const force = new URL(request.url).searchParams.get("force") === "true";
+
+  const { error } = await g.supabase.rpc("delete_team", {
+    p_team_id: id,
+    p_force: force,
+  });
   if (error) {
+    // team_has_clients:count=N から件数を抜き出して UI に返す。
+    const teamHasClientsMatch = /team_has_clients:count=(\d+)/.exec(error.message ?? "");
+    if (teamHasClientsMatch) {
+      const count = Number(teamHasClientsMatch[1]);
+      return NextResponse.json(
+        {
+          error: "team_has_clients",
+          message: `このリスト表には ${count} 件の顧客が割り当てられています。 強制削除しますか?`,
+          assignment_count: count,
+        },
+        { status: 409 },
+      );
+    }
     if (error.message?.includes("not_found")) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }

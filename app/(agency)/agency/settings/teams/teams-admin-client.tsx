@@ -76,18 +76,40 @@ export function TeamsAdminClient({ initialTeams, allMembers, teamMemberships }: 
     // 進行中の操作があるときは連打による多重送信を防ぐ。
     if (isPending) return;
     submitAction(async () => {
-      if (
-        !window.confirm(
-          `「${teamName}」を削除します。割当済の顧客は未割当に戻り、組織メンバー全員から閲覧できるようになります。実行しますか?`,
-        )
-      ) {
+      // 1 段階目: 通常削除 (force なし)。
+      // 未割当なら成功、割当ありなら 409 で assignment_count を受信する。
+      if (!window.confirm(`「${teamName}」を削除します。実行しますか?`)) {
         return;
       }
       const res = await fetch(`/api/agency/teams/${teamId}`, { method: "DELETE" });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { message?: string };
-        throw new Error(j.message ?? "削除に失敗しました");
+      if (res.ok) return;
+
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+        assignment_count?: number;
+      };
+
+      // 2 段階目: 割当ありで拒否されたら、件数を提示して強制削除を確認。
+      if (res.status === 409 && json.error === "team_has_clients") {
+        const count = json.assignment_count ?? 0;
+        if (
+          !window.confirm(
+            `このリスト表には ${count} 件の顧客が割り当てられています。 強制削除すると、これらの顧客は未割当に戻り、組織メンバー全員から閲覧できるようになります。 実行しますか?`,
+          )
+        ) {
+          return;
+        }
+        const forced = await fetch(`/api/agency/teams/${teamId}?force=true`, {
+          method: "DELETE",
+        });
+        if (!forced.ok) {
+          const jf = (await forced.json().catch(() => ({}))) as { message?: string };
+          throw new Error(jf.message ?? "強制削除に失敗しました");
+        }
+        return;
       }
+      throw new Error(json.message ?? "削除に失敗しました");
     });
   };
 
