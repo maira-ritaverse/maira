@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { SettingsBackLink } from "@/components/features/settings/settings-back-link";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient } from "@/lib/supabase/server";
 import { buildOrganizationGraph } from "@/lib/teams/graph";
@@ -36,6 +37,7 @@ export default async function OrgOverviewPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-4 sm:p-6">
+      <SettingsBackLink href="/agency/settings" />
       <div>
         <h1 className="text-2xl font-semibold">組織の全体像</h1>
         <p className="text-muted-foreground mt-1 text-sm">
