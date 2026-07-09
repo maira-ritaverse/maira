@@ -161,9 +161,13 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
       .eq("organization_id", role.organization.id),
     getOrgMemberAvatarMaps(supabase, role.organization.id),
   ]);
-  // 表示名は profiles.display_name を優先し、無い場合は email のローカル部で fallback。
-  // 従来は「arakaki1211 (admin)」のように ID + role を出していたが、
-  // 実運用では 「重盛 二郎」 のような登録氏名で表示したい (画面の視認性向上)。
+  // 表示名の解決:
+  //   1. profiles.display_name (プロフィール設定で登録した氏名) を最優先
+  //   2. auth.users.email のローカル部
+  //   3. どちらもなければ 「(名前 未設定)」
+  //  役職 (admin/advisor) の suffix は付けない (2026-07-09 修正)。
+  //  RLS を通すため service_role で profiles を直接読み、email も
+  //  同時取得して fallback に使う。
   const memberOptions = await (async () => {
     const rows = (membersData ?? []) as Array<{ user_id: string; role: string }>;
     if (rows.length === 0) return [];
@@ -171,8 +175,6 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
     const userIds = rows.map((r) => r.user_id);
     const [profilesRes, authLookups] = await Promise.all([
       admin.from("profiles").select("id, display_name").in("id", userIds),
-      // display_name が未登録の場合の fallback 用に email を並行取得。
-      // 失敗しても admin.auth.admin.getUserById は個別 API なので try/catch は 個別に
       Promise.all(
         rows.map((r) =>
           admin.auth.admin
@@ -192,12 +194,14 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
     return rows.map((r, i) => {
       const displayName = displayNameByUserId.get(r.user_id);
       const email = authLookups[i];
-      const label =
-        (displayName && displayName.trim().length > 0
-          ? displayName.trim()
-          : email
-            ? email.split("@")[0]
-            : null) ?? "(名前 未設定)";
+      let label = "(名前 未設定)";
+      if (displayName && displayName.trim().length > 0) {
+        label = displayName.trim();
+      } else if (email) {
+        // email のローカル部を fallback として使う。
+        // role suffix (「(admin)」等) は付けない。
+        label = email.split("@")[0];
+      }
       return {
         userId: r.user_id,
         displayName: label,
