@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import { readJsonBody, requireUser } from "@/lib/api/auth-guards";
 import { getUserRole } from "@/lib/organizations/queries";
@@ -72,10 +73,17 @@ export async function DELETE(request: Request, { params }: RouteContext) {
   const g = await guardAdmin();
   if (!g.ok) return g.response;
 
-  const memberId = new URL(request.url).searchParams.get("memberId");
-  if (!memberId) {
+  const memberIdRaw = new URL(request.url).searchParams.get("memberId");
+  if (!memberIdRaw) {
     return NextResponse.json({ error: "missing_member_id" }, { status: 400 });
   }
+  // クエリパラメータは string なので UUID 形式を明示的に検証する
+  // (不正 UUID がそのまま RPC に流れると 500 になり原因が分かりにくい)。
+  const memberIdParsed = z.string().uuid().safeParse(memberIdRaw);
+  if (!memberIdParsed.success) {
+    return NextResponse.json({ error: "invalid_member_id" }, { status: 400 });
+  }
+  const memberId = memberIdParsed.data;
 
   const { error } = await g.supabase.rpc("remove_team_member", {
     p_team_id: teamId,

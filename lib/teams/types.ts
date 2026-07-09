@@ -53,15 +53,23 @@ export type OrganizationTeamWithCounts = OrganizationTeam & {
 // zod スキーマ (API リクエスト 用)
 // ────────────────────────────────────────────
 
-/** 16 進 カラー (#RRGGBB) の 検証。 */
+/** 16 進カラー (#RRGGBB) の検証。 大文字は小文字化して保存する前提。 */
 const colorHexSchema = z
   .string()
-  .regex(/^#[0-9a-fA-F]{6}$/, "#RRGGBB 形式 で 入力 して ください")
+  .regex(/^#[0-9a-fA-F]{6}$/, "#RRGGBB 形式で入力してください")
+  .transform((s) => s.toLowerCase())
   .nullable()
   .optional();
 
+// 名前は前後の空白を除去した後に長さを判定する (「   」で通過を防ぐ)。
+const teamNameSchema = z
+  .string()
+  .transform((s) => s.trim())
+  .refine((s) => s.length >= 1, "リスト表名を入力してください")
+  .refine((s) => s.length <= 100, "リスト表名は100文字以内で入力してください");
+
 export const createTeamRequestSchema = z.object({
-  name: z.string().min(1, "team 名 を 入力 して ください").max(100),
+  name: teamNameSchema,
   description: z.string().max(500).nullable().optional(),
   color: colorHexSchema,
   sortOrder: z.number().int().min(0).max(1_000_000).optional(),
@@ -69,7 +77,7 @@ export const createTeamRequestSchema = z.object({
 export type CreateTeamRequest = z.infer<typeof createTeamRequestSchema>;
 
 export const updateTeamRequestSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
+  name: teamNameSchema.optional(),
   description: z.string().max(500).nullable().optional(),
   color: colorHexSchema,
   sortOrder: z.number().int().min(0).max(1_000_000).optional(),
