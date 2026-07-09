@@ -5069,6 +5069,16 @@ export type Database = {
         Args: { p_client_record_id: string; p_team_id: string };
         Returns: boolean;
       };
+      assign_clients_to_teams_bulk: {
+        Args: { p_client_ids: string[]; p_team_ids: string[] };
+        Returns: {
+          applied: boolean;
+          client_record_id: string;
+          operation: string;
+          reason: string;
+          team_id: string;
+        }[];
+      };
       auto_finalize_expired_revokes: { Args: never; Returns: number };
       cancel_client_invitation: {
         Args: { p_client_record_id: string };
@@ -5123,7 +5133,9 @@ export type Database = {
       current_user_organization_id: { Args: never; Returns: string };
       current_user_organization_role: { Args: never; Returns: string };
       deactivate_member: { Args: { target_member_id: string }; Returns: string };
-      delete_team: { Args: { p_team_id: string }; Returns: undefined };
+      delete_team:
+        | { Args: { p_team_id: string }; Returns: undefined }
+        | { Args: { p_force?: boolean; p_team_id: string }; Returns: undefined };
       get_client_distribution_stats: {
         Args: { p_organization_id: string };
         Returns: {
@@ -5457,6 +5469,16 @@ export type Database = {
       unassign_client_from_team: {
         Args: { p_client_record_id: string; p_team_id: string };
         Returns: boolean;
+      };
+      unassign_clients_from_teams_bulk: {
+        Args: { p_client_ids: string[]; p_team_ids: string[] };
+        Returns: {
+          applied: boolean;
+          client_record_id: string;
+          operation: string;
+          reason: string;
+          team_id: string;
+        }[];
       };
       update_team: {
         Args: {

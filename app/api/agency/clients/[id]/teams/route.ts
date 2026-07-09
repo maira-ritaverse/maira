@@ -120,34 +120,53 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const toAdd = [...targetIds].filter((id) => !currentIds.has(id));
   const toRemove = [...currentIds].filter((id) => !targetIds.has(id));
 
-  // すべての RPC を実行してから集計して返す (途中で中断しない)。
-  // これにより「Team1 は追加できたが Team2 で権限拒否」といった部分成功の状況を
-  // 呼び出し元にも正確に伝えられる。RLS が引き受ける安全な範囲での楽観並行制御。
+  // 一括 RPC で add / remove を それぞれ 1 呼び出しに集約 (単一トランザクション)。
+  // 途中失敗による中途半端な状態を防ぐ。
+  type BulkRow = {
+    client_record_id: string;
+    team_id: string;
+    operation: string;
+    applied: boolean;
+    reason: string;
+  };
   const addedTeamIds: string[] = [];
   const removedTeamIds: string[] = [];
   const failures: Array<{ teamId: string; op: "add" | "remove"; reason: string }> = [];
 
-  for (const teamId of toAdd) {
-    const { error } = await g.supabase.rpc("assign_client_to_team", {
-      p_client_record_id: clientRecordId,
-      p_team_id: teamId,
+  if (toAdd.length > 0) {
+    const { data, error } = await g.supabase.rpc("assign_clients_to_teams_bulk", {
+      p_client_ids: [clientRecordId],
+      p_team_ids: toAdd,
     });
     if (error) {
-      failures.push({ teamId, op: "add", reason: classifyRpcError(error) });
-      continue;
+      console.error("[client-teams] assign bulk rpc failed", {
+        code: error.code,
+        message: error.message,
+      });
+      return NextResponse.json({ error: "unknown" }, { status: 500 });
     }
-    addedTeamIds.push(teamId);
+    for (const row of (data ?? []) as BulkRow[]) {
+      if (row.reason === "ok") addedTeamIds.push(row.team_id);
+      else failures.push({ teamId: row.team_id, op: "add", reason: row.reason });
+    }
   }
-  for (const teamId of toRemove) {
-    const { error } = await g.supabase.rpc("unassign_client_from_team", {
-      p_client_record_id: clientRecordId,
-      p_team_id: teamId,
+
+  if (toRemove.length > 0) {
+    const { data, error } = await g.supabase.rpc("unassign_clients_from_teams_bulk", {
+      p_client_ids: [clientRecordId],
+      p_team_ids: toRemove,
     });
     if (error) {
-      failures.push({ teamId, op: "remove", reason: classifyRpcError(error) });
-      continue;
+      console.error("[client-teams] unassign bulk rpc failed", {
+        code: error.code,
+        message: error.message,
+      });
+      return NextResponse.json({ error: "unknown" }, { status: 500 });
     }
-    removedTeamIds.push(teamId);
+    for (const row of (data ?? []) as BulkRow[]) {
+      if (row.reason === "ok") removedTeamIds.push(row.team_id);
+      else failures.push({ teamId: row.team_id, op: "remove", reason: row.reason });
+    }
   }
 
   const partial = failures.length > 0 && addedTeamIds.length + removedTeamIds.length > 0;
@@ -174,13 +193,4 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     partial_failure: partial,
     failures,
   });
-}
-
-/** RPC エラーを 'forbidden' | 'not_found' | 'other' に分類。 */
-function classifyRpcError(error: { code?: string; message?: string }): string {
-  const msg = error.message ?? "";
-  if (error.code === "42501" || msg.includes("forbidden")) return "forbidden";
-  if (error.code === "P0002" || msg.includes("not_found")) return "not_found";
-  console.error("[client-teams] rpc failed", { code: error.code, message: msg });
-  return "other";
 }

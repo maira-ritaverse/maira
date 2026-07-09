@@ -202,15 +202,14 @@ export async function POST(request: Request) {
       }
     }
   } else if (parsed.data.action === "add_teams" || parsed.data.action === "remove_teams") {
-    // リスト表への割当は SECURITY DEFINER RPC で権限判定を行う。
-    // 権限拒否は clientId 単位で集計し、部分成功でも呼び出し元が状況を把握できるように
-    // 詳細サマリを返す(response.partial_failure = true)。
+    // 一括割当は単一 PL/pgSQL RPC (assign_clients_to_teams_bulk /
+    // unassign_clients_from_teams_bulk) を呼ぶ。 単一トランザクション内で
+    // 全ペアの権限判定 + INSERT/DELETE を実行し、結果を行単位で返す。
+    // N×M 逐次 RPC 呼び出しを 1 呼び出しに集約。
     const isAdd = parsed.data.action === "add_teams";
-    const rpcName = isAdd ? "assign_client_to_team" : "unassign_client_from_team";
+    const rpcName = isAdd ? "assign_clients_to_teams_bulk" : "unassign_clients_from_teams_bulk";
 
-    // 事前に teamIds が呼び出し者と同じ組織のリスト表かを一括検証。
-    // 他組織の team_id を混ぜて送っても RPC の not_found で弾かれるが、
-    // route 側で早期に 400 で拒否したほうが挙動が明確 (info disclosure も抑制)。
+    // 事前 teamIds org 検証は変わらず (RPC 内でも判定するが、早期に 400 を返す)。
     const { data: orgTeamRows } = await supabase
       .from("organization_teams")
       .select("id")
@@ -229,43 +228,58 @@ export async function POST(request: Request) {
       );
     }
 
-    let successCount = 0;
-    const failedByClient = new Map<string, { forbidden: number; other: number }>();
+    const { data: rpcRows, error: rpcError } = await supabase.rpc(rpcName, {
+      p_client_ids: targetIds,
+      p_team_ids: parsed.data.teamIds,
+    });
+    if (rpcError) {
+      // input_size / unauthenticated / forbidden (org 判定) 等の初期段階エラー。
+      if (rpcError.code === "42501" || rpcError.message?.includes("forbidden")) {
+        return NextResponse.json(
+          {
+            error: "forbidden",
+            message: "リスト表への一括操作の権限がありません",
+          },
+          { status: 403 },
+        );
+      }
+      console.error("[bulk teams] rpc failed", { code: rpcError.code, message: rpcError.message });
+      return NextResponse.json(
+        { error: "unknown", message: "リスト表の一括更新に失敗しました" },
+        { status: 500 },
+      );
+    }
+
+    type BulkRow = {
+      client_record_id: string;
+      team_id: string;
+      operation: string;
+      applied: boolean;
+      reason: string;
+    };
+    const rows = (rpcRows ?? []) as BulkRow[];
     const successClientIds = new Set<string>();
-    for (const clientId of targetIds) {
-      for (const teamId of parsed.data.teamIds) {
-        const { data: applied, error } = await supabase.rpc(rpcName, {
-          p_client_record_id: clientId,
-          p_team_id: teamId,
-        });
-        if (error) {
-          const bucket = failedByClient.get(clientId) ?? { forbidden: 0, other: 0 };
-          if (error.code === "42501" || error.message?.includes("forbidden")) {
-            bucket.forbidden += 1;
-          } else {
-            bucket.other += 1;
-          }
-          failedByClient.set(clientId, bucket);
-          continue;
-        }
-        // RPC は権限 OK なら 「実際 に INSERT / DELETE が 発生 したか」 を boolean で返す。
-        // successCount は 「権限があり呼び出しが通った顧客」 の数として集計する。
-        successCount += 1;
-        successClientIds.add(clientId);
-        // 監査ログは 実際に変化があった場合のみ push (重複割当 / 対象なしは skip)。
-        if (applied === true) {
+    const failedByClient = new Map<string, { forbidden: number; other: number }>();
+    for (const row of rows) {
+      if (row.reason === "ok") {
+        successClientIds.add(row.client_record_id);
+        if (row.applied) {
           auditChanges.push({
-            clientRecordId: clientId,
-            fieldName: isAdd ? "team_added" : "team_removed",
+            clientRecordId: row.client_record_id,
+            fieldName: row.operation === "add" ? "team_added" : "team_removed",
             oldValue: null,
-            newValue: teamId,
+            newValue: row.team_id,
           });
         }
+      } else {
+        const bucket = failedByClient.get(row.client_record_id) ?? { forbidden: 0, other: 0 };
+        if (row.reason === "forbidden") bucket.forbidden += 1;
+        else bucket.other += 1;
+        failedByClient.set(row.client_record_id, bucket);
       }
     }
 
-    // 全件失敗のケースは既存挙動を維持 (403 or 500)。
-    if (successCount === 0 && failedByClient.size > 0) {
+    if (successClientIds.size === 0 && failedByClient.size > 0) {
       const totalForbidden = [...failedByClient.values()].reduce((s, b) => s + b.forbidden, 0);
       const totalOther = [...failedByClient.values()].reduce((s, b) => s + b.other, 0);
       return NextResponse.json(
@@ -282,11 +296,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // 部分成功 / 全成功のケース: response で partial_failure を明示する。
     const failedClientIds = [...failedByClient.keys()];
     const partialFailure = failedClientIds.length > 0;
     return NextResponse.json({
-      // updated は「割当が変わった client-team ペア数」ではなく「操作が反映された顧客数」を返す。
       updated: successClientIds.size,
       ids: [...successClientIds],
       partial_failure: partialFailure,
