@@ -124,6 +124,43 @@ export async function listTeamMembers(teamId: string): Promise<OrganizationTeamM
 }
 
 /**
+ * 複数 team の member を 1 クエリで取得する N+1 解消版。
+ * settings/teams 画面のように 各 team の member を一括で必要とする場面で使う。
+ * 戻り値は team_id → member[] の Map。空 team は Map に含まれない (呼び出し側で [] にフォールバック)。
+ */
+export async function listTeamMembersForTeams(
+  teamIds: string[],
+): Promise<Map<string, OrganizationTeamMember[]>> {
+  if (teamIds.length === 0) return new Map();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("organization_team_members")
+    .select("team_id, member_id, role, added_at, added_by_member_id")
+    .in("team_id", teamIds);
+
+  const map = new Map<string, OrganizationTeamMember[]>();
+  for (const row of (data ?? []) as Array<{
+    team_id: string;
+    member_id: string;
+    role: "member" | "lead";
+    added_at: string;
+    added_by_member_id: string | null;
+  }>) {
+    const member: OrganizationTeamMember = {
+      teamId: row.team_id,
+      memberId: row.member_id,
+      role: row.role,
+      addedAt: row.added_at,
+      addedByMemberId: row.added_by_member_id,
+    };
+    const existing = map.get(row.team_id) ?? [];
+    existing.push(member);
+    map.set(row.team_id, existing);
+  }
+  return map;
+}
+
+/**
  * 顧客 の team assignment 一覧 (顧客 詳細 で 「所属 team」 表示 用)。
  */
 export async function listClientTeamAssignments(

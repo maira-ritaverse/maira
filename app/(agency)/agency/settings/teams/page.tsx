@@ -4,7 +4,7 @@ import { SettingsBackLink } from "@/components/features/settings/settings-back-l
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { listOrganizationMembersWithMeta } from "@/lib/organizations/members";
-import { listTeamsWithCounts } from "@/lib/teams/queries";
+import { listTeamMembersForTeams, listTeamsWithCounts } from "@/lib/teams/queries";
 
 import { TeamsAdminClient } from "./teams-admin-client";
 
@@ -37,11 +37,12 @@ export default async function TeamsSettingsPage() {
     listOrganizationMembersWithMeta(role.organization.id),
   ]);
 
-  // 各 team の member を 並列 取得
-  const { listTeamMembers } = await import("@/lib/teams/queries");
-  const teamMemberships = await Promise.all(
-    teams.map(async (t) => ({ teamId: t.id, members: await listTeamMembers(t.id) })),
-  );
+  // 全 team の member を 1 クエリで取得 (N+1 回避)
+  const membersByTeamId = await listTeamMembersForTeams(teams.map((t) => t.id));
+  const teamMemberships = teams.map((t) => ({
+    teamId: t.id,
+    members: membersByTeamId.get(t.id) ?? [],
+  }));
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
