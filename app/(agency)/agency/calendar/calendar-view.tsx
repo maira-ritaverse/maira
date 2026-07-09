@@ -33,6 +33,7 @@ const KIND_LABEL: Record<CalendarEventKind, string> = {
   meeting_tentative: "候補",
   company_interview: "企業面接",
   interview_round: "面接",
+  offer_deadline: "回答期限",
   external_google: "Google",
 };
 
@@ -48,6 +49,8 @@ const KIND_TONE: Record<CalendarEventKind, string> = {
   company_interview: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
   // B: interview_round は company_interview より 濃い 赤 で 「実 施 予定」 の 強調
   interview_round: "bg-rose-200 text-rose-900 dark:bg-rose-900 dark:text-rose-100",
+  // 内定 回答 期限 は 最重要 = 濃い アンバー + 太字 相当 の tone。
+  offer_deadline: "bg-amber-200 text-amber-900 font-semibold dark:bg-amber-800 dark:text-amber-100",
   external_google: "bg-sky-100/70 text-sky-700/80 dark:bg-sky-950/60 dark:text-sky-300/80",
 };
 

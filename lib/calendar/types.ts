@@ -15,6 +15,7 @@ export type CalendarEventKind =
   | "meeting_tentative" // line_meeting_proposals.candidates (LINE で 提案 中 の 未 確定 スロット)
   | "company_interview" // referrals.scheduled_interview_at (企業 と の 面接 予定、 直近 1 件 デノーマライズ)
   | "interview_round" // interviews.scheduled_at (1 応募 × N 回 の 個別 面接 ラウンド)
+  | "offer_deadline" // referrals.offer_deadline_at (内定 回答 期限)
   | "external_google"; // Google Calendar から 取り込んだ 予定 (本人 接続 の Primary)
 
 /**

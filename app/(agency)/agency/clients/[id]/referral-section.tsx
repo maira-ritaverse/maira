@@ -227,6 +227,11 @@ function ReferralRow({
 
       <ScheduledInterviewEditor referral={referral} onUpdated={onUpdated} />
 
+      {/* status = 'offer' の 場合 のみ 内定 回答 期限 エディタ を 出す */}
+      {referral.status === "offer" && (
+        <OfferDeadlineEditor referral={referral} onUpdated={onUpdated} />
+      )}
+
       <RecommendationLetterEntry referralId={referral.id} latestLetter={latestLetter} />
 
       <StatusHistoryBlock histories={histories} />
@@ -381,6 +386,124 @@ function ScheduledInterviewEditor({
               {isPending ? "保存 中..." : "保存"}
             </Button>
             {hasSchedule && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-red-600 hover:text-red-700"
+                disabled={isPending}
+                onClick={() => submit("clear")}
+              >
+                削除
+              </Button>
+            )}
+          </div>
+          {error && (
+            <Alert variant="destructive" className="mt-1">
+              <AlertDescription>エラー: {error}</AlertDescription>
+            </Alert>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================
+// 内定 回答 期限 (referrals.offer_deadline_at) 編集 ブロック
+//
+// status = 'offer' の 応募 で のみ 表示。 期限 が 過ぎる と 内定 失効 = 大きな
+// 損失 な ので、 カレンダー に 「回答 期限」 kind = amber 太字 で 出す。 ここ は
+// 期限 を 入力 する 入口。
+// ============================================
+function OfferDeadlineEditor({
+  referral,
+  onUpdated,
+}: {
+  referral: ReferralWithJob;
+  onUpdated: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [deadline, setDeadline] = useState<string>(toDatetimeLocal(referral.offerDeadlineAt));
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const hasDeadline = Boolean(referral.offerDeadlineAt);
+
+  const submit = (mode: "save" | "clear") => {
+    startTransition(async () => {
+      setError(null);
+      try {
+        const payload: { offer_deadline_at: string | null } =
+          mode === "clear"
+            ? { offer_deadline_at: null }
+            : { offer_deadline_at: new Date(deadline).toISOString() };
+        const res = await fetch(`/api/agency/referrals/${referral.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const errData = (await res.json()) as { error?: string; message?: string };
+          throw new Error(errData.message ?? errData.error ?? "更新 に 失敗 しま した");
+        }
+        setOpen(false);
+        onUpdated();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unknown error");
+      }
+    });
+  };
+
+  return (
+    <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 dark:border-amber-800 dark:bg-amber-950/40">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-xs">
+          <CalendarClock className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />
+          <span className="text-muted-foreground">内定 回答 期限:</span>
+          {hasDeadline ? (
+            <span className="font-semibold text-amber-900 dark:text-amber-100">
+              {formatJst(referral.offerDeadlineAt)}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">未設定</span>
+          )}
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-6 px-2 text-xs"
+          onClick={() => setOpen((v) => !v)}
+        >
+          {open ? "閉じる" : hasDeadline ? "変更" : "設定"}
+        </Button>
+      </div>
+      {open && (
+        <div className="mt-2 space-y-2">
+          <div>
+            <Label htmlFor={`offer-deadline-${referral.id}`} className="text-xs">
+              回答 期限 日時
+            </Label>
+            <input
+              id={`offer-deadline-${referral.id}`}
+              type="datetime-local"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+              className="border-input bg-background mt-1 w-full rounded-md border px-2 py-1 text-xs"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              className="h-7 text-xs"
+              disabled={isPending || !deadline}
+              onClick={() => submit("save")}
+            >
+              {isPending ? "保存 中..." : "保存"}
+            </Button>
+            {hasDeadline && (
               <Button
                 type="button"
                 variant="ghost"

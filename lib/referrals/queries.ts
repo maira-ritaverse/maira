@@ -28,6 +28,7 @@ type ReferralRow = {
   notes: string | null;
   scheduled_interview_at: string | null;
   interview_note: string | null;
+  offer_deadline_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -42,6 +43,7 @@ function rowToReferral(row: ReferralRow): Referral {
     notes: row.notes,
     scheduledInterviewAt: row.scheduled_interview_at,
     interviewNote: row.interview_note,
+    offerDeadlineAt: row.offer_deadline_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

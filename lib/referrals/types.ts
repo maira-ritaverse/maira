@@ -102,6 +102,11 @@ export type Referral = {
   scheduledInterviewAt: string | null;
   /** 面接 の 補足 (「1 次 対面 @ 品川」 等)。 平文。 */
   interviewNote: string | null;
+  /**
+   * 内定 回答 期限 (ISO 8601)。 null なら 未設定。
+   * status = 'offer' の 応募 で 使う。 カレンダー kind='offer_deadline' の ソース。
+   */
+  offerDeadlineAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -146,6 +151,11 @@ export const updateReferralRequestSchema = z.object({
    */
   scheduled_interview_at: z.string().datetime({ offset: true }).nullable().optional(),
   interview_note: z.string().max(200).optional().or(z.literal("")),
+  /**
+   * 内定 回答 期限 (ISO 8601)。 null / 空文字 で 未設定。
+   * カレンダー に kind='offer_deadline' として 表示。
+   */
+  offer_deadline_at: z.string().datetime({ offset: true }).nullable().optional(),
 });
 
 export type UpdateReferralRequest = z.infer<typeof updateReferralRequestSchema>;

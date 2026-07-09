@@ -66,6 +66,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   if (d.interview_note !== undefined) {
     updateData.interview_note = d.interview_note || null;
   }
+  if (d.offer_deadline_at !== undefined) {
+    updateData.offer_deadline_at = d.offer_deadline_at ?? null;
+  }
 
   if (Object.keys(updateData).length === 0) {
     return NextResponse.json({ success: true });

@@ -91,15 +91,17 @@ export async function listCalendarEvents(
       .neq("status", "canceled"),
     // 企業 と の 面接 予定 (referrals.scheduled_interview_at) + 関連 情報。
     // A: declined / joined になった 案件 は 「幽霊 予定」 化 する ので 除外。
+    // 内定 回答 期限 (offer_deadline_at) も 一緒 に 取得 し 「offer_deadline」 kind
+    // として 別 event を 生成 する (同じ referral 行 を 2 回 SELECT する 無駄 を 避ける)。
     supabase
       .from("referrals")
       .select(
-        "id, client_record_id, scheduled_interview_at, interview_note, status, job_postings ( company_name, position )",
+        "id, client_record_id, scheduled_interview_at, interview_note, status, offer_deadline_at, job_postings ( company_name, position )",
       )
       .eq("organization_id", opts.organizationId)
-      .gte("scheduled_interview_at", opts.rangeStart)
-      .lte("scheduled_interview_at", opts.rangeEnd + "T23:59:59")
-      .not("scheduled_interview_at", "is", null)
+      .or(
+        `and(scheduled_interview_at.gte.${opts.rangeStart},scheduled_interview_at.lte.${opts.rangeEnd}T23:59:59),and(offer_deadline_at.gte.${opts.rangeStart},offer_deadline_at.lte.${opts.rangeEnd}T23:59:59)`,
+      )
       .not("status", "in", "(declined,joined)"),
     // B: interviews (1 応募 × 複数 面接 ラウンド の 個別 レコード)。
     // result = 'scheduled' のみ を カレンダー に 出す (done / canceled / no_show は 過去 履歴)。
@@ -398,49 +400,71 @@ export async function listCalendarEvents(
     }
   }
 
-  // 5) 企業 と の 面接 予定 (referrals.scheduled_interview_at)
+  // 5) 企業 と の 面接 予定 (referrals.scheduled_interview_at) + 内定 回答 期限 (offer_deadline_at)
   //    interview_round と 重複 する レコード は 抑制 (dedupe)。
   if (interviewsRes.data) {
     type InterviewRow = {
       id: string;
       client_record_id: string;
-      scheduled_interview_at: string;
+      scheduled_interview_at: string | null;
       interview_note: string | null;
       status: string;
+      offer_deadline_at: string | null;
       job_postings:
         | { company_name: string; position: string }
         | { company_name: string; position: string }[]
         | null;
     };
     for (const r of interviewsRes.data as InterviewRow[]) {
-      const dateKey = isoDateOnly(r.scheduled_interview_at);
-      if (!dateKey) continue;
-      // dedupe: 同一 referral の interview_round が ± 5 分 以内 に あれば 抑制
-      if (
-        shouldSuppressReferral(
-          { id: r.id, scheduledInterviewAt: r.scheduled_interview_at },
-          roundSuppressKeys,
-        )
-      ) {
-        continue;
-      }
       const job = Array.isArray(r.job_postings) ? r.job_postings[0] : r.job_postings;
       const companyName = job?.company_name ?? "(求人 削除 済)";
       const position = job?.position ?? "";
       const displayName = clientNameMap.get(r.client_record_id) ?? "(顧客名 未取得)";
-      const title = position ? `${companyName} ・ ${position}` : companyName;
-      events.push({
-        id: `company_interview:${r.id}`,
-        kind: "company_interview",
-        dateKey,
-        occurredAt: r.scheduled_interview_at,
-        title,
-        clientRecordId: r.client_record_id,
-        clientName: displayName,
-        companyName,
-        jobPosition: position,
-        interviewNote: r.interview_note ?? undefined,
-      });
+      const jobTitle = position ? `${companyName} ・ ${position}` : companyName;
+
+      // 5a. 面接 予定 (scheduled_interview_at)
+      if (r.scheduled_interview_at) {
+        const dateKey = isoDateOnly(r.scheduled_interview_at);
+        // dedupe: 同一 referral の interview_round が ± 5 分 以内 に あれば 抑制
+        if (
+          dateKey &&
+          !shouldSuppressReferral(
+            { id: r.id, scheduledInterviewAt: r.scheduled_interview_at },
+            roundSuppressKeys,
+          )
+        ) {
+          events.push({
+            id: `company_interview:${r.id}`,
+            kind: "company_interview",
+            dateKey,
+            occurredAt: r.scheduled_interview_at,
+            title: jobTitle,
+            clientRecordId: r.client_record_id,
+            clientName: displayName,
+            companyName,
+            jobPosition: position,
+            interviewNote: r.interview_note ?? undefined,
+          });
+        }
+      }
+
+      // 5b. 内定 回答 期限 (offer_deadline_at) — 別 kind = 'offer_deadline'
+      if (r.offer_deadline_at) {
+        const deadlineKey = isoDateOnly(r.offer_deadline_at);
+        if (deadlineKey) {
+          events.push({
+            id: `offer_deadline:${r.id}`,
+            kind: "offer_deadline",
+            dateKey: deadlineKey,
+            occurredAt: r.offer_deadline_at,
+            title: `内定 回答 期限: ${jobTitle}`,
+            clientRecordId: r.client_record_id,
+            clientName: displayName,
+            companyName,
+            jobPosition: position,
+          });
+        }
+      }
     }
   }
 
@@ -485,16 +509,19 @@ export async function listCalendarEvents(
 
   // dateKey 昇順 → 同 日内 は kind 優先。 interview_round を 最上位 に、
   // meeting_tentative は 「未 確定」 な ので 通常 会議 より 下位 に 配置。
+  // offer_deadline は 「今日 中 に アクション しないと 内定 が 消える」 = 最重要 な ので
+  // interview_round より 上位 に 置く。
   const KIND_ORDER: Record<string, number> = {
-    interview_round: 0,
-    meeting: 1,
-    company_interview: 2,
-    meeting_tentative: 3,
-    first_meeting: 4,
-    task_due: 5,
-    intake: 6,
-    interaction: 7,
-    external_google: 8,
+    offer_deadline: 0,
+    interview_round: 1,
+    meeting: 2,
+    company_interview: 3,
+    meeting_tentative: 4,
+    first_meeting: 5,
+    task_due: 6,
+    intake: 7,
+    interaction: 8,
+    external_google: 9,
   };
   events.sort((a, b) => {
     const dc = a.dateKey.localeCompare(b.dateKey);
