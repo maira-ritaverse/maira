@@ -45,3 +45,4 @@ NNNN-short-title.md
 - [0004](./0004-ai-sdk-choice.md) AI SDK の選定
 - [0005](./0005-api-helpers-pattern.md) API ヘルパパターン
 - [0006](./0006-server-side-encryption-direction.md) サーバーサイド暗号化への方針確定
+- [0007](./0007-line-lstep-ma-flow.md) LINE Lステップ相当の MA 拡張方針
