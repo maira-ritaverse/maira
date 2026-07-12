@@ -69,10 +69,22 @@ export default async function MarketingPage({ searchParams }: { searchParams?: S
     sendStats.map((s) => [s.scenarioId, { sent: s.sent, failed: s.failed, skipped: s.skipped }]),
   );
 
-  // Resend 設定診断:Vercel 環境変数の有無だけ見る。
-  // 値そのものは絶対にクライアントに渡さない(キー漏洩防止)。
-  // 「設定されているか」だけを真偽値で渡す。
-  const resendConfigured = Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
+  // Resend 設定診断:「この組織で送れる状態か」を判定。
+  // 優先度: 組織単位の BYO 設定(organizations.resend_api_key_encrypted + email_from)
+  //         → env 環境変数(RESEND_API_KEY / EMAIL_FROM)
+  // 値そのものは絶対にクライアントに渡さない(キー漏洩防止)。 boolean だけ。
+  const { data: orgEmailRow } = await supabase
+    .from("organizations")
+    .select("email_from, resend_api_key_encrypted")
+    .eq("id", role.organization.id)
+    .maybeSingle();
+  const orgConfigured = Boolean(
+    (orgEmailRow as { email_from: string | null; resend_api_key_encrypted: string | null } | null)
+      ?.email_from &&
+    (orgEmailRow as { resend_api_key_encrypted: string | null } | null)?.resend_api_key_encrypted,
+  );
+  const envConfigured = Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
+  const resendConfigured = orgConfigured || envConfigured;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -82,17 +94,21 @@ export default async function MarketingPage({ searchParams }: { searchParams?: S
         <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           <p className="inline-flex items-center gap-1.5 font-semibold">
             <AlertTriangle className="size-4" aria-hidden />
-            Resend が未設定です
+            メール送信が設定されていません
           </p>
           <p className="mt-1">
-            <code className="font-mono text-xs">RESEND_API_KEY</code> または{" "}
-            <code className="font-mono text-xs">EMAIL_FROM</code> が Vercel
-            の環境変数に設定されていません。
+            この組織にはメール送信の設定(Resend の API キー + 送信元アドレス)がありません。
             <br />
-            シナリオを有効化しても自動配信は <code>skipped</code>{" "}
-            としてログに記録されるだけで、実際のメールは送信されません。
+            メール Flow・旧メールシナリオを有効化しても実際の送信は行われず、
+            <code>skipped</code> としてログに記録されるだけです。
             <br />
-            設定方法は <code className="font-mono text-xs">docs/ma-ops-guide.md</code> を参照。
+            <a
+              href="/agency/settings/email"
+              className="text-primary font-medium underline underline-offset-2"
+            >
+              メール送信設定を開く
+            </a>
+            から自社の Resend アカウントを登録してください。
           </p>
         </div>
       )}

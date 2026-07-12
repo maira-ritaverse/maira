@@ -198,6 +198,23 @@ export default async function SettingsPage() {
               </Link>
             </Card>
           )}
+
+          {isAdmin && (
+            <Card className="p-4">
+              <Link
+                href="/agency/settings/email"
+                className="hover:bg-accent -m-4 flex items-center gap-3 rounded-md p-4 transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">メール送信設定(管理者向け)</p>
+                  <p className="text-muted-foreground text-xs">
+                    自社ドメイン + Resend API キーを登録して、メール Flow を自社ドメインから送信
+                  </p>
+                </div>
+                <span className="text-muted-foreground text-sm">→</span>
+              </Link>
+            </Card>
+          )}
         </div>
       </div>
     </div>

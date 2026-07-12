@@ -15,15 +15,26 @@ export type ResendSendResult =
   | { sent: false; reason: "not_configured" }
   | { sent: false; reason: "send_failed"; error: string };
 
+/**
+ * Resend でメールを送る。
+ *
+ * apiKey / from はどちらもオプション。未指定なら Maira の env に fallback する
+ * (BYO 案 B:各組織が自分の Resend アカウントを持ち込むケースでは、
+ *  呼び出し側で組織の DB 設定を復号して渡す)。
+ */
 export async function sendViaResend(args: {
   toEmail: string;
   subject: string;
   body: string;
   /** タグ(Resend の集計 / 検索用)。 未指定なら送らない。 */
   tags?: Array<{ name: string; value: string }>;
+  /** org 単位で持ち込まれた Resend API キー。 未指定は env にフォールバック。 */
+  apiKey?: string | null;
+  /** org 単位で設定された送信元。 未指定は env EMAIL_FROM にフォールバック。 */
+  from?: string | null;
 }): Promise<ResendSendResult> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM;
+  const apiKey = args.apiKey ?? process.env.RESEND_API_KEY;
+  const from = args.from ?? process.env.EMAIL_FROM;
 
   if (!apiKey || !from) {
     return { sent: false, reason: "not_configured" };
@@ -67,4 +78,12 @@ export async function sendViaResend(args: {
 
 export function isResendConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
+}
+
+/**
+ * 送信先の API キーが「テストキー」で始まっているかで軽く形式を確認する。
+ * Resend の API キーは 're_' プレフィックス。 UI 側の入力ミスを早期に弾く。
+ */
+export function looksLikeResendKey(value: string): boolean {
+  return /^re_[A-Za-z0-9_-]{10,}$/.test(value.trim());
 }

@@ -14,6 +14,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
+import { getOrgEmailConfig } from "@/lib/email/org-config";
 import { sendViaResend } from "@/lib/email/resend";
 import { pushMessage } from "@/lib/line/api";
 import { classifyLineError } from "@/lib/line/errors";
@@ -350,11 +351,15 @@ async function sendMessageViaEmail(
     return {};
   }
 
+  // BYO: 組織が Resend API キーを登録していればそれを使う(未設定なら env)
+  const orgEmail = await getOrgEmailConfig(supabase, sub.organization_id);
   const resendResult = await sendViaResend({
     toEmail: clientRow.email,
     subject: subject || "(件名なし)",
     body: wrappedBody,
     tags: [{ name: "ma_flow_step_id", value: step.id }],
+    apiKey: orgEmail.apiKey,
+    from: orgEmail.from,
   });
 
   const status = resendResult.sent
