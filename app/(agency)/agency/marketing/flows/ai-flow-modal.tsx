@@ -1,21 +1,14 @@
 "use client";
 
 /**
- * AI で Flow を 生成 する モーダル。
+ * AI で Flow を生成するモーダル。
  *
  * 流れ:
- *   1. admin が 自然文 で 配信 意図 を 入力
- *   2. 「AI で 生成」 → /api/agency/ma/flows/ai-generate を 呼び 提案 取得
- *   3. プレビュー (name / description / trigger / narrative / steps) を 表示
- *   4. 「この 内容 で 作成」 → POST /api/agency/ma/flows で Flow 作成 →
- *      PUT /steps で ステップ 一括 挿入 → onCreated 呼び 出し
- *   5. admin は Flow エディタ で 微調整 (template_id / tag_id / 分岐 条件 を 埋める)
- *
- * 制限:
- *   ・send_message / assign_tag / remove_tag は 一時的 に action_type='wait' に
- *     変換 して 保存 (DB の CHECK 制約 回避)。 元 の 意図 は action_config に 保管
- *   ・admin は Step 詳細 で action_type を 正式 な もの に 戻し、
- *     template_id / tag_id を 選択 する 必要 が ある
+ *   1. 担当者が自然文で配信の意図を入力
+ *   2. 「AI に提案してもらう」→ 組織の既存タグ・セグメント・テンプレをコンテキストに
+ *      Claude が提案を生成
+ *   3. プレビュー(名前 / 起動条件 / 目標 / 概要 / ステップ一覧)を表示
+ *   4. 「この内容で作成」→ 送信ステップのテンプレを自動作成 → Flow + ステップを保存
  */
 import { Sparkles } from "lucide-react";
 import { useState } from "react";
@@ -38,35 +31,35 @@ type Props = {
 };
 
 const EXAMPLE_PROMPTS = [
-  "友だち追加後、まずウェルカムメッセージ。 3 日 以内 に 面談 予約 が なければ リマインド、 それ でも 予約 が なければ 7 日 後 に キャリア 相談 無料 キャンペーン を 案内 する",
-  "面談 完了 後、 3 日 経っても 応募 が なければ 求人 紹介 を 送信。 応募 済 なら 何 も せず 終了",
-  "沈黙 が 30 日 続く 求職者 に、 段階 的 に メッセージ を 送信 して 復帰 を 促す。 2 通目 まで 返信 なければ 卒業 メッセージ で 終了",
+  "友だち追加後、まず歓迎メッセージ。3日以内に面談予約がなければリマインドを送り、それでも予約がなければ7日後にキャリア相談無料キャンペーンを案内する",
+  "面談が完了してから3日経っても応募がなければ求人紹介を送信。応募済みなら何もせず終了",
+  "沈黙が30日続く求職者に、段階的にメッセージを送信して復帰を促す。2通目まで返信がなければ卒業メッセージで終了",
 ];
 
 const TRIGGER_LABELS: Record<string, string> = {
-  friend_added: "友だち追加",
-  tag_assigned: "タグ 付与",
-  segment_matched: "セグメント 一致",
-  postback_received: "ボタン タップ",
-  conversion_event: "CV 発生",
-  manual: "手動",
+  friend_added: "友だち追加時",
+  tag_assigned: "タグが付いたとき",
+  segment_matched: "セグメントに一致したとき",
+  postback_received: "ボタンタップ時",
+  conversion_event: "目標達成イベント発生時",
+  manual: "手動で登録",
 };
 
 const INTENT_LABELS: Record<string, string> = {
-  send_message: "メッセージ 送信",
-  assign_tag: "タグ 付与",
-  remove_tag: "タグ 削除",
-  wait: "待機",
-  branch: "分岐",
-  stop: "終了",
+  send_message: "メッセージを送る",
+  assign_tag: "タグをつける",
+  remove_tag: "タグを外す",
+  wait: "待つ",
+  branch: "条件で分岐",
+  stop: "終了する",
 };
 
 function formatDelay(seconds: number): string {
-  if (seconds === 0) return "即時";
-  if (seconds < 60) return `${seconds}秒`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}分`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}時間`;
-  return `${Math.floor(seconds / 86400)}日`;
+  if (seconds === 0) return "すぐ";
+  if (seconds < 60) return `${seconds}秒後`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}分後`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}時間後`;
+  return `${Math.floor(seconds / 86400)}日後`;
 }
 
 export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
@@ -87,8 +80,8 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
         body: JSON.stringify({ prompt: prompt.trim() }),
       });
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(body.error ?? "生成 に 失敗 しました");
+        const body = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+        setError(body.message ?? body.error ?? "AI からの提案取得に失敗しました");
         return;
       }
       const json = (await res.json()) as { proposal: AIFlowProposal };
@@ -105,7 +98,7 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
     setSaving(true);
     setError(null);
     try {
-      // 1. Flow を 作成 (POST /api/agency/ma/flows)
+      // 1. Flow を作成
       const flowRes = await fetch("/api/agency/ma/flows", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -117,12 +110,18 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
       });
       if (!flowRes.ok) {
         const body = (await flowRes.json().catch(() => ({}))) as { error?: string };
-        setError(`Flow 作成 失敗: ${body.error ?? flowRes.status}`);
+        setError(`Flow の作成に失敗しました: ${body.error ?? flowRes.status}`);
         return;
       }
       const { id: flowId } = (await flowRes.json()) as { id: string };
 
-      // 2. Flow メタ を PATCH (trigger_type / goal / allow_reentry / trigger_config)
+      // 2. 起動条件・目標などのメタ情報を更新
+      const triggerConfig: Record<string, unknown> = {
+        ai_trigger_hint: proposal.trigger_hint,
+      };
+      if (proposal.trigger_tag_id) triggerConfig.tag_id = proposal.trigger_tag_id;
+      if (proposal.trigger_segment_id) triggerConfig.segment_id = proposal.trigger_segment_id;
+
       await fetch("/api/agency/ma/flows", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -130,11 +129,12 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
           id: flowId,
           goal_event_key: proposal.goal_event_key,
           allow_reentry: proposal.allow_reentry,
-          trigger_config: { ai_trigger_hint: proposal.trigger_hint },
+          trigger_config: triggerConfig,
+          target_segment_id: proposal.trigger_segment_id ?? null,
         }),
       });
 
-      // 3. send_message ステップ に 対応 する 独立 テンプレ を 事前 作成
+      // 3. 送信ステップぶんのテンプレを自動作成
       const templateIdByStep: Record<number, string> = {};
       for (const step of proposal.steps) {
         if (step.action_type === "send_message" && step.message_body) {
@@ -142,7 +142,7 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
-              name: `[AI: ${proposal.name}] Step ${step.step_order}`,
+              name: `${proposal.name} - ステップ${step.step_order}`,
               body: step.message_body,
             }),
           });
@@ -150,11 +150,10 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
             const { id: templateId } = (await templRes.json()) as { id: string };
             templateIdByStep[step.step_order] = templateId;
           }
-          // 失敗 は フォールバック (mapper が wait に 変換)
         }
       }
 
-      // 4. Steps を PUT (proposal + template ID マップ から マッピング)
+      // 4. ステップを一括保存
       const saveable = mapProposalStepsToSaveable(proposal, templateIdByStep);
       const stepsRes = await fetch(`/api/agency/ma/flows/${flowId}/steps`, {
         method: "PUT",
@@ -163,11 +162,10 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
       });
       if (!stepsRes.ok) {
         const body = (await stepsRes.json().catch(() => ({}))) as { error?: string };
-        setError(`ステップ 保存 失敗: ${body.error ?? stepsRes.status}`);
+        setError(`ステップの保存に失敗しました: ${body.error ?? stepsRes.status}`);
         return;
       }
 
-      // 完了:モーダル を 閉じて 一覧 を 再フェッチ
       setPrompt("");
       setProposal(null);
       onCreated();
@@ -178,21 +176,30 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
     }
   }
 
+  // 提案の中の要検討ステップを数える(admin にわかりやすくするため)
+  const stepsNeedingAttention = proposal
+    ? proposal.steps.filter(
+        (s) =>
+          (s.action_type === "assign_tag" || s.action_type === "remove_tag") &&
+          !isUuid(s.tag_id ?? ""),
+      ).length
+    : 0;
+
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="max-w-3xl">
         <AlertDialogTitle className="flex items-center gap-2">
           <Sparkles className="size-4" aria-hidden />
-          AI で Flow を 生成
+          AI に Flow を提案してもらう
         </AlertDialogTitle>
         <AlertDialogDescription>
-          配信 したい 内容 を 自然文 で 書いて ください。 AI が 起動 トリガー、 目標、 ステップ
-          構成、 想定 メッセージ 本文 を 提案 します。
+          配信したい内容を自然な言葉で書いてください。組織で使っているタグやセグメントを踏まえて、そのまま動く
+          Flow を提案します。
         </AlertDialogDescription>
 
         {!proposal && (
           <div className="my-3 space-y-2">
-            <Label htmlFor="ai-prompt">配信 の 意図</Label>
+            <Label htmlFor="ai-prompt">配信の意図</Label>
             <Textarea
               id="ai-prompt"
               value={prompt}
@@ -203,7 +210,7 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
               disabled={generating}
             />
             <div className="text-muted-foreground text-xs">
-              例:
+              例(クリックで挿入):
               <ul className="mt-1 list-disc space-y-0.5 pl-4">
                 {EXAMPLE_PROMPTS.map((e, i) => (
                   <li
@@ -216,7 +223,7 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
                 ))}
               </ul>
             </div>
-            {error && <p className="text-destructive text-sm">エラー: {error}</p>}
+            {error && <p className="text-destructive text-sm">{error}</p>}
           </div>
         )}
 
@@ -227,30 +234,30 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
               <div className="mt-1 text-xs text-sky-800">{proposal.description}</div>
               <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-sky-900">
                 <div>
-                  <span className="opacity-70">トリガー:</span>{" "}
+                  <span className="opacity-70">起動タイミング:</span>{" "}
                   {TRIGGER_LABELS[proposal.trigger_type] ?? proposal.trigger_type}
                 </div>
                 <div>
-                  <span className="opacity-70">目標 CV:</span> {proposal.goal_event_key ?? "なし"}
+                  <span className="opacity-70">達成目標:</span> {proposal.goal_event_key ?? "なし"}
                 </div>
                 <div>
-                  <span className="opacity-70">再エンロール:</span>{" "}
-                  {proposal.allow_reentry ? "許可" : "1 度 のみ"}
+                  <span className="opacity-70">対象を再度追加:</span>{" "}
+                  {proposal.allow_reentry ? "する" : "しない"}
                 </div>
                 <div>
-                  <span className="opacity-70">ステップ 数:</span> {proposal.steps.length}
+                  <span className="opacity-70">ステップ数:</span> {proposal.steps.length}
                 </div>
               </div>
               <p className="mt-2 text-xs text-sky-900 opacity-80">{proposal.trigger_hint}</p>
             </div>
 
             <div className="border-border rounded border p-3 text-sm">
-              <div className="mb-2 font-medium">動作 の 要約</div>
+              <div className="mb-2 font-medium">この Flow の動き</div>
               <p className="text-muted-foreground text-xs">{proposal.narrative}</p>
             </div>
 
             <div className="border-border rounded border">
-              <div className="border-border border-b p-2 text-xs font-medium">ステップ 一覧</div>
+              <div className="border-border border-b p-2 text-xs font-medium">ステップ一覧</div>
               <div className="divide-border divide-y">
                 {proposal.steps.map((s) => (
                   <div key={s.step_order} className="space-y-1 p-2 text-xs">
@@ -267,16 +274,21 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
                       <span className="font-medium">{s.name}</span>
                     </div>
                     {s.message_body && (
-                      <p className="text-muted-foreground pl-8">送信 本文: {s.message_body}</p>
+                      <p className="text-muted-foreground pl-8">送る本文: {s.message_body}</p>
                     )}
-                    {s.tag_name && (
-                      <p className="text-muted-foreground pl-8">タグ 名: {s.tag_name}</p>
+                    {s.tag_name && !isUuid(s.tag_id ?? "") && (
+                      <p className="pl-8 text-amber-700">
+                        新規タグを想定: 「{s.tag_name}」(保存後にタグを選び直してください)
+                      </p>
                     )}
-                    {s.branch_description && (
+                    {s.tag_name && isUuid(s.tag_id ?? "") && (
+                      <p className="text-muted-foreground pl-8">既存タグ: {s.tag_name}</p>
+                    )}
+                    {s.branch_condition_json_stringified && (
                       <p className="text-muted-foreground pl-8">
-                        分岐 条件: {s.branch_description}
-                        {s.next_step_on_true != null && ` (true → Step ${s.next_step_on_true}`}
-                        {s.next_step_on_false != null && `, false → Step ${s.next_step_on_false})`}
+                        分岐条件: {summarizeBranchCondition(s.branch_condition_json_stringified)}
+                        {s.next_step_on_true != null && ` / Yes → ステップ${s.next_step_on_true}`}
+                        {s.next_step_on_false != null && ` / No → ステップ${s.next_step_on_false}`}
                       </p>
                     )}
                   </div>
@@ -284,13 +296,19 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
               </div>
             </div>
 
-            <div className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
-              保存 後 の 追加 作業:各 「送信」 「タグ」 ステップ は 一時的 に 「待機」 として 保存
-              されます。 Flow エディタ で 開き、 action_type を 正式 な もの に 戻し、 template /
-              tag を 選択 して ください。
-            </div>
+            {stepsNeedingAttention === 0 ? (
+              <div className="rounded border border-emerald-300 bg-emerald-50 p-2 text-xs text-emerald-900">
+                この Flow
+                はすべて自動で埋まりました。「この内容で作成」を押せば、そのまま動く状態で保存されます。
+              </div>
+            ) : (
+              <div className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+                保存後に {stepsNeedingAttention}{" "}
+                件のステップで新規タグの割り当てが必要です。ステップ編集画面でタグを選ぶか、新しいタグを作成してください。
+              </div>
+            )}
 
-            {error && <p className="text-destructive text-sm">エラー: {error}</p>}
+            {error && <p className="text-destructive text-sm">{error}</p>}
           </div>
         )}
 
@@ -300,19 +318,19 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
             disabled={generating || saving}
             onClick={() => onOpenChange(false)}
           >
-            キャンセル
+            閉じる
           </Button>
           {!proposal ? (
             <Button disabled={generating || prompt.trim().length < 5} onClick={generate}>
-              {generating ? "生成 中..." : "AI で 生成"}
+              {generating ? "AI に提案してもらっています..." : "AI に提案してもらう"}
             </Button>
           ) : (
             <>
               <Button variant="outline" disabled={saving} onClick={() => setProposal(null)}>
-                やり直し
+                やり直す
               </Button>
               <Button disabled={saving} onClick={save}>
-                {saving ? "作成 中..." : "この 内容 で 作成"}
+                {saving ? "作成中..." : "この内容で作成"}
               </Button>
             </>
           )}
@@ -320,4 +338,29 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
       </AlertDialogContent>
     </AlertDialog>
   );
+}
+
+function isUuid(v: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+}
+
+function summarizeBranchCondition(stringified: string): string {
+  try {
+    const obj = JSON.parse(stringified) as { kind?: string };
+    if (!obj?.kind) return "設定済み";
+    if (obj.kind === "and") return "複数条件をすべて満たす";
+    if (obj.kind === "or") return "いずれかの条件を満たす";
+    if (obj.kind === "not") return "条件を満たさない";
+    if (obj.kind === "has_tag") return "特定のタグを持っている";
+    if (obj.kind === "not_has_tag") return "特定のタグを持っていない";
+    if (obj.kind === "field_equals") return "自由項目が特定の値";
+    if (obj.kind === "field_exists") return "自由項目が存在する";
+    if (obj.kind === "days_since_last_activity_gte") return "最終活動から N 日以上";
+    if (obj.kind === "days_since_added_gte") return "追加から N 日以上";
+    if (obj.kind === "days_since_added_lte") return "追加から N 日以内";
+    if (obj.kind === "clicked_link_in_flow") return "Flow のリンクをクリック済み";
+    return obj.kind;
+  } catch {
+    return "設定済み";
+  }
 }

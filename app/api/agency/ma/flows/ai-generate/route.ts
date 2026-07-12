@@ -1,14 +1,9 @@
 /**
  * POST /api/agency/ma/flows/ai-generate
  *
- * admin の 自然文 の 意図 を Claude Sonnet 4.6 に 渡し、 Flow の 構造 化 提案 を
- * JSON で 返す。 保存 は 別 エンドポイント (POST /api/agency/ma/flows +
- * PUT /api/agency/ma/flows/[id]/steps) で 行う。
- *
- * 認可 :organization admin のみ
- *
- * TODO:AI 使用 上限 (checkAiUsageLimit / recordAiUsage) は 別 コミット で 追加。
- *      現状 は 総量 制限 (PLATFORM_AI_TOTAL) のみ で 個別 kind 制限 なし。
+ * 自然文の意図を Claude Sonnet 4.6 に渡し、Flow 提案を JSON で返す。
+ * 事前に組織の既存タグ・セグメント・テンプレ・稼働 Flow をコンテキストとして
+ * 渡し、AI が実 UUID を含む「そのまま動く」提案を返せるようにする。
  */
 import { generateObject } from "ai";
 import { NextResponse } from "next/server";
@@ -18,9 +13,13 @@ import { requireOrgAdmin } from "@/lib/api/auth-guards";
 import { assertAnthropicConfigured, getModel, MODELS } from "@/lib/ai/client";
 import {
   AIFlowProposalSchema,
-  FLOW_GENERATION_SYSTEM_PROMPT,
+  buildFlowGenerationSystemPrompt,
+  type OrgContextForAI,
 } from "@/lib/ai/prompts/flow-generation";
 import { checkAiUsageLimit, recordAiUsage } from "@/lib/features/ai-usage";
+import { listOrganizationLineTags } from "@/lib/line/conversation-tags";
+import { listMaTemplatesForOrg } from "@/lib/ma/flow-queries";
+import { listSegmentsForOrg } from "@/lib/ma/segment-queries";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -48,13 +47,12 @@ export async function POST(request: Request) {
     );
   }
 
-  // AI 月次 上限 チェック
   const usage = await checkAiUsageLimit(guard.supabase, guard.user.id, "agency_ma_flow_generation");
   if (!usage.allowed) {
     return NextResponse.json(
       {
         error: "ai_limit_exceeded",
-        message: `今月 の AI Flow 生成 上限 (${usage.limit} 回) に 達しました。 リセット: ${usage.resetsAt}`,
+        message: `今月の AI Flow 生成の上限(${usage.limit}回)に達しました。次回リセット: ${usage.resetsAt}`,
         current: usage.current,
         limit: usage.limit,
       },
@@ -62,17 +60,41 @@ export async function POST(request: Request) {
     );
   }
 
+  // 組織のコンテキストを取得(既存タグ・セグメント・テンプレ・稼働 Flow)
+  const [tags, segments, templates, flowsRes] = await Promise.all([
+    listOrganizationLineTags(guard.organization.id),
+    listSegmentsForOrg(guard.supabase, guard.organization.id),
+    listMaTemplatesForOrg(guard.supabase, guard.organization.id),
+    guard.supabase
+      .from("ma_flows")
+      .select("name")
+      .eq("organization_id", guard.organization.id)
+      .eq("is_active", true),
+  ]);
+
+  const context: OrgContextForAI = {
+    tags: tags.map((t) => ({ id: t.id, name: t.name })),
+    segments: segments.map((s) => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+    })),
+    templates: templates.map((t) => ({
+      id: t.id,
+      name: t.scenario_name ?? "テンプレート",
+    })),
+    activeFlowNames: (flowsRes.data ?? []).map((f: { name: string }) => f.name),
+  };
+
   try {
     const result = await generateObject({
       model: getModel(MODELS.CONVERSATION),
       schema: AIFlowProposalSchema,
-      system: FLOW_GENERATION_SYSTEM_PROMPT,
+      system: buildFlowGenerationSystemPrompt(context),
       prompt: `<user_intent>\n${parsed.data.prompt}\n</user_intent>`,
     });
 
-    // 成功 → 使用 回数 を 記録
     await recordAiUsage(guard.supabase, guard.user.id, "agency_ma_flow_generation");
-
     return NextResponse.json({ proposal: result.object });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

@@ -1,12 +1,10 @@
 "use client";
 
 /**
- * 新規 Flow 作成 モーダル。
+ * 新しい Flow を作成するモーダル。
  *
- * プリセット (7 種) から 選ぶ か、 「空白 Flow」 を 選ぶ。 選択 後 に
- * POST /api/agency/ma/flows を 叩き、 成功 した ら onCreated で 一覧 を 更新。
- *
- * Phase 1-E で は 作成 のみ。 ステップ 設定 は 次 の 編集 画面 (Phase 1-F) で 行う。
+ * プリセット(7 種)から選ぶか、「空白 Flow」を選ぶ。作成後、ステップの追加は
+ * 編集画面で行う。
  */
 import { useState } from "react";
 
@@ -24,7 +22,7 @@ import { LINE_FLOW_PRESETS } from "@/lib/ma/flow-presets";
 type Choice = { key: string | null; label: string; description: string };
 
 const CHOICES: Choice[] = [
-  { key: null, label: "空白 Flow", description: "trigger や ステップ を 一から 組む" },
+  { key: null, label: "空白から作る", description: "起動条件やステップを一から組み立てる" },
   ...LINE_FLOW_PRESETS.map((p) => ({
     key: p.key,
     label: p.name,
@@ -46,7 +44,7 @@ export function NewFlowModal({ open, onOpenChange, onCreated }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const selectedChoice = CHOICES.find((c) => c.key === selected) ?? CHOICES[0];
-  const nameRequired = selected === null; // 空白 Flow は name 必須
+  const nameRequired = selected === null;
 
   async function submit() {
     setBusy(true);
@@ -63,10 +61,9 @@ export function NewFlowModal({ open, onOpenChange, onCreated }: Props) {
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(body.error ?? "作成 に 失敗 しました");
+        setError(body.error ?? "作成に失敗しました");
         return;
       }
-      // reset
       setSelected(CHOICES[0]?.key ?? null);
       setName("");
       setDescription("");
@@ -83,10 +80,9 @@ export function NewFlowModal({ open, onOpenChange, onCreated }: Props) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="max-w-lg">
-        <AlertDialogTitle>新規 Flow を 作成</AlertDialogTitle>
+        <AlertDialogTitle>新しい Flow を作成</AlertDialogTitle>
         <AlertDialogDescription>
-          プリセット を 選ぶ か、 空白 で 開始 して ください。 ステップ の 追加 は 次 の 編集 画面
-          で 行い ます。
+          プリセットから選ぶか、空白から始めてください。ステップの追加は次の編集画面で行います。
         </AlertDialogDescription>
 
         <div className="my-4 space-y-3">
@@ -128,16 +124,14 @@ export function NewFlowModal({ open, onOpenChange, onCreated }: Props) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={
-                selectedChoice.key
-                  ? `未指定 なら 「${selectedChoice.label}」`
-                  : "空白 Flow の 表示 名"
+                selectedChoice.key ? `未入力なら「${selectedChoice.label}」` : "この Flow の名前"
               }
               maxLength={200}
             />
           </div>
 
           <div className="space-y-1">
-            <Label htmlFor="flow-description">説明 (任意)</Label>
+            <Label htmlFor="flow-description">説明(任意)</Label>
             <Input
               id="flow-description"
               value={description}
@@ -146,12 +140,12 @@ export function NewFlowModal({ open, onOpenChange, onCreated }: Props) {
             />
           </div>
 
-          {error && <p className="text-destructive text-sm">エラー: {error}</p>}
+          {error && <p className="text-destructive text-sm">{error}</p>}
         </div>
 
         <div className="flex justify-end gap-2">
           <Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>
-            キャンセル
+            閉じる
           </Button>
           <Button disabled={submitDisabled} onClick={submit}>
             作成

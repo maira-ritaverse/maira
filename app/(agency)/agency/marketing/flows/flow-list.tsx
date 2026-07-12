@@ -1,13 +1,12 @@
 "use client";
 
 /**
- * Flow 一覧 の Client component。
+ * Flow 一覧の画面。
  *
- * 責務 :
- *   ・初期 フェッチ 済 の Flows を テーブル 形式 で 表示
- *   ・「新規 Flow 作成」 ボタン → NewFlowModal を 開く
- *   ・admin なら 有効化 スイッチ で is_active を PATCH
- *   ・PATCH 成功 後 は 楽観 更新 (エラー 時 は revert)
+ * - カードで Flow を表示、状態(有効・停止)を色で区別
+ * - 「AI に提案してもらう」で自然文から自動生成
+ * - 「新しい Flow」でプリセットから作成
+ * - 各カードから編集画面へ遷移
  */
 import { Sparkles } from "lucide-react";
 import Link from "next/link";
@@ -21,8 +20,7 @@ import type { FlowListItem } from "@/lib/ma/flow-queries";
 import { AiFlowModal } from "./ai-flow-modal";
 import { NewFlowModal } from "./new-flow-modal";
 
-// Badge shadcn コンポーネント は 未 導入 なので、 本 画面 用 に インライン span で 統一。
-// Phase 1-F 以降 で 他 画面 と 共用 する 場合 は shadcn add badge を 検討。
+// Badge shadcn コンポーネントは未導入なので、この画面用にインラインで用意。
 function Chip({
   children,
   tone = "outline",
@@ -46,14 +44,14 @@ type Props = {
 };
 
 const TRIGGER_LABELS: Record<string, string> = {
-  friend_added: "友だち追加",
-  tag_assigned: "タグ付与",
-  tag_removed: "タグ削除",
-  segment_matched: "セグメント一致",
-  form_submitted: "フォーム送信",
-  postback_received: "postback",
-  keyword_matched: "キーワード",
-  conversion_event: "CV",
+  friend_added: "友だち追加時",
+  tag_assigned: "タグが付いたとき",
+  tag_removed: "タグが外れたとき",
+  segment_matched: "セグメント一致時",
+  form_submitted: "フォーム送信時",
+  postback_received: "ボタンタップ時",
+  keyword_matched: "キーワード反応時",
+  conversion_event: "目標達成時",
   manual: "手動",
 };
 
@@ -67,7 +65,6 @@ export function FlowList({ initialFlows, isAdmin }: Props) {
   async function toggle(flow: FlowListItem, next: boolean) {
     if (!isAdmin) return;
     setBusyId(flow.id);
-    // 楽観 更新
     setFlows((prev) => prev.map((f) => (f.id === flow.id ? { ...f, is_active: next } : f)));
     const res = await fetch("/api/agency/ma/flows", {
       method: "PATCH",
@@ -75,7 +72,6 @@ export function FlowList({ initialFlows, isAdmin }: Props) {
       body: JSON.stringify({ id: flow.id, is_active: next }),
     });
     if (!res.ok) {
-      // revert
       setFlows((prev) => prev.map((f) => (f.id === flow.id ? { ...f, is_active: !next } : f)));
     }
     setBusyId(null);
@@ -83,7 +79,7 @@ export function FlowList({ initialFlows, isAdmin }: Props) {
 
   function handleCreated() {
     setModalOpen(false);
-    // 一覧 を 再取得
+    setAiModalOpen(false);
     startTransition(async () => {
       const res = await fetch("/api/agency/ma/flows", { cache: "no-store" });
       if (res.ok) {
@@ -100,20 +96,20 @@ export function FlowList({ initialFlows, isAdmin }: Props) {
           <>
             <Button variant="outline" onClick={() => setAiModalOpen(true)}>
               <Sparkles className="mr-1 size-4" aria-hidden />
-              AI で 生成
+              AI に提案してもらう
             </Button>
-            <Button onClick={() => setModalOpen(true)}>+ 新規 Flow 作成</Button>
+            <Button onClick={() => setModalOpen(true)}>+ 新しい Flow</Button>
           </>
         )}
       </div>
 
       {flows.length === 0 ? (
         <EmptyState
-          title="Flow が まだ ありません"
+          title="まだ Flow がありません"
           description={
             isAdmin
-              ? "上の 「新規 Flow 作成」 から プリセット を 選ぶ か、 空白 で 作成 してください。"
-              : "admin が Flow を 作成 する と ここ に 表示 されます。"
+              ? "「AI に提案してもらう」または「新しい Flow」から始めてください。"
+              : "管理者が作成するとここに表示されます。"
           }
         />
       ) : (
@@ -124,7 +120,7 @@ export function FlowList({ initialFlows, isAdmin }: Props) {
                 <div className="flex items-start justify-between gap-2">
                   <CardTitle className="text-base leading-tight">{flow.name}</CardTitle>
                   <Chip tone={flow.is_active ? "solid" : "muted"}>
-                    {flow.is_active ? "有効" : "停止"}
+                    {flow.is_active ? "動作中" : "停止中"}
                   </Chip>
                 </div>
                 {flow.description && (
@@ -136,7 +132,7 @@ export function FlowList({ initialFlows, isAdmin }: Props) {
                   <Chip>{TRIGGER_LABELS[flow.trigger_type] ?? flow.trigger_type}</Chip>
                   <Chip>{flow.step_count} ステップ</Chip>
                   {flow.active_subscription_count > 0 && (
-                    <Chip>進行中 {flow.active_subscription_count}</Chip>
+                    <Chip>実行中 {flow.active_subscription_count}</Chip>
                   )}
                   {flow.origin_preset_key && <Chip>プリセット由来</Chip>}
                 </div>
@@ -145,7 +141,7 @@ export function FlowList({ initialFlows, isAdmin }: Props) {
                     href={`/agency/marketing/flows/${flow.id}/edit`}
                     className="text-primary text-sm underline-offset-4 hover:underline"
                   >
-                    詳細 / 編集
+                    詳細・編集
                   </Link>
                   {isAdmin && (
                     <Button
@@ -154,7 +150,7 @@ export function FlowList({ initialFlows, isAdmin }: Props) {
                       disabled={busyId === flow.id}
                       onClick={() => toggle(flow, !flow.is_active)}
                     >
-                      {flow.is_active ? "停止" : "有効化"}
+                      {flow.is_active ? "停止する" : "動かす"}
                     </Button>
                   )}
                 </div>
