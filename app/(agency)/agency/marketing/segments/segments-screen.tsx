@@ -11,6 +11,7 @@
  * 保存 は POST / PATCH。 filter_dsl_json 更新 時 は サーバー 側 で
  * friend_count_cache も 再計算 される。
  */
+import { Sparkles } from "lucide-react";
 import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ import type { LineConversationTag } from "@/lib/line/conversation-tags";
 import { type SegmentCondition } from "@/lib/ma/segment-dsl";
 import type { SegmentListItem } from "@/lib/ma/segment-queries";
 
+import { AiSegmentModal } from "./ai-segment-modal";
 import { ConditionEditor } from "./condition-builder";
 
 type Props = {
@@ -56,6 +58,7 @@ function blankEditState(): EditState {
 export function SegmentsScreen({ initialSegments, isAdmin, tags }: Props) {
   const [segments, setSegments] = useState<SegmentListItem[]>(initialSegments);
   const [edit, setEdit] = useState<EditState | null>(null);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -118,9 +121,15 @@ export function SegmentsScreen({ initialSegments, isAdmin, tags }: Props) {
       {/* 左:一覧 */}
       <div className="space-y-3">
         {isAdmin && (
-          <Button className="w-full" onClick={() => setEdit(blankEditState())}>
-            + 新規 セグメント
-          </Button>
+          <div className="space-y-2">
+            <Button className="w-full" onClick={() => setEdit(blankEditState())}>
+              + 新規 セグメント
+            </Button>
+            <Button variant="outline" className="w-full" onClick={() => setAiModalOpen(true)}>
+              <Sparkles className="mr-1 size-4" aria-hidden />
+              AI で 生成
+            </Button>
+          </div>
         )}
         {segments.length === 0 ? (
           <EmptyState
@@ -220,6 +229,17 @@ export function SegmentsScreen({ initialSegments, isAdmin, tags }: Props) {
           </div>
         )}
       </div>
+
+      {isAdmin && (
+        <AiSegmentModal
+          open={aiModalOpen}
+          onOpenChange={setAiModalOpen}
+          onCreated={() => {
+            setAiModalOpen(false);
+            refetch();
+          }}
+        />
+      )}
     </div>
   );
 }
