@@ -23,11 +23,11 @@ import {
   resolvePeriod,
   type PeriodPreset,
 } from "@/lib/reports/queries";
-import { ExportButton } from "@/components/features/agency/export-button";
 import { AchievementSection } from "./achievement-section";
 import { AdvisorPerformanceSection } from "./advisor-performance-section";
 import { CompanyReportSection } from "./company-report-section";
 import { EntrySourceSection } from "./entry-source-section";
+import { ExportMenu } from "./export-menu";
 import { KpiHeadline } from "./kpi-headline";
 import { MonthlyDealsSection } from "./monthly-deals-section";
 import { PeriodFilter } from "./period-filter";
@@ -138,7 +138,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
               {role.organization.name} の活動状況をまとめます
             </p>
           </div>
-          <div className="no-print flex flex-col items-end gap-2">
+          {/* 右上ツールバー:1 行にコンパクト集約。 CSV はドロップダウンにまとめる。 */}
+          <div className="no-print flex flex-wrap items-center justify-end gap-2">
             {isAdmin && (
               <Link
                 href="/agency/reports/settings"
@@ -148,15 +149,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
               </Link>
             )}
             <PrintButton />
-            {showExport && (
-              <div className="flex flex-col items-end gap-2">
-                <ExportButton href="/api/agency/export/placements" label="成約・売上 CSV" />
-                <ExportButton href="/api/agency/export/referrals" label="応募 CSV" />
-                <ExportButton href="/api/agency/export/interviews" label="面接 履歴 CSV" />
-                <ExportButton href="/api/agency/export/tasks" label="タスク CSV" />
-                <ExportButton href="/api/agency/export/line-broadcasts" label="LINE 一斉配信 CSV" />
-              </div>
-            )}
+            {showExport && <ExportMenu />}
           </div>
         </div>
 
