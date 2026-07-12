@@ -68,6 +68,9 @@ type FlowMeta = {
   allow_reentry: boolean;
   max_send_per_day: number | null;
   target_segment_id: string | null;
+  /** trigger_type='keyword_matched' 用 */
+  keyword: string;
+  keyword_match_mode: "partial" | "exact";
 };
 
 const NODE_TYPES = { step: StepNode };
@@ -221,6 +224,14 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments, attributi
     allow_reentry: flow.allow_reentry,
     max_send_per_day: flow.max_send_per_day,
     target_segment_id: flow.target_segment_id,
+    keyword:
+      typeof (flow.trigger_config as { keyword?: unknown }).keyword === "string"
+        ? String((flow.trigger_config as { keyword: string }).keyword)
+        : "",
+    keyword_match_mode:
+      (flow.trigger_config as { match_mode?: unknown }).match_mode === "exact"
+        ? "exact"
+        : "partial",
   });
   const [metaExpanded, setMetaExpanded] = useState(false);
   const [aiImproveOpen, setAiImproveOpen] = useState(false);
@@ -434,6 +445,16 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments, attributi
           allow_reentry: meta.allow_reentry,
           max_send_per_day: meta.max_send_per_day,
           target_segment_id: meta.target_segment_id,
+          // 起動条件が keyword_matched のときだけ trigger_config を上書き。
+          // 他の trigger_type ではプリセット由来の trigger_config を保持したいので
+          // undefined を渡す(PATCH は provided fields のみ更新)。
+          trigger_config:
+            flow.trigger_type === "keyword_matched"
+              ? {
+                  keyword: meta.keyword.trim(),
+                  match_mode: meta.keyword_match_mode,
+                }
+              : undefined,
         }),
       });
       if (!metaRes.ok) {
@@ -561,6 +582,46 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments, attributi
               />
             </div>
           </div>
+
+          {flow.trigger_type === "keyword_matched" && (
+            <div className="rounded border border-emerald-200 bg-emerald-50 p-3">
+              <div className="mb-2 text-sm font-medium text-emerald-900">キーワード応答の設定</div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="space-y-1">
+                  <Label htmlFor="flow-meta-keyword">反応するキーワード</Label>
+                  <Input
+                    id="flow-meta-keyword"
+                    value={meta.keyword}
+                    disabled={!isAdmin}
+                    onChange={(e) => setMeta({ ...meta, keyword: e.target.value })}
+                    placeholder="求人 / 面接 / 相談 など"
+                    maxLength={100}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="flow-meta-match-mode">照合方法</Label>
+                  <select
+                    id="flow-meta-match-mode"
+                    className="border-input bg-background w-full rounded border px-3 py-2 text-sm"
+                    value={meta.keyword_match_mode}
+                    disabled={!isAdmin}
+                    onChange={(e) =>
+                      setMeta({
+                        ...meta,
+                        keyword_match_mode: e.target.value === "exact" ? "exact" : "partial",
+                      })
+                    }
+                  >
+                    <option value="partial">部分一致(メッセージに含まれれば反応)</option>
+                    <option value="exact">完全一致(メッセージ全体がキーワードと同一)</option>
+                  </select>
+                </div>
+              </div>
+              <p className="text-muted-foreground mt-1 text-xs">
+                大文字・小文字は無視されます。キーワードを空にすると Flow は反応しません。
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <div className="space-y-1">

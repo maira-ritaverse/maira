@@ -173,13 +173,47 @@ describe("isTriggerConfigMatch - segment_matched", () => {
   });
 });
 
-describe("isTriggerConfigMatch - manual / keyword_matched", () => {
-  it("manual / keyword_matched は config 不問 で true (呼び出し 側 で 事前 絞込)", () => {
+describe("isTriggerConfigMatch - manual", () => {
+  it("manual は config 不問 で true (呼び出し 側 で 事前 絞込)", () => {
     const manual = makeFlow({ trigger_type: "manual" });
     expect(isTriggerConfigMatch(manual, { type: "manual", line_user_id: "U1" })).toBe(true);
-    const kw = makeFlow({ trigger_type: "keyword_matched" });
+  });
+});
+
+describe("isTriggerConfigMatch - keyword_matched", () => {
+  it("keyword 未設定なら false", () => {
+    const flow = makeFlow({ trigger_type: "keyword_matched", trigger_config: {} });
     expect(
-      isTriggerConfigMatch(kw, { type: "keyword_matched", line_user_id: "U1", keyword: "hello" }),
+      isTriggerConfigMatch(flow, { type: "keyword_matched", line_user_id: "U1", keyword: "求人" }),
+    ).toBe(false);
+  });
+  it("部分一致(デフォルト)で true(大文字小文字は無視)", () => {
+    const flow = makeFlow({
+      trigger_type: "keyword_matched",
+      trigger_config: { keyword: "求人" },
+    });
+    expect(
+      isTriggerConfigMatch(flow, {
+        type: "keyword_matched",
+        line_user_id: "U1",
+        keyword: "新しい求人 を 見たい",
+      }),
     ).toBe(true);
+  });
+  it("match_mode='exact' なら完全一致のみ true", () => {
+    const flow = makeFlow({
+      trigger_type: "keyword_matched",
+      trigger_config: { keyword: "求人", match_mode: "exact" },
+    });
+    expect(
+      isTriggerConfigMatch(flow, { type: "keyword_matched", line_user_id: "U1", keyword: "求人" }),
+    ).toBe(true);
+    expect(
+      isTriggerConfigMatch(flow, {
+        type: "keyword_matched",
+        line_user_id: "U1",
+        keyword: "新しい求人",
+      }),
+    ).toBe(false);
   });
 });

@@ -104,9 +104,19 @@ export function isTriggerConfigMatch(
       return flow.trigger_config.form_id === event.form_id;
     case "conversion_event":
       return flow.trigger_config.event_key === event.event_key;
-    case "keyword_matched":
-      // keyword flow の 具体 マッチ は 呼び出し 側 (自動 応答 エンジン) で 決定
-      return true;
+    case "keyword_matched": {
+      // Flow の trigger_config.keyword を case-insensitive 部分一致 で 判定 する。
+      // 完全 一致 にしたい 場合 は match_mode='exact' を 指定。
+      // 呼び出し 側 で pre-filter する 用途 に 合わせて、 keyword が
+      // 未設定 なら false (unconfigured Flow を 全 event に マッチさせない)。
+      const raw = flow.trigger_config.keyword;
+      if (typeof raw !== "string" || raw.trim().length === 0) return false;
+      const keyword = raw.trim().toLowerCase();
+      const text = event.keyword.trim().toLowerCase();
+      const mode = flow.trigger_config.match_mode;
+      if (mode === "exact") return text === keyword;
+      return text.includes(keyword);
+    }
     case "segment_matched":
       return flow.trigger_config.segment_id === event.segment_id;
     default: {

@@ -226,6 +226,23 @@ async function handleMessage(
     console.warn("[line/event-handler] notify failed", err);
   }
 
+  // キーワード応答:text の場合、trigger_type='keyword_matched' の active Flow を検索
+  // し、trigger_config.keyword に一致する Flow を enroll。テキスト以外は無視。
+  // 失敗しても本体レスポンスに影響させない(fire-and-forget、握り潰し)。
+  if (msg.type === "text") {
+    try {
+      await dispatchFlowTrigger(ctx.service, ctx.organizationId, {
+        type: "keyword_matched",
+        line_user_id: lineUserId,
+        keyword: msg.text,
+      });
+    } catch (err) {
+      console.warn("[line/event-handler] keyword_matched dispatch failed", {
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   return {
     ok: true,
     type: "message",
