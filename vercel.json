@@ -23,10 +23,6 @@
       "schedule": "* * * * *"
     },
     {
-      "path": "/api/internal/ma/line-dispatch",
-      "schedule": "*/2 * * * *"
-    },
-    {
       "path": "/api/internal/ma/flow-dispatch",
       "schedule": "* * * * *"
     },

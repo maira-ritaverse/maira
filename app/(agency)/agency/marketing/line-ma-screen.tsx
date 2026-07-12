@@ -92,6 +92,24 @@ export function LineMaScreen({
 
   return (
     <div className="space-y-5">
+      {/* Phase 1 P1-H:新 Flow 体系 へ の 移行 バナー */}
+      <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
+        <div className="font-medium text-amber-900">
+          この 画面 は 旧 MA シナリオ (ma_scenarios) の 表示 用 です
+        </div>
+        <p className="mt-1 text-amber-800">
+          Phase 1 で 多段 ステップ + 分岐 + 動的 セグメント に 対応 した 新 Flow 体系 に 移行
+          しました。 新規 の シナリオ 作成 / 編集 は{" "}
+          <Link href="/agency/marketing/flows" className="underline">
+            Flow 一覧
+          </Link>{" "}
+          と{" "}
+          <Link href="/agency/marketing/segments" className="underline">
+            セグメント 一覧
+          </Link>{" "}
+          から 行って ください。 旧 ma_scenarios は 監査 用 に read-only で 保持 されて い ます。
+        </p>
+      </div>
       {/* ヘッダー (タイトル 左 / 同意 状態 右) */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
