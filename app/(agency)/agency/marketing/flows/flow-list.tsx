@@ -81,6 +81,12 @@ export function FlowList({ initialFlows, isAdmin }: Props) {
   return (
     <>
       <div className="flex items-center justify-end gap-2">
+        <Link
+          href="/agency/marketing/forms"
+          className="text-muted-foreground hover:text-primary rounded border px-3 py-1.5 text-xs"
+        >
+          フォーム管理
+        </Link>
         {isAdmin && (
           <>
             <Button variant="outline" onClick={() => setAiModalOpen(true)}>
