@@ -17,6 +17,38 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { dispatchFlowTrigger } from "./flow-enroller";
 
 /**
+ * CV イベントを ma_conversion_events に記録する。
+ * INSERT のみ、失敗時はログのみで握り潰す(Flow 起動を止めないため)。
+ * @returns 記録成功なら true
+ */
+async function recordConversionEvent(
+  admin: SupabaseClient,
+  params: {
+    organization_id: string;
+    line_user_id: string;
+    event_key: string;
+    source: string;
+    source_id: string | null;
+  },
+): Promise<boolean> {
+  const { error } = await admin.from("ma_conversion_events").insert({
+    organization_id: params.organization_id,
+    line_user_id: params.line_user_id,
+    event_key: params.event_key,
+    source: params.source,
+    source_id: params.source_id,
+  });
+  if (error) {
+    console.error("[cv-flow] recordConversionEvent failed", {
+      ...params,
+      message: error.message,
+    });
+    return false;
+  }
+  return true;
+}
+
+/**
  * referrals.status → CV event key の対応。
  *
  * planned / declined / recommended は「Flow の起動条件」として弱い(既に他手段で
@@ -69,9 +101,10 @@ export async function fireReferralConversionFlow(params: {
   admin: SupabaseClient;
   organizationId: string;
   clientRecordId: string;
+  referralId?: string;
   newStatus: string;
 }): Promise<void> {
-  const { admin, organizationId, clientRecordId, newStatus } = params;
+  const { admin, organizationId, clientRecordId, referralId, newStatus } = params;
   try {
     const eventKey = referralStatusToEventKey(newStatus);
     if (!eventKey) return;
@@ -79,6 +112,16 @@ export async function fireReferralConversionFlow(params: {
     const lineUserId = await findLineUserIdForClient(admin, organizationId, clientRecordId);
     if (!lineUserId) return;
 
+    // 1. 台帳(ma_conversion_events)に記録 → セグメント条件・attribution の情報源に
+    await recordConversionEvent(admin, {
+      organization_id: organizationId,
+      line_user_id: lineUserId,
+      event_key: eventKey,
+      source: "referral_status_change",
+      source_id: referralId ?? null,
+    });
+
+    // 2. Flow 起動(trigger_type='conversion_event' の active Flow を enroll)
     await dispatchFlowTrigger(admin, organizationId, {
       type: "conversion_event",
       line_user_id: lineUserId,
@@ -106,9 +149,10 @@ export async function fireInterviewConversionFlow(params: {
   admin: SupabaseClient;
   organizationId: string;
   referralId: string;
+  interviewId?: string;
   eventKey: "meeting_confirmed" | "interview_done";
 }): Promise<void> {
-  const { admin, organizationId, referralId, eventKey } = params;
+  const { admin, organizationId, referralId, interviewId, eventKey } = params;
   try {
     // referral → client_record_id
     const { data: referral } = await admin
@@ -122,6 +166,14 @@ export async function fireInterviewConversionFlow(params: {
 
     const lineUserId = await findLineUserIdForClient(admin, organizationId, clientRecordId);
     if (!lineUserId) return;
+
+    await recordConversionEvent(admin, {
+      organization_id: organizationId,
+      line_user_id: lineUserId,
+      event_key: eventKey,
+      source: eventKey === "meeting_confirmed" ? "interview_created" : "interview_completed",
+      source_id: interviewId ?? null,
+    });
 
     await dispatchFlowTrigger(admin, organizationId, {
       type: "conversion_event",

@@ -145,13 +145,14 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
     // CV Flow(trigger_type='conversion_event')を起動。
     // referral 更新は既に成功。CV Flow の失敗は握り潰す(業務は動かす)。
-    // service client を使うのは ma_flows / ma_flow_subscriptions が
+    // service client を使うのは ma_flows / ma_flow_subscriptions / ma_conversion_events が
     // service_role INSERT 想定で RLS が厳しめのため。
     if (referralClientRecordId) {
       void fireReferralConversionFlow({
         admin: createServiceClient(),
         organizationId: orgId,
         clientRecordId: referralClientRecordId,
+        referralId: id,
         newStatus: d.status,
       });
     }

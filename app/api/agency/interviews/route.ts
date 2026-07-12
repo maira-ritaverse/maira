@@ -101,6 +101,7 @@ export async function POST(request: Request) {
       admin: createServiceClient(),
       organizationId: role.organization.id,
       referralId: d.referral_id,
+      interviewId: inserted.id as string,
       eventKey: "meeting_confirmed",
     });
   }

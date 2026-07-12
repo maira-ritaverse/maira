@@ -85,6 +85,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       admin: createServiceClient(),
       organizationId: role.organization.id,
       referralId: referralIdForCv,
+      interviewId: id,
       eventKey: "interview_done",
     });
   }
