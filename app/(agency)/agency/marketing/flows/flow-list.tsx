@@ -15,6 +15,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { formatUpdatedAtJa, labelForTriggerType } from "@/lib/ma/flow-labels";
 import type { FlowListItem } from "@/lib/ma/flow-queries";
 
 import { AiFlowModal } from "./ai-flow-modal";
@@ -41,18 +42,6 @@ function Chip({
 type Props = {
   initialFlows: FlowListItem[];
   isAdmin: boolean;
-};
-
-const TRIGGER_LABELS: Record<string, string> = {
-  friend_added: "友だち追加時",
-  tag_assigned: "タグが付いたとき",
-  tag_removed: "タグが外れたとき",
-  segment_matched: "セグメント一致時",
-  form_submitted: "フォーム送信時",
-  postback_received: "ボタンタップ時",
-  keyword_matched: "キーワード反応時",
-  conversion_event: "目標達成時",
-  manual: "手動",
 };
 
 export function FlowList({ initialFlows, isAdmin }: Props) {
@@ -129,12 +118,15 @@ export function FlowList({ initialFlows, isAdmin }: Props) {
               </CardHeader>
               <CardContent className="flex flex-1 flex-col justify-between space-y-3">
                 <div className="flex flex-wrap gap-1.5 text-xs">
-                  <Chip>{TRIGGER_LABELS[flow.trigger_type] ?? flow.trigger_type}</Chip>
+                  <Chip>{labelForTriggerType(flow.trigger_type)}</Chip>
                   <Chip>{flow.step_count} ステップ</Chip>
                   {flow.active_subscription_count > 0 && (
                     <Chip>実行中 {flow.active_subscription_count}</Chip>
                   )}
                   {flow.origin_preset_key && <Chip>プリセット由来</Chip>}
+                </div>
+                <div className="text-muted-foreground text-xs">
+                  最終更新: {formatUpdatedAtJa(flow.updated_at)}
                 </div>
                 <div className="flex items-center justify-between gap-2 pt-2">
                   <Link

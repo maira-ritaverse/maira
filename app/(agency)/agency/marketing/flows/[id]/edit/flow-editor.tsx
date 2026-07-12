@@ -42,6 +42,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { LineConversationTag } from "@/lib/line/conversation-tags";
+import { formatUpdatedAtJa, labelForTriggerType } from "@/lib/ma/flow-labels";
 import type { FlowDetail, MaTemplateOption } from "@/lib/ma/flow-queries";
 import type { SegmentListItem } from "@/lib/ma/segment-queries";
 
@@ -380,12 +381,12 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments }: Props) 
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setSaveMsg(`ステップ 保存 失敗: ${body.error ?? res.status}`);
+        setSaveMsg(`ステップの保存に失敗: ${body.error ?? res.status}`);
         return;
       }
-      setSaveMsg(`保存 完了 (${new Date().toLocaleTimeString("ja-JP")})`);
+      setSaveMsg(`保存しました (${new Date().toLocaleTimeString("ja-JP")})`);
     } catch (err) {
-      setSaveMsg(`保存 失敗: ${err instanceof Error ? err.message : String(err)}`);
+      setSaveMsg(`保存に失敗: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setSaving(false);
     }
@@ -418,7 +419,8 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments }: Props) 
             AI に改善してもらう
           </Button>
           <span className="text-muted-foreground text-xs">
-            起動タイミング: {flow.trigger_type} / ステップ: {steps.length}
+            起動タイミング: {labelForTriggerType(flow.trigger_type)} / ステップ: {steps.length}
+            {flow.updated_at && ` / 最終更新: ${formatUpdatedAtJa(flow.updated_at)}`}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -474,13 +476,27 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments }: Props) 
                 disabled={!isAdmin}
                 onChange={(e) => setMeta({ ...meta, target_segment_id: e.target.value || null })}
               >
-                <option value="">(絞り込みなし)</option>
+                <option value="">絞り込みなし(起動条件を満たす全員に届く)</option>
                 {segments.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
+                    {s.friend_count_cache != null ? ` (現在 ${s.friend_count_cache}人)` : ""}
                   </option>
                 ))}
               </select>
+              <p className="text-muted-foreground text-xs">
+                {(() => {
+                  if (!meta.target_segment_id) {
+                    return "起動条件を満たした人 全員 に届きます。";
+                  }
+                  const seg = segments.find((s) => s.id === meta.target_segment_id);
+                  if (!seg) return "選んだセグメントを条件として使います。";
+                  const count = seg.friend_count_cache;
+                  return count != null
+                    ? `現在 ${count}人 が「${seg.name}」に該当します。この人たちだけに届きます。`
+                    : `「${seg.name}」に該当する人だけに届きます(人数は未計算)。`;
+                })()}
+              </p>
             </div>
             <div className="space-y-1">
               <Label htmlFor="flow-meta-max">1日あたりの送信上限</Label>
