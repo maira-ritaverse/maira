@@ -29,8 +29,12 @@ export const AIFlowStepSchema = z.object({
     .string()
     .nullable()
     .describe(
-      "action_type='send_message' の場合の本文。LINE で送るメッセージ、敬体、2〜4 文、60〜200 文字目安。他の action_type では null。",
+      "action_type='send_message' の場合の本文。LINE で送るメッセージ、敬体、2〜4 文、60〜200 文字目安。メール Flow なら 100〜500 文字目安。他の action_type では null。",
     ),
+  message_subject: z
+    .string()
+    .nullable()
+    .describe("メール Flow の send_message で使う件名(30文字程度)。 LINE Flow では null。"),
   tag_id: z
     .string()
     .nullable()
@@ -113,6 +117,8 @@ export type OrgContextForAI = {
   segments: Array<{ id: string; name: string; description: string | null }>;
   templates: Array<{ id: string; name: string }>;
   activeFlowNames: string[];
+  /** 生成する Flow の送信チャネル。 email なら subject と長めの本文を生成する */
+  channel: "line" | "email";
 };
 
 export function buildFlowGenerationSystemPrompt(ctx: OrgContextForAI): string {
@@ -170,10 +176,19 @@ ${flowList}
 - next_step_on_true / next_step_on_false は必ず既存の step_order を指す(存在しない番号は NG)
 
 ## 送信(send_message)
-- LINE メッセージとして自然な本文を message_body に入れる
+${
+  ctx.channel === "email"
+    ? `- **これはメール Flow です**。 message_subject に件名(30 字目安)、message_body に本文(200〜500 字目安)を入れる
+- 件名は要件が一目で分かる短く直接的な表現(例:「明日の面談のご案内」「求人紹介 - 3件のご提案」)
+- 本文は敬体、宛名(◯◯様)で始め、要件 → 詳細 → 次アクション の順で構成
+- 押し売りにならない誠実なトーンを維持。 マーケティング感を出しすぎない
+- 求人紹介は 1〜2 求人まで、リマインドは短く簡潔に`
+    : `- LINE メッセージとして自然な本文を message_body に入れる(60〜200 字目安)
 - 敬体、押し売りにならない誠実なトーン
 - 冒頭は「◯◯さん」で始める(実行時に求職者名が差し込まれる)
 - 求人紹介はテンプレの提案(1〜2 求人)、リマインドは短く
+- message_subject は null(LINE では未使用)`
+}
 
 ## 起動条件(trigger_type)
 - friend_added:公式 LINE に友だち追加された瞬間

@@ -62,7 +62,10 @@ function formatDelay(seconds: number): string {
   return `${Math.floor(seconds / 86400)}日後`;
 }
 
+type Channel = "line" | "email";
+
 export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
+  const [channel, setChannel] = useState<Channel>("line");
   const [prompt, setPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -77,7 +80,7 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
       const res = await fetch("/api/agency/ma/flows/ai-generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: prompt.trim() }),
+        body: JSON.stringify({ prompt: prompt.trim(), channel }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
@@ -98,12 +101,13 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
     setSaving(true);
     setError(null);
     try {
-      // 1. Flow を作成
+      // 1. Flow を作成(channel を明示)
       const flowRes = await fetch("/api/agency/ma/flows", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           preset_key: null,
+          channel,
           name: proposal.name,
           description: proposal.description,
         }),
@@ -134,7 +138,7 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
         }),
       });
 
-      // 3. 送信ステップぶんのテンプレを自動作成
+      // 3. 送信ステップぶんのテンプレを自動作成(email なら subject も同送)
       const templateIdByStep: Record<number, string> = {};
       for (const step of proposal.steps) {
         if (step.action_type === "send_message" && step.message_body) {
@@ -144,6 +148,9 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
             body: JSON.stringify({
               name: `${proposal.name} - ステップ${step.step_order}`,
               body: step.message_body,
+              ...(channel === "email"
+                ? { subject: step.message_subject ?? `${proposal.name} - お知らせ` }
+                : {}),
             }),
           });
           if (templRes.ok) {
@@ -199,6 +206,42 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
 
         {!proposal && (
           <div className="my-3 space-y-2">
+            <div className="space-y-1">
+              <Label>送信チャネル</Label>
+              <div className="inline-flex overflow-hidden rounded border">
+                <button
+                  type="button"
+                  onClick={() => setChannel("line")}
+                  disabled={generating}
+                  className={`px-3 py-1 text-xs ${
+                    channel === "line"
+                      ? "bg-emerald-500 text-white"
+                      : "bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  公式 LINE
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChannel("email")}
+                  disabled={generating}
+                  className={`px-3 py-1 text-xs ${
+                    channel === "email"
+                      ? "bg-emerald-500 text-white"
+                      : "bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  メール
+                </button>
+              </div>
+              {channel === "email" && (
+                <p className="text-muted-foreground text-xs">
+                  メール Flow は件名 + 長めの本文で提案されます。 LINE 連携済み +
+                  メール登録済みの求職者だけに届きます。
+                </p>
+              )}
+            </div>
+
             <Label htmlFor="ai-prompt">配信の意図</Label>
             <Textarea
               id="ai-prompt"

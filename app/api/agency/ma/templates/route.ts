@@ -23,6 +23,8 @@ export const dynamic = "force-dynamic";
 const postBody = z.object({
   name: z.string().min(1).max(200),
   body: z.string().min(1).max(4000),
+  /** メール Flow で使用する件名。 未指定は空文字暗号化(LINE 用途)。 */
+  subject: z.string().max(200).optional(),
 });
 
 export async function POST(request: Request) {
@@ -41,7 +43,8 @@ export async function POST(request: Request) {
   const admin = createServiceClient();
 
   const encryptedBody = await encryptField(parsed.data.body);
-  const encryptedSubject = await encryptField(""); // LINE では 未使用
+  // subject は明示指定があればそれを、無ければ空文字を暗号化(LINE では未使用のダミー)
+  const encryptedSubject = await encryptField(parsed.data.subject ?? "");
 
   const { data, error } = await admin
     .from("ma_templates")

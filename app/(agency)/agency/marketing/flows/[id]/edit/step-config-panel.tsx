@@ -467,30 +467,39 @@ function SendMessageEditor({
   return (
     <div className="space-y-2">
       <div className="space-y-1">
-        <Label htmlFor="step-template">送信するメッセージ</Label>
-        {templates.length === 0 ? (
+        <div className="flex items-center justify-between">
+          <Label htmlFor="step-template">送信するメッセージ</Label>
+          {!disabled && (
+            <NewTemplateButton
+              channel={channel}
+              onCreated={(newTemplateId) => {
+                onSelectTemplate(newTemplateId);
+                // 新規テンプレは client には反映されていないので、
+                // 保存後に親側で refetch する必要がある(次の Flow 保存で反映)
+              }}
+            />
+          )}
+        </div>
+        <select
+          id="step-template"
+          className="border-input bg-background w-full rounded border px-3 py-2 text-sm"
+          value={templateId ?? ""}
+          disabled={disabled}
+          onChange={(e) => onSelectTemplate(e.target.value || null)}
+        >
+          <option value="">
+            {templates.length === 0 ? "まだテンプレートがありません" : "選択してください"}
+          </option>
+          {templates.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.scenario_name}
+            </option>
+          ))}
+        </select>
+        {templates.length === 0 && (
           <p className="text-muted-foreground text-xs">
-            まだメッセージテンプレートがありません。
-            <a href="/agency/marketing" target="_blank" rel="noreferrer" className="underline">
-              MA 画面
-            </a>
-            でプリセットを有効化するか、AI 生成で自動作成してください。
+            右上の「+ 新規作成」から作れます(AI 生成でも自動作成されます)。
           </p>
-        ) : (
-          <select
-            id="step-template"
-            className="border-input bg-background w-full rounded border px-3 py-2 text-sm"
-            value={templateId ?? ""}
-            disabled={disabled}
-            onChange={(e) => onSelectTemplate(e.target.value || null)}
-          >
-            <option value="">選択してください</option>
-            {templates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.scenario_name}
-              </option>
-            ))}
-          </select>
         )}
       </div>
 
@@ -550,6 +559,146 @@ function SendMessageEditor({
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────
+// 新規テンプレート作成ボタン(インラインダイアログ)
+// ────────────────────────────────────────
+
+function NewTemplateButton({
+  channel,
+  onCreated,
+}: {
+  channel: string;
+  onCreated: (templateId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const isEmail = channel === "email";
+
+  async function create() {
+    if (!name.trim() || !body.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/agency/ma/templates", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          body: body.trim(),
+          ...(isEmail ? { subject: subject.trim() } : {}),
+        }),
+      });
+      if (!res.ok) {
+        const b = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+        setError(b.message ?? b.error ?? "作成に失敗しました");
+        return;
+      }
+      const json = (await res.json()) as { id: string };
+      onCreated(json.id);
+      setOpen(false);
+      setName("");
+      setSubject("");
+      setBody("");
+      // ページを再読み込みして templates リストを更新する
+      window.location.reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-700 hover:bg-slate-50"
+      >
+        + 新規作成
+      </button>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md space-y-3 rounded-lg border bg-white p-4 shadow-lg">
+        <div className="text-sm font-medium">新しいメッセージテンプレート</div>
+        <div className="space-y-1">
+          <Label htmlFor="new-tpl-name" className="text-xs">
+            テンプレート名(管理用)
+          </Label>
+          <Input
+            id="new-tpl-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="例: 面談前日リマインド"
+            maxLength={200}
+          />
+        </div>
+        {isEmail && (
+          <div className="space-y-1">
+            <Label htmlFor="new-tpl-subject" className="text-xs">
+              メール件名
+            </Label>
+            <Input
+              id="new-tpl-subject"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="例: 明日の面談についてのご案内"
+              maxLength={200}
+            />
+          </div>
+        )}
+        <div className="space-y-1">
+          <Label htmlFor="new-tpl-body" className="text-xs">
+            {isEmail ? "メール本文" : "LINE メッセージ本文"}
+          </Label>
+          <textarea
+            id="new-tpl-body"
+            className="border-input bg-background w-full rounded border px-2 py-1.5 text-sm"
+            rows={6}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder={
+              isEmail ? "ここに本文を書いてください" : "ここに LINE メッセージを書いてください"
+            }
+            maxLength={4000}
+          />
+          <p className="text-muted-foreground text-[10px]">{body.length} / 4000 字</p>
+        </div>
+        {error && (
+          <p className="rounded border border-rose-200 bg-rose-50 p-2 text-xs text-rose-900">
+            {error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2 border-t pt-2">
+          <button
+            type="button"
+            className="rounded border px-3 py-1 text-xs hover:bg-slate-50"
+            onClick={() => setOpen(false)}
+            disabled={saving}
+          >
+            キャンセル
+          </button>
+          <button
+            type="button"
+            className="rounded bg-emerald-500 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+            onClick={create}
+            disabled={saving || !name.trim() || !body.trim()}
+          >
+            {saving ? "作成中..." : "作成してこのステップに割当"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -26,6 +26,8 @@ export const runtime = "nodejs";
 
 const bodySchema = z.object({
   prompt: z.string().min(5).max(2000),
+  /** 生成する Flow の送信チャネル(未指定は line) */
+  channel: z.enum(["line", "email"]).optional(),
 });
 
 export async function POST(request: Request) {
@@ -84,6 +86,7 @@ export async function POST(request: Request) {
       name: t.scenario_name ?? "テンプレート",
     })),
     activeFlowNames: (flowsRes.data ?? []).map((f: { name: string }) => f.name),
+    channel: parsed.data.channel ?? "line",
   };
 
   try {
