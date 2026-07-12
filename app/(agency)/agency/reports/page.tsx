@@ -1,45 +1,65 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { canExport } from "@/lib/permissions/server";
 import {
   computePreviousPeriod,
+  getAchievementForPeriod,
   getAdvisorPerformance,
   getClientStatusDistribution,
+  getCompanyReport,
+  getEntrySourceReport,
   getKpiSummary,
   getMonthlyDealsRevenue,
+  getMonthlyTrend,
   getPhaseDuration,
   getPlacementRate,
   getReferralStatusDistribution,
+  getRoiSummary,
   getSelectionFunnel,
   getSelectionFunnelByCandidate,
   resolvePeriod,
   type PeriodPreset,
 } from "@/lib/reports/queries";
 import { ExportButton } from "@/components/features/agency/export-button";
-import { PeriodFilter } from "./period-filter";
-import { KpiHeadline } from "./kpi-headline";
-import { SectionNav } from "./section-nav";
-import { StatusDistributionSection } from "./status-distribution-section";
-import { MonthlyDealsSection } from "./monthly-deals-section";
-import { PlacementRateSection } from "./placement-rate-section";
-import { SelectionFunnelSection } from "./selection-funnel-section";
+import { AchievementSection } from "./achievement-section";
 import { AdvisorPerformanceSection } from "./advisor-performance-section";
+import { CompanyReportSection } from "./company-report-section";
+import { EntrySourceSection } from "./entry-source-section";
+import { KpiHeadline } from "./kpi-headline";
+import { MonthlyDealsSection } from "./monthly-deals-section";
+import { PeriodFilter } from "./period-filter";
 import { PhaseDurationSection } from "./phase-duration-section";
+import { PlacementRateSection } from "./placement-rate-section";
+import { PrintButton } from "./print-button";
+import { RoiSection } from "./roi-section";
+import { SectionNav } from "./section-nav";
+import { SelectionFunnelSection } from "./selection-funnel-section";
+import { StatusDistributionSection } from "./status-distribution-section";
+import { TrendSection } from "./trend-section";
 
 /**
- * エージェント向けレポート画面(改善版:KPI ヘッドライン + セクションナビ)
+ * エージェント向けレポート画面(充実版)
  *
- * レイアウト:
- *   ・上部に KPI ヘッドライン(成約数 / 純売上 / 応募 / 面談 + 前期比)
- *   ・md 以上でサイドバーに sticky セクションナビ
- *   ・本体は Card 単位で縦に並べる
+ * セクション構成:
+ *   1. KPI ヘッドライン(4 タイル + 前期比)
+ *   2. 目標達成率(月次目標が入っていれば)
+ *   3. ROI(admin 限定・コストが入っていれば)
+ *   4. 時系列トレンド(過去 12 か月)
+ *   5. 成約・売上(月別)
+ *   6. 成約率
+ *   7. 選考ファネル
+ *   8. 企業別レポート
+ *   9. エントリーサイト別
+ *  10. アドバイザー別成績
+ *  11. 所要日数
+ *  12. ステータス分布(スナップショット)
  *
- * データ取得:
- *   ・当期と前期の KpiSummary を並列取得
- *   ・その他の詳細セクションは当期のみで足りるので既存クエリを再利用
- *
- * 期間フィルタは URL searchParams で持ち、Period に解決してから使う。
+ * ・md 以上でサイドバーに sticky セクションナビ
+ * ・admin のみ設定リンク / ROI が表示される
+ * ・PrintButton で印刷 / PDF 出力(サイドバーは非表示化)
  */
 type SearchParams = Promise<{ period?: string; from?: string; to?: string }>;
 
@@ -60,19 +80,18 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
   const preset = normalizePeriodPreset(params.period);
   const period = resolvePeriod(preset, params.from, params.to);
   const previousPeriod = computePreviousPeriod(period);
+  const isAdmin = role.member.role === "admin";
 
-  // C(アドバイザー別)はサーバー側で権限フィルタを掛ける。
-  // advisor の場合、自分のデータしか取得しない。
   const viewer = {
     memberId: role.member.id,
     userId: user.id,
-    isAdmin: role.member.role === "admin",
+    isAdmin,
   };
 
-  // 全部並列取得。 KPI サマリは当期/前期の 2 呼び出しを含む。
   const [
     kpiCurrent,
     kpiPrevious,
+    trend,
     clients,
     referrals,
     monthlyDeals,
@@ -81,9 +100,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
     funnelByCandidate,
     advisor,
     phaseDuration,
+    companyReport,
+    entrySourceReport,
   ] = await Promise.all([
     getKpiSummary(role.organization.id, period),
     getKpiSummary(role.organization.id, previousPeriod),
+    getMonthlyTrend(role.organization.id),
     getClientStatusDistribution(role.organization.id),
     getReferralStatusDistribution(role.organization.id),
     getMonthlyDealsRevenue(role.organization.id, period),
@@ -92,6 +114,14 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
     getSelectionFunnelByCandidate(role.organization.id, period),
     getAdvisorPerformance(role.organization.id, viewer, period),
     getPhaseDuration(role.organization.id, period),
+    getCompanyReport(role.organization.id, period),
+    getEntrySourceReport(role.organization.id, period),
+  ]);
+
+  // achievement と roi は kpi の後で計算(depends on kpiCurrent)
+  const [achievement, roi] = await Promise.all([
+    getAchievementForPeriod(role.organization.id, period, kpiCurrent),
+    isAdmin ? getRoiSummary(role.organization.id, period) : Promise.resolve(null),
   ]);
 
   const showExport = canExport(role);
@@ -100,28 +130,41 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
     <div className="mx-auto flex max-w-6xl gap-6 md:gap-8">
       <SectionNav />
 
-      <div className="flex-1 space-y-6">
-        <div className="flex items-start justify-between gap-4">
+      <div className="print-single-column flex-1 space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold">レポート</h1>
             <p className="text-muted-foreground mt-1 text-sm">
               {role.organization.name} の活動状況をまとめます
             </p>
           </div>
-          {showExport && (
-            <div className="flex flex-col items-end gap-2">
-              <ExportButton href="/api/agency/export/placements" label="成約・売上 CSV" />
-              <ExportButton href="/api/agency/export/referrals" label="応募 CSV" />
-              <ExportButton href="/api/agency/export/interviews" label="面接 履歴 CSV" />
-              <ExportButton href="/api/agency/export/tasks" label="タスク CSV" />
-              <ExportButton href="/api/agency/export/line-broadcasts" label="LINE 一斉配信 CSV" />
-            </div>
-          )}
+          <div className="no-print flex flex-col items-end gap-2">
+            {isAdmin && (
+              <Link
+                href="/agency/reports/settings"
+                className="text-muted-foreground hover:text-primary text-xs underline underline-offset-2"
+              >
+                目標 / コスト設定
+              </Link>
+            )}
+            <PrintButton />
+            {showExport && (
+              <div className="flex flex-col items-end gap-2">
+                <ExportButton href="/api/agency/export/placements" label="成約・売上 CSV" />
+                <ExportButton href="/api/agency/export/referrals" label="応募 CSV" />
+                <ExportButton href="/api/agency/export/interviews" label="面接 履歴 CSV" />
+                <ExportButton href="/api/agency/export/tasks" label="タスク CSV" />
+                <ExportButton href="/api/agency/export/line-broadcasts" label="LINE 一斉配信 CSV" />
+              </div>
+            )}
+          </div>
         </div>
 
-        <PeriodFilter period={period} />
+        <div className="no-print">
+          <PeriodFilter period={period} />
+        </div>
 
-        {/* KPI ヘッドライン(前期比付き)*/}
+        {/* 1. KPI ヘッドライン */}
         <section id="kpi" className="scroll-mt-4 space-y-2">
           <KpiHeadline current={kpiCurrent} previous={kpiPrevious} />
           <p className="text-muted-foreground text-[10px]">
@@ -129,27 +172,59 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
           </p>
         </section>
 
-        {/* セクションアンカーを付けて sticky nav から飛べるようにする */}
+        {/* 2. 目標達成率 */}
+        <section id="achievement" className="scroll-mt-4">
+          <AchievementSection rows={achievement} isAdmin={isAdmin} />
+        </section>
+
+        {/* 3. ROI(admin 限定) */}
+        {isAdmin && roi && (
+          <section id="roi" className="scroll-mt-4">
+            <RoiSection data={roi} isAdmin={isAdmin} />
+          </section>
+        )}
+
+        {/* 4. 時系列トレンド */}
+        <section id="trend" className="scroll-mt-4">
+          <TrendSection data={trend} />
+        </section>
+
+        {/* 5. 成約・売上 */}
         <section id="monthly-deals" className="scroll-mt-4">
           <MonthlyDealsSection data={monthlyDeals} />
         </section>
 
+        {/* 6. 成約率 */}
         <section id="placement-rate" className="scroll-mt-4">
           <PlacementRateSection data={placementRate} />
         </section>
 
+        {/* 7. 選考ファネル */}
         <section id="funnel" className="scroll-mt-4">
           <SelectionFunnelSection application={funnelByApplication} candidate={funnelByCandidate} />
         </section>
 
+        {/* 8. 企業別 */}
+        <section id="company" className="scroll-mt-4">
+          <CompanyReportSection rows={companyReport} />
+        </section>
+
+        {/* 9. エントリーサイト別 */}
+        <section id="entry-source" className="scroll-mt-4">
+          <EntrySourceSection rows={entrySourceReport} />
+        </section>
+
+        {/* 10. アドバイザー別 */}
         <section id="advisor" className="scroll-mt-4">
           <AdvisorPerformanceSection data={advisor} />
         </section>
 
+        {/* 11. 所要日数 */}
         <section id="phase-duration" className="scroll-mt-4">
           <PhaseDurationSection data={phaseDuration} />
         </section>
 
+        {/* 12. ステータス分布 */}
         <section id="status-distribution" className="scroll-mt-4">
           <StatusDistributionSection clients={clients} referrals={referrals} />
         </section>
@@ -158,10 +233,6 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
   );
 }
 
-/**
- * URL から流れてくる period 文字列を PeriodPreset に narrow する。
- * 不正値や未指定は this-month にフォールバック。
- */
 function normalizePeriodPreset(raw: string | undefined): PeriodPreset {
   if (raw === "last-month" || raw === "custom") return raw;
   return "this-month";

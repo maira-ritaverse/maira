@@ -54,35 +54,59 @@ function AdminTable({ data, noData }: { data: AdvisorPerformance; noData: boolea
       </p>
     );
   }
+  // 売上ランキング(未割当を除いた実メンバーのみ)+ ビジュアル比較用の max
+  const rankable = data.rows.filter((r) => !r.isUnassigned);
+  const maxRevenue = Math.max(1, ...rankable.map((r) => r.netRevenue));
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[480px] text-sm">
+      <table className="w-full min-w-[560px] text-sm">
         <thead>
           <tr className="text-muted-foreground border-b text-left text-xs">
+            <th className="py-2 pr-2 font-normal">#</th>
             <th className="py-2 pr-3 font-normal">アドバイザー</th>
             <th className="py-2 pr-3 text-right font-normal">担当 referral</th>
-            <th className="py-2 pr-3 text-right font-normal">成約数</th>
-            <th className="py-2 text-right font-normal">純売上</th>
+            <th className="py-2 pr-3 text-right font-normal">成約</th>
+            <th className="py-2 pr-3 text-right font-normal">純売上</th>
+            <th className="py-2 font-normal">売上シェア</th>
           </tr>
         </thead>
         <tbody>
-          {data.rows.map((row) => (
-            <tr
-              key={row.memberId ?? "unassigned"}
-              className={`border-b last:border-b-0 ${row.isUnassigned ? "text-muted-foreground" : ""}`}
-            >
-              <td className="py-2 pr-3">
-                {row.isUnassigned ? (
-                  <span className="italic">未割当</span>
-                ) : (
-                  (row.displayName ?? "(表示名未設定)")
-                )}
-              </td>
-              <td className="py-2 pr-3 text-right tabular-nums">{row.referralCount}</td>
-              <td className="py-2 pr-3 text-right tabular-nums">{row.placementCount}</td>
-              <td className="py-2 text-right tabular-nums">{formatYen(row.netRevenue)}</td>
-            </tr>
-          ))}
+          {data.rows.map((row, idx) => {
+            const rank = row.isUnassigned ? null : idx + 1;
+            const pct = maxRevenue > 0 ? (row.netRevenue / maxRevenue) * 100 : 0;
+            return (
+              <tr
+                key={row.memberId ?? "unassigned"}
+                className={`border-b last:border-b-0 ${row.isUnassigned ? "text-muted-foreground" : ""}`}
+              >
+                <td className="text-muted-foreground py-2 pr-2 text-xs tabular-nums">
+                  {rank ?? "-"}
+                </td>
+                <td className="py-2 pr-3">
+                  {row.isUnassigned ? (
+                    <span className="italic">未割当</span>
+                  ) : (
+                    (row.displayName ?? "(表示名未設定)")
+                  )}
+                </td>
+                <td className="py-2 pr-3 text-right tabular-nums">{row.referralCount}</td>
+                <td className="py-2 pr-3 text-right tabular-nums">{row.placementCount}</td>
+                <td className="py-2 pr-3 text-right tabular-nums">{formatYen(row.netRevenue)}</td>
+                <td className="py-2">
+                  {row.isUnassigned ? (
+                    <span className="text-muted-foreground text-xs">-</span>
+                  ) : (
+                    <div className="h-2 w-full rounded bg-slate-100 dark:bg-slate-800">
+                      <div
+                        className="h-2 rounded bg-emerald-500"
+                        style={{ width: `${Math.max(2, pct)}%` }}
+                      />
+                    </div>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       {noData && (

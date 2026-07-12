@@ -191,6 +191,533 @@ export async function getKpiSummary(organizationId: string, period: Period): Pro
 }
 
 // ============================================
+// A:時系列トレンド(過去 12 か月)
+// ============================================
+
+export type MonthlyTrendBucket = {
+  month: string; // YYYY-MM
+  label: string; // 「7月」形式
+  placementCount: number;
+  netRevenue: number;
+  applicationCount: number;
+  interviewCount: number;
+};
+
+/**
+ * 過去 12 か月分の月次トレンドを取得。
+ *
+ * KPI サマリの月次版。 折れ線グラフで推移を可視化するためのデータ。
+ * 期間は「今月」を基準に過去 11 か月遡って合計 12 か月。
+ */
+export async function getMonthlyTrend(
+  organizationId: string,
+  now: Date = new Date(),
+): Promise<MonthlyTrendBucket[]> {
+  const supabase = await createClient();
+
+  // 12 か月分の YYYY-MM を先に列挙(0 件月も残す)
+  const months: string[] = [];
+  const jst = toJstParts(now);
+  let y = jst.year;
+  let m = jst.month;
+  for (let i = 0; i < 12; i++) {
+    months.unshift(`${y}-${String(m).padStart(2, "0")}`);
+    m -= 1;
+    if (m === 0) {
+      m = 12;
+      y -= 1;
+    }
+  }
+  const firstMonth = months[0];
+  const lastMonth = months[months.length - 1];
+  const rangeFrom = `${firstMonth}-01`;
+  const [lastY, lastM] = lastMonth.split("-").map((s) => parseInt(s, 10));
+  const rangeToDay = new Date(Date.UTC(lastY, lastM, 0)).getUTCDate();
+  const rangeTo = `${lastMonth}-${String(rangeToDay).padStart(2, "0")}`;
+
+  // 並列取得(placements / referrals / interviews)
+  const [placementsRes, referralsRes, interviewsRes] = await Promise.all([
+    supabase
+      .from("placements")
+      .select("event_type, amount, event_date")
+      .eq("organization_id", organizationId)
+      .gte("event_date", rangeFrom)
+      .lte("event_date", rangeTo),
+    supabase
+      .from("referrals")
+      .select("created_at")
+      .eq("organization_id", organizationId)
+      .gte("created_at", `${rangeFrom}T00:00:00Z`)
+      .lte("created_at", `${rangeTo}T23:59:59Z`),
+    supabase
+      .from("interviews")
+      .select("scheduled_at")
+      .eq("organization_id", organizationId)
+      .gte("scheduled_at", `${rangeFrom}T00:00:00Z`)
+      .lte("scheduled_at", `${rangeTo}T23:59:59Z`),
+  ]);
+
+  type PRow = { event_type: string; amount: number | null; event_date: string };
+  type RRow = { created_at: string };
+  type IRow = { scheduled_at: string };
+  const placements = (placementsRes.data ?? []) as PRow[];
+  const referrals = (referralsRes.data ?? []) as RRow[];
+  const interviews = (interviewsRes.data ?? []) as IRow[];
+
+  // 月ごとに集計
+  const acc = new Map<
+    string,
+    { placement: number; revenue: number; app: number; interview: number }
+  >();
+  for (const mo of months) acc.set(mo, { placement: 0, revenue: 0, app: 0, interview: 0 });
+
+  for (const p of placements) {
+    const mo = p.event_date.slice(0, 7);
+    const b = acc.get(mo);
+    if (!b) continue;
+    const amt = p.amount ?? 0;
+    if (p.event_type === "placement") {
+      b.placement += 1;
+      b.revenue += amt;
+    } else if (p.event_type === "additional") {
+      b.revenue += amt;
+    } else if (p.event_type === "refund") {
+      b.revenue -= amt;
+    }
+  }
+  for (const r of referrals) {
+    const mo = r.created_at.slice(0, 7);
+    const b = acc.get(mo);
+    if (b) b.app += 1;
+  }
+  for (const iv of interviews) {
+    const mo = iv.scheduled_at.slice(0, 7);
+    const b = acc.get(mo);
+    if (b) b.interview += 1;
+  }
+
+  return months.map((mo) => {
+    const b = acc.get(mo) ?? { placement: 0, revenue: 0, app: 0, interview: 0 };
+    const monthNum = parseInt(mo.split("-")[1], 10);
+    return {
+      month: mo,
+      label: `${monthNum}月`,
+      placementCount: b.placement,
+      netRevenue: b.revenue,
+      applicationCount: b.app,
+      interviewCount: b.interview,
+    };
+  });
+}
+
+// ============================================
+// B:企業別・求人別レポート(成約 + 応募 + 売上)
+// ============================================
+
+export type CompanyReportRow = {
+  companyName: string;
+  applicationCount: number;
+  placementCount: number;
+  netRevenue: number;
+};
+
+export async function getCompanyReport(
+  organizationId: string,
+  period: Period,
+): Promise<CompanyReportRow[]> {
+  const supabase = await createClient();
+
+  // 期間内の referrals + placements を取得
+  const { data: refs } = await supabase
+    .from("referrals")
+    .select("id, job_posting_id, created_at, job_postings(company_name)")
+    .eq("organization_id", organizationId)
+    .gte("created_at", `${period.from}T00:00:00Z`)
+    .lte("created_at", `${period.to}T23:59:59Z`);
+
+  const { data: placements } = await supabase
+    .from("placements")
+    .select("event_type, amount, referral_id, referrals(job_postings(company_name))")
+    .eq("organization_id", organizationId)
+    .gte("event_date", period.from)
+    .lte("event_date", period.to);
+
+  type RefRow = { id: string; job_postings?: { company_name?: string } | null };
+  type PRow = {
+    event_type: string;
+    amount: number | null;
+    referrals?: { job_postings?: { company_name?: string } | null } | null;
+  };
+  const refRows = (refs ?? []) as RefRow[];
+  const pRows = (placements ?? []) as PRow[];
+
+  const map = new Map<string, CompanyReportRow>();
+  for (const r of refRows) {
+    const name = r.job_postings?.company_name ?? "(不明)";
+    const row = map.get(name) ?? {
+      companyName: name,
+      applicationCount: 0,
+      placementCount: 0,
+      netRevenue: 0,
+    };
+    row.applicationCount += 1;
+    map.set(name, row);
+  }
+  for (const p of pRows) {
+    const name = p.referrals?.job_postings?.company_name ?? "(不明)";
+    const row = map.get(name) ?? {
+      companyName: name,
+      applicationCount: 0,
+      placementCount: 0,
+      netRevenue: 0,
+    };
+    const amt = p.amount ?? 0;
+    if (p.event_type === "placement") {
+      row.placementCount += 1;
+      row.netRevenue += amt;
+    } else if (p.event_type === "additional") {
+      row.netRevenue += amt;
+    } else if (p.event_type === "refund") {
+      row.netRevenue -= amt;
+    }
+    map.set(name, row);
+  }
+
+  // 純売上降順 → 成約降順 → 応募降順
+  return Array.from(map.values()).sort((a, b) => {
+    if (b.netRevenue !== a.netRevenue) return b.netRevenue - a.netRevenue;
+    if (b.placementCount !== a.placementCount) return b.placementCount - a.placementCount;
+    return b.applicationCount - a.applicationCount;
+  });
+}
+
+// ============================================
+// C:エントリーサイト別(entry_source)
+// ============================================
+
+export type EntrySourceReportRow = {
+  entrySource: string;
+  clientCount: number;
+  applicationCount: number;
+  placementCount: number;
+  netRevenue: number;
+  /** 応募 → 成約 の 変換率 (%) */
+  conversionRate: number | null;
+};
+
+export async function getEntrySourceReport(
+  organizationId: string,
+  period: Period,
+): Promise<EntrySourceReportRow[]> {
+  const supabase = await createClient();
+
+  // 期間内に作成された client_records の entry_source 分布
+  const { data: clients } = await supabase
+    .from("client_records")
+    .select("id, entry_source_code, created_at")
+    .eq("organization_id", organizationId)
+    .gte("created_at", `${period.from}T00:00:00Z`)
+    .lte("created_at", `${period.to}T23:59:59Z`);
+
+  const { data: refs } = await supabase
+    .from("referrals")
+    .select("id, client_record_id, client_records(entry_source_code)")
+    .eq("organization_id", organizationId)
+    .gte("created_at", `${period.from}T00:00:00Z`)
+    .lte("created_at", `${period.to}T23:59:59Z`);
+
+  const { data: placements } = await supabase
+    .from("placements")
+    .select(
+      "event_type, amount, referral_id, referrals(client_record_id, client_records(entry_source_code))",
+    )
+    .eq("organization_id", organizationId)
+    .gte("event_date", period.from)
+    .lte("event_date", period.to);
+
+  type CRow = { entry_source_code: string | null };
+  type RRow = { client_records?: { entry_source_code?: string | null } | null };
+  type PRow = {
+    event_type: string;
+    amount: number | null;
+    referrals?: { client_records?: { entry_source_code?: string | null } | null } | null;
+  };
+
+  const map = new Map<string, EntrySourceReportRow>();
+  const ensure = (key: string): EntrySourceReportRow => {
+    const cur = map.get(key);
+    if (cur) return cur;
+    const row: EntrySourceReportRow = {
+      entrySource: key,
+      clientCount: 0,
+      applicationCount: 0,
+      placementCount: 0,
+      netRevenue: 0,
+      conversionRate: null,
+    };
+    map.set(key, row);
+    return row;
+  };
+
+  for (const c of (clients ?? []) as CRow[]) {
+    ensure(c.entry_source_code ?? "(未設定)").clientCount += 1;
+  }
+  for (const r of (refs ?? []) as RRow[]) {
+    ensure(r.client_records?.entry_source_code ?? "(未設定)").applicationCount += 1;
+  }
+  for (const p of (placements ?? []) as PRow[]) {
+    const key = p.referrals?.client_records?.entry_source_code ?? "(未設定)";
+    const row = ensure(key);
+    const amt = p.amount ?? 0;
+    if (p.event_type === "placement") {
+      row.placementCount += 1;
+      row.netRevenue += amt;
+    } else if (p.event_type === "additional") {
+      row.netRevenue += amt;
+    } else if (p.event_type === "refund") {
+      row.netRevenue -= amt;
+    }
+  }
+
+  for (const row of map.values()) {
+    row.conversionRate =
+      row.applicationCount > 0
+        ? Math.round((row.placementCount / row.applicationCount) * 1000) / 10
+        : null;
+  }
+
+  return Array.from(map.values()).sort((a, b) => {
+    if (b.netRevenue !== a.netRevenue) return b.netRevenue - a.netRevenue;
+    return b.placementCount - a.placementCount;
+  });
+}
+
+// ============================================
+// D:目標達成率
+// ============================================
+
+export type ReportTarget = {
+  yearMonth: string;
+  placementCountTarget: number;
+  netRevenueTarget: number;
+  applicationCountTarget: number;
+  interviewCountTarget: number;
+};
+
+export type AchievementRow = {
+  label: string;
+  actual: number;
+  target: number;
+  achievedPercent: number | null;
+};
+
+/**
+ * 期間の月(YYYY-MM)に紐付く目標を取得する。
+ * period が複数月にまたがる場合は、その全月の目標を合算する。
+ */
+export async function getAchievementForPeriod(
+  organizationId: string,
+  period: Period,
+  actual: KpiSummary,
+): Promise<AchievementRow[] | null> {
+  const supabase = await createClient();
+
+  // period 内の月を列挙
+  const months = enumerateMonthsFromPeriod(period);
+  const { data } = await supabase
+    .from("report_targets")
+    .select(
+      "year_month, placement_count_target, net_revenue_target, application_count_target, interview_count_target",
+    )
+    .eq("organization_id", organizationId)
+    .in("year_month", months);
+
+  const rows = (data ?? []) as Array<{
+    year_month: string;
+    placement_count_target: number;
+    net_revenue_target: number;
+    application_count_target: number;
+    interview_count_target: number;
+  }>;
+  if (rows.length === 0) return null;
+
+  const total = rows.reduce(
+    (acc, r) => ({
+      placement: acc.placement + r.placement_count_target,
+      revenue: acc.revenue + r.net_revenue_target,
+      app: acc.app + r.application_count_target,
+      interview: acc.interview + r.interview_count_target,
+    }),
+    { placement: 0, revenue: 0, app: 0, interview: 0 },
+  );
+
+  const pct = (a: number, t: number): number | null =>
+    t === 0 ? null : Math.round((a / t) * 1000) / 10;
+
+  return [
+    {
+      label: "成約",
+      actual: actual.placementCount,
+      target: total.placement,
+      achievedPercent: pct(actual.placementCount, total.placement),
+    },
+    {
+      label: "純売上",
+      actual: actual.netRevenue,
+      target: total.revenue,
+      achievedPercent: pct(actual.netRevenue, total.revenue),
+    },
+    {
+      label: "応募",
+      actual: actual.applicationCount,
+      target: total.app,
+      achievedPercent: pct(actual.applicationCount, total.app),
+    },
+    {
+      label: "面談",
+      actual: actual.interviewCount,
+      target: total.interview,
+      achievedPercent: pct(actual.interviewCount, total.interview),
+    },
+  ];
+}
+
+// ============================================
+// ROI(admin 限定 UI で表示)
+// ============================================
+
+export type ReportCost = {
+  yearMonth: string;
+  marketingCost: number;
+  toolCost: number;
+  personnelCost: number;
+  otherCost: number;
+  totalCost: number;
+  memo: string | null;
+};
+
+export type RoiSummary = {
+  totalCost: number;
+  netRevenue: number;
+  profit: number;
+  roiPercent: number | null;
+  breakdown: {
+    marketing: number;
+    tool: number;
+    personnel: number;
+    other: number;
+  };
+  months: Array<{
+    yearMonth: string;
+    label: string;
+    cost: number;
+    revenue: number;
+    profit: number;
+    roi: number | null;
+  }>;
+};
+
+/**
+ * 期間内の月次コストと売上を突き合わせて ROI を計算する。
+ *
+ * ROI = (純売上 - コスト合計) / コスト合計 × 100
+ * period の月に対応する report_costs 行があれば集計、無ければ 0。
+ */
+export async function getRoiSummary(organizationId: string, period: Period): Promise<RoiSummary> {
+  const supabase = await createClient();
+  const months = enumerateMonthsFromPeriod(period);
+
+  const { data: costs } = await supabase
+    .from("report_costs")
+    .select("year_month, marketing_cost, tool_cost, personnel_cost, other_cost")
+    .eq("organization_id", organizationId)
+    .in("year_month", months);
+
+  const { data: placementRows } = await supabase
+    .from("placements")
+    .select("event_type, amount, event_date")
+    .eq("organization_id", organizationId)
+    .gte("event_date", period.from)
+    .lte("event_date", period.to);
+
+  type CRow = {
+    year_month: string;
+    marketing_cost: number;
+    tool_cost: number;
+    personnel_cost: number;
+    other_cost: number;
+  };
+  type PRow = { event_type: string; amount: number | null; event_date: string };
+
+  const costsByMonth = new Map<string, CRow>();
+  for (const c of (costs ?? []) as CRow[]) costsByMonth.set(c.year_month, c);
+
+  const revenueByMonth = new Map<string, number>();
+  for (const p of (placementRows ?? []) as PRow[]) {
+    const mo = p.event_date.slice(0, 7);
+    const cur = revenueByMonth.get(mo) ?? 0;
+    const amt = p.amount ?? 0;
+    if (p.event_type === "placement") revenueByMonth.set(mo, cur + amt);
+    else if (p.event_type === "additional") revenueByMonth.set(mo, cur + amt);
+    else if (p.event_type === "refund") revenueByMonth.set(mo, cur - amt);
+  }
+
+  const monthsList = months.map((mo) => {
+    const c = costsByMonth.get(mo);
+    const cost =
+      (c?.marketing_cost ?? 0) +
+      (c?.tool_cost ?? 0) +
+      (c?.personnel_cost ?? 0) +
+      (c?.other_cost ?? 0);
+    const revenue = revenueByMonth.get(mo) ?? 0;
+    const profit = revenue - cost;
+    const roi = cost === 0 ? null : Math.round((profit / cost) * 1000) / 10;
+    const monthNum = parseInt(mo.split("-")[1], 10);
+    return { yearMonth: mo, label: `${monthNum}月`, cost, revenue, profit, roi };
+  });
+
+  const totalCost = monthsList.reduce((s, m) => s + m.cost, 0);
+  const netRevenue = monthsList.reduce((s, m) => s + m.revenue, 0);
+  const profit = netRevenue - totalCost;
+  const roiPercent = totalCost === 0 ? null : Math.round((profit / totalCost) * 1000) / 10;
+
+  const breakdown = { marketing: 0, tool: 0, personnel: 0, other: 0 };
+  for (const c of (costs ?? []) as CRow[]) {
+    breakdown.marketing += c.marketing_cost;
+    breakdown.tool += c.tool_cost;
+    breakdown.personnel += c.personnel_cost;
+    breakdown.other += c.other_cost;
+  }
+
+  return {
+    totalCost,
+    netRevenue,
+    profit,
+    roiPercent,
+    breakdown,
+    months: monthsList,
+  };
+}
+
+/** 期間 -> 「その期間に触れる YYYY-MM のリスト」を返す。 */
+function enumerateMonthsFromPeriod(period: Period): string[] {
+  const [fy, fm] = period.from.split("-").map((s) => parseInt(s, 10));
+  const [ty, tm] = period.to.split("-").map((s) => parseInt(s, 10));
+  const list: string[] = [];
+  let y = fy;
+  let m = fm;
+  while (y < ty || (y === ty && m <= tm)) {
+    list.push(`${y}-${String(m).padStart(2, "0")}`);
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return list;
+}
+
+// ============================================
 // D-1:ステータス分布(スナップショット)
 // ============================================
 

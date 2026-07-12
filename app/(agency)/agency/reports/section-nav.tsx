@@ -11,9 +11,14 @@ import { useEffect, useState } from "react";
 
 const SECTIONS = [
   { id: "kpi", label: "サマリー" },
+  { id: "achievement", label: "目標達成率" },
+  { id: "roi", label: "ROI(admin)" },
+  { id: "trend", label: "時系列トレンド" },
   { id: "monthly-deals", label: "成約・売上" },
   { id: "placement-rate", label: "成約率" },
   { id: "funnel", label: "選考ファネル" },
+  { id: "company", label: "企業別" },
+  { id: "entry-source", label: "エントリーサイト別" },
   { id: "advisor", label: "アドバイザー別" },
   { id: "phase-duration", label: "所要日数" },
   { id: "status-distribution", label: "ステータス分布" },
@@ -42,7 +47,7 @@ export function SectionNav() {
   }, []);
 
   return (
-    <nav className="sticky top-4 hidden w-40 shrink-0 space-y-0.5 self-start text-sm md:block">
+    <nav className="no-print sticky top-4 hidden w-40 shrink-0 space-y-0.5 self-start text-sm md:block">
       <p className="text-muted-foreground mb-2 text-xs font-semibold">レポート項目</p>
       {SECTIONS.map((s) => {
         const isActive = activeId === s.id;

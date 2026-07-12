@@ -149,3 +149,36 @@
     }
   }
 }
+
+/* ────────────────────────────────────────
+ * レポート印刷用スタイル(PDF 出力対応)
+ * .no-print が付いた要素(サイドバー / CSV ボタン / 印刷ボタン等)を非表示に、
+ * カードは page-break で分割されないようにする。
+ * ──────────────────────────────────────── */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  /* サイドバーを持つ flex コンテナは印刷時に単一カラムに */
+  .print-single-column {
+    display: block !important;
+  }
+  /* recharts のツールチップ等は印刷しない */
+  .recharts-tooltip-wrapper {
+    display: none !important;
+  }
+  /* カードやセクションを跨がないようにする */
+  section,
+  [data-slot="card"] {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  /* 背景色を print で維持(Chrome 用) */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  body {
+    background: white;
+  }
+}
