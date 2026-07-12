@@ -36,6 +36,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import type { LineConversationTag } from "@/lib/line/conversation-tags";
 import type { FlowDetail } from "@/lib/ma/flow-queries";
 
 import { StepConfigPanel, type StepEditable } from "./step-config-panel";
@@ -44,6 +45,7 @@ import { StepNode, type StepNodeData } from "./step-node";
 type Props = {
   flow: FlowDetail;
   isAdmin: boolean;
+  tags: LineConversationTag[];
 };
 
 const NODE_TYPES = { step: StepNode };
@@ -150,7 +152,7 @@ function toEditable(steps: FlowDetail["steps"]): StepEditable[] {
 // 本体
 // ────────────────────────────────────────
 
-export function FlowEditor({ flow, isAdmin }: Props) {
+export function FlowEditor({ flow, isAdmin, tags }: Props) {
   const initialSteps = useMemo(() => toEditable(flow.steps), [flow.steps]);
   const [steps, setSteps] = useState<StepEditable[]>(initialSteps);
   const [selectedOrder, setSelectedOrder] = useState<number | null>(
@@ -394,6 +396,7 @@ export function FlowEditor({ flow, isAdmin }: Props) {
             onChange={patchSelected}
             onDelete={deleteSelected}
             disabled={!isAdmin}
+            tags={tags}
           />
         </div>
       </div>

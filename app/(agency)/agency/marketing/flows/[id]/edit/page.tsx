@@ -7,6 +7,7 @@
 import { notFound, redirect } from "next/navigation";
 
 import { PageHeading } from "@/components/ui/page-heading";
+import { listOrganizationLineTags } from "@/lib/line/conversation-tags";
 import { getUserRole } from "@/lib/organizations/queries";
 import { getFlowDetail } from "@/lib/ma/flow-queries";
 import { createClient } from "@/lib/supabase/server";
@@ -31,7 +32,10 @@ export default async function FlowEditPage({ params }: { params: RouteParams }) 
     redirect("/app");
   }
 
-  const flow = await getFlowDetail(supabase, role.organization.id, flowId);
+  const [flow, tags] = await Promise.all([
+    getFlowDetail(supabase, role.organization.id, flowId),
+    listOrganizationLineTags(role.organization.id),
+  ]);
   if (!flow) notFound();
 
   return (
@@ -44,7 +48,7 @@ export default async function FlowEditPage({ params }: { params: RouteParams }) 
         }
       />
       <div className="flex-1 overflow-hidden">
-        <FlowEditor flow={flow} isAdmin={role.member.role === "admin"} />
+        <FlowEditor flow={flow} isAdmin={role.member.role === "admin"} tags={tags} />
       </div>
     </div>
   );

@@ -16,6 +16,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { LineConversationTag } from "@/lib/line/conversation-tags";
 import { isPhase1ImplementedKind, type SegmentCondition } from "@/lib/ma/segment-dsl";
 
 type KindOption = { value: SegmentCondition["kind"]; label: string; group: string };
@@ -78,6 +79,8 @@ type Props = {
   disabled?: boolean;
   /** 親 が composite の 場合 の 削除 ボタン */
   onRemove?: () => void;
+  /** タグ 一覧 (has_tag / not_has_tag の ドロップダウン 用)。 未 指定 なら UUID 手打ち。 */
+  tags?: LineConversationTag[];
 };
 
 export function ConditionEditor({
@@ -86,6 +89,7 @@ export function ConditionEditor({
   depth = 0,
   disabled = false,
   onRemove,
+  tags,
 }: Props) {
   const changeKind = (nextKind: SegmentCondition["kind"]) => {
     onChange(defaultConditionForKind(nextKind));
@@ -144,6 +148,7 @@ export function ConditionEditor({
               condition={sub}
               depth={depth + 1}
               disabled={disabled}
+              tags={tags}
               onChange={(next) => {
                 const nextConds = [...condition.conditions];
                 nextConds[idx] = next;
@@ -176,18 +181,37 @@ export function ConditionEditor({
           condition={condition.condition}
           depth={depth + 1}
           disabled={disabled}
+          tags={tags}
           onChange={(next) => onChange({ ...condition, condition: next })}
         />
       )}
 
-      {(condition.kind === "has_tag" || condition.kind === "not_has_tag") && (
-        <LeafInputRow
-          label="tag_id (UUID)"
-          value={condition.tag_id}
-          disabled={disabled}
-          onChange={(v) => onChange({ ...condition, tag_id: v })}
-        />
-      )}
+      {(condition.kind === "has_tag" || condition.kind === "not_has_tag") &&
+        (tags && tags.length > 0 ? (
+          <div className="space-y-1">
+            <Label className="text-xs">タグ</Label>
+            <select
+              value={condition.tag_id}
+              disabled={disabled}
+              onChange={(e) => onChange({ ...condition, tag_id: e.target.value })}
+              className="border-input bg-background h-8 w-full rounded border px-2 text-xs"
+            >
+              <option value="">タグ を 選択</option>
+              {tags.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <LeafInputRow
+            label="tag_id (UUID)"
+            value={condition.tag_id}
+            disabled={disabled}
+            onChange={(v) => onChange({ ...condition, tag_id: v })}
+          />
+        ))}
 
       {condition.kind === "field_equals" && (
         <div className="grid grid-cols-2 gap-2">

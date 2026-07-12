@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { LineConversationTag } from "@/lib/line/conversation-tags";
 import { type SegmentCondition } from "@/lib/ma/segment-dsl";
 import type { SegmentListItem } from "@/lib/ma/segment-queries";
 
@@ -26,6 +27,7 @@ import { ConditionEditor } from "./condition-builder";
 type Props = {
   initialSegments: SegmentListItem[];
   isAdmin: boolean;
+  tags: LineConversationTag[];
 };
 
 type EditState = {
@@ -51,7 +53,7 @@ function blankEditState(): EditState {
   return { id: null, name: "", description: "", root: BLANK_ROOT };
 }
 
-export function SegmentsScreen({ initialSegments, isAdmin }: Props) {
+export function SegmentsScreen({ initialSegments, isAdmin, tags }: Props) {
   const [segments, setSegments] = useState<SegmentListItem[]>(initialSegments);
   const [edit, setEdit] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
@@ -208,6 +210,7 @@ export function SegmentsScreen({ initialSegments, isAdmin }: Props) {
               <ConditionEditor
                 condition={edit.root}
                 disabled={!isAdmin}
+                tags={tags}
                 onChange={(next) => setEdit({ ...edit, root: next })}
               />
               <p className="text-muted-foreground text-xs">

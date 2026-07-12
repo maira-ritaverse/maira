@@ -19,6 +19,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { LineConversationTag } from "@/lib/line/conversation-tags";
 import type { SegmentCondition } from "@/lib/ma/segment-dsl";
 
 import { ConditionEditor } from "../../../segments/condition-builder";
@@ -46,6 +47,8 @@ type Props = {
   onChange: (patch: Partial<StepEditable>) => void;
   onDelete: () => void;
   disabled: boolean;
+  /** 自組織 の 会話 タグ (assign_tag / remove_tag / branch has_tag ドロップダウン 用) */
+  tags: LineConversationTag[];
 };
 
 const ACTION_TYPES = [
@@ -59,7 +62,14 @@ const ACTION_TYPES = [
   { value: "stop", label: "終了" },
 ];
 
-export function StepConfigPanel({ step, allStepOrders, onChange, onDelete, disabled }: Props) {
+export function StepConfigPanel({
+  step,
+  allStepOrders,
+  onChange,
+  onDelete,
+  disabled,
+  tags,
+}: Props) {
   if (!step) {
     return (
       <div className="border-muted text-muted-foreground rounded border border-dashed p-4 text-sm">
@@ -142,13 +152,31 @@ export function StepConfigPanel({ step, allStepOrders, onChange, onDelete, disab
 
       {(step.action_type === "assign_tag" || step.action_type === "remove_tag") && (
         <div className="space-y-1">
-          <Label htmlFor="step-tag">tag_id (UUID)</Label>
-          <Input
-            id="step-tag"
-            value={String(cfg.tag_id ?? "")}
-            disabled={disabled}
-            onChange={(e) => setCfg("tag_id", e.target.value)}
-          />
+          <Label htmlFor="step-tag">タグ</Label>
+          {tags.length === 0 ? (
+            <p className="text-muted-foreground text-xs">
+              自組織 に タグ が ありません。 まず{" "}
+              <a href="/agency/line/users" target="_blank" rel="noreferrer" className="underline">
+                LINE ユーザー 画面
+              </a>{" "}
+              で タグ を 作成 して ください。
+            </p>
+          ) : (
+            <select
+              id="step-tag"
+              className="border-input bg-background w-full rounded border px-3 py-2 text-sm"
+              value={String(cfg.tag_id ?? "")}
+              disabled={disabled}
+              onChange={(e) => setCfg("tag_id", e.target.value)}
+            >
+              <option value="">タグ を 選択</option>
+              {tags.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       )}
 
@@ -188,6 +216,7 @@ export function StepConfigPanel({ step, allStepOrders, onChange, onDelete, disab
               }
               disabled={disabled}
               onChange={(next) => onChange({ branch_condition_json: next })}
+              tags={tags}
             />
             <p className="text-muted-foreground text-xs">
               Segment と 同じ 16 種 kind の 再帰 ツリー。 保存 は JSON。
