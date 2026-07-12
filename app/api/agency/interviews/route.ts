@@ -10,8 +10,10 @@ import { NextResponse } from "next/server";
 
 import { listInterviewsByReferral } from "@/lib/interviews/queries";
 import { createInterviewRequestSchema } from "@/lib/interviews/types";
+import { fireInterviewConversionFlow } from "@/lib/ma/conversion-events";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -90,5 +92,18 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+
+  // 初回 / 企業面接の日程確定 → 「meeting_confirmed」CV Flow を発火。
+  // 2次以降は「面接シリーズ継続中」なのでスキップし、result=done の PATCH で
+  // interview_done を発火する。
+  if (d.kind === "first" || d.kind === "company") {
+    void fireInterviewConversionFlow({
+      admin: createServiceClient(),
+      organizationId: role.organization.id,
+      referralId: d.referral_id,
+      eventKey: "meeting_confirmed",
+    });
+  }
+
   return NextResponse.json({ ok: true, id: inserted.id });
 }

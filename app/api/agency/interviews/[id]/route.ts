@@ -7,8 +7,10 @@
 import { NextResponse } from "next/server";
 
 import { updateInterviewRequestSchema } from "@/lib/interviews/types";
+import { fireInterviewConversionFlow } from "@/lib/ma/conversion-events";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -48,6 +50,22 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     return NextResponse.json({ ok: true });
   }
 
+  // 遷移前の result を控えて、done への遷移だけ CV Flow を発火する
+  let previousResult: string | null = null;
+  let referralIdForCv: string | null = null;
+  if (d.result !== undefined) {
+    const { data: current } = await supabase
+      .from("interviews")
+      .select("result, referral_id")
+      .eq("id", id)
+      .eq("organization_id", role.organization.id)
+      .maybeSingle();
+    if (current) {
+      previousResult = current.result as string;
+      referralIdForCv = current.referral_id as string;
+    }
+  }
+
   const { error } = await supabase
     .from("interviews")
     .update(updateData)
@@ -60,6 +78,17 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       { status: 500 },
     );
   }
+
+  // 面接完了 → 「interview_done」CV Flow を発火(fire-and-forget)
+  if (d.result === "done" && previousResult !== "done" && referralIdForCv) {
+    void fireInterviewConversionFlow({
+      admin: createServiceClient(),
+      organizationId: role.organization.id,
+      referralId: referralIdForCv,
+      eventKey: "interview_done",
+    });
+  }
+
   return NextResponse.json({ ok: true });
 }
 

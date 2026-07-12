@@ -94,3 +94,47 @@ export async function fireReferralConversionFlow(params: {
     });
   }
 }
+
+/**
+ * 面接イベントで CV Flow を起動する。referral_id 経由で client_record_id を引く。
+ *
+ * ・INSERT 時:kind='first'/'company' → 'meeting_confirmed' を発火
+ *   (初回面接 or 企業面接の日程が組まれた = 会えることが確定)
+ * ・PATCH 時:result が 'done' に遷移したら 'interview_done' を発火
+ */
+export async function fireInterviewConversionFlow(params: {
+  admin: SupabaseClient;
+  organizationId: string;
+  referralId: string;
+  eventKey: "meeting_confirmed" | "interview_done";
+}): Promise<void> {
+  const { admin, organizationId, referralId, eventKey } = params;
+  try {
+    // referral → client_record_id
+    const { data: referral } = await admin
+      .from("referrals")
+      .select("client_record_id, organization_id")
+      .eq("id", referralId)
+      .maybeSingle();
+    if (!referral || referral.organization_id !== organizationId) return;
+    const clientRecordId = referral.client_record_id as string | null;
+    if (!clientRecordId) return;
+
+    const lineUserId = await findLineUserIdForClient(admin, organizationId, clientRecordId);
+    if (!lineUserId) return;
+
+    await dispatchFlowTrigger(admin, organizationId, {
+      type: "conversion_event",
+      line_user_id: lineUserId,
+      event_key: eventKey,
+      occurred_at: new Date(),
+    });
+  } catch (err) {
+    console.error("[cv-flow] fireInterviewConversionFlow failed", {
+      organizationId,
+      referralId,
+      eventKey,
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
