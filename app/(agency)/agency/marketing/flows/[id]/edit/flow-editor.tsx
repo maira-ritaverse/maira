@@ -33,6 +33,7 @@ import {
   type Node,
   type NodeChange,
 } from "@xyflow/react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Sparkles } from "lucide-react";
@@ -188,6 +189,7 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments }: Props) 
   );
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const router = useRouter();
 
   const [nodes, setNodes, onNodesChangeRaw] = useNodesState<Node<StepNodeData>>(
     stepsToNodes(initialSteps),
@@ -555,7 +557,15 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments }: Props) 
         「レイアウトをリセット」で自動配置に戻す
       </div>
 
-      <AiImproveModal open={aiImproveOpen} onOpenChange={setAiImproveOpen} flowId={flow.id} />
+      <AiImproveModal
+        open={aiImproveOpen}
+        onOpenChange={setAiImproveOpen}
+        flowId={flow.id}
+        onApplied={() => {
+          setSaveMsg("AI の改善提案を反映しました");
+          router.refresh();
+        }}
+      />
     </div>
   );
 }

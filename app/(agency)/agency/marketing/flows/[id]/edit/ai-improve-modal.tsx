@@ -7,7 +7,7 @@
  * 各提案には自動適用ボタンがあり、担当者がチェックして「選んだ提案を適用」を
  * 押すと、対応する変更をサーバー側で反映する。
  */
-import { AlertTriangle, CheckCircle2, Info, Sparkles, TrendingUp } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, Sparkles, TrendingUp, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
@@ -70,13 +70,20 @@ const APPLY_KIND_LABELS: Record<AIFlowSuggestion["apply"]["kind"], string> = {
   advisory_only: "自動適用不可(担当者判断)",
 };
 
+type ApplyResult = {
+  suggestionTitle: string;
+  applyKindLabel: string;
+  status: "success" | "failed";
+  reason?: string;
+};
+
 export function AiImproveModal({ open, onOpenChange, flowId, onApplied }: Props) {
   const [loading, setLoading] = useState(false);
   const [review, setReview] = useState<Review | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedIndexes, setSelectedIndexes] = useState<Set<number>>(new Set());
   const [applying, setApplying] = useState(false);
-  const [appliedCount, setAppliedCount] = useState(0);
+  const [applyResults, setApplyResults] = useState<ApplyResult[] | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -90,7 +97,7 @@ export function AiImproveModal({ open, onOpenChange, flowId, onApplied }: Props)
     setError(null);
     setReview(null);
     setSelectedIndexes(new Set());
-    setAppliedCount(0);
+    setApplyResults(null);
     try {
       const res = await fetch(`/api/agency/ma/flows/${flowId}/ai-improve`, {
         method: "POST",
@@ -126,30 +133,57 @@ export function AiImproveModal({ open, onOpenChange, flowId, onApplied }: Props)
     if (!review || selectedIndexes.size === 0) return;
     setApplying(true);
     setError(null);
-    let succeeded = 0;
-    let failed = 0;
+    const results: ApplyResult[] = [];
     for (const idx of selectedIndexes) {
       const suggestion = review.suggestions[idx];
       if (!suggestion || suggestion.apply.kind === "advisory_only") continue;
+      const applyKindLabel = APPLY_KIND_LABELS[suggestion.apply.kind];
       try {
         const res = await fetch(`/api/agency/ma/flows/${flowId}/ai-improve/apply`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(suggestion.apply),
         });
-        if (res.ok) succeeded++;
-        else failed++;
-      } catch {
-        failed++;
+        if (res.ok) {
+          results.push({
+            suggestionTitle: suggestion.title,
+            applyKindLabel,
+            status: "success",
+          });
+        } else {
+          const body = (await res.json().catch(() => ({}))) as {
+            error?: string;
+            message?: string;
+          };
+          results.push({
+            suggestionTitle: suggestion.title,
+            applyKindLabel,
+            status: "failed",
+            reason: body.message ?? body.error ?? `HTTP ${res.status}`,
+          });
+        }
+      } catch (err) {
+        results.push({
+          suggestionTitle: suggestion.title,
+          applyKindLabel,
+          status: "failed",
+          reason: err instanceof Error ? err.message : String(err),
+        });
       }
     }
-    setAppliedCount(succeeded);
-    if (failed > 0) {
-      setError(`${failed} 件の適用に失敗しました。手動で編集してください。`);
-    }
-    setApplying(false);
+    setApplyResults(results);
     setSelectedIndexes(new Set());
-    if (succeeded > 0 && onApplied) onApplied();
+    setApplying(false);
+  }
+
+  /** 結果画面から「閉じる」を押したときの動作:Flow エディタをリロードしてモーダルを閉じる */
+  function finishAndClose() {
+    if (applyResults && applyResults.some((r) => r.status === "success") && onApplied) {
+      onApplied();
+    }
+    setApplyResults(null);
+    setReview(null);
+    onOpenChange(false);
   }
 
   const autoApplicableCount = review
@@ -175,7 +209,7 @@ export function AiImproveModal({ open, onOpenChange, flowId, onApplied }: Props)
             </div>
           )}
 
-          {error && (
+          {error && !applyResults && (
             <div className="border-destructive/50 bg-destructive/10 text-destructive rounded border p-3 text-sm">
               {error}
               <Button
@@ -189,15 +223,64 @@ export function AiImproveModal({ open, onOpenChange, flowId, onApplied }: Props)
             </div>
           )}
 
-          {appliedCount > 0 && (
-            <div className="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
-              <CheckCircle2 className="mr-1 inline size-4" aria-hidden />
-              {appliedCount} 件の提案を Flow
-              に反映しました。ページを再読み込みして変更を確認してください。
-            </div>
-          )}
+          {applyResults &&
+            (() => {
+              const successList = applyResults.filter((r) => r.status === "success");
+              const failedList = applyResults.filter((r) => r.status === "failed");
+              return (
+                <div className="space-y-3">
+                  <div className="rounded border border-emerald-300 bg-emerald-50 p-4">
+                    <div className="flex items-center gap-2 text-base font-semibold text-emerald-900">
+                      <CheckCircle2 className="size-5" aria-hidden />
+                      {successList.length > 0
+                        ? `${successList.length} 件の改善を Flow に反映しました`
+                        : "反映できた項目はありませんでした"}
+                    </div>
+                    {successList.length > 0 && (
+                      <ul className="mt-3 space-y-1.5">
+                        {successList.map((r, i) => (
+                          <li key={i} className="flex items-start gap-2 text-xs text-emerald-900">
+                            <CheckCircle2 className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                            <div>
+                              <div className="font-medium">{r.suggestionTitle}</div>
+                              <div className="text-emerald-800 opacity-80">{r.applyKindLabel}</div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
 
-          {review && (
+                  {failedList.length > 0 && (
+                    <div className="rounded border border-rose-300 bg-rose-50 p-4">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-rose-900">
+                        <XCircle className="size-4" aria-hidden />
+                        {failedList.length} 件は反映に失敗しました
+                      </div>
+                      <ul className="mt-2 space-y-1.5">
+                        {failedList.map((r, i) => (
+                          <li key={i} className="text-xs text-rose-900">
+                            <div className="font-medium">{r.suggestionTitle}</div>
+                            <div className="text-rose-800 opacity-80">
+                              {r.applyKindLabel} — {r.reason ?? "エラー"}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="mt-2 text-xs text-rose-800">
+                        失敗した項目は、Flow エディタ内で手動で編集してください。
+                      </p>
+                    </div>
+                  )}
+
+                  <p className="text-muted-foreground text-center text-xs">
+                    「編集画面に戻る」を押すと、Flow エディタが自動で最新の状態にリロードされます。
+                  </p>
+                </div>
+              );
+            })()}
+
+          {review && !applyResults && (
             <>
               <div className="rounded border border-sky-300 bg-sky-50 p-3 text-sm">
                 <div className="flex items-center gap-2 font-semibold text-sky-900">
@@ -303,23 +386,29 @@ export function AiImproveModal({ open, onOpenChange, flowId, onApplied }: Props)
         </div>
 
         <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            閉じる
-          </Button>
-          {review && autoApplicableCount > 0 && (
+          {applyResults ? (
+            <Button onClick={finishAndClose}>編集画面に戻る</Button>
+          ) : (
             <>
-              <Button
-                variant="outline"
-                onClick={() => void loadReview()}
-                disabled={loading || applying}
-              >
-                レビューし直す
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                閉じる
               </Button>
-              <Button disabled={selectedIndexes.size === 0 || applying} onClick={applySelected}>
-                {applying
-                  ? "適用中..."
-                  : `選んだ提案を適用${selectedIndexes.size > 0 ? `(${selectedIndexes.size} 件)` : ""}`}
-              </Button>
+              {review && autoApplicableCount > 0 && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => void loadReview()}
+                    disabled={loading || applying}
+                  >
+                    レビューし直す
+                  </Button>
+                  <Button disabled={selectedIndexes.size === 0 || applying} onClick={applySelected}>
+                    {applying
+                      ? "反映中..."
+                      : `選んだ提案を Flow に反映${selectedIndexes.size > 0 ? `(${selectedIndexes.size}件)` : ""}`}
+                  </Button>
+                </>
+              )}
             </>
           )}
         </div>
