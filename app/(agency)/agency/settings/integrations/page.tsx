@@ -135,6 +135,14 @@ export default async function AgencyIntegrationsPage({
         zoomConfigured={zoomConfigured}
         hasMeetingAddon={hasMeetingAddon}
       />
+      <div className="-mt-4">
+        <Link
+          href="/agency/settings/integrations/zoom-diagnostic"
+          className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
+        >
+          Zoom 連携の診断ページを開く(環境変数・Webhook 受信状況の確認)
+        </Link>
+      </div>
 
       {/* Google 連携(Calendar + Drive 録画取込) */}
       <GoogleConnectCard status={googleStatus} googleConfigured={googleConfigured} />
