@@ -11,6 +11,7 @@
  *   ・スコア加算 / 待機 / 終了: 追加入力なし
  */
 import { AlertTriangle } from "lucide-react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -154,51 +155,22 @@ export function StepConfigPanel({
         </select>
       </div>
 
-      <div className="space-y-1">
-        <Label htmlFor="step-delay">前のステップからの待機時間(秒)</Label>
-        <Input
-          id="step-delay"
-          type="number"
-          min={0}
-          value={step.delay_from_previous_seconds}
-          disabled={disabled}
-          onChange={(e) =>
-            onChange({ delay_from_previous_seconds: Math.max(0, Number(e.target.value)) })
-          }
-        />
-        <p className="text-muted-foreground text-xs">
-          0 = すぐ / 3600 = 1時間後 / 86400 = 1日後 / 604800 = 1週間後
-        </p>
-      </div>
+      <DelayInput
+        seconds={step.delay_from_previous_seconds}
+        disabled={disabled}
+        onChange={(next) => onChange({ delay_from_previous_seconds: next })}
+      />
 
       {step.action_type === "send_message" && (
-        <div className="space-y-1">
-          <Label htmlFor="step-template">送信するテンプレート</Label>
-          {templates.length === 0 ? (
-            <p className="text-muted-foreground text-xs">
-              まだテンプレートがありません。
-              <a href="/agency/marketing" target="_blank" rel="noreferrer" className="underline">
-                MA 画面
-              </a>{" "}
-              でプリセットを有効化するか、AI 生成で自動作成してください。
-            </p>
-          ) : (
-            <select
-              id="step-template"
-              className="border-input bg-background w-full rounded border px-3 py-2 text-sm"
-              value={step.template_id ?? ""}
-              disabled={disabled}
-              onChange={(e) => onChange({ template_id: e.target.value || null })}
-            >
-              <option value="">テンプレートを選択</option>
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.scenario_name}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
+        <SendMessageEditor
+          // template が切り替わったら local state をリセットするため、
+          // key に template_id を含めて意図的に再マウントする
+          key={step.template_id ?? "none"}
+          templateId={step.template_id}
+          templates={templates}
+          disabled={disabled}
+          onSelectTemplate={(id) => onChange({ template_id: id })}
+        />
       )}
 
       {(step.action_type === "assign_tag" || step.action_type === "remove_tag") && (
@@ -322,6 +294,225 @@ export function StepConfigPanel({
             </div>
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────
+// 待機時間の入力(プリセット + 日/時間/分)
+// ────────────────────────────────────────
+
+const DELAY_PRESETS: Array<{ label: string; seconds: number | "custom" }> = [
+  { label: "すぐ", seconds: 0 },
+  { label: "30分後", seconds: 1800 },
+  { label: "1時間後", seconds: 3600 },
+  { label: "3時間後", seconds: 10800 },
+  { label: "半日後(12時間)", seconds: 43200 },
+  { label: "1日後", seconds: 86400 },
+  { label: "3日後", seconds: 259200 },
+  { label: "1週間後", seconds: 604800 },
+  { label: "カスタム", seconds: "custom" },
+];
+
+function secondsToParts(seconds: number): { d: number; h: number; m: number } {
+  const total = Math.max(0, Math.floor(seconds));
+  const d = Math.floor(total / 86400);
+  const h = Math.floor((total % 86400) / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  return { d, h, m };
+}
+
+function partsToSeconds(d: number, h: number, m: number): number {
+  return Math.max(0, d) * 86400 + Math.max(0, h) * 3600 + Math.max(0, m) * 60;
+}
+
+function DelayInput({
+  seconds,
+  disabled,
+  onChange,
+}: {
+  seconds: number;
+  disabled: boolean;
+  onChange: (nextSeconds: number) => void;
+}) {
+  const parts = secondsToParts(seconds);
+  const matchedPreset = DELAY_PRESETS.find(
+    (p) => typeof p.seconds === "number" && p.seconds === seconds,
+  );
+  const presetValue = matchedPreset ? String(matchedPreset.seconds) : "custom";
+  const isCustom = !matchedPreset;
+
+  return (
+    <div className="space-y-1">
+      <Label>前のステップからの待機時間</Label>
+      <select
+        className="border-input bg-background w-full rounded border px-3 py-2 text-sm"
+        value={presetValue}
+        disabled={disabled}
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (raw === "custom") return; // 何もしない、下の日/時間/分で入力
+          onChange(Number(raw));
+        }}
+      >
+        {DELAY_PRESETS.map((p) => (
+          <option key={String(p.seconds)} value={String(p.seconds)}>
+            {p.label}
+          </option>
+        ))}
+      </select>
+      {isCustom && (
+        <div className="text-muted-foreground grid grid-cols-3 gap-2 pt-1 text-xs">
+          <div className="flex items-center gap-1">
+            <Input
+              type="number"
+              min={0}
+              max={365}
+              value={parts.d}
+              disabled={disabled}
+              onChange={(e) => onChange(partsToSeconds(Number(e.target.value), parts.h, parts.m))}
+              className="text-right"
+            />
+            <span className="shrink-0">日</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Input
+              type="number"
+              min={0}
+              max={23}
+              value={parts.h}
+              disabled={disabled}
+              onChange={(e) => onChange(partsToSeconds(parts.d, Number(e.target.value), parts.m))}
+              className="text-right"
+            />
+            <span className="shrink-0">時間</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Input
+              type="number"
+              min={0}
+              max={59}
+              value={parts.m}
+              disabled={disabled}
+              onChange={(e) => onChange(partsToSeconds(parts.d, parts.h, Number(e.target.value)))}
+              className="text-right"
+            />
+            <span className="shrink-0">分</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────
+// メッセージ送信ステップの編集(テンプレ選択 + 本文プレビュー / 編集)
+// ────────────────────────────────────────
+
+function SendMessageEditor({
+  templateId,
+  templates,
+  disabled,
+  onSelectTemplate,
+}: {
+  templateId: string | null;
+  templates: MaTemplateOption[];
+  disabled: boolean;
+  onSelectTemplate: (id: string | null) => void;
+}) {
+  const selectedTemplate = templates.find((t) => t.id === templateId) ?? null;
+  const [body, setBody] = useState<string>(selectedTemplate?.body ?? "");
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const dirty = selectedTemplate ? body !== selectedTemplate.body : false;
+
+  async function saveBody() {
+    if (!selectedTemplate) return;
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      const res = await fetch(`/api/agency/ma/templates/${selectedTemplate.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ body }),
+      });
+      if (!res.ok) {
+        const b = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+        setSaveMsg(`保存失敗: ${b.message ?? b.error ?? res.status}`);
+        return;
+      }
+      setSaveMsg("保存しました。次のページ再読み込みで反映されます");
+    } catch (e) {
+      setSaveMsg(`保存失敗: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="space-y-1">
+        <Label htmlFor="step-template">送信するメッセージ</Label>
+        {templates.length === 0 ? (
+          <p className="text-muted-foreground text-xs">
+            まだメッセージテンプレートがありません。
+            <a href="/agency/marketing" target="_blank" rel="noreferrer" className="underline">
+              MA 画面
+            </a>
+            でプリセットを有効化するか、AI 生成で自動作成してください。
+          </p>
+        ) : (
+          <select
+            id="step-template"
+            className="border-input bg-background w-full rounded border px-3 py-2 text-sm"
+            value={templateId ?? ""}
+            disabled={disabled}
+            onChange={(e) => onSelectTemplate(e.target.value || null)}
+          >
+            <option value="">選択してください</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.scenario_name}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      {selectedTemplate && (
+        <div className="space-y-1 rounded border bg-slate-50/60 p-2">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="step-body" className="text-xs">
+              このステップで送られる本文
+            </Label>
+            <div className="flex items-center gap-2">
+              {saveMsg && <span className="text-muted-foreground text-[10px]">{saveMsg}</span>}
+              <button
+                type="button"
+                disabled={disabled || !dirty || saving}
+                onClick={saveBody}
+                className="rounded border border-emerald-500 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-900 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-400"
+              >
+                {saving ? "保存中..." : dirty ? "本文を保存" : "変更なし"}
+              </button>
+            </div>
+          </div>
+          <textarea
+            id="step-body"
+            className="border-input bg-background w-full rounded border px-2 py-1.5 text-sm"
+            rows={6}
+            value={body}
+            disabled={disabled}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder="ここに送信するメッセージを書いてください"
+            maxLength={4000}
+          />
+          <p className="text-muted-foreground text-[10px]">
+            {body.length} / 4000 字 ・
+            このメッセージは同じテンプレートを使う他のステップにも反映されます。
+          </p>
+        </div>
       )}
     </div>
   );

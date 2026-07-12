@@ -12,6 +12,8 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { decryptField } from "@/lib/crypto/field-encryption";
+
 /**
  * Flow ステップ の template_id 選択肢 用。 line チャネル の ma_templates を
  * 関連 ma_scenarios の preset 名 と 組んで 返す。
@@ -24,6 +26,8 @@ export type MaTemplateOption = {
   id: string;
   scenario_key: string;
   scenario_name: string;
+  /** 復号済み本文。 Flow エディタで担当者に見せて編集できるようにするため。 */
+  body: string;
   updated_at: string;
 };
 
@@ -33,9 +37,10 @@ export async function listMaTemplatesForOrg(
 ): Promise<MaTemplateOption[]> {
   // ma_templates.organization_id で 直接 引く。
   // scenario_id が ある もの は preset 名 を 別 SELECT で 補完 する。
+  // 本文(encrypted_body) は Flow エディタで送信内容を可視化するため復号して返す。
   const { data: templates, error } = await supabase
     .from("ma_templates")
-    .select("id, name, scenario_id, updated_at")
+    .select("id, name, scenario_id, encrypted_body, updated_at")
     .eq("organization_id", organizationId)
     .order("updated_at", { ascending: false });
   if (error) throw error;
@@ -44,6 +49,7 @@ export async function listMaTemplatesForOrg(
     id: string;
     name: string | null;
     scenario_id: string | null;
+    encrypted_body: string | null;
     updated_at: string;
   };
   const rows = (templates ?? []) as Row[];
@@ -67,12 +73,25 @@ export async function listMaTemplatesForOrg(
     }
   }
 
-  return rows.map((r) => ({
+  // 本文を復号(失敗したら空文字で埋めて UI 側でエラー表示せず継続)
+  const bodies = await Promise.all(
+    rows.map(async (r) => {
+      if (!r.encrypted_body) return "";
+      try {
+        return (await decryptField(r.encrypted_body)) ?? "";
+      } catch {
+        return "";
+      }
+    }),
+  );
+
+  return rows.map((r, i) => ({
     id: r.id,
     scenario_key: r.scenario_id ?? "standalone",
     scenario_name: r.scenario_id
       ? (presetNameByScenarioId.get(r.scenario_id) ?? "旧 プリセット")
       : (r.name ?? "無 名 テンプレ"),
+    body: bodies[i],
     updated_at: r.updated_at,
   }));
 }
