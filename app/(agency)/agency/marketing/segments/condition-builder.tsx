@@ -33,11 +33,11 @@ const KIND_OPTIONS: KindOption[] = [
   { value: "days_since_added_gte", label: "追加から◯日以上", group: "活動" },
   { value: "days_since_added_lte", label: "追加から◯日以内", group: "活動" },
   { value: "clicked_link_in_flow", label: "Flow のリンクをクリック済", group: "行動" },
+  { value: "conversion_event_present", label: "目標達成イベントあり", group: "目標達成" },
+  { value: "conversion_event_absent", label: "目標達成イベントなし", group: "目標達成" },
   { value: "score_gte", label: "スコア◯以上(準備中)", group: "準備中" },
   { value: "score_lte", label: "スコア◯以下(準備中)", group: "準備中" },
   { value: "entry_source_in", label: "登録元がいずれか(準備中)", group: "準備中" },
-  { value: "conversion_event_present", label: "目標達成イベントあり(準備中)", group: "準備中" },
-  { value: "conversion_event_absent", label: "目標達成イベントなし(準備中)", group: "準備中" },
 ];
 
 /** kind 変更 時 に 挿入 する デフォルト 条件 */

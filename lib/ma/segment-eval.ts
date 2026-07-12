@@ -30,6 +30,12 @@ export type SegmentEvalContext = {
   fields: Map<string, string>;
   /** クリック を 通した Flow ID セット (clicked_link_in_flow 用) */
   clicked_flow_ids: Set<string>;
+  /**
+   * 直近の CV イベント履歴 (ma_conversion_events)。
+   * conversion_event_present / absent の判定に使う。
+   * 呼び出し 側 で 「評価 対象 期間 の 最大 within_days」 だけ ロード すれば 十分。
+   */
+  conversion_events?: ReadonlyArray<{ event_key: string; occurred_at: Date }>;
   /** Phase 2 予約 : 熱量 スコア (実装 まで 常に 0 として 扱う) */
   engagement_score?: number;
   /** Phase 3 予約 : 登録元 コード (実装 まで null) */
@@ -90,10 +96,20 @@ export function evaluateSegmentCondition(
     case "entry_source_in":
       return false;
 
-    // Phase 2 予約 : ma_conversion_events が Phase 2 で 追加 される まで 常に false
+    // 2026-07-12 実装 : ma_conversion_events を直近ロードして判定
+    // ctx.conversion_events が未指定なら「情報なし」→ false 側に倒す
+    // (present は「発生あり」を主張する側なので false、absent は「なし」を主張するので true)
     case "conversion_event_present":
+      if (!ctx.conversion_events) return false;
+      return hasConversionEventWithin(ctx.conversion_events, cond.event_key, cond.within_days, now);
     case "conversion_event_absent":
-      return false;
+      if (!ctx.conversion_events) return true;
+      return !hasConversionEventWithin(
+        ctx.conversion_events,
+        cond.event_key,
+        cond.within_days,
+        now,
+      );
 
     default: {
       // TS の exhaustiveness チェック。 新 kind 追加時 に コンパイル エラー で 気付く。
@@ -121,4 +137,18 @@ export function evaluateSegmentFilter(
 function daysBetween(from: Date, to: Date): number {
   const MS_PER_DAY = 1000 * 60 * 60 * 24;
   return Math.floor((to.getTime() - from.getTime()) / MS_PER_DAY);
+}
+
+/**
+ * 「within_days 日以内に event_key の CV が発生したか」を判定。
+ * PG 側 build_segment_where と揃えて interval を秒基準で計算。
+ */
+function hasConversionEventWithin(
+  events: ReadonlyArray<{ event_key: string; occurred_at: Date }>,
+  eventKey: string,
+  withinDays: number,
+  now: Date,
+): boolean {
+  const threshold = now.getTime() - withinDays * 24 * 60 * 60 * 1000;
+  return events.some((e) => e.event_key === eventKey && e.occurred_at.getTime() >= threshold);
 }

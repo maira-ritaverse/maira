@@ -507,6 +507,21 @@ async function buildBranchEvalContext(
       .map((r: { key: string; value: string }) => [r.key, r.value] as const),
   );
 
+  // 直近 180 日の CV イベントをロード。branch の conversion_event_present /
+  // absent の判定に使う。過去 6 か月あれば within_days が長めの条件でも足りる。
+  const cvRes = await supabase
+    .from("ma_conversion_events")
+    .select("event_key, occurred_at")
+    .eq("organization_id", sub.organization_id)
+    .eq("line_user_id", sub.line_user_id)
+    .gte("occurred_at", new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString());
+  const conversion_events = (cvRes.data ?? []).map(
+    (r: { event_key: string; occurred_at: string }) => ({
+      event_key: r.event_key,
+      occurred_at: new Date(r.occurred_at),
+    }),
+  );
+
   return {
     organization_id: sub.organization_id,
     line_user_id: sub.line_user_id,
@@ -515,6 +530,7 @@ async function buildBranchEvalContext(
     tag_ids: tagIds,
     fields,
     clicked_flow_ids: new Set(),
+    conversion_events,
     replied_since_previous_step: false,
     clicked_link_in_previous_step: false,
     latest_postback_data: undefined,

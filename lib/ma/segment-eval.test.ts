@@ -134,16 +134,22 @@ describe("evaluateSegmentCondition - clicked_link_in_flow", () => {
 });
 
 describe("evaluateSegmentCondition - Phase 2/3 予約 kind (常に false)", () => {
-  it("score_gte / score_lte / entry_source_in / conversion_event_* は 全 て false", () => {
+  it("score_gte / score_lte / entry_source_in は 全 て false", () => {
     const ctx = makeCtx({ engagement_score: 999, entry_source_code: "qr_lp01" });
     expect(evaluateSegmentCondition({ kind: "score_gte", value: 0 }, ctx, NOW)).toBe(false);
     expect(evaluateSegmentCondition({ kind: "score_lte", value: 9999 }, ctx, NOW)).toBe(false);
     expect(
       evaluateSegmentCondition({ kind: "entry_source_in", codes: ["qr_lp01"] }, ctx, NOW),
     ).toBe(false);
+  });
+});
+
+describe("evaluateSegmentCondition - conversion_event_present / absent", () => {
+  it("ctx.conversion_events 未指定なら present=false / absent=true", () => {
+    const ctx = makeCtx();
     expect(
       evaluateSegmentCondition(
-        { kind: "conversion_event_present", event_key: "application_submitted", within_days: 7 },
+        { kind: "conversion_event_present", event_key: "meeting_confirmed", within_days: 7 },
         ctx,
         NOW,
       ),
@@ -151,6 +157,60 @@ describe("evaluateSegmentCondition - Phase 2/3 予約 kind (常に false)", () =
     expect(
       evaluateSegmentCondition(
         { kind: "conversion_event_absent", event_key: "meeting_confirmed", within_days: 7 },
+        ctx,
+        NOW,
+      ),
+    ).toBe(true);
+  });
+
+  it("within_days 以内に該当 event_key があれば present=true / absent=false", () => {
+    const ctx = makeCtx({
+      conversion_events: [
+        // 3 日前
+        { event_key: "meeting_confirmed", occurred_at: new Date("2026-07-08T12:00:00Z") },
+      ],
+    });
+    expect(
+      evaluateSegmentCondition(
+        { kind: "conversion_event_present", event_key: "meeting_confirmed", within_days: 7 },
+        ctx,
+        NOW,
+      ),
+    ).toBe(true);
+    expect(
+      evaluateSegmentCondition(
+        { kind: "conversion_event_absent", event_key: "meeting_confirmed", within_days: 7 },
+        ctx,
+        NOW,
+      ),
+    ).toBe(false);
+  });
+
+  it("within_days の外は該当扱いしない(古すぎ)", () => {
+    const ctx = makeCtx({
+      conversion_events: [
+        // 30 日前
+        { event_key: "meeting_confirmed", occurred_at: new Date("2026-06-11T12:00:00Z") },
+      ],
+    });
+    expect(
+      evaluateSegmentCondition(
+        { kind: "conversion_event_present", event_key: "meeting_confirmed", within_days: 7 },
+        ctx,
+        NOW,
+      ),
+    ).toBe(false);
+  });
+
+  it("別 event_key は無視する", () => {
+    const ctx = makeCtx({
+      conversion_events: [
+        { event_key: "interview_done", occurred_at: new Date("2026-07-10T12:00:00Z") },
+      ],
+    });
+    expect(
+      evaluateSegmentCondition(
+        { kind: "conversion_event_present", event_key: "meeting_confirmed", within_days: 7 },
         ctx,
         NOW,
       ),

@@ -167,6 +167,9 @@ export const PHASE1_IMPLEMENTED_KINDS = [
   "days_since_added_lte",
   "days_since_added_gte",
   "clicked_link_in_flow",
+  // 2026-07-12 追加(ma_conversion_events テーブル追加時に解禁)
+  "conversion_event_present",
+  "conversion_event_absent",
   "and",
   "or",
   "not",
