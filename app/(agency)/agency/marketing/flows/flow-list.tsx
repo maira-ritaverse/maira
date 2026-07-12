@@ -9,6 +9,7 @@
  *   ・admin なら 有効化 スイッチ で is_active を PATCH
  *   ・PATCH 成功 後 は 楽観 更新 (エラー 時 は revert)
  */
+import { Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 
@@ -17,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { FlowListItem } from "@/lib/ma/flow-queries";
 
+import { AiFlowModal } from "./ai-flow-modal";
 import { NewFlowModal } from "./new-flow-modal";
 
 // Badge shadcn コンポーネント は 未 導入 なので、 本 画面 用 に インライン span で 統一。
@@ -58,6 +60,7 @@ const TRIGGER_LABELS: Record<string, string> = {
 export function FlowList({ initialFlows, isAdmin }: Props) {
   const [flows, setFlows] = useState<FlowListItem[]>(initialFlows);
   const [modalOpen, setModalOpen] = useState(false);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
@@ -92,8 +95,16 @@ export function FlowList({ initialFlows, isAdmin }: Props) {
 
   return (
     <>
-      <div className="flex items-center justify-end">
-        {isAdmin && <Button onClick={() => setModalOpen(true)}>+ 新規 Flow 作成</Button>}
+      <div className="flex items-center justify-end gap-2">
+        {isAdmin && (
+          <>
+            <Button variant="outline" onClick={() => setAiModalOpen(true)}>
+              <Sparkles className="mr-1 size-4" aria-hidden />
+              AI で 生成
+            </Button>
+            <Button onClick={() => setModalOpen(true)}>+ 新規 Flow 作成</Button>
+          </>
+        )}
       </div>
 
       {flows.length === 0 ? (
@@ -154,7 +165,10 @@ export function FlowList({ initialFlows, isAdmin }: Props) {
       )}
 
       {isAdmin && (
-        <NewFlowModal open={modalOpen} onOpenChange={setModalOpen} onCreated={handleCreated} />
+        <>
+          <NewFlowModal open={modalOpen} onOpenChange={setModalOpen} onCreated={handleCreated} />
+          <AiFlowModal open={aiModalOpen} onOpenChange={setAiModalOpen} onCreated={handleCreated} />
+        </>
       )}
     </>
   );
