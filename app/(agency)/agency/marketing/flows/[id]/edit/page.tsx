@@ -9,7 +9,7 @@ import { notFound, redirect } from "next/navigation";
 import { PageHeading } from "@/components/ui/page-heading";
 import { listOrganizationLineTags } from "@/lib/line/conversation-tags";
 import { getUserRole } from "@/lib/organizations/queries";
-import { getFlowDetail } from "@/lib/ma/flow-queries";
+import { getFlowDetail, listMaTemplatesForOrg } from "@/lib/ma/flow-queries";
 import { createClient } from "@/lib/supabase/server";
 
 import { FlowEditor } from "./flow-editor";
@@ -32,9 +32,10 @@ export default async function FlowEditPage({ params }: { params: RouteParams }) 
     redirect("/app");
   }
 
-  const [flow, tags] = await Promise.all([
+  const [flow, tags, templates] = await Promise.all([
     getFlowDetail(supabase, role.organization.id, flowId),
     listOrganizationLineTags(role.organization.id),
+    listMaTemplatesForOrg(supabase, role.organization.id),
   ]);
   if (!flow) notFound();
 
@@ -48,7 +49,12 @@ export default async function FlowEditPage({ params }: { params: RouteParams }) 
         }
       />
       <div className="flex-1 overflow-hidden">
-        <FlowEditor flow={flow} isAdmin={role.member.role === "admin"} tags={tags} />
+        <FlowEditor
+          flow={flow}
+          isAdmin={role.member.role === "admin"}
+          tags={tags}
+          templates={templates}
+        />
       </div>
     </div>
   );

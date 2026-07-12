@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { LineConversationTag } from "@/lib/line/conversation-tags";
+import type { MaTemplateOption } from "@/lib/ma/flow-queries";
 import type { SegmentCondition } from "@/lib/ma/segment-dsl";
 
 import { ConditionEditor } from "../../../segments/condition-builder";
@@ -49,6 +50,8 @@ type Props = {
   disabled: boolean;
   /** 自組織 の 会話 タグ (assign_tag / remove_tag / branch has_tag ドロップダウン 用) */
   tags: LineConversationTag[];
+  /** 自組織 の テンプレ (send_message ドロップダウン 用) */
+  templates: MaTemplateOption[];
 };
 
 const ACTION_TYPES = [
@@ -69,6 +72,7 @@ export function StepConfigPanel({
   onDelete,
   disabled,
   tags,
+  templates,
 }: Props) {
   if (!step) {
     return (
@@ -136,17 +140,31 @@ export function StepConfigPanel({
       {/* action_type 別 の 追加 フィールド */}
       {step.action_type === "send_message" && (
         <div className="space-y-1">
-          <Label htmlFor="step-template">template_id (UUID)</Label>
-          <Input
-            id="step-template"
-            value={step.template_id ?? ""}
-            disabled={disabled}
-            onChange={(e) => onChange({ template_id: e.target.value || null })}
-            placeholder="ma_templates.id"
-          />
-          <p className="text-muted-foreground text-xs">
-            Phase 1-F では 手打ち。 テンプレ 選択 UI は 追って 追加。
-          </p>
+          <Label htmlFor="step-template">テンプレ</Label>
+          {templates.length === 0 ? (
+            <p className="text-muted-foreground text-xs">
+              自組織 に テンプレ が ありません。 まず{" "}
+              <a href="/agency/marketing" target="_blank" rel="noreferrer" className="underline">
+                MA 画面
+              </a>{" "}
+              で LINE プリセット を 有効化 して テンプレ を 編集 して ください。
+            </p>
+          ) : (
+            <select
+              id="step-template"
+              className="border-input bg-background w-full rounded border px-3 py-2 text-sm"
+              value={step.template_id ?? ""}
+              disabled={disabled}
+              onChange={(e) => onChange({ template_id: e.target.value || null })}
+            >
+              <option value="">テンプレ を 選択</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.scenario_name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       )}
 

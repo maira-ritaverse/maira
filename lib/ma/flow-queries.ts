@@ -13,6 +13,63 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
+ * Flow ステップ の template_id 選択肢 用。 line チャネル の ma_templates を
+ * 関連 ma_scenarios の preset 名 と 組んで 返す。
+ *
+ * ma_templates.scenario_id NOT NULL 制約 の ため、 現時点 の 選択肢 は
+ * 既存 プリセット (7 種) の うち 「テンプレ が 作成 済 の もの」 に 限る。
+ * 独立 template 管理 は 後日 (scenario_id nullable 化 + テンプレ CRUD UI)。
+ */
+export type MaTemplateOption = {
+  id: string;
+  scenario_key: string;
+  scenario_name: string;
+  updated_at: string;
+};
+
+export async function listMaTemplatesForOrg(
+  supabase: SupabaseClient,
+  organizationId: string,
+): Promise<MaTemplateOption[]> {
+  const { data, error } = await supabase
+    .from("ma_templates")
+    .select(
+      `
+      id,
+      updated_at,
+      ma_scenarios!inner (
+        organization_id,
+        ma_scenario_presets!inner (key, name, channel)
+      )
+    `,
+    )
+    .eq("ma_scenarios.organization_id", organizationId)
+    .eq("ma_scenarios.ma_scenario_presets.channel", "line");
+  if (error) throw error;
+
+  type Row = {
+    id: string;
+    updated_at: string;
+    ma_scenarios: {
+      ma_scenario_presets: { key: string; name: string } | null;
+    } | null;
+  };
+
+  return ((data ?? []) as unknown as Row[])
+    .map((r) => {
+      const preset = r.ma_scenarios?.ma_scenario_presets;
+      if (!preset) return null;
+      return {
+        id: r.id,
+        scenario_key: preset.key,
+        scenario_name: preset.name,
+        updated_at: r.updated_at,
+      };
+    })
+    .filter((t): t is MaTemplateOption => t !== null);
+}
+
+/**
  * 一覧 表示 用 の 集約 済 Flow 行。
  */
 export type FlowListItem = {
