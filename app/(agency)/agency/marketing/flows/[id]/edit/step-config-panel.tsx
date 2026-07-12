@@ -432,7 +432,7 @@ function SendMessageEditor({
     setSaving(true);
     setSaveMsg(null);
     try {
-      const res = await fetch(`/api/agency/ma/templates/${selectedTemplate.id}`, {
+      const res = await fetch(`/api/agency/ma/templates/by-id/${selectedTemplate.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ body }),
