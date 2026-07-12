@@ -6,6 +6,7 @@ import { pushMessage } from "@/lib/line/api";
 import { classifyLineError } from "@/lib/line/errors";
 import { getLineChannelByOrgId } from "@/lib/line/queries";
 import { wrapBodyUrls } from "@/lib/ma/click-tracking";
+import { getOrgIdsByDispatchEngine } from "@/lib/ma/dispatch-flag";
 import { expandTemplate, type TemplateVariableValues } from "@/lib/ma/test-send";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -77,11 +78,25 @@ export async function POST(request: Request) {
     "line_after_interview_followup",
     "line_birthday_greeting",
   ]);
-  const lineScenarios = scenarios.filter(
+  const lineScenariosBeforeEngineFilter = scenarios.filter(
     (s) => s.ma_scenario_presets?.key && LINE_KEYS.has(s.ma_scenario_presets.key),
   );
+
+  // Phase 1 P1-D カットオーバー:organizations.ma_dispatch_engine='new' の org は
+  // 新 flow-dispatch cron が 担当 する ので、 旧 line-dispatch は 対象外 に する。
+  // 参照:docs/line-lstep-ma-phase1-plan.md §4.4
+  const newEngineOrgs = await getOrgIdsByDispatchEngine(admin, "new");
+  const lineScenarios = lineScenariosBeforeEngineFilter.filter(
+    (s) => !newEngineOrgs.has(s.organization_id),
+  );
+
   if (lineScenarios.length === 0) {
-    return NextResponse.json({ ok: true, processed: 0, message: "no_active_line_scenarios" });
+    return NextResponse.json({
+      ok: true,
+      processed: 0,
+      message: "no_active_line_scenarios",
+      skipped_by_new_engine: lineScenariosBeforeEngineFilter.length - lineScenarios.length,
+    });
   }
 
   // 関連 org の line_ma 同意 を 一括 確認

@@ -254,10 +254,19 @@ async function enrollFriendToFlow(flowId, lineUserId, options) {
 
 **カットオーバー段階**:
 
-- Stage 0(現在):旧のみ稼働、新 dispatcher コードは書かれているが cron 未登録
-- Stage 1:新 cron を追加、両方稼働。`dispatch_engine='new'` フラグ立てた org のみ新側で処理、旧は skip
-- Stage 2:全 org で新側稼働、旧 line-dispatch は空回り
-- Stage 3(P1-H):旧 line-dispatch cron を vercel.json から削除、コード削除
+- Stage 0(2026-07-11):旧のみ稼働、新 dispatcher コードは書かれているが cron 未登録
+- **Stage 1(2026-07-12 完了):新 cron 登録済、両方稼働。全 org デフォルト `ma_dispatch_engine='old'`(旧 cron が処理)。新 cron は subscription が無いため 0 件処理**
+- Stage 2:1 org ずつ `ma_dispatch_engine='new'` に切替、24h 観測(未実施、UI 完成後)
+- Stage 3:全 org 'new'、旧 line-dispatch は空回り(未実施)
+- Stage 4(P1-H):旧 line-dispatch cron を vercel.json から削除、コード削除(未実施)
+
+**Stage 1 実施内容(2026-07-12)**:
+
+- `20260712000003_add_org_ma_dispatch_engine.sql` で `organizations.ma_dispatch_engine`(default 'old')列を追加
+- `lib/ma/dispatch-flag.ts` に `getOrgDispatchEngine` / `getOrgIdsByDispatchEngine` / `setOrgDispatchEngine` を実装
+- `vercel.json` に `/api/internal/ma/flow-dispatch`(1 分)と `/api/internal/ma/segment-scan`(15 分)を追加
+- `app/api/internal/ma/line-dispatch/route.ts` に `getOrgIdsByDispatchEngine("new")` フィルタを追加(該当 org のシナリオは skip、レスポンスに `skipped_by_new_engine` 件数を返す)
+- dev 適用 + `ma_dispatch_engine` 列存在 + フラグ切替による line-dispatch フィルタ動作を検証
 
 **受入基準**:
 

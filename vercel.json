@@ -27,6 +27,14 @@
       "schedule": "*/2 * * * *"
     },
     {
+      "path": "/api/internal/ma/flow-dispatch",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/ma/segment-scan",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/internal/clients/finalize-revokes",
       "schedule": "0 3 * * *"
     },
