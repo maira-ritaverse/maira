@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireOrgMember } from "@/lib/api/auth-guards";
+import { dispatchFlowTrigger } from "@/lib/ma/flow-enroller";
 import { createServiceClient } from "@/lib/supabase/service";
 
 /**
@@ -65,6 +66,17 @@ export async function POST(request: Request, context: RouteContext) {
     }
   }
 
+  // Phase 1: Flow trigger 発火 の ため、 削除 前 に 現在 の タグ 集合 を 取得
+  const { data: currentRows } = await admin
+    .from("line_conversation_tag_assignments")
+    .select("tag_id")
+    .eq("organization_id", guard.organization.id)
+    .eq("line_user_id", lineUserId);
+  const currentSet = new Set(
+    ((currentRows ?? []) as Array<{ tag_id: string }>).map((r) => r.tag_id),
+  );
+  const newSet = new Set(tagIds);
+
   // 完全置換:既存 削除 → 新規 INSERT
   await admin
     .from("line_conversation_tag_assignments")
@@ -84,6 +96,27 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "insert_failed", message: error.message }, { status: 500 });
     }
   }
+
+  // Phase 1: 追加 された タグ / 削除 された タグ ごと に Flow trigger を dispatch。
+  // 例外 は 握り 潰す (レスポンス に は 影響 させ ない、 best-effort)。
+  const added = tagIds.filter((id) => !currentSet.has(id));
+  const removed = Array.from(currentSet).filter((id) => !newSet.has(id));
+  await Promise.all([
+    ...added.map((tag_id) =>
+      dispatchFlowTrigger(admin, guard.organization.id, {
+        type: "tag_assigned",
+        line_user_id: lineUserId,
+        tag_id,
+      }).catch((err) => console.warn("[flow-trigger] tag_assigned failed", err)),
+    ),
+    ...removed.map((tag_id) =>
+      dispatchFlowTrigger(admin, guard.organization.id, {
+        type: "tag_removed",
+        line_user_id: lineUserId,
+        tag_id,
+      }).catch((err) => console.warn("[flow-trigger] tag_removed failed", err)),
+    ),
+  ]);
 
   return NextResponse.json({ ok: true, tagIds });
 }

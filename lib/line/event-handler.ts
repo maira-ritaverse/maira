@@ -18,6 +18,7 @@ import { getGoogleAccessToken } from "@/lib/integrations/google-token";
 import { createGoogleMeetEvent } from "@/lib/integrations/google-meet";
 import { createZoomMeeting } from "@/lib/integrations/zoom-meeting";
 import { getZoomAccessToken } from "@/lib/integrations/zoom-token";
+import { dispatchFlowTrigger } from "@/lib/ma/flow-enroller";
 import { getMessageContent, getUserProfile, replyMessage } from "./api";
 import type {
   LineMessageEvent,
@@ -351,6 +352,16 @@ async function handleFollow(
     console.warn("[line/welcome] threw", err);
   }
 
+  // Phase 1: friend_added trigger の Flow を enroll (best-effort、 webhook 失敗 に は 波及 させない)
+  try {
+    await dispatchFlowTrigger(ctx.service, ctx.organizationId, {
+      type: "friend_added",
+      line_user_id: lineUserId,
+    });
+  } catch (err) {
+    console.warn("[flow-trigger] friend_added dispatch failed", err);
+  }
+
   return { ok: true, type: "follow" };
 }
 
@@ -365,6 +376,19 @@ async function handlePostback(
   const data = event.postback.data;
   if (!lineUserId) {
     return { ok: false, type: "postback", reason: "no_user_id" };
+  }
+
+  // Phase 1: postback_received trigger の Flow を enroll (既存 postback 処理 と 並行)
+  // Flow ビルダー 側 の trigger_config.postback_data_prefix で 絞り 込まれ る の で、
+  // ここ で は 全 postback を dispatch する。
+  try {
+    await dispatchFlowTrigger(ctx.service, ctx.organizationId, {
+      type: "postback_received",
+      line_user_id: lineUserId,
+      postback_data: data,
+    });
+  } catch (err) {
+    console.warn("[flow-trigger] postback_received dispatch failed", err);
   }
 
   // 「別の日時 を 希望」: line_meeting_other:{proposalId}
