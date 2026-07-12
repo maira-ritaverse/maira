@@ -78,6 +78,42 @@ function defaultPosition(index: number): { x: number; y: number } {
   return { x: 60, y: 40 + index * 130 };
 }
 
+/**
+ * AI 生成 Flow で「本当は送信 / タグ操作をしたかったのに、既存資産が見つからず
+ * wait にフォールバックされたステップ」を検出する。
+ *
+ * action_config に ai_intent が入っていれば、AI は wait ではなく本来別の動作を
+ * 意図していた印。実行時に何も起きないので、担当者に修正を促す必要がある。
+ */
+export function isStepNeedsSetup(step: StepEditable): boolean {
+  const cfg = step.action_config ?? {};
+  if (step.action_type === "wait" && typeof cfg.ai_intent === "string") return true;
+  // send_message なのにテンプレ未割当:CHECK 制約で保存時に落ちるはずだが念のため
+  if (step.action_type === "send_message" && !step.template_id) return true;
+  // assign_tag / remove_tag なのに tag_id 未指定
+  if (
+    (step.action_type === "assign_tag" || step.action_type === "remove_tag") &&
+    typeof cfg.tag_id !== "string"
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/** ai_intent キー → 利用者向けの日本語ラベル */
+function labelForAiIntent(intent: string): string {
+  switch (intent) {
+    case "send_message":
+      return "メッセージ送信";
+    case "assign_tag":
+      return "タグ付与";
+    case "remove_tag":
+      return "タグ削除";
+    default:
+      return intent;
+  }
+}
+
 function stepsToNodes(steps: StepEditable[]): Node<StepNodeData>[] {
   return steps.map((s, idx) => ({
     id: String(s.step_order),
@@ -91,6 +127,7 @@ function stepsToNodes(steps: StepEditable[]): Node<StepNodeData>[] {
       name: s.name,
       action_type: s.action_type,
       delay_from_previous_seconds: s.delay_from_previous_seconds,
+      needsSetup: isStepNeedsSetup(s),
     },
   }));
 }
@@ -429,9 +466,32 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments }: Props) 
 
   const selectedStep = steps.find((s) => s.step_order === selectedOrder) ?? null;
   const allStepOrders = steps.map((s) => s.step_order);
+  const needsSetupSteps = steps.filter(isStepNeedsSetup);
 
   return (
     <div className="flex h-full flex-col gap-3">
+      {needsSetupSteps.length > 0 && (
+        <div className="rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900">
+          <div className="mb-1 font-semibold">
+            未設定のステップが {needsSetupSteps.length} 件あります。このままだと動きません。
+          </div>
+          <ul className="ml-4 list-disc space-y-0.5 text-xs">
+            {needsSetupSteps.map((s) => (
+              <li key={s.step_order}>
+                <button
+                  type="button"
+                  className="underline underline-offset-2 hover:text-amber-950"
+                  onClick={() => setSelectedOrder(s.step_order)}
+                >
+                  ステップ {s.step_order}: {s.name ?? "(名前なし)"}
+                </button>
+                {typeof s.action_config?.ai_intent === "string" &&
+                  ` — 本来は「${labelForAiIntent(s.action_config.ai_intent)}」の予定`}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" disabled={!isAdmin} onClick={addStep}>

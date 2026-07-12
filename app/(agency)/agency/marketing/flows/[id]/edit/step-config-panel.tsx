@@ -10,6 +10,8 @@
  *   ・分岐: 条件ビルダー + Yes/No の次ステップ
  *   ・スコア加算 / 待機 / 終了: 追加入力なし
  */
+import { AlertTriangle } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -77,6 +79,11 @@ export function StepConfigPanel({
   const setCfg = (key: string, value: unknown) =>
     onChange({ action_config: { ...cfg, [key]: value } });
 
+  // AI 生成 Flow で「本当は◯◯したかった」情報を持っている場合、担当者に見せる
+  const aiIntent = typeof cfg.ai_intent === "string" ? cfg.ai_intent : null;
+  const aiBody = typeof cfg.ai_body === "string" ? cfg.ai_body : null;
+  const aiTagName = typeof cfg.ai_tag_name === "string" ? cfg.ai_tag_name : null;
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -85,6 +92,39 @@ export function StepConfigPanel({
           削除
         </Button>
       </div>
+
+      {aiIntent && (
+        <div className="rounded border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900">
+          <div className="mb-1 flex items-center gap-1 font-semibold">
+            <AlertTriangle className="size-3.5" aria-hidden />
+            AI からの引き継ぎ:このステップは未設定です
+          </div>
+          {aiIntent === "send_message" && aiBody && (
+            <>
+              <div className="mb-1">本来送りたかったメッセージ:</div>
+              <div className="mb-2 rounded border border-amber-300 bg-white/60 p-2 whitespace-pre-wrap">
+                {aiBody}
+              </div>
+              <div>
+                「何をするステップか」を「メッセージを送る」に変更し、テンプレートを選ぶか、
+                上のメッセージ本文でテンプレートを新規作成してから割り当ててください。
+              </div>
+            </>
+          )}
+          {(aiIntent === "assign_tag" || aiIntent === "remove_tag") && aiTagName && (
+            <>
+              <div className="mb-1">
+                本来{aiIntent === "assign_tag" ? "付与" : "削除"}したかったタグ:
+                <b className="ml-1">{aiTagName}</b>
+              </div>
+              <div>
+                「何をするステップか」を「タグをつける /
+                外す」に変更し、対応するタグを選択(または新規作成)してください。
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="space-y-1">
         <Label htmlFor="step-name">ステップ名(任意)</Label>

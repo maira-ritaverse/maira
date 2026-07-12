@@ -17,6 +17,7 @@
  */
 import { Handle, Position } from "@xyflow/react";
 import {
+  AlertTriangle,
   CircleStop,
   Clock,
   GitBranch,
@@ -35,6 +36,8 @@ export type StepNodeData = {
   action_type: string;
   delay_from_previous_seconds: number;
   selected?: boolean;
+  /** AI 生成 Flow の未設定ステップ(wait + ai_intent など)ならバッジを出す */
+  needsSetup?: boolean;
 };
 
 type Shape = "block" | "diamond" | "pill";
@@ -140,6 +143,15 @@ function StepNodeInner({ data, selected }: { data: StepNodeData; selected?: bool
   const isStop = style.shape === "pill";
 
   const ringClass = selected ? "ring-2 ring-primary ring-offset-1" : "";
+  const warningBadge = data.needsSetup ? (
+    <div
+      className="absolute -top-2 -right-2 z-10 flex items-center gap-0.5 rounded-full border border-amber-500 bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 shadow-sm"
+      title="このステップは未設定です。実行時に何も起きません。"
+    >
+      <AlertTriangle className="size-3" aria-hidden />
+      未設定
+    </div>
+  ) : null;
 
   // ── コンテンツ (共通) ──
   const content = (
@@ -164,6 +176,7 @@ function StepNodeInner({ data, selected }: { data: StepNodeData; selected?: bool
     // Diamond (decision)。 clip-path で 菱形、 handle は Top / Left / Right。
     return (
       <div className={`relative ${ringClass}`} style={{ width: 180, height: 120 }}>
+        {warningBadge}
         <div
           className={`absolute inset-0 ${style.bg} border-2 ${style.border}`}
           style={{ clipPath: "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)" }}
@@ -189,8 +202,9 @@ function StepNodeInner({ data, selected }: { data: StepNodeData; selected?: bool
     // Pill (terminator)
     return (
       <div
-        className={`flex min-w-[160px] items-center justify-center rounded-full border-2 py-2 ${style.bg} ${style.border} ${ringClass}`}
+        className={`relative flex min-w-[160px] items-center justify-center rounded-full border-2 py-2 ${style.bg} ${style.border} ${ringClass}`}
       >
+        {warningBadge}
         <Handle type="target" position={Position.Top} />
         {content}
       </div>
@@ -198,10 +212,12 @@ function StepNodeInner({ data, selected }: { data: StepNodeData; selected?: bool
   }
 
   // Block (processing)
+  const warningBorderClass = data.needsSetup ? "border-amber-500 bg-amber-50" : "";
   return (
     <div
-      className={`min-w-[180px] rounded-md border-2 py-2 ${style.bg} ${style.border} ${ringClass}`}
+      className={`relative min-w-[180px] rounded-md border-2 py-2 ${warningBorderClass || `${style.bg} ${style.border}`} ${ringClass}`}
     >
+      {warningBadge}
       <Handle type="target" position={Position.Top} />
       {content}
       <Handle type="source" position={Position.Bottom} />
