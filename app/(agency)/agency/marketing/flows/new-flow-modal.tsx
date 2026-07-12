@@ -36,15 +36,21 @@ type Props = {
   onCreated: () => void;
 };
 
+type Channel = "line" | "email";
+
 export function NewFlowModal({ open, onOpenChange, onCreated }: Props) {
+  const [channel, setChannel] = useState<Channel>("line");
   const [selected, setSelected] = useState<string | null>(CHOICES[0]?.key ?? null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const selectedChoice = CHOICES.find((c) => c.key === selected) ?? CHOICES[0];
-  const nameRequired = selected === null;
+  // メールに切替時はプリセット選択を空白固定にする(プリセットは LINE 用のみ)
+  const isEmail = channel === "email";
+  const effectiveSelected = isEmail ? null : selected;
+  const selectedChoice = CHOICES.find((c) => c.key === effectiveSelected) ?? CHOICES[0];
+  const nameRequired = effectiveSelected === null;
 
   async function submit() {
     setBusy(true);
@@ -54,7 +60,8 @@ export function NewFlowModal({ open, onOpenChange, onCreated }: Props) {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          preset_key: selected,
+          preset_key: effectiveSelected,
+          channel,
           name: name.trim() || undefined,
           description: description.trim() || null,
         }),
@@ -64,6 +71,7 @@ export function NewFlowModal({ open, onOpenChange, onCreated }: Props) {
         setError(body.error ?? "作成に失敗しました");
         return;
       }
+      setChannel("line");
       setSelected(CHOICES[0]?.key ?? null);
       setName("");
       setDescription("");
@@ -86,34 +94,72 @@ export function NewFlowModal({ open, onOpenChange, onCreated }: Props) {
         </AlertDialogDescription>
 
         <div className="my-4 space-y-3">
-          <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
-            {CHOICES.map((c) => {
-              const id = `flow-preset-${c.key ?? "blank"}`;
-              return (
-                <label
-                  key={id}
-                  htmlFor={id}
-                  className={`flex cursor-pointer items-start gap-2 rounded border p-2 text-sm ${
-                    selected === c.key ? "border-primary bg-muted/50" : "border-muted"
-                  }`}
-                >
-                  <input
-                    id={id}
-                    type="radio"
-                    name="preset"
-                    value={c.key ?? ""}
-                    checked={selected === c.key}
-                    onChange={() => setSelected(c.key)}
-                    className="mt-0.5"
-                  />
-                  <div className="flex-1">
-                    <div className="font-medium">{c.label}</div>
-                    <div className="text-muted-foreground text-xs">{c.description}</div>
-                  </div>
-                </label>
-              );
-            })}
+          {/* チャネル選択:公式 LINE / メール */}
+          <div className="space-y-1">
+            <Label>送信チャネル</Label>
+            <div className="inline-flex overflow-hidden rounded border">
+              <button
+                type="button"
+                onClick={() => setChannel("line")}
+                className={`px-3 py-1.5 text-xs ${
+                  channel === "line"
+                    ? "bg-emerald-500 text-white"
+                    : "bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                公式 LINE
+              </button>
+              <button
+                type="button"
+                onClick={() => setChannel("email")}
+                className={`px-3 py-1.5 text-xs ${
+                  channel === "email"
+                    ? "bg-emerald-500 text-white"
+                    : "bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                メール
+              </button>
+            </div>
+            {isEmail && (
+              <p className="text-muted-foreground text-xs">
+                メール Flow は LINE 連携済み +
+                メールアドレス登録済みの求職者にだけ届きます。プリセットは LINE
+                用のみのため、空白から作成します。
+              </p>
+            )}
           </div>
+
+          {!isEmail && (
+            <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
+              {CHOICES.map((c) => {
+                const id = `flow-preset-${c.key ?? "blank"}`;
+                return (
+                  <label
+                    key={id}
+                    htmlFor={id}
+                    className={`flex cursor-pointer items-start gap-2 rounded border p-2 text-sm ${
+                      selected === c.key ? "border-primary bg-muted/50" : "border-muted"
+                    }`}
+                  >
+                    <input
+                      id={id}
+                      type="radio"
+                      name="preset"
+                      value={c.key ?? ""}
+                      checked={selected === c.key}
+                      onChange={() => setSelected(c.key)}
+                      className="mt-0.5"
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium">{c.label}</div>
+                      <div className="text-muted-foreground text-xs">{c.description}</div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          )}
 
           <div className="space-y-1">
             <Label htmlFor="flow-name">

@@ -45,6 +45,8 @@ const postBody = z.object({
   /** preset_key 未指定 時 の 表示 名 (必須)。 preset 指定 時 は 上書き 用 (任意)。 */
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).nullable().optional(),
+  /** 送信チャネル。 preset 指定時は preset 側で LINE 固定、 空白時のみ選択可。 */
+  channel: z.enum(["line", "email"]).optional(),
 });
 
 export async function POST(request: Request) {
@@ -62,7 +64,8 @@ export async function POST(request: Request) {
 
   const admin = createServiceClient();
 
-  // プリセット 由来 の 場合 は 定義 から メタ を コピー
+  // プリセット 由来 の 場合 は 定義 から メタ を コピー(プリセットは LINE 用のみなので channel='line')
+  // 空白 Flow の場合のみ、 リクエストの channel を尊重する('line' or 'email')
   let insertRow: Record<string, unknown> = {
     organization_id: guard.organization.id,
     channel: "line",
@@ -77,6 +80,7 @@ export async function POST(request: Request) {
     }
     insertRow = {
       ...insertRow,
+      channel: "line",
       name: parsed.data.name ?? preset.name,
       description: parsed.data.description ?? preset.description,
       trigger_type: preset.trigger_type,
@@ -92,6 +96,7 @@ export async function POST(request: Request) {
     }
     insertRow = {
       ...insertRow,
+      channel: parsed.data.channel ?? "line",
       name: parsed.data.name,
       description: parsed.data.description ?? null,
       trigger_type: "manual",

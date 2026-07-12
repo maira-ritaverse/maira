@@ -14,6 +14,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
+import { sendViaResend } from "@/lib/email/resend";
 import { pushMessage } from "@/lib/line/api";
 import { classifyLineError } from "@/lib/line/errors";
 import { getLineChannelByOrgId } from "@/lib/line/queries";
@@ -52,6 +53,8 @@ export type SubscriptionRow = {
 type FlowRow = {
   id: string;
   organization_id: string;
+  /** 'line' | 'email' — 送信チャネル */
+  channel: string;
   send_time_window_json: unknown;
   max_send_per_day: number | null;
   goal_event_key: string | null;
@@ -90,7 +93,7 @@ export async function executeSubscriptionTick(
   // 1. Flow + Step を 取得
   const { data: flowData, error: flowErr } = await supabase
     .from("ma_flows")
-    .select("id, organization_id, send_time_window_json, max_send_per_day, goal_event_key")
+    .select("id, organization_id, channel, send_time_window_json, max_send_per_day, goal_event_key")
     .eq("id", sub.flow_id)
     .single();
   if (flowErr || !flowData) {
@@ -150,7 +153,7 @@ export async function executeSubscriptionTick(
   try {
     switch (step.action_type) {
       case "send_message": {
-        const r = await handleSendMessage(supabase, sub, step);
+        const r = await handleSendMessage(supabase, sub, flow, step);
         if (r.error) return failWith(supabase, sub.id, r.error);
         break;
       }
@@ -230,37 +233,56 @@ export async function executeSubscriptionTick(
 async function handleSendMessage(
   supabase: SupabaseClient,
   sub: SubscriptionRow,
+  flow: FlowRow,
   step: FlowStepRow,
 ): Promise<{ error?: string }> {
   if (!step.template_id) return { error: "template_id_missing" };
 
-  // Template 取得 + 復号
+  // Template 取得 + 復号(subject は email 用、body は共通)
   const { data: template } = await supabase
     .from("ma_templates")
-    .select("id, encrypted_body")
+    .select("id, encrypted_subject, encrypted_body")
     .eq("id", step.template_id)
     .single();
   if (!template?.encrypted_body) return { error: "template_body_missing" };
 
   const rawBody = await decryptField(template.encrypted_body);
   if (!rawBody) return { error: "template_decrypt_failed" };
+  const rawSubject = template.encrypted_subject
+    ? ((await decryptField(template.encrypted_subject)) ?? "")
+    : "";
 
   // 変数 展開 (Phase 1 は 最小 コンテキスト)
   const ctx = await buildTemplateContext(supabase, sub);
   const expandedBody = expandTemplate(rawBody, ctx);
+  const expandedSubject = expandTemplate(rawSubject, ctx);
 
-  // URL 短縮 (クリック 計測)
+  // URL 短縮 (クリック 計測) は LINE / メール 共通
   const wrappedBody = await wrapBodyUrls(supabase, {
     organizationId: sub.organization_id,
     sendLogId: null,
     body: expandedBody,
   });
 
-  // LINE Channel 取得
+  if (flow.channel === "email") {
+    return sendMessageViaEmail(supabase, sub, step, expandedSubject, wrappedBody);
+  }
+  // default: line
+  return sendMessageViaLine(supabase, sub, step, wrappedBody);
+}
+
+/**
+ * LINE 経由の送信。 従来の pushMessage をそのまま使う。
+ */
+async function sendMessageViaLine(
+  supabase: SupabaseClient,
+  sub: SubscriptionRow,
+  step: FlowStepRow,
+  wrappedBody: string,
+): Promise<{ error?: string }> {
   const channel = await getLineChannelByOrgId(supabase, sub.organization_id);
   if (!channel) return { error: "line_channel_not_found" };
 
-  // Push
   const pushResult = await pushMessage(channel.channelAccessToken, sub.line_user_id, [
     { type: "text", text: wrappedBody },
   ]);
@@ -273,7 +295,6 @@ async function handleSendMessage(
         500,
       );
 
-  // ma_send_logs に 記録
   const encryptedBody = await encryptField(wrappedBody);
   const encryptedSubject = await encryptField("(LINE Flow)");
   await supabase.from("ma_send_logs").insert({
@@ -291,6 +312,112 @@ async function handleSendMessage(
 
   if (!pushResult.ok) return { error: errorMessage ?? "push_failed" };
   return {};
+}
+
+/**
+ * メール経由の送信(Resend)。
+ * ・sub.client_record_id が必要(subscribe 時に埋まっている想定)
+ * ・client_records.email が空 / email_distribution_enabled=false は skipped 相当で完了
+ * ・件名は復号 + 変数展開済みの expandedSubject を使用
+ */
+async function sendMessageViaEmail(
+  supabase: SupabaseClient,
+  sub: SubscriptionRow,
+  step: FlowStepRow,
+  subject: string,
+  wrappedBody: string,
+): Promise<{ error?: string }> {
+  if (!sub.client_record_id) {
+    // enrollment 時に client_record と紐付けられなかった email Flow 加入者。
+    // 送りようがないので skipped 相当で完了させる(失敗ではなく成功と同じ扱い)。
+    await logEmailSkipped(supabase, sub, step, "client_record_missing", subject, wrappedBody);
+    return {};
+  }
+
+  const { data: client } = await supabase
+    .from("client_records")
+    .select("email, email_distribution_enabled")
+    .eq("id", sub.client_record_id)
+    .maybeSingle();
+  const clientRow = client as { email: string | null; email_distribution_enabled: boolean } | null;
+
+  if (!clientRow?.email) {
+    await logEmailSkipped(supabase, sub, step, "no_email_address", subject, wrappedBody);
+    return {};
+  }
+  if (clientRow.email_distribution_enabled === false) {
+    await logEmailSkipped(supabase, sub, step, "email_opt_out", subject, wrappedBody);
+    return {};
+  }
+
+  const resendResult = await sendViaResend({
+    toEmail: clientRow.email,
+    subject: subject || "(件名なし)",
+    body: wrappedBody,
+    tags: [{ name: "ma_flow_step_id", value: step.id }],
+  });
+
+  const status = resendResult.sent
+    ? "sent"
+    : resendResult.reason === "not_configured"
+      ? "skipped"
+      : "failed";
+  const errorMessage = resendResult.sent
+    ? null
+    : resendResult.reason === "not_configured"
+      ? "resend_not_configured"
+      : resendResult.error.slice(0, 500);
+
+  const encryptedBody = await encryptField(wrappedBody);
+  const encryptedSubject = await encryptField(subject);
+  await supabase.from("ma_send_logs").insert({
+    organization_id: sub.organization_id,
+    scenario_id: null,
+    ma_flow_step_id: step.id,
+    recipient_client_record_id: sub.client_record_id,
+    recipient_email: clientRow.email,
+    recipient_line_user_id: null,
+    encrypted_subject: encryptedSubject,
+    encrypted_body: encryptedBody,
+    status,
+    error_message: errorMessage,
+    resend_message_id: resendResult.sent ? resendResult.messageId : null,
+  });
+
+  // Resend 未設定は運用上「送れなかった」だけで Flow エラーではないので継続。
+  // 明示的な send_failed はエラー扱い(step は fail としてマークされる)。
+  if (!resendResult.sent && resendResult.reason === "send_failed") {
+    return { error: errorMessage ?? "email_send_failed" };
+  }
+  return {};
+}
+
+/**
+ * メール送信をスキップした際の ma_send_logs 記録。 実送信はしていないが
+ * 「なぜ送らなかったか」を後追いできるようにする。
+ */
+async function logEmailSkipped(
+  supabase: SupabaseClient,
+  sub: SubscriptionRow,
+  step: FlowStepRow,
+  reason: string,
+  subject: string,
+  body: string,
+): Promise<void> {
+  const encryptedBody = await encryptField(body);
+  const encryptedSubject = await encryptField(subject);
+  await supabase.from("ma_send_logs").insert({
+    organization_id: sub.organization_id,
+    scenario_id: null,
+    ma_flow_step_id: step.id,
+    recipient_client_record_id: sub.client_record_id,
+    recipient_email: null,
+    recipient_line_user_id: null,
+    encrypted_subject: encryptedSubject,
+    encrypted_body: encryptedBody,
+    status: "skipped",
+    error_message: reason,
+  });
 }
 
 async function handleAssignTag(
