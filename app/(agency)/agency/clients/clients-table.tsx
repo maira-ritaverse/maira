@@ -256,7 +256,7 @@ export function ClientsTable({
                   colSpan={visible.length + (selectionEnabled ? 1 : 0)}
                   className="text-muted-foreground py-8 text-center"
                 >
-                  該当するクライアントがいません
+                  該当する求職者がいません
                 </TableCell>
               </TableRow>
             ) : (

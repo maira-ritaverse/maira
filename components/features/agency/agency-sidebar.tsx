@@ -24,7 +24,7 @@ const STORAGE_KEY = "maira-agency-sidebar";
 
 const BASE_ITEMS: ItemDescriptor[] = [
   { id: "dashboard", href: "/agency", icon: "dashboard", defaultLabel: "ダッシュボード" },
-  { id: "clients", href: "/agency/clients", icon: "users", defaultLabel: "クライアント管理" },
+  { id: "clients", href: "/agency/clients", icon: "users", defaultLabel: "求職者管理" },
   { id: "jobs", href: "/agency/jobs", icon: "briefcase", defaultLabel: "求人管理" },
   { id: "calendar", href: "/agency/calendar", icon: "calendar", defaultLabel: "カレンダー" },
   { id: "line", href: "/agency/line", icon: "message", defaultLabel: "LINE" },
@@ -56,7 +56,7 @@ const ADMIN_ITEMS: ItemDescriptor[] = [
  *   1. ダッシュボード (top)
  *   2. カレンダー    (top)
  *   3. 公式ライン    (group: LINE / LINE設定)
- *   4. 顧客・求人管理  (group: クライアント管理 / 求人管理)
+ *   4. 顧客・求人管理  (group: 求職者管理 / 求人管理)
  *   5. マーケティング  (タイトル無し group = 順番 制御 用)
  *   6. お知らせ      ↑同 group
  *   7. レポート      ↑同 group

@@ -388,7 +388,7 @@ export default async function AgencyDashboardPage() {
                   重複候補が <strong>{duplicates.length} 件</strong> あります。
                 </p>
                 <Button render={<Link href="/agency/clients" />} variant="outline" size="sm">
-                  クライアント一覧で確認
+                  求職者一覧で確認
                 </Button>
               </div>
             ) : (
@@ -396,7 +396,7 @@ export default async function AgencyDashboardPage() {
             ),
           "quick-actions": (
             <div className="flex flex-wrap gap-2">
-              <Button render={<Link href="/agency/clients/new" />}>+ クライアント登録</Button>
+              <Button render={<Link href="/agency/clients/new" />}>+ 求職者を登録</Button>
               <Button render={<Link href="/agency/calendar" />} variant="outline">
                 カレンダー
               </Button>

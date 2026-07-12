@@ -156,7 +156,7 @@ export function CsvImportDialog() {
         >
           <Card className="bg-background max-h-[90vh] w-full max-w-3xl space-y-4 overflow-y-auto p-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">CSV インポート(クライアント)</h2>
+              <h2 className="text-lg font-semibold">CSV インポート(求職者)</h2>
               <button
                 type="button"
                 onClick={close}

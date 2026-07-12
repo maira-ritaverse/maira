@@ -27,7 +27,7 @@ export default async function NewClientPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">クライアント登録</h1>
+        <h1 className="text-2xl font-bold">求職者を登録</h1>
         <Button render={<Link href="/agency/clients" />} variant="outline" size="sm">
           一覧に戻る
         </Button>

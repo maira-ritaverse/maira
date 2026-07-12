@@ -64,21 +64,21 @@ export default async function ClientsPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">クライアント管理</h1>
-          <p className="text-muted-foreground mt-1 text-sm">担当するクライアントを管理します</p>
+          <h1 className="text-2xl font-bold">求職者管理</h1>
+          <p className="text-muted-foreground mt-1 text-sm">担当する求職者を管理します</p>
         </div>
         <div className="flex items-center gap-2">
           {showExport && <ExportDialog />}
           <CsvImportDialog />
-          <Button render={<Link href="/agency/clients/new" />}>+ クライアント登録</Button>
+          <Button render={<Link href="/agency/clients/new" />}>+ 求職者を登録</Button>
         </div>
       </div>
 
       {clients.length === 0 ? (
         <EmptyState
           icon={<Users className="size-10" aria-hidden />}
-          title="クライアントがまだ登録されていません"
-          description="「クライアント登録」ボタンから追加できます"
+          title="求職者がまだ登録されていません"
+          description="「求職者を登録」ボタンから追加できます"
         />
       ) : (
         <>
