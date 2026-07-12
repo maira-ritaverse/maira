@@ -204,6 +204,12 @@ export type StepSavePayload = {
   branch_condition_json?: unknown;
   next_step_on_true?: number | null;
   next_step_on_false?: number | null;
+  /**
+   * 非 branch / 非 stop ステップの「次に進む先」。null だと編集画面で矢印が
+   * 引かれない。AI が明示しない場合は proposal の並び順の次ステップを
+   * 自動で埋める(下記 mapProposalStepsToSaveable 参照)。
+   */
+  next_step_on_default?: number | null;
 };
 
 /**
@@ -219,7 +225,19 @@ export function mapProposalStepsToSaveable(
   proposal: AIFlowProposal,
   templateIdByStepOrder: Record<number, string> = {},
 ): StepSavePayload[] {
+  // 提案の並び順で「次のステップの step_order」を先に計算しておく。
+  // 非 branch / 非 stop ステップの next_step_on_default に自動で入れて、
+  // 編集画面で矢印が繋がるようにする。
+  const sorted = [...proposal.steps].sort((a, b) => a.step_order - b.step_order);
+  const nextByOrder = new Map<number, number>();
+  for (let i = 0; i < sorted.length - 1; i++) {
+    nextByOrder.set(sorted[i].step_order, sorted[i + 1].step_order);
+  }
+  const defaultNextFor = (stepOrder: number): number | null => nextByOrder.get(stepOrder) ?? null;
+
   return proposal.steps.map((s): StepSavePayload => {
+    const defaultNext = defaultNextFor(s.step_order);
+
     // 送信
     if (s.action_type === "send_message") {
       const templateId = templateIdByStepOrder[s.step_order];
@@ -231,6 +249,7 @@ export function mapProposalStepsToSaveable(
           action_type: "send_message",
           template_id: templateId,
           action_config: { ai_generated: true },
+          next_step_on_default: defaultNext,
         };
       }
       return {
@@ -242,6 +261,7 @@ export function mapProposalStepsToSaveable(
           ai_intent: "send_message",
           ai_body: s.message_body ?? "",
         },
+        next_step_on_default: defaultNext,
       };
     }
 
@@ -261,6 +281,7 @@ export function mapProposalStepsToSaveable(
             tag_id: s.tag_id,
             ai_generated: true,
           },
+          next_step_on_default: defaultNext,
         };
       }
       // タグが未指定 or 新規要作成 → wait にフォールバック
@@ -273,10 +294,12 @@ export function mapProposalStepsToSaveable(
           ai_intent: s.action_type,
           ai_tag_name: s.tag_name ?? "",
         },
+        next_step_on_default: defaultNext,
       };
     }
 
-    // 分岐
+    // 分岐:AI が true / false のどちらか片方しか指定しなかった場合は
+    // 自然な流れ(次のステップ)を false 側に自動で埋める。
     if (s.action_type === "branch") {
       let branchJson: unknown = null;
       if (s.branch_condition_json_stringified) {
@@ -286,6 +309,8 @@ export function mapProposalStepsToSaveable(
           branchJson = null;
         }
       }
+      const trueNext = s.next_step_on_true ?? defaultNext;
+      const falseNext = s.next_step_on_false ?? defaultNext;
       return {
         step_order: s.step_order,
         name: s.name,
@@ -293,18 +318,30 @@ export function mapProposalStepsToSaveable(
         action_type: "branch",
         action_config: { ai_generated: true },
         branch_condition_json: branchJson ?? { kind: "and", conditions: [] },
-        next_step_on_true: s.next_step_on_true,
-        next_step_on_false: s.next_step_on_false,
+        next_step_on_true: trueNext,
+        next_step_on_false: falseNext,
       };
     }
 
-    // wait / stop
+    // stop:次はない
+    if (s.action_type === "stop") {
+      return {
+        step_order: s.step_order,
+        name: s.name,
+        delay_from_previous_seconds: s.delay_from_previous_seconds,
+        action_type: "stop",
+        action_config: {},
+      };
+    }
+
+    // wait
     return {
       step_order: s.step_order,
       name: s.name,
       delay_from_previous_seconds: s.delay_from_previous_seconds,
       action_type: s.action_type,
       action_config: {},
+      next_step_on_default: defaultNext,
     };
   });
 }

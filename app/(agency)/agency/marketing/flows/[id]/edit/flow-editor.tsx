@@ -341,6 +341,41 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments }: Props) 
     setSteps((prev) => prev.map((s) => ({ ...s, position_x: null, position_y: null })));
   };
 
+  /**
+   * 矢印が空いているステップを、並び順の次ステップに自動で繋げる。
+   *
+   * ・非 branch / 非 stop:next_step_on_default が null なら次ステップに
+   * ・branch:next_step_on_true / false が片方 null なら次ステップに
+   * 既に手動で繋いだ矢印は上書きしない。AI 生成直後の Flow を綺麗に繋ぐ用途。
+   */
+  const autoConnectMissing = () => {
+    if (!isAdmin) return;
+    setSteps((prev) => {
+      const sorted = [...prev].sort((a, b) => a.step_order - b.step_order);
+      const nextByOrder = new Map<number, number>();
+      for (let i = 0; i < sorted.length - 1; i++) {
+        nextByOrder.set(sorted[i].step_order, sorted[i + 1].step_order);
+      }
+      return prev.map((s) => {
+        const next = nextByOrder.get(s.step_order) ?? null;
+        if (next == null) return s;
+        if (s.action_type === "stop") return s;
+        if (s.action_type === "branch") {
+          return {
+            ...s,
+            next_step_on_true: s.next_step_on_true ?? next,
+            next_step_on_false: s.next_step_on_false ?? next,
+          };
+        }
+        return {
+          ...s,
+          next_step_on_default: s.next_step_on_default ?? next,
+        };
+      });
+    });
+    setSaveMsg("空いている矢印を並び順で繋ぎました。「保存」で確定します。");
+  };
+
   // ── 保存 ──
 
   const save = async () => {
@@ -404,6 +439,15 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments }: Props) 
           </Button>
           <Button variant="outline" size="sm" disabled={!isAdmin} onClick={resetLayout}>
             レイアウトをリセット
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!isAdmin || steps.length < 2}
+            onClick={autoConnectMissing}
+            title="矢印が繋がっていないステップを、並び順の次ステップに自動で繋げます"
+          >
+            矢印を自動接続
           </Button>
           <Button variant="outline" size="sm" onClick={() => setMetaExpanded((v) => !v)}>
             {metaExpanded ? "▼" : "▶"} Flow の詳細設定
