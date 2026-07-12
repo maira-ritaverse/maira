@@ -243,9 +243,22 @@ export async function POST(request: Request) {
           { status: 403 },
         );
       }
-      console.error("[bulk teams] rpc failed", { code: rpcError.code, message: rpcError.message });
+      // 500 の場合、フロント側で診断できるよう message に生の DB エラーを乗せる
+      // (内部設定情報の漏洩リスクは低い / admin 操作なので OK)。 sanitize は
+      // 最大 300 字にとどめる。
+      console.error("[bulk teams] rpc failed", {
+        code: rpcError.code,
+        message: rpcError.message,
+        details: rpcError.details,
+        hint: rpcError.hint,
+      });
       return NextResponse.json(
-        { error: "unknown", message: "リスト表の一括更新に失敗しました" },
+        {
+          error: "unknown",
+          message: `リスト表の一括更新に失敗しました: ${(rpcError.message ?? "").slice(0, 300)}`,
+          code: rpcError.code ?? null,
+          hint: (rpcError.hint ?? "").slice(0, 200) || undefined,
+        },
         { status: 500 },
       );
     }
