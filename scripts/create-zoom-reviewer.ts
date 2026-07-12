@@ -3,10 +3,12 @@
  * (maira-prod) に 作成 する スクリプト。
  *
  * 実行 例:
+ *   FIELD_ENCRYPTION_KEYS='{"v1":"<base64>"}' \
+ *   FIELD_ENCRYPTION_CURRENT_VERSION="v1" \
  *   SUPABASE_URL="https://xxatkimjfiaidxfuglae.supabase.co" \
  *   SUPABASE_SERVICE_ROLE_KEY="eyJ..." \
- *   REVIEWER_EMAIL="zoom.maira.review@gmail.com" \
- *   REVIEWER_PASSWORD="ti5CINOq1bH66q13STXK" \
+ *   REVIEWER_EMAIL="zoom-review@maira.pro" \
+ *   REVIEWER_PASSWORD="xUzR1g5fpYHkMvdZbfVn" \
  *   pnpm exec tsx scripts/create-zoom-reviewer.ts
  *
  * 動作:
@@ -15,10 +17,28 @@
  *   3. organization_members に admin として紐付け
  *   4. profiles の display_name を "Zoom Reviewer" にセット
  *   5. ダミークライアント 3 件 + ダミー求人 2 件をシード
+ *   6. LINE 会話タグ 3 種を作成し、ダミー LINE user と紐付け
+ *   7. 過去/未来の Zoom 面談 (meeting_schedules) 3 件をシード
+ *   8. 紹介 (referrals) 2 件 + 面接 (interviews) 1 件をシード
  *
  * 既存ユーザーが居ても先に削除して作り直す (= 冪等)。
+ * FIELD_ENCRYPTION_KEYS が未設定なら暗号化フィールドは null のままスキップ。
  */
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+// 暗号化ユーティリティ(FIELD_ENCRYPTION_KEYS がセットされていれば使う)
+// 動的 import にして、鍵未設定でもスクリプト全体が落ちないようにする
+let encryptField: ((v: string) => Promise<string | null>) | null = null;
+try {
+  if (process.env.FIELD_ENCRYPTION_KEYS && process.env.FIELD_ENCRYPTION_CURRENT_VERSION) {
+    const mod = await import("../lib/crypto/field-encryption");
+    encryptField = mod.encryptField as (v: string) => Promise<string | null>;
+  }
+} catch (err) {
+  console.warn(
+    `! field-encryption import failed, encrypted fields will be null: ${err instanceof Error ? err.message : String(err)}`,
+  );
+}
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -53,6 +73,9 @@ async function findExistingUserId(email: string): Promise<string | null> {
 
 async function deleteExistingReviewer(userId: string): Promise<void> {
   // organization_members を 削除 → organizations が 残った 場合 も 削除
+  //   organizations 削除で client_records / job_postings / referrals /
+  //   line_conversation_tags / meeting_schedules / interviews は
+  //   ON DELETE CASCADE で全部消える(各テーブル定義でそう宣言済み)。
   const { data: members } = await admin
     .from("organization_members")
     .select("id, organization_id")
@@ -68,7 +91,7 @@ async function deleteExistingReviewer(userId: string): Promise<void> {
   // auth.users 削除 (profiles は ON DELETE CASCADE 想定)
   const { error: delErr } = await admin.auth.admin.deleteUser(userId);
   if (delErr) throw new Error(`deleteUser failed: ${delErr.message}`);
-  console.log(`✓ Deleted existing user: ${userId}`);
+  console.log(`✓ Deleted existing user + org cascade: ${userId}`);
 }
 
 async function main() {
@@ -162,14 +185,35 @@ async function main() {
       status: "open" as const,
     },
   ];
-  const { error: jobErr } = await admin.from("job_postings").insert(
-    dummyJobs.map((j) => ({
-      organization_id: orgId,
-      ...j,
-    })),
-  );
+  const { data: insertedJobs, error: jobErr } = await admin
+    .from("job_postings")
+    .insert(dummyJobs.map((j) => ({ organization_id: orgId, ...j })))
+    .select("id, company_name");
   if (jobErr) console.warn(`! job seed failed: ${jobErr.message}`);
   else console.log(`✓ dummy jobs seeded (${dummyJobs.length})`);
+
+  // 挿入した client / job の ID を再取得(referrals / meetings で使う)
+  const { data: clientRows } = await admin
+    .from("client_records")
+    .select("id, name")
+    .eq("organization_id", orgId);
+  const clients = (clientRows ?? []) as Array<{ id: string; name: string }>;
+  const jobs = (insertedJobs ?? []) as Array<{ id: string; company_name: string }>;
+
+  // 6. LINE 会話タグ 3 種 + ダミー LINE user + タグ紐付け
+  //   Zoom 連携のテストには LINE は必須ではないが、Maira の UI で「タグが
+  //   ついた友だち一覧」など複数の画面が確認できるようにする。
+  await seedLineTagsAndAssignments(admin, orgId, clients);
+
+  // 7. Zoom 面談 (meeting_schedules) 3 件:過去 done / 今週予定 / 来週予定
+  //   Zoom 会議の join URL は placeholder(実際にクリックしても本物のZoom
+  //   会議は無いが、UI 表示・履歴の確認が可能)
+  await seedMeetingSchedules(admin, orgId, userId, clients);
+
+  // 8. 紹介 (referrals) と 面接 (interviews) をシード
+  //    - 求職者を求人に紐付けた進捗管理
+  //    - 面接 done ログ 1 件
+  await seedReferralsAndInterviews(admin, orgId, userId, clients, jobs);
 
   console.log("");
   console.log("════════════════════════════════════════════════");
@@ -181,6 +225,202 @@ async function main() {
   console.log(`  Org:       ${ORG_NAME} (${orgId})`);
   console.log(`  Role:      admin`);
   console.log("════════════════════════════════════════════════");
+}
+
+// ────────────────────────────────────────────────────────────────
+// ヘルパー:LINE タグ + ダミー友だちを シードする
+// ────────────────────────────────────────────────────────────────
+
+async function seedLineTagsAndAssignments(
+  admin: SupabaseClient,
+  orgId: string,
+  clients: Array<{ id: string; name: string }>,
+): Promise<void> {
+  const tagDefs = [
+    { name: "面談前", color: "#93c5fd" },
+    { name: "求人検討中", color: "#fbbf24" },
+    { name: "内定", color: "#86efac" },
+  ];
+  const { data: insertedTags, error: tagErr } = await admin
+    .from("line_conversation_tags")
+    .insert(tagDefs.map((t) => ({ organization_id: orgId, ...t })))
+    .select("id, name");
+  if (tagErr) {
+    console.warn(`! tag seed failed: ${tagErr.message}`);
+    return;
+  }
+  const tags = (insertedTags ?? []) as Array<{ id: string; name: string }>;
+  console.log(`✓ LINE conversation tags seeded (${tags.length})`);
+
+  // ダミー LINE user と client の紐付け(line_user_links)
+  //   実際の LINE 連携は不要。 UI で「タグが付いた友だち」を出すために
+  //   placeholder の line_user_id (U + 32 hex) を作る。
+  const linkRows = clients.slice(0, tags.length).map((c, i) => ({
+    organization_id: orgId,
+    line_user_id: `U${"0".repeat(31)}${i + 1}`, // placeholder(実 Zoom / LINE には影響しない)
+    client_record_id: c.id,
+    display_name: c.name,
+    link_method: "manual" as const,
+    linked_at: new Date().toISOString(),
+  }));
+  const { error: linkErr } = await admin.from("line_user_links").insert(linkRows);
+  if (linkErr) {
+    console.warn(`! line_user_links seed failed: ${linkErr.message}`);
+    return;
+  }
+  console.log(`✓ dummy line_user_links seeded (${linkRows.length})`);
+
+  // タグを friend に紐付け(1:1 対応で各友だちに 1 タグ)
+  const assignmentRows = linkRows.map((l, i) => ({
+    organization_id: orgId,
+    line_user_id: l.line_user_id,
+    tag_id: tags[i % tags.length].id,
+  }));
+  const { error: assignErr } = await admin
+    .from("line_conversation_tag_assignments")
+    .insert(assignmentRows);
+  if (assignErr) console.warn(`! tag assignment failed: ${assignErr.message}`);
+  else console.log(`✓ tag assignments seeded (${assignmentRows.length})`);
+}
+
+// ────────────────────────────────────────────────────────────────
+// ヘルパー:Zoom 面談 (meeting_schedules) をシード
+// ────────────────────────────────────────────────────────────────
+
+async function seedMeetingSchedules(
+  admin: SupabaseClient,
+  orgId: string,
+  hostUserId: string,
+  clients: Array<{ id: string; name: string }>,
+): Promise<void> {
+  if (clients.length === 0) return;
+  const now = new Date();
+  const daysFromNow = (d: number) => new Date(now.getTime() + d * 86400 * 1000);
+
+  const meetings = [
+    // 過去(録画取込済み想定):3 日前
+    {
+      client: clients[0],
+      offsetDays: -3,
+      status: "completed",
+      title: `[初回面談] ${clients[0].name} さん`,
+      agenda: "初回キャリア相談。現職の悩みと今後のキャリア方向性をヒアリング。",
+    },
+    // 今週(あと 2 日後)
+    ...(clients.length > 1
+      ? [
+          {
+            client: clients[1],
+            offsetDays: 2,
+            status: "scheduled",
+            title: `[求人紹介] ${clients[1].name} さん`,
+            agenda: "サンプル株式会社 / テスト商事 の求人詳細を紹介する予定。",
+          },
+        ]
+      : []),
+    // 来週(7 日後)
+    ...(clients.length > 2
+      ? [
+          {
+            client: clients[2],
+            offsetDays: 7,
+            status: "scheduled",
+            title: `[面接対策] ${clients[2].name} さん`,
+            agenda: "書類選考通過後の 1 次面接に向けた対策セッション。",
+          },
+        ]
+      : []),
+  ];
+
+  const rows = await Promise.all(
+    meetings.map(async (m) => {
+      const starts = daysFromNow(m.offsetDays);
+      const ends = new Date(starts.getTime() + 3600 * 1000); // 1 時間枠
+      const encryptedAgenda = encryptField ? await encryptField(m.agenda) : null;
+      return {
+        organization_id: orgId,
+        host_user_id: hostUserId,
+        client_record_id: m.client.id,
+        provider: "zoom" as const,
+        // 実 Zoom 会議 ID ではない placeholder(表示用)
+        external_meeting_id: `dummy-${Math.floor(Math.random() * 1e9)}`,
+        join_url: "https://zoom.us/j/reviewer-placeholder",
+        host_url: "https://zoom.us/s/reviewer-placeholder",
+        title: m.title,
+        encrypted_agenda: encryptedAgenda,
+        starts_at: starts.toISOString(),
+        ends_at: ends.toISOString(),
+        timezone: "Asia/Tokyo",
+        status: m.status,
+      };
+    }),
+  );
+  const { error } = await admin.from("meeting_schedules").insert(rows);
+  if (error) console.warn(`! meeting_schedules seed failed: ${error.message}`);
+  else console.log(`✓ meeting_schedules seeded (${rows.length})`);
+}
+
+// ────────────────────────────────────────────────────────────────
+// ヘルパー:紹介 (referrals) と 面接 (interviews) をシード
+// ────────────────────────────────────────────────────────────────
+
+async function seedReferralsAndInterviews(
+  admin: SupabaseClient,
+  orgId: string,
+  hostUserId: string,
+  clients: Array<{ id: string; name: string }>,
+  jobs: Array<{ id: string; company_name: string }>,
+): Promise<void> {
+  if (clients.length === 0 || jobs.length === 0) return;
+
+  // 紹介 2 件:
+  //   - clients[0] → jobs[0]:面接 status(進行中)
+  //   - clients[1] → jobs[1]:internal_screening(書類選考中)
+  const refs = [
+    {
+      client_record_id: clients[0].id,
+      job_posting_id: jobs[0].id,
+      status: "interview" as const,
+      notes: "初回面談で意欲が高く、スキルセットもマッチ。 一次面接を控える。",
+    },
+    ...(clients.length > 1 && jobs.length > 1
+      ? [
+          {
+            client_record_id: clients[1].id,
+            job_posting_id: jobs[1].id,
+            status: "screening" as const,
+            notes: "職務経歴書を提出済み。 書類選考結果待ち。",
+          },
+        ]
+      : []),
+  ];
+  const { data: insertedRefs, error: refErr } = await admin
+    .from("referrals")
+    .insert(refs.map((r) => ({ organization_id: orgId, ...r })))
+    .select("id, client_record_id");
+  if (refErr) {
+    console.warn(`! referral seed failed: ${refErr.message}`);
+    return;
+  }
+  const referrals = (insertedRefs ?? []) as Array<{ id: string; client_record_id: string }>;
+  console.log(`✓ referrals seeded (${referrals.length})`);
+
+  // 面接 1 件:1 件目の referral に対する 1 次面接 (done)
+  if (referrals.length > 0) {
+    const now = new Date();
+    const oneWeekAgo = new Date(now.getTime() - 7 * 86400 * 1000);
+    const { error: intErr } = await admin.from("interviews").insert({
+      organization_id: orgId,
+      referral_id: referrals[0].id,
+      kind: "first",
+      scheduled_at: oneWeekAgo.toISOString(),
+      result: "done",
+      notes: "1次面接完了。 印象は好感触。 2次面接の日程調整中。",
+      created_by_user_id: hostUserId,
+    });
+    if (intErr) console.warn(`! interview seed failed: ${intErr.message}`);
+    else console.log(`✓ interviews seeded (1)`);
+  }
 }
 
 main().catch((err) => {
