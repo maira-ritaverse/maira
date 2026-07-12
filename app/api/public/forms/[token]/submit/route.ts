@@ -77,8 +77,25 @@ export async function POST(request: Request, context: RouteContext) {
     }
   }
 
-  // 暗号化して INSERT
-  const encryptedAnswers = await encryptField(JSON.stringify(parsed.data.answers));
+  // 暗号化して INSERT。 FIELD_ENCRYPTION_KEYS 未設定の場合 throw する可能性が
+  // あるので try/catch で 500 メッセージを整える(公開エンドポイントなので
+  // 生の error message を漏らさない)。
+  let encryptedAnswers: string | null | undefined;
+  try {
+    encryptedAnswers = await encryptField(JSON.stringify(parsed.data.answers));
+  } catch (err) {
+    console.error("[forms/submit] encryptField failed", {
+      formId: formRow.id,
+      message: err instanceof Error ? err.message : String(err),
+    });
+    return NextResponse.json(
+      {
+        error: "server_misconfigured",
+        message: "サーバー設定の問題により送信できませんでした。管理者にお問い合わせください。",
+      },
+      { status: 500 },
+    );
+  }
   if (!encryptedAnswers) {
     return NextResponse.json({ error: "encryption_failed" }, { status: 500 });
   }
