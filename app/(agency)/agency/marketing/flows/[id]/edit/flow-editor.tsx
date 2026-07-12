@@ -36,7 +36,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Sparkles } from "lucide-react";
+import { Play, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +48,7 @@ import type { FlowDetail, MaTemplateOption } from "@/lib/ma/flow-queries";
 import type { SegmentListItem } from "@/lib/ma/segment-queries";
 
 import { AiImproveModal } from "./ai-improve-modal";
+import { DryRunModal } from "./dry-run-modal";
 import { StepConfigPanel, type StepEditable } from "./step-config-panel";
 import { StepNode, type StepNodeData } from "./step-node";
 
@@ -235,6 +236,7 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments, attributi
   });
   const [metaExpanded, setMetaExpanded] = useState(false);
   const [aiImproveOpen, setAiImproveOpen] = useState(false);
+  const [dryRunOpen, setDryRunOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<number | null>(
     initialSteps[0]?.step_order ?? null,
   );
@@ -538,6 +540,20 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments, attributi
           <Button
             variant="outline"
             size="sm"
+            onClick={() => setDryRunOpen(true)}
+            disabled={steps.length === 0}
+            title={
+              steps.length === 0
+                ? "ステップがない Flow はテスト実行できません"
+                : "仮想友だちで Flow をシミュレーション実行(実 LINE 送信なし)"
+            }
+          >
+            <Play className="mr-1 size-3" aria-hidden />
+            テスト実行
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setAiImproveOpen(true)}
             disabled={steps.length === 0}
             title={steps.length === 0 ? "ステップがない Flow はレビューできません" : ""}
@@ -789,6 +805,7 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments, attributi
           router.refresh();
         }}
       />
+      <DryRunModal open={dryRunOpen} onOpenChange={setDryRunOpen} flowId={flow.id} tags={tags} />
     </div>
   );
 }
