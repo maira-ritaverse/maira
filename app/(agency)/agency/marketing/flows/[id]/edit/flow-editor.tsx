@@ -35,6 +35,8 @@ import {
 } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { Sparkles } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,6 +44,7 @@ import type { LineConversationTag } from "@/lib/line/conversation-tags";
 import type { FlowDetail, MaTemplateOption } from "@/lib/ma/flow-queries";
 import type { SegmentListItem } from "@/lib/ma/segment-queries";
 
+import { AiImproveModal } from "./ai-improve-modal";
 import { StepConfigPanel, type StepEditable } from "./step-config-panel";
 import { StepNode, type StepNodeData } from "./step-node";
 
@@ -179,6 +182,7 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments }: Props) 
     target_segment_id: flow.target_segment_id,
   });
   const [metaExpanded, setMetaExpanded] = useState(false);
+  const [aiImproveOpen, setAiImproveOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<number | null>(
     initialSteps[0]?.step_order ?? null,
   );
@@ -401,6 +405,16 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments }: Props) 
           <Button variant="outline" size="sm" onClick={() => setMetaExpanded((v) => !v)}>
             {metaExpanded ? "▼" : "▶"} Flow メタ 情報
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAiImproveOpen(true)}
+            disabled={steps.length === 0}
+            title={steps.length === 0 ? "ステップ が ない Flow は レビュー でき ません" : ""}
+          >
+            <Sparkles className="mr-1 size-3" aria-hidden />
+            AI 改善 提案
+          </Button>
           <span className="text-muted-foreground text-xs">
             トリガー: {flow.trigger_type} / ステップ: {steps.length}
           </span>
@@ -540,6 +554,8 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments }: Props) 
         操作:ノード ドラッグ で 移動 / ハンドル ドラッグ で 接続 / 選択 して Delete で 削除 /
         「レイアウト リセット」 で 自動 縦積み に 戻す
       </div>
+
+      <AiImproveModal open={aiImproveOpen} onOpenChange={setAiImproveOpen} flowId={flow.id} />
     </div>
   );
 }
