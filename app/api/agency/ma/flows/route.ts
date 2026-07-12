@@ -1,0 +1,144 @@
+/**
+ * /api/agency/ma/flows
+ *
+ * GET   :自組織 の Flow 一覧 (集約 済) を 返す
+ * POST  :Flow を 新規 作成 (プリセット から or 空白)
+ * PATCH :Flow の is_active を 切替 (body に { id, is_active })
+ *
+ * 認可 :
+ *   ・GET:organization member (advisor / admin)
+ *   ・POST / PATCH:organization admin のみ
+ */
+import { NextResponse } from "next/server";
+import { z } from "zod";
+
+import { requireOrgAdmin, requireOrgMember } from "@/lib/api/auth-guards";
+import { listFlowsForOrg } from "@/lib/ma/flow-queries";
+import { getLineFlowPresetByKey } from "@/lib/ma/flow-presets";
+import { createServiceClient } from "@/lib/supabase/service";
+
+export const dynamic = "force-dynamic";
+
+// ────────────────────────────────────────
+// GET
+// ────────────────────────────────────────
+export async function GET() {
+  const guard = await requireOrgMember();
+  if (!guard.ok) return guard.response;
+
+  try {
+    const flows = await listFlowsForOrg(guard.supabase, guard.organization.id);
+    return NextResponse.json({ flows });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: "fetch_failed", message: msg }, { status: 500 });
+  }
+}
+
+// ────────────────────────────────────────
+// POST (Flow 新規 作成)
+// ────────────────────────────────────────
+const postBody = z.object({
+  /** LINE_FLOW_PRESETS の key。 null なら 空白 Flow を 作成。 */
+  preset_key: z.string().nullable(),
+  /** preset_key 未指定 時 の 表示 名 (必須)。 preset 指定 時 は 上書き 用 (任意)。 */
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).nullable().optional(),
+});
+
+export async function POST(request: Request) {
+  const guard = await requireOrgAdmin();
+  if (!guard.ok) return guard.response;
+
+  const json = (await request.json().catch(() => null)) as unknown;
+  const parsed = postBody.safeParse(json);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "invalid_body", details: parsed.error.flatten() },
+      { status: 400 },
+    );
+  }
+
+  const admin = createServiceClient();
+
+  // プリセット 由来 の 場合 は 定義 から メタ を コピー
+  let insertRow: Record<string, unknown> = {
+    organization_id: guard.organization.id,
+    channel: "line",
+    is_active: false,
+    created_by: guard.user.id,
+  };
+
+  if (parsed.data.preset_key) {
+    const preset = getLineFlowPresetByKey(parsed.data.preset_key);
+    if (!preset) {
+      return NextResponse.json({ error: "unknown_preset" }, { status: 400 });
+    }
+    insertRow = {
+      ...insertRow,
+      name: parsed.data.name ?? preset.name,
+      description: parsed.data.description ?? preset.description,
+      trigger_type: preset.trigger_type,
+      trigger_config: preset.trigger_config,
+      goal_event_key: preset.goal_event_key,
+      allow_reentry: preset.allow_reentry,
+      origin_preset_key: preset.key,
+    };
+  } else {
+    // 空白 Flow:name 必須、 trigger は 'manual' (後で 編集 画面 で 変更)
+    if (!parsed.data.name) {
+      return NextResponse.json({ error: "name_required_for_blank" }, { status: 400 });
+    }
+    insertRow = {
+      ...insertRow,
+      name: parsed.data.name,
+      description: parsed.data.description ?? null,
+      trigger_type: "manual",
+      trigger_config: {},
+      goal_event_key: null,
+      allow_reentry: false,
+      origin_preset_key: null,
+    };
+  }
+
+  const { data, error } = await admin.from("ma_flows").insert(insertRow).select("id").single();
+  if (error) {
+    return NextResponse.json({ error: "insert_failed", message: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, id: data.id });
+}
+
+// ────────────────────────────────────────
+// PATCH (is_active 切替)
+// ────────────────────────────────────────
+const patchBody = z.object({
+  id: z.string().uuid(),
+  is_active: z.boolean(),
+});
+
+export async function PATCH(request: Request) {
+  const guard = await requireOrgAdmin();
+  if (!guard.ok) return guard.response;
+
+  const json = (await request.json().catch(() => null)) as unknown;
+  const parsed = patchBody.safeParse(json);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "invalid_body", details: parsed.error.flatten() },
+      { status: 400 },
+    );
+  }
+
+  const admin = createServiceClient();
+  const { error } = await admin
+    .from("ma_flows")
+    .update({ is_active: parsed.data.is_active })
+    .eq("id", parsed.data.id)
+    .eq("organization_id", guard.organization.id);
+  if (error) {
+    return NextResponse.json({ error: "update_failed", message: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
