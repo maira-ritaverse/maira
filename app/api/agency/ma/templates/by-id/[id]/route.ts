@@ -21,6 +21,8 @@ export const runtime = "nodejs";
 const patchBody = z.object({
   name: z.string().min(1).max(200).optional(),
   body: z.string().min(1).max(4000).optional(),
+  /** メール Flow 用の件名。 LINE Flow では未使用だが保存はする(将来切替時に流用可能)。 */
+  subject: z.string().max(200).optional(),
 });
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -43,6 +45,9 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (parsed.data.name !== undefined) patch.name = parsed.data.name;
   if (parsed.data.body !== undefined) {
     patch.encrypted_body = await encryptField(parsed.data.body);
+  }
+  if (parsed.data.subject !== undefined) {
+    patch.encrypted_subject = await encryptField(parsed.data.subject);
   }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "no_fields" }, { status: 400 });

@@ -46,6 +46,8 @@ type Props = {
   disabled: boolean;
   tags: LineConversationTag[];
   templates: MaTemplateOption[];
+  /** Flow の送信チャネル。 'email' なら件名編集を表示 */
+  channel: string;
 };
 
 const ACTION_TYPES = [
@@ -67,6 +69,7 @@ export function StepConfigPanel({
   disabled,
   tags,
   templates,
+  channel,
 }: Props) {
   if (!step) {
     return (
@@ -169,6 +172,7 @@ export function StepConfigPanel({
           templateId={step.template_id}
           templates={templates}
           disabled={disabled}
+          channel={channel}
           onSelectTemplate={(id) => onChange({ template_id: id })}
         />
       )}
@@ -414,20 +418,26 @@ function SendMessageEditor({
   templateId,
   templates,
   disabled,
+  channel,
   onSelectTemplate,
 }: {
   templateId: string | null;
   templates: MaTemplateOption[];
   disabled: boolean;
+  channel: string;
   onSelectTemplate: (id: string | null) => void;
 }) {
   const selectedTemplate = templates.find((t) => t.id === templateId) ?? null;
+  const [subject, setSubject] = useState<string>(selectedTemplate?.subject ?? "");
   const [body, setBody] = useState<string>(selectedTemplate?.body ?? "");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
-  const dirty = selectedTemplate ? body !== selectedTemplate.body : false;
+  const isEmail = channel === "email";
+  const dirty = selectedTemplate
+    ? body !== selectedTemplate.body || (isEmail && subject !== selectedTemplate.subject)
+    : false;
 
-  async function saveBody() {
+  async function saveTemplate() {
     if (!selectedTemplate) return;
     setSaving(true);
     setSaveMsg(null);
@@ -435,7 +445,11 @@ function SendMessageEditor({
       const res = await fetch(`/api/agency/ma/templates/by-id/${selectedTemplate.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ body }),
+        body: JSON.stringify({
+          body,
+          // 件名はメール Flow の場合のみ送る(LINE Flow は subject を使わない)
+          ...(isEmail ? { subject } : {}),
+        }),
       });
       if (!res.ok) {
         const b = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
@@ -481,23 +495,41 @@ function SendMessageEditor({
       </div>
 
       {selectedTemplate && (
-        <div className="space-y-1 rounded border bg-slate-50/60 p-2">
+        <div className="space-y-2 rounded border bg-slate-50/60 p-2">
           <div className="flex items-center justify-between">
-            <Label htmlFor="step-body" className="text-xs">
-              このステップで送られる本文
-            </Label>
+            <Label className="text-xs">このステップで送られる内容</Label>
             <div className="flex items-center gap-2">
               {saveMsg && <span className="text-muted-foreground text-[10px]">{saveMsg}</span>}
               <button
                 type="button"
                 disabled={disabled || !dirty || saving}
-                onClick={saveBody}
+                onClick={saveTemplate}
                 className="rounded border border-emerald-500 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-900 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-400"
               >
-                {saving ? "保存中..." : dirty ? "本文を保存" : "変更なし"}
+                {saving ? "保存中..." : dirty ? "テンプレートを保存" : "変更なし"}
               </button>
             </div>
           </div>
+
+          {isEmail && (
+            <div className="space-y-1">
+              <Label htmlFor="step-subject" className="text-[10px] text-slate-600">
+                メール件名
+              </Label>
+              <Input
+                id="step-subject"
+                value={subject}
+                disabled={disabled}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="例: ◯◯様 - 面談の日程調整のご案内"
+                maxLength={200}
+              />
+            </div>
+          )}
+
+          <Label htmlFor="step-body" className="text-[10px] text-slate-600">
+            {isEmail ? "メール本文" : "LINE メッセージ本文"}
+          </Label>
           <textarea
             id="step-body"
             className="border-input bg-background w-full rounded border px-2 py-1.5 text-sm"
@@ -505,7 +537,11 @@ function SendMessageEditor({
             value={body}
             disabled={disabled}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="ここに送信するメッセージを書いてください"
+            placeholder={
+              isEmail
+                ? "ここにメール本文を書いてください"
+                : "ここに LINE メッセージを書いてください"
+            }
             maxLength={4000}
           />
           <p className="text-muted-foreground text-[10px]">

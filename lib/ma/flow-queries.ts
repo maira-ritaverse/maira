@@ -26,6 +26,8 @@ export type MaTemplateOption = {
   id: string;
   scenario_key: string;
   scenario_name: string;
+  /** 復号済み件名。 メール Flow で使用(LINE Flow では未使用)。 */
+  subject: string;
   /** 復号済み本文。 Flow エディタで担当者に見せて編集できるようにするため。 */
   body: string;
   updated_at: string;
@@ -40,7 +42,7 @@ export async function listMaTemplatesForOrg(
   // 本文(encrypted_body) は Flow エディタで送信内容を可視化するため復号して返す。
   const { data: templates, error } = await supabase
     .from("ma_templates")
-    .select("id, name, scenario_id, encrypted_body, updated_at")
+    .select("id, name, scenario_id, encrypted_subject, encrypted_body, updated_at")
     .eq("organization_id", organizationId)
     .order("updated_at", { ascending: false });
   if (error) throw error;
@@ -49,6 +51,7 @@ export async function listMaTemplatesForOrg(
     id: string;
     name: string | null;
     scenario_id: string | null;
+    encrypted_subject: string | null;
     encrypted_body: string | null;
     updated_at: string;
   };
@@ -73,15 +76,26 @@ export async function listMaTemplatesForOrg(
     }
   }
 
-  // 本文を復号(失敗したら空文字で埋めて UI 側でエラー表示せず継続)
-  const bodies = await Promise.all(
+  // 件名 / 本文を復号(失敗したら空文字で埋めて UI 側でエラー表示せず継続)
+  const decrypted = await Promise.all(
     rows.map(async (r) => {
-      if (!r.encrypted_body) return "";
-      try {
-        return (await decryptField(r.encrypted_body)) ?? "";
-      } catch {
-        return "";
+      let subject = "";
+      let body = "";
+      if (r.encrypted_subject) {
+        try {
+          subject = (await decryptField(r.encrypted_subject)) ?? "";
+        } catch {
+          subject = "";
+        }
       }
+      if (r.encrypted_body) {
+        try {
+          body = (await decryptField(r.encrypted_body)) ?? "";
+        } catch {
+          body = "";
+        }
+      }
+      return { subject, body };
     }),
   );
 
@@ -91,7 +105,8 @@ export async function listMaTemplatesForOrg(
     scenario_name: r.scenario_id
       ? (presetNameByScenarioId.get(r.scenario_id) ?? "旧 プリセット")
       : (r.name ?? "無 名 テンプレ"),
-    body: bodies[i],
+    subject: decrypted[i].subject,
+    body: decrypted[i].body,
     updated_at: r.updated_at,
   }));
 }
@@ -103,6 +118,8 @@ export type FlowListItem = {
   id: string;
   name: string;
   description: string | null;
+  /** 'line' | 'email' — 送信チャネル */
+  channel: string;
   trigger_type: string;
   is_active: boolean;
   origin_preset_key: string | null;
@@ -125,7 +142,7 @@ export async function listFlowsForOrg(
   const { data: flowsData, error: flowsErr } = await supabase
     .from("ma_flows")
     .select(
-      "id, name, description, trigger_type, is_active, origin_preset_key, goal_event_key, allow_reentry, created_at, updated_at",
+      "id, name, description, channel, trigger_type, is_active, origin_preset_key, goal_event_key, allow_reentry, created_at, updated_at",
     )
     .eq("organization_id", organizationId)
     .order("created_at", { ascending: false });

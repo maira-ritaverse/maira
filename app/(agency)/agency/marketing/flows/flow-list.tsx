@@ -124,6 +124,9 @@ export function FlowList({ initialFlows, isAdmin }: Props) {
               </CardHeader>
               <CardContent className="flex flex-1 flex-col justify-between space-y-3">
                 <div className="flex flex-wrap gap-1.5 text-xs">
+                  <Chip tone={flow.channel === "email" ? "muted" : "outline"}>
+                    {flow.channel === "email" ? "メール" : "公式 LINE"}
+                  </Chip>
                   <Chip>{labelForTriggerType(flow.trigger_type)}</Chip>
                   <Chip>{flow.step_count} ステップ</Chip>
                   {flow.active_subscription_count > 0 && (

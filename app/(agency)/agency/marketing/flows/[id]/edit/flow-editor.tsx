@@ -572,7 +572,8 @@ export function FlowEditor({
             AI に改善してもらう
           </Button>
           <span className="text-muted-foreground text-xs">
-            起動タイミング: {labelForTriggerType(flow.trigger_type)} / ステップ: {steps.length}
+            チャネル: {flow.channel === "email" ? "メール" : "公式 LINE"} / 起動タイミング:{" "}
+            {labelForTriggerType(flow.trigger_type)} / ステップ: {steps.length}
             {flow.updated_at && ` / 最終更新: ${formatUpdatedAtJa(flow.updated_at)}`}
           </span>
         </div>
@@ -842,6 +843,7 @@ export function FlowEditor({
             disabled={!isAdmin}
             tags={tags}
             templates={templates}
+            channel={flow.channel}
           />
         </div>
       </div>
