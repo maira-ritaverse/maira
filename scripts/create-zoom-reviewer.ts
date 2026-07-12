@@ -2,14 +2,16 @@
  * Zoom Marketplace の 審査 員 用 reviewer アカウント を 本番 Supabase
  * (maira-prod) に 作成 する スクリプト。
  *
- * 実行 例:
+ * 実行 例(2026-06-23 に Zoom に共有した認証情報でシードする場合):
  *   FIELD_ENCRYPTION_KEYS='{"v1":"<base64>"}' \
  *   FIELD_ENCRYPTION_CURRENT_VERSION="v1" \
  *   SUPABASE_URL="https://xxatkimjfiaidxfuglae.supabase.co" \
  *   SUPABASE_SERVICE_ROLE_KEY="eyJ..." \
- *   REVIEWER_EMAIL="zoom-review@maira.pro" \
- *   REVIEWER_PASSWORD="xUzR1g5fpYHkMvdZbfVn" \
  *   pnpm exec tsx scripts/create-zoom-reviewer.ts
+ *
+ * REVIEWER_EMAIL / REVIEWER_PASSWORD 未指定時は、 Zoom Marketplace の
+ * レビュースレッドに提示した以下の認証情報を既定値として使う。
+ * ローカル / dev で試すときだけ env で上書きすること。
  *
  * 動作:
  *   1. auth.admin.createUser でメール確認スキップで作成
@@ -42,8 +44,11 @@ try {
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const REVIEWER_EMAIL = process.env.REVIEWER_EMAIL;
-const REVIEWER_PASSWORD = process.env.REVIEWER_PASSWORD;
+// Zoom Marketplace レビュースレッド(2026-06-23 リタバースマイラ 11:38 AM)で
+// 共有した認証情報を既定値として使う。 dev や再作成でパスワードを変えたい場合
+// のみ env で上書きすること。
+const REVIEWER_EMAIL = process.env.REVIEWER_EMAIL ?? "maira-zoom-reviewer@maira.pro";
+const REVIEWER_PASSWORD = process.env.REVIEWER_PASSWORD ?? "ti5CINOq1bH66q13STXK";
 const ORG_NAME = process.env.REVIEWER_ORG_NAME ?? "Zoom Marketplace Reviewer";
 const DISPLAY_NAME = process.env.REVIEWER_DISPLAY_NAME ?? "Zoom Reviewer";
 
@@ -54,8 +59,7 @@ function fail(message: string): never {
 
 if (!SUPABASE_URL) fail("SUPABASE_URL is required");
 if (!SERVICE_ROLE_KEY) fail("SUPABASE_SERVICE_ROLE_KEY is required");
-if (!REVIEWER_EMAIL) fail("REVIEWER_EMAIL is required");
-if (!REVIEWER_PASSWORD) fail("REVIEWER_PASSWORD is required");
+// REVIEWER_EMAIL / PASSWORD は既定値があるので必須チェックしない
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
