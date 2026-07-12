@@ -20,6 +20,7 @@ import {
   AIFlowProposalSchema,
   FLOW_GENERATION_SYSTEM_PROMPT,
 } from "@/lib/ai/prompts/flow-generation";
+import { checkAiUsageLimit, recordAiUsage } from "@/lib/features/ai-usage";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -47,6 +48,20 @@ export async function POST(request: Request) {
     );
   }
 
+  // AI 月次 上限 チェック
+  const usage = await checkAiUsageLimit(guard.supabase, guard.user.id, "agency_ma_flow_generation");
+  if (!usage.allowed) {
+    return NextResponse.json(
+      {
+        error: "ai_limit_exceeded",
+        message: `今月 の AI Flow 生成 上限 (${usage.limit} 回) に 達しました。 リセット: ${usage.resetsAt}`,
+        current: usage.current,
+        limit: usage.limit,
+      },
+      { status: 429 },
+    );
+  }
+
   try {
     const result = await generateObject({
       model: getModel(MODELS.CONVERSATION),
@@ -54,6 +69,9 @@ export async function POST(request: Request) {
       system: FLOW_GENERATION_SYSTEM_PROMPT,
       prompt: `<user_intent>\n${parsed.data.prompt}\n</user_intent>`,
     });
+
+    // 成功 → 使用 回数 を 記録
+    await recordAiUsage(guard.supabase, guard.user.id, "agency_ma_flow_generation");
 
     return NextResponse.json({ proposal: result.object });
   } catch (err) {

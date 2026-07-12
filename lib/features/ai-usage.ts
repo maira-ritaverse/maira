@@ -38,7 +38,13 @@ export type AiUsageKind =
   // LINE 会話 履歴 から の 返信 案 生成 (ボタン クリック 起動、 1 回 あたり 軽量)
   | "agency_line_reply_suggest"
   // LINE 会話 履歴 から 顧客 プロファイル 情報 (name_kana / email / phone / 所感) を 抽出
-  | "agency_line_client_extract";
+  | "agency_line_client_extract"
+  // Flow ビルダー AI ジェネレーター (自然文 → Flow 提案)
+  | "agency_ma_flow_generation"
+  // Segment ビルダー AI ジェネレーター (自然文 → SegmentCondition ツリー)
+  | "agency_ma_segment_generation"
+  // Flow 改善 提案 (既存 Flow を レビュー して 改善点 を 提示)
+  | "agency_ma_flow_improvement";
 
 /** kind の scope:組織側(全メンバー合算上限)/ 求職者側(1 人あたり上限) */
 type KindScope = "agency_org" | "seeker_per_user";
@@ -60,6 +66,9 @@ const KIND_SCOPE: Record<AiUsageKind, KindScope> = {
   agency_client_summary: "agency_org",
   agency_line_reply_suggest: "agency_org",
   agency_line_client_extract: "agency_org",
+  agency_ma_flow_generation: "agency_org",
+  agency_ma_segment_generation: "agency_org",
+  agency_ma_flow_improvement: "agency_org",
 };
 
 // クライアント サマリー 月次上限 既定値 (軽量 タスク、 1 回 ¥1-3 程度)
@@ -73,6 +82,14 @@ export const AGENCY_LINE_REPLY_SUGGEST_ADDON_MONTHLY = 5000;
 // 通常 は 頻度 が 少ない が、 大量 バッチ 化 に 備えて 中庸 の 値。
 export const AGENCY_LINE_CLIENT_EXTRACT_FREE_MONTHLY = 200;
 export const AGENCY_LINE_CLIENT_EXTRACT_ADDON_MONTHLY = 2000;
+// MA Flow / Segment 生成 系 (Claude Sonnet 4.6、 1 回 あたり ¥5-15 程度)
+// admin が Flow / Segment を 作る 頻度 は 高くない (月 数 回 〜 数十 回) 想定。
+export const AGENCY_MA_FLOW_GENERATION_FREE_MONTHLY = 50;
+export const AGENCY_MA_FLOW_GENERATION_ADDON_MONTHLY = 500;
+export const AGENCY_MA_SEGMENT_GENERATION_FREE_MONTHLY = 50;
+export const AGENCY_MA_SEGMENT_GENERATION_ADDON_MONTHLY = 500;
+export const AGENCY_MA_FLOW_IMPROVEMENT_FREE_MONTHLY = 30;
+export const AGENCY_MA_FLOW_IMPROVEMENT_ADDON_MONTHLY = 300;
 
 // 既定値(組織が 何も 設定していない 状態の フォールバック)
 export const PHOTO_ENHANCE_FREE_MONTHLY = 5;
@@ -186,6 +203,18 @@ function defaultLimitFor(kind: AiUsageKind, addon: boolean): number {
       return addon
         ? AGENCY_LINE_CLIENT_EXTRACT_ADDON_MONTHLY
         : AGENCY_LINE_CLIENT_EXTRACT_FREE_MONTHLY;
+    case "agency_ma_flow_generation":
+      return addon
+        ? AGENCY_MA_FLOW_GENERATION_ADDON_MONTHLY
+        : AGENCY_MA_FLOW_GENERATION_FREE_MONTHLY;
+    case "agency_ma_segment_generation":
+      return addon
+        ? AGENCY_MA_SEGMENT_GENERATION_ADDON_MONTHLY
+        : AGENCY_MA_SEGMENT_GENERATION_FREE_MONTHLY;
+    case "agency_ma_flow_improvement":
+      return addon
+        ? AGENCY_MA_FLOW_IMPROVEMENT_ADDON_MONTHLY
+        : AGENCY_MA_FLOW_IMPROVEMENT_FREE_MONTHLY;
   }
 }
 

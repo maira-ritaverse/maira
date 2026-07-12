@@ -21,6 +21,9 @@ export const AI_KIND_LABEL: Record<string, string> = {
   agency_client_summary: "クライアント詳細 AI 状況サマリー",
   agency_line_reply_suggest: "LINE 返信案 AI 提案",
   agency_line_client_extract: "LINE 会話から CRM 情報 抽出",
+  agency_ma_flow_generation: "Flow ビルダー AI 生成",
+  agency_ma_segment_generation: "Segment ビルダー AI 生成",
+  agency_ma_flow_improvement: "Flow 改善 提案 AI",
 };
 
 /** 上限設定 UI で「組織横断」「求職者 1 人あたり」を 表示する分類 */
@@ -37,6 +40,9 @@ export const AI_KIND_SCOPE_LABEL: Record<string, "agency_org" | "seeker_per_user
   agency_client_summary: "agency_org",
   agency_line_reply_suggest: "agency_org",
   agency_line_client_extract: "agency_org",
+  agency_ma_flow_generation: "agency_org",
+  agency_ma_segment_generation: "agency_org",
+  agency_ma_flow_improvement: "agency_org",
 };
 
 /**
@@ -56,6 +62,9 @@ export const AI_KIND_UNIT_COST_USD: Record<string, number> = {
   agency_client_summary: 0.015, // 軽量 ストリーミング (約 2k input + 800 output 想定)
   agency_line_reply_suggest: 0.012, // Claude 短会話 (約 1.5k input + 500 output 想定)
   agency_line_client_extract: 0.015, // 会話 全 30 件 + JSON 出力 (約 2k input + 500 output 想定)
+  agency_ma_flow_generation: 0.05, // Claude 構造 化 出力 (約 3k input + 2k output 想定)
+  agency_ma_segment_generation: 0.03, // Claude 構造 化 (約 2k input + 1k output 想定)
+  agency_ma_flow_improvement: 0.06, // Flow 全体 を レビュー (約 4k input + 2k output 想定)
 };
 
 export function estimateCostUsd(byKind: Record<string, number>): number {
