@@ -117,6 +117,35 @@ export async function PUT(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "duplicate_step_order" }, { status: 400 });
   }
 
+  // template_id の cross-org チェック(H1 防御:他組織のテンプレを
+  // 参照して実行時に本文流出する経路を塞ぐ)。
+  const referencedTemplateIds = Array.from(
+    new Set(
+      parsed.data.steps
+        .map((s) => s.template_id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    ),
+  );
+  if (referencedTemplateIds.length > 0) {
+    const { data: tplRows } = await admin
+      .from("ma_templates")
+      .select("id")
+      .in("id", referencedTemplateIds)
+      .eq("organization_id", guard.organization.id);
+    const validIds = new Set(((tplRows ?? []) as Array<{ id: string }>).map((r) => r.id));
+    const invalidIds = referencedTemplateIds.filter((id) => !validIds.has(id));
+    if (invalidIds.length > 0) {
+      return NextResponse.json(
+        {
+          error: "invalid_template_ids",
+          message: "自組織に属さないテンプレートは参照できません",
+          invalid_template_ids: invalidIds,
+        },
+        { status: 400 },
+      );
+    }
+  }
+
   // トランザクション 的 に 置換:全 削除 → INSERT
   // 注意 : 単一 リクエスト 内 で は 実質 逐次 だが、 その間 に cron が
   // 走って step を lookup すると 不整合 の 可能性。 頻度 と 影響 が 小さい ため 許容。

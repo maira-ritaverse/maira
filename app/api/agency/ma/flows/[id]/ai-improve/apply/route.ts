@@ -119,16 +119,30 @@ export async function POST(request: Request, context: RouteContext) {
         const encryptedBody = await encryptField(suggestion.new_body);
 
         if (step.template_id) {
-          // 既存テンプレートの本文を更新
-          const { error } = await admin
+          // 既存テンプレートの本文を更新。 M1 防御:cross-org な template_id を
+          // 誤って(または悪意で)参照しているケースを弾く。 organization_id で
+          // 絞ることで、返り値ゼロなら update 対象なし = 404 相当。
+          const { data: updRows, error } = await admin
             .from("ma_templates")
             .update({ encrypted_body: encryptedBody })
-            .eq("id", step.template_id);
+            .eq("id", step.template_id)
+            .eq("organization_id", guard.organization.id)
+            .select("id");
           if (error)
             return NextResponse.json(
               { error: "template_update_failed", message: error.message },
               { status: 500 },
             );
+          if (!updRows || updRows.length === 0) {
+            return NextResponse.json(
+              {
+                error: "template_not_in_org",
+                message:
+                  "参照先テンプレートが自組織のものではありません。 このステップのテンプレ割当を見直してください。",
+              },
+              { status: 400 },
+            );
+          }
         } else {
           // テンプレートがないので新規作成してステップに割り当て
           const encryptedSubject = await encryptField("");

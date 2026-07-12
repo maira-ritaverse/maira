@@ -11,6 +11,7 @@
  *   ・スコア加算 / 待機 / 終了: 追加入力なし
  */
 import { AlertTriangle } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -574,6 +575,7 @@ function NewTemplateButton({
   channel: string;
   onCreated: (templateId: string) => void;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
@@ -607,8 +609,12 @@ function NewTemplateButton({
       setName("");
       setSubject("");
       setBody("");
-      // ページを再読み込みして templates リストを更新する
-      window.location.reload();
+      // 従来 window.location.reload していたが、 Flow エディタで未保存の
+      // ステップ配置・分岐・delay 編集が全部失われる問題があった。
+      // router.refresh() だけにして templates プロップだけ更新する。
+      // 呼び出し側(親)は onCreated で受け取った templateId を選択済み状態にしつつ、
+      // router.refresh() で新しい template を反映させる。
+      router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

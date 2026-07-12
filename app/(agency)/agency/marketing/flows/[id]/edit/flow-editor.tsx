@@ -261,6 +261,9 @@ export function FlowEditor({
 
   // steps に 追加 / 削除 / データ 更新 が あった とき に nodes / edges を 追随。
   // 位置 は 既存 の React Flow 側 の 値 を 優先 して 保持。
+  // needsSetup フラグを含めないと、任意の setSteps で再構築されるたびに
+  // 「未設定」バッジが消えてしまう(以前この bug で AI 生成 wait ステップの
+  // 警告が見えなくなる問題があった)。
   useEffect(() => {
     setNodes((prev) => {
       const posById = new Map(prev.map((n) => [n.id, n.position]));
@@ -277,6 +280,7 @@ export function FlowEditor({
           name: s.name,
           action_type: s.action_type,
           delay_from_previous_seconds: s.delay_from_previous_seconds,
+          needsSetup: isStepNeedsSetup(s),
         },
       }));
     });
@@ -320,10 +324,15 @@ export function FlowEditor({
       if (!isAdmin) return;
       for (const change of changes) {
         if (change.type === "remove") {
-          // edge id は "<src>-<kind>-<tgt>" 形式
+          // edge id は stepsToEdges / onConnect が生成する "<src>-<kind>-<tgt>" 形式。
+          // ReactFlow の addEdge デフォルト id ("xy-edge__..." 等)ではないことを
+          // onConnect 側で保証している(下記参照)。 これでもし parse できない ID を
+          // 受けたら silently ignore(将来の互換対策)。
           const parts = change.id.split("-");
+          if (parts.length < 3) continue;
           const src = Number(parts[0]);
           const kind = parts[1];
+          if (!Number.isFinite(src)) continue;
           setSteps((prev) =>
             prev.map((s) => {
               if (s.step_order !== src) return s;
@@ -345,6 +354,15 @@ export function FlowEditor({
       const src = Number(params.source);
       const tgt = Number(params.target);
       if (src === tgt) return; // 自己 ループ 禁止
+      // stepsToEdges と 同じ id 形式("<src>-<kind>-<tgt>") で作る。
+      // これにより後の onEdgesChange remove ハンドラで parts[0]/parts[1] を
+      // 正しく parse できる(以前は addEdge のデフォルト id が使われて
+      // parse 失敗 → 参照が clean up されず DB に残る bug があった)。
+      const kind =
+        params.sourceHandle === "true" || params.sourceHandle === "false"
+          ? params.sourceHandle
+          : "default";
+      const edgeId = `${src}-${kind}-${tgt}`;
       setSteps((prev) =>
         prev.map((s) => {
           if (s.step_order !== src) return s;
@@ -355,7 +373,7 @@ export function FlowEditor({
           return { ...s, next_step_on_default: tgt };
         }),
       );
-      setEdges((eds) => addEdge(params, eds));
+      setEdges((eds) => addEdge({ ...params, id: edgeId }, eds));
     },
     [isAdmin, setEdges],
   );

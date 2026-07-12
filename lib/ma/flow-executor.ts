@@ -519,18 +519,48 @@ async function markStatus(
     .eq("id", subId);
 }
 
+/**
+ * ステップ実行が失敗した subscription を退避する。
+ *
+ * 以前の実装は last_error_at / last_error_message だけ更新して status も
+ * next_action_at も触っていなかったため、 dispatcher が「status='active' AND
+ * next_action_at <= now()」で毎 tick 拾い直し無限リトライしていた
+ *(Resend の壊れたアドレス、LINE の revoked token 等でクレジットを焼く原因)。
+ *
+ * 修正:
+ *   ・next_action_at を 1 時間先にずらして即時再ピックを止める(soft backoff)
+ *   ・恒久的な失敗は 3 回で status='failed' に遷移して以降拾わない
+ *     (last_error_message に何が失敗したかは既に残っている)
+ */
+const MAX_TICK_FAILURES = 3;
+const BACKOFF_SECONDS_ON_FAIL = 60 * 60; // 1 時間
+
 async function failWith(
   supabase: SupabaseClient,
   subId: string,
   error: string,
 ): Promise<TickResult> {
-  await supabase
+  // 現在の失敗回数を取得(なければ 0 として扱う)
+  const { data: current } = await supabase
     .from("ma_flow_subscriptions")
-    .update({
-      last_error_at: new Date().toISOString(),
-      last_error_message: error.slice(0, 500),
-    })
-    .eq("id", subId);
+    .select("tick_failure_count")
+    .eq("id", subId)
+    .maybeSingle();
+  const rawCount = (current as { tick_failure_count: number | null } | null)?.tick_failure_count;
+  const nextCount = (typeof rawCount === "number" ? rawCount : 0) + 1;
+
+  const shouldFail = nextCount >= MAX_TICK_FAILURES;
+  const patch: Record<string, unknown> = {
+    last_error_at: new Date().toISOString(),
+    last_error_message: error.slice(0, 500),
+    tick_failure_count: nextCount,
+  };
+  if (shouldFail) {
+    patch.status = "failed";
+  } else {
+    patch.next_action_at = new Date(Date.now() + BACKOFF_SECONDS_ON_FAIL * 1000).toISOString();
+  }
+  await supabase.from("ma_flow_subscriptions").update(patch).eq("id", subId);
   return { kind: "failed", error };
 }
 

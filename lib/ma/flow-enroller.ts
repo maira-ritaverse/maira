@@ -286,10 +286,26 @@ export async function dispatchFlowTrigger(
   let skipped = 0;
   let failed = 0;
 
+  // メール Flow(flow.channel='email')は sub.client_record_id が必須。
+  // event.line_user_id から line_user_links を lookup して client_record_id を
+  // 事前解決しておくと、以降の enrollFriendToFlow で埋められる。
+  // LINE Flow でも副次的に埋まるが実行時は line_user_id で送るので害はない。
+  let resolvedClientRecordId: string | null = null;
+  const { data: linkRow } = await supabase
+    .from("line_user_links")
+    .select("client_record_id")
+    .eq("organization_id", organizationId)
+    .eq("line_user_id", event.line_user_id)
+    .maybeSingle();
+  resolvedClientRecordId =
+    (linkRow as { client_record_id: string | null } | null)?.client_record_id ?? null;
+
   for (const flow of flows) {
     let result: EnrollResult;
     try {
-      result = await enrollFriendToFlow(supabase, flow.id, event.line_user_id);
+      result = await enrollFriendToFlow(supabase, flow.id, event.line_user_id, {
+        clientRecordId: resolvedClientRecordId,
+      });
     } catch (err) {
       result = { kind: "failed", error: err instanceof Error ? err.message : String(err) };
     }

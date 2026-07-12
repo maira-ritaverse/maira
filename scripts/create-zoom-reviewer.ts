@@ -44,11 +44,12 @@ try {
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-// Zoom Marketplace レビュースレッド(2026-06-23 リタバースマイラ 11:38 AM)で
-// 共有した認証情報を既定値として使う。 dev や再作成でパスワードを変えたい場合
-// のみ env で上書きすること。
-const REVIEWER_EMAIL = process.env.REVIEWER_EMAIL ?? "maira-zoom-reviewer@maira.pro";
-const REVIEWER_PASSWORD = process.env.REVIEWER_PASSWORD ?? "ti5CINOq1bH66q13STXK";
+// CLAUDE.md ルール:.env や本番シークレットをコードに含めない。
+// REVIEWER_EMAIL / REVIEWER_PASSWORD は env 必須。 既定値を持たせない。
+// 実行例のメール/パスワードは README / docs 側にも書かない(Zoom Marketplace の
+// レビュースレッドで直接共有する)。
+const REVIEWER_EMAIL = process.env.REVIEWER_EMAIL;
+const REVIEWER_PASSWORD = process.env.REVIEWER_PASSWORD;
 const ORG_NAME = process.env.REVIEWER_ORG_NAME ?? "Zoom Marketplace Reviewer";
 const DISPLAY_NAME = process.env.REVIEWER_DISPLAY_NAME ?? "Zoom Reviewer";
 
@@ -59,7 +60,8 @@ function fail(message: string): never {
 
 if (!SUPABASE_URL) fail("SUPABASE_URL is required");
 if (!SERVICE_ROLE_KEY) fail("SUPABASE_SERVICE_ROLE_KEY is required");
-// REVIEWER_EMAIL / PASSWORD は既定値があるので必須チェックしない
+if (!REVIEWER_EMAIL) fail("REVIEWER_EMAIL is required");
+if (!REVIEWER_PASSWORD) fail("REVIEWER_PASSWORD is required");
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
@@ -225,7 +227,11 @@ async function main() {
   console.log("════════════════════════════════════════════════");
   console.log(`  Login URL: https://www.maira.pro/login`);
   console.log(`  Email:     ${REVIEWER_EMAIL}`);
-  console.log(`  Password:  ${REVIEWER_PASSWORD}`);
+  // パスワードは実行者が env で渡した値と同一なので画面上には出さない
+  //(スクショ・ターミナル録画から漏れるリスクを下げる)。 実行者は
+  // Zoom Marketplace のレビュースレッドや 1Password 等の secure channel で
+  // 認証情報を管理する前提。
+  console.log(`  Password:  (env REVIEWER_PASSWORD の値がそのまま設定されました)`);
   console.log(`  Org:       ${ORG_NAME} (${orgId})`);
   console.log(`  Role:      admin`);
   console.log("════════════════════════════════════════════════");
