@@ -7,15 +7,21 @@
  *   ・send_message: template_id (Phase 1 は 手打ち UUID)
  *   ・assign_tag / remove_tag: tag_id (action_config)
  *   ・set_field: key / value (action_config)
- *   ・branch: 分岐 条件 の JSON テキスト エリア、 true/false 分岐先
+ *   ・branch: Segment と 同じ 視覚 ConditionEditor + true/false 分岐先
  *   ・add_score / wait / stop: 追加 入力 なし
  *
  * onChange で 親 (flow-editor) の state を 更新 する 制御 コンポーネント。
+ *
+ * Phase 1-F.2 (2026-07-12):
+ *   ・branch の 分岐 条件 を JSON 手打ち から 視覚 ConditionEditor に 変更
+ *   ・position_x / position_y を StepEditable に 追加 (自由 DAG 対応)
  */
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import type { SegmentCondition } from "@/lib/ma/segment-dsl";
+
+import { ConditionEditor } from "../../../segments/condition-builder";
 
 export type StepEditable = {
   step_order: number;
@@ -29,6 +35,9 @@ export type StepEditable = {
   next_step_on_false: number | null;
   next_step_on_default: number | null;
   goal_check_on_entry: boolean;
+  /** Phase 1-F.2:自由 DAG エディタ の 位置 */
+  position_x: number | null;
+  position_y: number | null;
 };
 
 type Props = {
@@ -169,29 +178,19 @@ export function StepConfigPanel({ step, allStepOrders, onChange, onDelete, disab
       {step.action_type === "branch" && (
         <>
           <div className="space-y-1">
-            <Label htmlFor="step-branch">branch_condition_json</Label>
-            <Textarea
-              id="step-branch"
-              value={
-                step.branch_condition_json
-                  ? JSON.stringify(step.branch_condition_json, null, 2)
-                  : ""
+            <Label>分岐 条件 (視覚 ビルダー)</Label>
+            <ConditionEditor
+              condition={
+                (step.branch_condition_json as SegmentCondition | null) ?? {
+                  kind: "and",
+                  conditions: [],
+                }
               }
               disabled={disabled}
-              onChange={(e) => {
-                const raw = e.target.value;
-                if (!raw.trim()) return onChange({ branch_condition_json: null });
-                try {
-                  onChange({ branch_condition_json: JSON.parse(raw) });
-                } catch {
-                  // 不正 JSON は 保存 せず、 見た目 だけ 更新 させる ため に patch を text とし ない
-                }
-              }}
-              rows={5}
-              placeholder='{"kind": "has_tag", "tag_id": "..."}'
+              onChange={(next) => onChange({ branch_condition_json: next })}
             />
             <p className="text-muted-foreground text-xs">
-              SegmentCondition の JSON。 詳細 は docs/line-lstep-ma-design.md §5.1
+              Segment と 同じ 16 種 kind の 再帰 ツリー。 保存 は JSON。
             </p>
           </div>
           <div className="grid grid-cols-2 gap-2">

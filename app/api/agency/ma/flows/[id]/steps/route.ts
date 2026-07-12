@@ -75,6 +75,9 @@ const stepSchema = z.object({
   next_step_on_false: z.number().int().nullable().optional(),
   next_step_on_default: z.number().int().nullable().optional(),
   goal_check_on_entry: z.boolean().optional(),
+  // Phase 1-F.2 自由 DAG エディタ:キャンバス 上 の 位置
+  position_x: z.number().nullable().optional(),
+  position_y: z.number().nullable().optional(),
 });
 
 const putBody = z.object({
@@ -135,6 +138,8 @@ export async function PUT(request: Request, context: RouteContext) {
       next_step_on_false: s.next_step_on_false ?? null,
       next_step_on_default: s.next_step_on_default ?? null,
       goal_check_on_entry: s.goal_check_on_entry ?? false,
+      position_x: s.position_x ?? null,
+      position_y: s.position_y ?? null,
     }));
     const { error: insErr } = await admin.from("ma_flow_steps").insert(rows);
     if (insErr) {

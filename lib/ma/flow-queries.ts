@@ -110,6 +110,9 @@ export type FlowStepRow = {
   next_step_on_false: number | null;
   next_step_on_default: number | null;
   goal_check_on_entry: boolean;
+  /** Phase 1-F.2:自由 DAG エディタ の 位置。 null なら 自動 レイアウト。 */
+  position_x: number | null;
+  position_y: number | null;
 };
 
 export async function getFlowDetail(
