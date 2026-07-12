@@ -118,6 +118,23 @@ export function MarketingScreen({
 
   return (
     <>
+      {/* 旧シナリオ体系は read-only に移行済み。 Flow ビルダーへ利用者を誘導 */}
+      <div className="flex items-center justify-between gap-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+        <div>
+          <div className="font-semibold">新しい配信は「Flow ビルダー」で作成します</div>
+          <div className="text-xs">
+            以下の旧シナリオは読み取り専用です(過去の実績は保持されます)。友だち追加後の配信・面接後フォロー・目標達成イベントによる自動配信など、これから作る配信はすべて
+            Flow ビルダーからどうぞ。
+          </div>
+        </div>
+        <Link
+          href="/agency/marketing/flows"
+          className="shrink-0 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+        >
+          Flow ビルダーを開く
+        </Link>
+      </div>
+
       {/* channel タブ (Eメール / LINE) — 共通 ヘッダー の 上 に */}
       <div className="inline-flex rounded-md ring-1 ring-slate-200">
         <button
