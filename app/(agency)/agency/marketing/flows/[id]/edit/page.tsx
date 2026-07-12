@@ -9,6 +9,7 @@ import { notFound, redirect } from "next/navigation";
 import { PageHeading } from "@/components/ui/page-heading";
 import { listOrganizationLineTags } from "@/lib/line/conversation-tags";
 import { getUserRole } from "@/lib/organizations/queries";
+import { getFlowAttribution } from "@/lib/ma/flow-attribution";
 import { getFlowDetail, listMaTemplatesForOrg } from "@/lib/ma/flow-queries";
 import { listSegmentsForOrg } from "@/lib/ma/segment-queries";
 import { createClient } from "@/lib/supabase/server";
@@ -33,11 +34,12 @@ export default async function FlowEditPage({ params }: { params: RouteParams }) 
     redirect("/app");
   }
 
-  const [flow, tags, templates, segments] = await Promise.all([
+  const [flow, tags, templates, segments, attribution] = await Promise.all([
     getFlowDetail(supabase, role.organization.id, flowId),
     listOrganizationLineTags(role.organization.id),
     listMaTemplatesForOrg(supabase, role.organization.id),
     listSegmentsForOrg(supabase, role.organization.id),
+    getFlowAttribution(supabase, role.organization.id, flowId),
   ]);
   if (!flow) notFound();
 
@@ -46,8 +48,7 @@ export default async function FlowEditPage({ params }: { params: RouteParams }) 
       <PageHeading
         title={`Flow: ${flow.name}`}
         description={
-          flow.description ??
-          "ステップ を 追加 / 編集 して Flow を 構築 します。 変更 は 保存 ボタン で 反映。"
+          flow.description ?? "ステップを追加・編集して Flow を構築します。変更は保存ボタンで反映。"
         }
       />
       <div className="flex-1 overflow-hidden">
@@ -57,6 +58,7 @@ export default async function FlowEditPage({ params }: { params: RouteParams }) 
           tags={tags}
           templates={templates}
           segments={segments}
+          attribution={attribution}
         />
       </div>
     </div>

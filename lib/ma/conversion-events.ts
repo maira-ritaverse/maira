@@ -16,9 +16,56 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { dispatchFlowTrigger } from "./flow-enroller";
 
+/** attribution 計算対象期間(日) */
+const ATTRIBUTION_WINDOW_DAYS = 30;
+
+/**
+ * 過去 ATTRIBUTION_WINDOW_DAYS 日以内にこのユーザーが経験した Flow を拾う。
+ * ・active:今も走っている
+ * ・completed / goal_achieved:直近で完了した
+ * 順序は entered_at DESC(最新が先頭)。
+ *
+ * @returns { attributed_flow_ids, last_touch_flow_id }
+ */
+async function computeAttribution(
+  admin: SupabaseClient,
+  organizationId: string,
+  lineUserId: string,
+): Promise<{ attributed_flow_ids: string[]; last_touch_flow_id: string | null }> {
+  const since = new Date(Date.now() - ATTRIBUTION_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const { data } = await admin
+    .from("ma_flow_subscriptions")
+    .select("flow_id, entered_at, status")
+    .eq("organization_id", organizationId)
+    .eq("line_user_id", lineUserId)
+    .in("status", ["active", "completed", "goal_achieved"])
+    .gte("entered_at", since)
+    .order("entered_at", { ascending: false });
+
+  const rows = (data ?? []) as Array<{ flow_id: string; status: string }>;
+  if (rows.length === 0) {
+    return { attributed_flow_ids: [], last_touch_flow_id: null };
+  }
+  // 重複除去(1 Flow に複数回 enroll したケース)
+  const seen = new Set<string>();
+  const uniqueFlowIds: string[] = [];
+  for (const r of rows) {
+    if (!seen.has(r.flow_id)) {
+      seen.add(r.flow_id);
+      uniqueFlowIds.push(r.flow_id);
+    }
+  }
+  return {
+    attributed_flow_ids: uniqueFlowIds,
+    // entered_at DESC で並んでいるので先頭が last-touch
+    last_touch_flow_id: uniqueFlowIds[0] ?? null,
+  };
+}
+
 /**
  * CV イベントを ma_conversion_events に記録する。
- * INSERT のみ、失敗時はログのみで握り潰す(Flow 起動を止めないため)。
+ * ・attribution を先に計算して同じ INSERT で埋める(後追い UPDATE ではなく)
+ * ・INSERT のみ、失敗時はログのみで握り潰す(Flow 起動を止めないため)
  * @returns 記録成功なら true
  */
 async function recordConversionEvent(
@@ -31,12 +78,20 @@ async function recordConversionEvent(
     source_id: string | null;
   },
 ): Promise<boolean> {
+  const { attributed_flow_ids, last_touch_flow_id } = await computeAttribution(
+    admin,
+    params.organization_id,
+    params.line_user_id,
+  );
+
   const { error } = await admin.from("ma_conversion_events").insert({
     organization_id: params.organization_id,
     line_user_id: params.line_user_id,
     event_key: params.event_key,
     source: params.source,
     source_id: params.source_id,
+    attributed_flow_ids,
+    last_touch_flow_id,
   });
   if (error) {
     console.error("[cv-flow] recordConversionEvent failed", {

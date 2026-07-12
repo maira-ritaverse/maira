@@ -42,6 +42,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { LineConversationTag } from "@/lib/line/conversation-tags";
+import { labelForConversionEvent, type FlowAttributionRow } from "@/lib/ma/flow-attribution";
 import { formatUpdatedAtJa, labelForTriggerType } from "@/lib/ma/flow-labels";
 import type { FlowDetail, MaTemplateOption } from "@/lib/ma/flow-queries";
 import type { SegmentListItem } from "@/lib/ma/segment-queries";
@@ -56,6 +57,7 @@ type Props = {
   tags: LineConversationTag[];
   templates: MaTemplateOption[];
   segments: SegmentListItem[];
+  attribution: FlowAttributionRow[];
 };
 
 /** Flow の 編集 可能 メタ (PATCH で 送る フィールド のみ) */
@@ -209,7 +211,7 @@ function toEditable(steps: FlowDetail["steps"]): StepEditable[] {
 // 本体
 // ────────────────────────────────────────
 
-export function FlowEditor({ flow, isAdmin, tags, templates, segments }: Props) {
+export function FlowEditor({ flow, isAdmin, tags, templates, segments, attribution }: Props) {
   const initialSteps = useMemo(() => toEditable(flow.steps), [flow.steps]);
   const [steps, setSteps] = useState<StepEditable[]>(initialSteps);
   const [meta, setMeta] = useState<FlowMeta>({
@@ -632,6 +634,46 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments }: Props) 
             <Label htmlFor="flow-meta-reentry" className="text-sm">
               一度完了または停止した友だちを、再度対象にする
             </Label>
+          </div>
+
+          {/* CV attribution:この Flow が貢献した目標達成の件数 */}
+          <div className="border-border rounded border bg-white p-3">
+            <div className="mb-2 text-sm font-medium">この Flow が貢献した目標達成</div>
+            {attribution.length === 0 ? (
+              <p className="text-muted-foreground text-xs">
+                まだ集計対象の目標達成イベントがありません。応募・面接・内定などが記録されると、この
+                Flow が関わっていた場合にここに反映されます(過去 30 日以内の関与を集計)。
+              </p>
+            ) : (
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-muted-foreground border-b text-left">
+                    <th className="py-1 font-normal">目標</th>
+                    <th
+                      className="py-1 pr-2 text-right font-normal"
+                      title="この Flow が最後に到達した後に発生した件数(直接寄与)"
+                    >
+                      直接寄与
+                    </th>
+                    <th
+                      className="py-1 text-right font-normal"
+                      title="この Flow が過去 30 日以内に関与した件数(間接寄与を含む)"
+                    >
+                      関与
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {attribution.map((a) => (
+                    <tr key={a.event_key} className="border-b last:border-none">
+                      <td className="py-1">{labelForConversionEvent(a.event_key)}</td>
+                      <td className="py-1 pr-2 text-right font-mono">{a.last_touch_count}</td>
+                      <td className="py-1 text-right font-mono">{a.any_touch_count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       )}
