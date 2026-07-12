@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { fireReferralConversionFlow } from "@/lib/ma/conversion-events";
 import { fireInAppNotification, fireSeekerNotification } from "@/lib/notifications/in-app";
 import { getUserRole } from "@/lib/organizations/queries";
 import { getReferralStatusConfig, updateReferralRequestSchema } from "@/lib/referrals/types";
@@ -138,6 +140,19 @@ export async function PATCH(request: Request, { params }: RouteParams) {
         from: previousStatus,
         to: d.status,
         message: historyError.message,
+      });
+    }
+
+    // CV Flow(trigger_type='conversion_event')を起動。
+    // referral 更新は既に成功。CV Flow の失敗は握り潰す(業務は動かす)。
+    // service client を使うのは ma_flows / ma_flow_subscriptions が
+    // service_role INSERT 想定で RLS が厳しめのため。
+    if (referralClientRecordId) {
+      void fireReferralConversionFlow({
+        admin: createServiceClient(),
+        organizationId: orgId,
+        clientRecordId: referralClientRecordId,
+        newStatus: d.status,
       });
     }
 
