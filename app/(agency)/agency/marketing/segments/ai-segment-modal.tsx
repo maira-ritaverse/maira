@@ -1,14 +1,9 @@
 "use client";
 
 /**
- * AI で Segment を 生成 する モーダル。
+ * AI で Segment を生成するモーダル。
  *
- * 流れ:
- *   1. admin が 自然文 で 絞り 込み 意図 を 入力
- *   2. 「AI で 生成」 → /api/agency/ma/segments/ai-generate を 呼ぶ
- *   3. プレビュー (name / description / narrative / 生成 filter を JSON で 表示)
- *   4. 「この 内容 で 作成」 → POST /api/agency/ma/segments で 作成
- *   5. admin は Segment 編集 画面 で 微調整 (tag_id を 実際 の タグ に 差替え 等)
+ * 自然文の絞り込み意図を渡して、Claude が SegmentCondition ツリーを返す。
  */
 import { Sparkles } from "lucide-react";
 import { useState } from "react";
@@ -39,9 +34,9 @@ type Proposal = {
 };
 
 const EXAMPLE_PROMPTS = [
-  "追加 から 30 日 以上 経って いる のに 最終 活動 も 30 日 以上 前 の 沈黙 求職者",
-  "希望勤務地 が 東京 で、 職務要約 が 記入 済 の 友だち",
-  "特定 タグ 「面談 予約 済」 が 付いて いる が 応募 が まだ の 人",
+  "追加から30日以上経っているのに、最終活動も30日以上前の沈黙している求職者",
+  "希望勤務地が東京で、職務要約が記入済みの友だち",
+  "特定のタグ「面談予約済み」が付いているが、応募がまだの人",
 ];
 
 export function AiSegmentModal({ open, onOpenChange, onCreated }: Props) {
@@ -62,8 +57,8 @@ export function AiSegmentModal({ open, onOpenChange, onCreated }: Props) {
         body: JSON.stringify({ prompt: prompt.trim() }),
       });
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(body.error ?? "生成 に 失敗 しました");
+        const body = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+        setError(body.message ?? body.error ?? "AI からの提案取得に失敗しました");
         return;
       }
       const json = (await res.json()) as { proposal: Proposal };
@@ -91,7 +86,7 @@ export function AiSegmentModal({ open, onOpenChange, onCreated }: Props) {
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(`Segment 作成 失敗: ${body.error ?? res.status}`);
+        setError(`セグメントの作成に失敗しました: ${body.error ?? res.status}`);
         return;
       }
       setPrompt("");
@@ -109,16 +104,15 @@ export function AiSegmentModal({ open, onOpenChange, onCreated }: Props) {
       <AlertDialogContent className="max-w-2xl">
         <AlertDialogTitle className="flex items-center gap-2">
           <Sparkles className="size-4" aria-hidden />
-          AI で Segment を 生成
+          AI にセグメントを提案してもらう
         </AlertDialogTitle>
         <AlertDialogDescription>
-          絞り 込みたい 求職者 の 条件 を 自然文 で 書いて ください。 AI が SegmentCondition の
-          ツリー を 提案 します。
+          絞り込みたい求職者の条件を自然な言葉で書いてください。AI が条件ツリーを提案します。
         </AlertDialogDescription>
 
         {!proposal && (
           <div className="my-3 space-y-2">
-            <Label htmlFor="ai-seg-prompt">絞り 込み の 意図</Label>
+            <Label htmlFor="ai-seg-prompt">絞り込みの意図</Label>
             <Textarea
               id="ai-seg-prompt"
               value={prompt}
@@ -129,7 +123,7 @@ export function AiSegmentModal({ open, onOpenChange, onCreated }: Props) {
               disabled={generating}
             />
             <div className="text-muted-foreground text-xs">
-              例:
+              例(クリックで挿入):
               <ul className="mt-1 list-disc space-y-0.5 pl-4">
                 {EXAMPLE_PROMPTS.map((e, i) => (
                   <li
@@ -142,7 +136,7 @@ export function AiSegmentModal({ open, onOpenChange, onCreated }: Props) {
                 ))}
               </ul>
             </div>
-            {error && <p className="text-destructive text-sm">エラー: {error}</p>}
+            {error && <p className="text-destructive text-sm">{error}</p>}
           </div>
         )}
 
@@ -156,27 +150,22 @@ export function AiSegmentModal({ open, onOpenChange, onCreated }: Props) {
 
             {proposal.uses_reserved_kinds && (
               <div className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
-                この Segment は Phase 2/3 予約 kind (score / entry_source / conversion_event) を
-                含みます。 該当 部分 は 実際 の 絞り 込み で は 「常 に false」 と 評価 されます。
-                定義 の 骨格 として 保存 は 可能 です。
+                このセグメントには、まだサポートしていない条件(スコア・登録元・目標達成イベント)が含まれています。該当部分は絞り込みには反映されません。骨格として保存すること自体は可能です。
               </div>
             )}
 
             <div className="border-border rounded border">
-              <div className="border-border border-b p-2 text-xs font-medium">
-                生成 された Filter (JSON)
-              </div>
+              <div className="border-border border-b p-2 text-xs font-medium">生成された条件</div>
               <pre className="max-h-48 overflow-auto p-2 font-mono text-[10px]">
                 {JSON.stringify(proposal.filter, null, 2)}
               </pre>
             </div>
 
             <p className="text-muted-foreground text-xs">
-              保存 後、 Segment 編集 画面 で tag_id / flow_id を 実 データ に 置き換えて ください。
-              空 文字列 の 部分 は 手動 選択 が 必要 です。
+              保存後、セグメント編集画面で「タグ」や「Flow」の項目を実際のデータに差し替えてください。空欄になっているところは手動選択が必要です。
             </p>
 
-            {error && <p className="text-destructive text-sm">エラー: {error}</p>}
+            {error && <p className="text-destructive text-sm">{error}</p>}
           </div>
         )}
 
@@ -186,19 +175,19 @@ export function AiSegmentModal({ open, onOpenChange, onCreated }: Props) {
             disabled={generating || saving}
             onClick={() => onOpenChange(false)}
           >
-            キャンセル
+            閉じる
           </Button>
           {!proposal ? (
             <Button disabled={generating || prompt.trim().length < 5} onClick={generate}>
-              {generating ? "生成 中..." : "AI で 生成"}
+              {generating ? "AI に提案してもらっています..." : "AI に提案してもらう"}
             </Button>
           ) : (
             <>
               <Button variant="outline" disabled={saving} onClick={() => setProposal(null)}>
-                やり直し
+                やり直す
               </Button>
               <Button disabled={saving} onClick={save}>
-                {saving ? "作成 中..." : "この 内容 で 作成"}
+                {saving ? "作成中..." : "この内容で作成"}
               </Button>
             </>
           )}
