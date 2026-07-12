@@ -9,6 +9,7 @@ import { notFound, redirect } from "next/navigation";
 import { PageHeading } from "@/components/ui/page-heading";
 import { listOrganizationLineTags } from "@/lib/line/conversation-tags";
 import { getUserRole } from "@/lib/organizations/queries";
+import { listFlowAuditByFlow } from "@/lib/ma/flow-audit";
 import { getFlowAttribution } from "@/lib/ma/flow-attribution";
 import { getFlowDetail, listMaTemplatesForOrg } from "@/lib/ma/flow-queries";
 import { listSegmentsForOrg } from "@/lib/ma/segment-queries";
@@ -34,12 +35,13 @@ export default async function FlowEditPage({ params }: { params: RouteParams }) 
     redirect("/app");
   }
 
-  const [flow, tags, templates, segments, attribution] = await Promise.all([
+  const [flow, tags, templates, segments, attribution, auditLog] = await Promise.all([
     getFlowDetail(supabase, role.organization.id, flowId),
     listOrganizationLineTags(role.organization.id),
     listMaTemplatesForOrg(supabase, role.organization.id),
     listSegmentsForOrg(supabase, role.organization.id),
     getFlowAttribution(supabase, role.organization.id, flowId),
+    listFlowAuditByFlow(supabase, role.organization.id, flowId, 20),
   ]);
   if (!flow) notFound();
 
@@ -59,6 +61,7 @@ export default async function FlowEditPage({ params }: { params: RouteParams }) 
           templates={templates}
           segments={segments}
           attribution={attribution}
+          auditLog={auditLog}
         />
       </div>
     </div>

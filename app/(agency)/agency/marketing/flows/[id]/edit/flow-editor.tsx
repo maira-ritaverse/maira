@@ -43,6 +43,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { LineConversationTag } from "@/lib/line/conversation-tags";
 import { labelForConversionEvent, type FlowAttributionRow } from "@/lib/ma/flow-attribution";
+import { labelForAuditAction, type FlowAuditRow } from "@/lib/ma/flow-audit";
 import { formatUpdatedAtJa, labelForTriggerType } from "@/lib/ma/flow-labels";
 import type { FlowDetail, MaTemplateOption } from "@/lib/ma/flow-queries";
 import type { SegmentListItem } from "@/lib/ma/segment-queries";
@@ -59,6 +60,7 @@ type Props = {
   templates: MaTemplateOption[];
   segments: SegmentListItem[];
   attribution: FlowAttributionRow[];
+  auditLog: FlowAuditRow[];
 };
 
 /** Flow の 編集 可能 メタ (PATCH で 送る フィールド のみ) */
@@ -215,7 +217,15 @@ function toEditable(steps: FlowDetail["steps"]): StepEditable[] {
 // 本体
 // ────────────────────────────────────────
 
-export function FlowEditor({ flow, isAdmin, tags, templates, segments, attribution }: Props) {
+export function FlowEditor({
+  flow,
+  isAdmin,
+  tags,
+  templates,
+  segments,
+  attribution,
+  auditLog,
+}: Props) {
   const initialSteps = useMemo(() => toEditable(flow.steps), [flow.steps]);
   const [steps, setSteps] = useState<StepEditable[]>(initialSteps);
   const [meta, setMeta] = useState<FlowMeta>({
@@ -750,6 +760,51 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments, attributi
                   ))}
                 </tbody>
               </table>
+            )}
+          </div>
+
+          {/* 監査ログ:誰がいつこの Flow を触ったか */}
+          <div className="border-border rounded border bg-white p-3">
+            <div className="mb-2 text-sm font-medium">変更履歴</div>
+            {auditLog.length === 0 ? (
+              <p className="text-muted-foreground text-xs">まだ変更記録がありません。</p>
+            ) : (
+              <ol className="space-y-1 text-xs">
+                {auditLog.map((row) => (
+                  <li
+                    key={row.id}
+                    className="text-muted-foreground flex items-center gap-2 border-b py-1 last:border-none"
+                  >
+                    <span className="w-28 shrink-0 font-mono">
+                      {new Date(row.occurred_at).toLocaleString("ja-JP", {
+                        month: "2-digit",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                    <span className="text-foreground">{row.actor_display_name ?? "(不明)"}</span>
+                    <span>{labelForAuditAction(row.action)}</span>
+                    {row.action === "toggle_active" && (
+                      <span
+                        className={`ml-1 rounded px-1.5 py-0.5 text-[10px] ${
+                          row.diff_summary.is_active
+                            ? "bg-emerald-100 text-emerald-900"
+                            : "bg-slate-100 text-slate-700"
+                        }`}
+                      >
+                        {row.diff_summary.is_active ? "動作中" : "停止中"}
+                      </span>
+                    )}
+                    {row.action === "update_steps" &&
+                      typeof row.diff_summary.step_count === "number" && (
+                        <span className="ml-1 text-[10px]">
+                          {row.diff_summary.step_count} ステップに保存
+                        </span>
+                      )}
+                  </li>
+                ))}
+              </ol>
             )}
           </div>
         </div>

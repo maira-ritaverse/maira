@@ -13,6 +13,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireOrgAdmin, requireOrgMember } from "@/lib/api/auth-guards";
+import { logFlowAudit } from "@/lib/ma/flow-audit";
 import { listFlowsForOrg } from "@/lib/ma/flow-queries";
 import { getLineFlowPresetByKey } from "@/lib/ma/flow-presets";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -106,6 +107,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "insert_failed", message: error.message }, { status: 500 });
   }
 
+  await logFlowAudit(admin, {
+    organization_id: guard.organization.id,
+    flow_id: data.id as string,
+    action: "create",
+    actor_user_id: guard.user.id,
+    diff_summary: {
+      preset_key: parsed.data.preset_key,
+      name: insertRow.name,
+    },
+  });
+
   return NextResponse.json({ ok: true, id: data.id });
 }
 
@@ -170,6 +182,17 @@ export async function PATCH(request: Request) {
   if (error) {
     return NextResponse.json({ error: "update_failed", message: error.message }, { status: 500 });
   }
+
+  // is_active だけの変更なら toggle_active、それ以外はメタ変更として記録
+  const changedKeys = Object.keys(patch);
+  const isToggleOnly = changedKeys.length === 1 && changedKeys[0] === "is_active";
+  await logFlowAudit(admin, {
+    organization_id: guard.organization.id,
+    flow_id: parsed.data.id,
+    action: isToggleOnly ? "toggle_active" : "update_meta",
+    actor_user_id: guard.user.id,
+    diff_summary: isToggleOnly ? { is_active: patch.is_active } : { fields: changedKeys },
+  });
 
   return NextResponse.json({ ok: true });
 }

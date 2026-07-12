@@ -15,6 +15,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireOrgAdmin, requireOrgMember } from "@/lib/api/auth-guards";
+import { logFlowAudit } from "@/lib/ma/flow-audit";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
@@ -149,6 +150,14 @@ export async function PUT(request: Request, context: RouteContext) {
       );
     }
   }
+
+  await logFlowAudit(admin, {
+    organization_id: guard.organization.id,
+    flow_id: flowId,
+    action: "update_steps",
+    actor_user_id: guard.user.id,
+    diff_summary: { step_count: parsed.data.steps.length },
+  });
 
   return NextResponse.json({ ok: true, step_count: parsed.data.steps.length });
 }
