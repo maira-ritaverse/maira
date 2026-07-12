@@ -88,6 +88,108 @@ function toJstParts(d: Date): { year: number; month: number; day: number } {
   };
 }
 
+/**
+ * 前期(比較期間)を計算する。
+ *
+ * ・this-month → 先月(1月扱いは 前年12月)
+ * ・last-month → 先々月
+ * ・custom     → 同じ長さの直前期間(from - (to-from+1) 日 〜 from-1 日)
+ *
+ * KPI ヘッドラインの「前期比」表示に使う。
+ */
+export function computePreviousPeriod(current: Period): Period {
+  if (current.preset === "this-month" || current.preset === "last-month") {
+    // 月ベース:from の 1 か月前を作る
+    const [yStr, mStr] = current.from.split("-");
+    const y = parseInt(yStr, 10);
+    const m = parseInt(mStr, 10);
+    const prevY = m === 1 ? y - 1 : y;
+    const prevM = m === 1 ? 12 : m - 1;
+    const from = isoDate(prevY, prevM, 1);
+    const lastDay = new Date(Date.UTC(prevY, prevM, 0)).getUTCDate();
+    const to = isoDate(prevY, prevM, lastDay);
+    return { preset: "custom", from, to };
+  }
+  // custom:同じ長さの直前期間
+  const fromMs = new Date(current.from + "T00:00:00Z").getTime();
+  const toMs = new Date(current.to + "T00:00:00Z").getTime();
+  const lengthMs = toMs - fromMs;
+  const prevToMs = fromMs - 24 * 60 * 60 * 1000;
+  const prevFromMs = prevToMs - lengthMs;
+  return {
+    preset: "custom",
+    from: new Date(prevFromMs).toISOString().slice(0, 10),
+    to: new Date(prevToMs).toISOString().slice(0, 10),
+  };
+}
+
+// ============================================
+// KPI サマリ(ヘッドライン用)
+// ============================================
+
+export type KpiSummary = {
+  /** 対象期間 */
+  period: Period;
+  /** 期間内の成約件数 */
+  placementCount: number;
+  /** 期間内の純売上(円) */
+  netRevenue: number;
+  /** 期間内に作成された referral(応募)件数 */
+  applicationCount: number;
+  /** 期間内に scheduled_at がある interview 件数(実施予定を含む) */
+  interviewCount: number;
+};
+
+/**
+ * KPI ヘッドラインの 4 指標を軽量に集約する。
+ *
+ * ・placement / revenue は placements テーブルの event_date で集計
+ * ・application は referrals.created_at
+ * ・interview は interviews.scheduled_at
+ *
+ * getMonthlyDealsRevenue と冪等・整合するよう、金額集計は
+ * aggregatePlacements を再利用する。
+ */
+export async function getKpiSummary(organizationId: string, period: Period): Promise<KpiSummary> {
+  const supabase = await createClient();
+
+  // 1. placements(成約 + 売上)
+  const { data: placementsRaw } = await supabase
+    .from("placements")
+    .select("id, organization_id, referral_id, event_type, amount, event_date")
+    .eq("organization_id", organizationId)
+    .gte("event_date", period.from)
+    .lte("event_date", period.to);
+
+  const placements = (placementsRaw ?? []) as Array<PlacementRowMinimal>;
+  const totals = aggregatePlacements(placements.map(toPlacementForAggregate));
+  const placementCount = placements.filter((p) => p.event_type === "placement").length;
+
+  // 2. referrals(応募):期間内の作成件数
+  const { count: applicationCount } = await supabase
+    .from("referrals")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+    .gte("created_at", `${period.from}T00:00:00Z`)
+    .lte("created_at", `${period.to}T23:59:59Z`);
+
+  // 3. interviews(面談):期間内の scheduled_at
+  const { count: interviewCount } = await supabase
+    .from("interviews")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+    .gte("scheduled_at", `${period.from}T00:00:00Z`)
+    .lte("scheduled_at", `${period.to}T23:59:59Z`);
+
+  return {
+    period,
+    placementCount,
+    netRevenue: totals.netRevenue,
+    applicationCount: applicationCount ?? 0,
+    interviewCount: interviewCount ?? 0,
+  };
+}
+
 // ============================================
 // D-1:ステータス分布(スナップショット)
 // ============================================

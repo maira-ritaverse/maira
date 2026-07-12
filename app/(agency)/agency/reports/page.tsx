@@ -3,8 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { canExport } from "@/lib/permissions/server";
 import {
+  computePreviousPeriod,
   getAdvisorPerformance,
   getClientStatusDistribution,
+  getKpiSummary,
   getMonthlyDealsRevenue,
   getPhaseDuration,
   getPlacementRate,
@@ -16,6 +18,8 @@ import {
 } from "@/lib/reports/queries";
 import { ExportButton } from "@/components/features/agency/export-button";
 import { PeriodFilter } from "./period-filter";
+import { KpiHeadline } from "./kpi-headline";
+import { SectionNav } from "./section-nav";
 import { StatusDistributionSection } from "./status-distribution-section";
 import { MonthlyDealsSection } from "./monthly-deals-section";
 import { PlacementRateSection } from "./placement-rate-section";
@@ -24,17 +28,18 @@ import { AdvisorPerformanceSection } from "./advisor-performance-section";
 import { PhaseDurationSection } from "./phase-duration-section";
 
 /**
- * エージェント向けレポート画面(土台 + D:ステータス分布)
+ * エージェント向けレポート画面(改善版:KPI ヘッドライン + セクションナビ)
  *
- * レポートは organization スコープで自社のデータのみ表示する。
- * 期間フィルタは URL searchParams で持ち、ここで Period に解決する。
+ * レイアウト:
+ *   ・上部に KPI ヘッドライン(成約数 / 純売上 / 応募 / 面談 + 前期比)
+ *   ・md 以上でサイドバーに sticky セクションナビ
+ *   ・本体は Card 単位で縦に並べる
  *
- * memberRole(admin / advisor)は今回は使わないが、後続の C(アドバイザー別)で
- * 「admin は全員分、一般は自分の分」を出すために土台として保持。
+ * データ取得:
+ *   ・当期と前期の KpiSummary を並列取得
+ *   ・その他の詳細セクションは当期のみで足りるので既存クエリを再利用
  *
- * セクションは Card 単位で縦に並べる構造にしてある。
- * 後で A(成約・売上)/ B(ファネル)/ C(アドバイザー別)/ E(所要日数)を
- * このページに足していく。
+ * 期間フィルタは URL searchParams で持ち、Period に解決してから使う。
  */
 type SearchParams = Promise<{ period?: string; from?: string; to?: string }>;
 
@@ -54,18 +59,20 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
   const params = await searchParams;
   const preset = normalizePeriodPreset(params.period);
   const period = resolvePeriod(preset, params.from, params.to);
+  const previousPeriod = computePreviousPeriod(period);
 
-  // 🔴 C(アドバイザー別)はサーバー側で権限フィルタを掛ける。
-  //    advisor の場合、自分のデータしか取得しないため、devtools でも他人のデータは見えない。
+  // C(アドバイザー別)はサーバー側で権限フィルタを掛ける。
+  // advisor の場合、自分のデータしか取得しない。
   const viewer = {
     memberId: role.member.id,
     userId: user.id,
     isAdmin: role.member.role === "admin",
   };
 
-  // 後続レポートの並行取得を見越して Promise.all で固める。
-  // ファネルは「応募ベース」「求職者ベース」の 2 視点を別関数で取得して両方渡す。
+  // 全部並列取得。 KPI サマリは当期/前期の 2 呼び出しを含む。
   const [
+    kpiCurrent,
+    kpiPrevious,
     clients,
     referrals,
     monthlyDeals,
@@ -75,6 +82,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
     advisor,
     phaseDuration,
   ] = await Promise.all([
+    getKpiSummary(role.organization.id, period),
+    getKpiSummary(role.organization.id, previousPeriod),
     getClientStatusDistribution(role.organization.id),
     getReferralStatusDistribution(role.organization.id),
     getMonthlyDealsRevenue(role.organization.id, period),
@@ -88,34 +97,62 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
   const showExport = canExport(role);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">レポート</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {role.organization.name} の活動状況をまとめます
-          </p>
-        </div>
-        {showExport && (
-          <div className="flex flex-col items-end gap-2">
-            <ExportButton href="/api/agency/export/placements" label="成約・売上 CSV" />
-            <ExportButton href="/api/agency/export/referrals" label="応募 CSV" />
-            <ExportButton href="/api/agency/export/interviews" label="面接 履歴 CSV" />
-            <ExportButton href="/api/agency/export/tasks" label="タスク CSV" />
-            <ExportButton href="/api/agency/export/line-broadcasts" label="LINE 一斉配信 CSV" />
+    <div className="mx-auto flex max-w-6xl gap-6 md:gap-8">
+      <SectionNav />
+
+      <div className="flex-1 space-y-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">レポート</h1>
+            <p className="text-muted-foreground mt-1 text-sm">
+              {role.organization.name} の活動状況をまとめます
+            </p>
           </div>
-        )}
-      </div>
+          {showExport && (
+            <div className="flex flex-col items-end gap-2">
+              <ExportButton href="/api/agency/export/placements" label="成約・売上 CSV" />
+              <ExportButton href="/api/agency/export/referrals" label="応募 CSV" />
+              <ExportButton href="/api/agency/export/interviews" label="面接 履歴 CSV" />
+              <ExportButton href="/api/agency/export/tasks" label="タスク CSV" />
+              <ExportButton href="/api/agency/export/line-broadcasts" label="LINE 一斉配信 CSV" />
+            </div>
+          )}
+        </div>
 
-      <PeriodFilter period={period} />
+        <PeriodFilter period={period} />
 
-      <div className="space-y-4">
-        <StatusDistributionSection clients={clients} referrals={referrals} />
-        <MonthlyDealsSection data={monthlyDeals} />
-        <PlacementRateSection data={placementRate} />
-        <SelectionFunnelSection application={funnelByApplication} candidate={funnelByCandidate} />
-        <AdvisorPerformanceSection data={advisor} />
-        <PhaseDurationSection data={phaseDuration} />
+        {/* KPI ヘッドライン(前期比付き)*/}
+        <section id="kpi" className="scroll-mt-4 space-y-2">
+          <KpiHeadline current={kpiCurrent} previous={kpiPrevious} />
+          <p className="text-muted-foreground text-[10px]">
+            前期比の基準:{previousPeriod.from} 〜 {previousPeriod.to}
+          </p>
+        </section>
+
+        {/* セクションアンカーを付けて sticky nav から飛べるようにする */}
+        <section id="monthly-deals" className="scroll-mt-4">
+          <MonthlyDealsSection data={monthlyDeals} />
+        </section>
+
+        <section id="placement-rate" className="scroll-mt-4">
+          <PlacementRateSection data={placementRate} />
+        </section>
+
+        <section id="funnel" className="scroll-mt-4">
+          <SelectionFunnelSection application={funnelByApplication} candidate={funnelByCandidate} />
+        </section>
+
+        <section id="advisor" className="scroll-mt-4">
+          <AdvisorPerformanceSection data={advisor} />
+        </section>
+
+        <section id="phase-duration" className="scroll-mt-4">
+          <PhaseDurationSection data={phaseDuration} />
+        </section>
+
+        <section id="status-distribution" className="scroll-mt-4">
+          <StatusDistributionSection clients={clients} referrals={referrals} />
+        </section>
       </div>
     </div>
   );
