@@ -10,6 +10,7 @@ import { PageHeading } from "@/components/ui/page-heading";
 import { listOrganizationLineTags } from "@/lib/line/conversation-tags";
 import { getUserRole } from "@/lib/organizations/queries";
 import { getFlowDetail, listMaTemplatesForOrg } from "@/lib/ma/flow-queries";
+import { listSegmentsForOrg } from "@/lib/ma/segment-queries";
 import { createClient } from "@/lib/supabase/server";
 
 import { FlowEditor } from "./flow-editor";
@@ -32,10 +33,11 @@ export default async function FlowEditPage({ params }: { params: RouteParams }) 
     redirect("/app");
   }
 
-  const [flow, tags, templates] = await Promise.all([
+  const [flow, tags, templates, segments] = await Promise.all([
     getFlowDetail(supabase, role.organization.id, flowId),
     listOrganizationLineTags(role.organization.id),
     listMaTemplatesForOrg(supabase, role.organization.id),
+    listSegmentsForOrg(supabase, role.organization.id),
   ]);
   if (!flow) notFound();
 
@@ -54,6 +56,7 @@ export default async function FlowEditPage({ params }: { params: RouteParams }) 
           isAdmin={role.member.role === "admin"}
           tags={tags}
           templates={templates}
+          segments={segments}
         />
       </div>
     </div>

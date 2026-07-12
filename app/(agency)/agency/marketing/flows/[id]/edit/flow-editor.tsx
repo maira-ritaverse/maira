@@ -36,8 +36,11 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import type { LineConversationTag } from "@/lib/line/conversation-tags";
 import type { FlowDetail, MaTemplateOption } from "@/lib/ma/flow-queries";
+import type { SegmentListItem } from "@/lib/ma/segment-queries";
 
 import { StepConfigPanel, type StepEditable } from "./step-config-panel";
 import { StepNode, type StepNodeData } from "./step-node";
@@ -47,6 +50,17 @@ type Props = {
   isAdmin: boolean;
   tags: LineConversationTag[];
   templates: MaTemplateOption[];
+  segments: SegmentListItem[];
+};
+
+/** Flow の 編集 可能 メタ (PATCH で 送る フィールド のみ) */
+type FlowMeta = {
+  name: string;
+  description: string;
+  goal_event_key: string;
+  allow_reentry: boolean;
+  max_send_per_day: number | null;
+  target_segment_id: string | null;
 };
 
 const NODE_TYPES = { step: StepNode };
@@ -153,9 +167,18 @@ function toEditable(steps: FlowDetail["steps"]): StepEditable[] {
 // 本体
 // ────────────────────────────────────────
 
-export function FlowEditor({ flow, isAdmin, tags, templates }: Props) {
+export function FlowEditor({ flow, isAdmin, tags, templates, segments }: Props) {
   const initialSteps = useMemo(() => toEditable(flow.steps), [flow.steps]);
   const [steps, setSteps] = useState<StepEditable[]>(initialSteps);
+  const [meta, setMeta] = useState<FlowMeta>({
+    name: flow.name,
+    description: flow.description ?? "",
+    goal_event_key: flow.goal_event_key ?? "",
+    allow_reentry: flow.allow_reentry,
+    max_send_per_day: flow.max_send_per_day,
+    target_segment_id: flow.target_segment_id,
+  });
+  const [metaExpanded, setMetaExpanded] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<number | null>(
     initialSteps[0]?.step_order ?? null,
   );
@@ -318,7 +341,27 @@ export function FlowEditor({ flow, isAdmin, tags, templates }: Props) {
     setSaving(true);
     setSaveMsg(null);
     try {
-      // 現在 の React Flow 上 の 位置 を steps に マージ (drag 中断 前 の 分 を 含め て)
+      // 1. メタ 情報 PATCH
+      const metaRes = await fetch("/api/agency/ma/flows", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: flow.id,
+          name: meta.name.trim() || flow.name,
+          description: meta.description.trim() || null,
+          goal_event_key: meta.goal_event_key.trim() || null,
+          allow_reentry: meta.allow_reentry,
+          max_send_per_day: meta.max_send_per_day,
+          target_segment_id: meta.target_segment_id,
+        }),
+      });
+      if (!metaRes.ok) {
+        const body = (await metaRes.json().catch(() => ({}))) as { error?: string };
+        setSaveMsg(`メタ 保存 失敗: ${body.error ?? metaRes.status}`);
+        return;
+      }
+
+      // 2. 現在 の React Flow 上 の 位置 を steps に マージ し PUT
       const posById = new Map(nodes.map((n) => [n.id, n.position]));
       const withPositions = steps.map((s) => {
         const p = posById.get(String(s.step_order));
@@ -331,7 +374,7 @@ export function FlowEditor({ flow, isAdmin, tags, templates }: Props) {
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setSaveMsg(`保存 失敗: ${body.error ?? res.status}`);
+        setSaveMsg(`ステップ 保存 失敗: ${body.error ?? res.status}`);
         return;
       }
       setSaveMsg(`保存 完了 (${new Date().toLocaleTimeString("ja-JP")})`);
@@ -355,6 +398,9 @@ export function FlowEditor({ flow, isAdmin, tags, templates }: Props) {
           <Button variant="outline" size="sm" disabled={!isAdmin} onClick={resetLayout}>
             レイアウト リセット
           </Button>
+          <Button variant="outline" size="sm" onClick={() => setMetaExpanded((v) => !v)}>
+            {metaExpanded ? "▼" : "▶"} Flow メタ 情報
+          </Button>
           <span className="text-muted-foreground text-xs">
             トリガー: {flow.trigger_type} / ステップ: {steps.length}
           </span>
@@ -366,6 +412,93 @@ export function FlowEditor({ flow, isAdmin, tags, templates }: Props) {
           </Button>
         </div>
       </div>
+
+      {metaExpanded && (
+        <div className="border-border bg-muted/30 space-y-3 rounded border p-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor="flow-meta-name">名前 *</Label>
+              <Input
+                id="flow-meta-name"
+                value={meta.name}
+                disabled={!isAdmin}
+                onChange={(e) => setMeta({ ...meta, name: e.target.value })}
+                maxLength={200}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="flow-meta-desc">説明</Label>
+              <Input
+                id="flow-meta-desc"
+                value={meta.description}
+                disabled={!isAdmin}
+                onChange={(e) => setMeta({ ...meta, description: e.target.value })}
+                maxLength={2000}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="space-y-1">
+              <Label htmlFor="flow-meta-goal">目標 イベント (CV)</Label>
+              <Input
+                id="flow-meta-goal"
+                value={meta.goal_event_key}
+                disabled={!isAdmin}
+                onChange={(e) => setMeta({ ...meta, goal_event_key: e.target.value })}
+                placeholder="meeting_confirmed 等"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="flow-meta-segment">対象 セグメント</Label>
+              <select
+                id="flow-meta-segment"
+                className="border-input bg-background w-full rounded border px-3 py-2 text-sm"
+                value={meta.target_segment_id ?? ""}
+                disabled={!isAdmin}
+                onChange={(e) => setMeta({ ...meta, target_segment_id: e.target.value || null })}
+              >
+                <option value="">(絞込 なし)</option>
+                {segments.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="flow-meta-max">1 日 送信 上限</Label>
+              <Input
+                id="flow-meta-max"
+                type="number"
+                min={1}
+                value={meta.max_send_per_day ?? ""}
+                disabled={!isAdmin}
+                onChange={(e) =>
+                  setMeta({
+                    ...meta,
+                    max_send_per_day: e.target.value ? Number(e.target.value) : null,
+                  })
+                }
+                placeholder="無制限"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              id="flow-meta-reentry"
+              type="checkbox"
+              checked={meta.allow_reentry}
+              disabled={!isAdmin}
+              onChange={(e) => setMeta({ ...meta, allow_reentry: e.target.checked })}
+            />
+            <Label htmlFor="flow-meta-reentry" className="text-sm">
+              一度 完了/中断 した 友だち を 再度 enroll 可能 に する (allow_reentry)
+            </Label>
+          </div>
+        </div>
+      )}
 
       <div className="grid flex-1 grid-cols-1 gap-3 overflow-hidden md:grid-cols-[1fr_360px]">
         <div className="border-border rounded border">

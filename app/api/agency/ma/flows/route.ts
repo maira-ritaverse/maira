@@ -110,11 +110,21 @@ export async function POST(request: Request) {
 }
 
 // ────────────────────────────────────────
-// PATCH (is_active 切替)
+// PATCH (メタデータ 部分 更新)
+//
+// 少なくとも 1 つ の 編集 可能 フィールド を 含める 必要 が ある。
+// 変更 不可 : id / organization_id / trigger_type (再作成 で 対応)
 // ────────────────────────────────────────
 const patchBody = z.object({
   id: z.string().uuid(),
-  is_active: z.boolean(),
+  is_active: z.boolean().optional(),
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).nullable().optional(),
+  goal_event_key: z.string().max(100).nullable().optional(),
+  allow_reentry: z.boolean().optional(),
+  max_send_per_day: z.number().int().min(1).nullable().optional(),
+  target_segment_id: z.string().uuid().nullable().optional(),
+  trigger_config: z.record(z.string(), z.unknown()).optional(),
 });
 
 export async function PATCH(request: Request) {
@@ -131,9 +141,30 @@ export async function PATCH(request: Request) {
   }
 
   const admin = createServiceClient();
+
+  // id 以外 で 実際 に 送られた フィールド のみ 更新
+  const patch: Record<string, unknown> = {};
+  for (const key of [
+    "is_active",
+    "name",
+    "description",
+    "goal_event_key",
+    "allow_reentry",
+    "max_send_per_day",
+    "target_segment_id",
+    "trigger_config",
+  ] as const) {
+    if (parsed.data[key] !== undefined) {
+      patch[key] = parsed.data[key];
+    }
+  }
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json({ error: "no_fields" }, { status: 400 });
+  }
+
   const { error } = await admin
     .from("ma_flows")
-    .update({ is_active: parsed.data.is_active })
+    .update(patch)
     .eq("id", parsed.data.id)
     .eq("organization_id", guard.organization.id);
   if (error) {
