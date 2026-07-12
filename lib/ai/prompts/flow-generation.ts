@@ -154,19 +154,39 @@ export type StepSavePayload = {
   step_order: number;
   name: string;
   delay_from_previous_seconds: number;
-  action_type: "wait" | "branch" | "stop";
+  action_type: "wait" | "branch" | "stop" | "send_message";
   action_config: Record<string, unknown>;
+  template_id?: string | null;
   branch_condition_json?: unknown;
   next_step_on_true?: number | null;
   next_step_on_false?: number | null;
 };
 
-export function mapProposalStepsToSaveable(proposal: AIFlowProposal): StepSavePayload[] {
+/**
+ * step_order → template_id の マップ を 引数 に 取る (Phase 1-AI.4)。
+ * ai-flow-modal の save() で send_message ステップ 毎 に POST /api/agency/ma/templates
+ * で 作成 して id を 集めて 渡す 前提。 空 の 場合 は 従来 通り wait に フォールバック。
+ */
+export function mapProposalStepsToSaveable(
+  proposal: AIFlowProposal,
+  templateIdByStepOrder: Record<number, string> = {},
+): StepSavePayload[] {
   return proposal.steps.map((s): StepSavePayload => {
     if (s.action_type === "send_message") {
+      const templateId = templateIdByStepOrder[s.step_order];
+      if (templateId) {
+        return {
+          step_order: s.step_order,
+          name: s.name,
+          delay_from_previous_seconds: s.delay_from_previous_seconds,
+          action_type: "send_message",
+          template_id: templateId,
+          action_config: { ai_generated: true },
+        };
+      }
       return {
         step_order: s.step_order,
-        name: `[AI: 送信] ${s.name}`,
+        name: `[AI: 送信 失敗] ${s.name}`,
         delay_from_previous_seconds: s.delay_from_previous_seconds,
         action_type: "wait",
         action_config: {

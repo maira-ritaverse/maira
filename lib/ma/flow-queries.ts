@@ -31,42 +31,50 @@ export async function listMaTemplatesForOrg(
   supabase: SupabaseClient,
   organizationId: string,
 ): Promise<MaTemplateOption[]> {
-  const { data, error } = await supabase
+  // ma_templates.organization_id で 直接 引く。
+  // scenario_id が ある もの は preset 名 を 別 SELECT で 補完 する。
+  const { data: templates, error } = await supabase
     .from("ma_templates")
-    .select(
-      `
-      id,
-      updated_at,
-      ma_scenarios!inner (
-        organization_id,
-        ma_scenario_presets!inner (key, name, channel)
-      )
-    `,
-    )
-    .eq("ma_scenarios.organization_id", organizationId)
-    .eq("ma_scenarios.ma_scenario_presets.channel", "line");
+    .select("id, name, scenario_id, updated_at")
+    .eq("organization_id", organizationId)
+    .order("updated_at", { ascending: false });
   if (error) throw error;
 
   type Row = {
     id: string;
+    name: string | null;
+    scenario_id: string | null;
     updated_at: string;
-    ma_scenarios: {
-      ma_scenario_presets: { key: string; name: string } | null;
-    } | null;
   };
+  const rows = (templates ?? []) as Row[];
+  if (rows.length === 0) return [];
 
-  return ((data ?? []) as unknown as Row[])
-    .map((r) => {
-      const preset = r.ma_scenarios?.ma_scenario_presets;
-      if (!preset) return null;
-      return {
-        id: r.id,
-        scenario_key: preset.key,
-        scenario_name: preset.name,
-        updated_at: r.updated_at,
-      };
-    })
-    .filter((t): t is MaTemplateOption => t !== null);
+  // scenario_id が ある もの の preset 名 を 一括 取得
+  const scenarioIds = rows.map((r) => r.scenario_id).filter((id): id is string => id != null);
+  const presetNameByScenarioId = new Map<string, string>();
+  if (scenarioIds.length > 0) {
+    const { data: scenarios } = await supabase
+      .from("ma_scenarios")
+      .select("id, ma_scenario_presets!inner(name, channel)")
+      .in("id", scenarioIds)
+      .eq("ma_scenario_presets.channel", "line");
+    for (const s of (scenarios ?? []) as unknown as Array<{
+      id: string;
+      ma_scenario_presets: { name: string } | null;
+    }>) {
+      const preset = s.ma_scenario_presets;
+      if (preset) presetNameByScenarioId.set(s.id, preset.name);
+    }
+  }
+
+  return rows.map((r) => ({
+    id: r.id,
+    scenario_key: r.scenario_id ?? "standalone",
+    scenario_name: r.scenario_id
+      ? (presetNameByScenarioId.get(r.scenario_id) ?? "旧 プリセット")
+      : (r.name ?? "無 名 テンプレ"),
+    updated_at: r.updated_at,
+  }));
 }
 
 /**

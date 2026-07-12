@@ -134,8 +134,28 @@ export function AiFlowModal({ open, onOpenChange, onCreated }: Props) {
         }),
       });
 
-      // 3. Steps を PUT (proposal から マッピング)
-      const saveable = mapProposalStepsToSaveable(proposal);
+      // 3. send_message ステップ に 対応 する 独立 テンプレ を 事前 作成
+      const templateIdByStep: Record<number, string> = {};
+      for (const step of proposal.steps) {
+        if (step.action_type === "send_message" && step.message_body) {
+          const templRes = await fetch("/api/agency/ma/templates", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              name: `[AI: ${proposal.name}] Step ${step.step_order}`,
+              body: step.message_body,
+            }),
+          });
+          if (templRes.ok) {
+            const { id: templateId } = (await templRes.json()) as { id: string };
+            templateIdByStep[step.step_order] = templateId;
+          }
+          // 失敗 は フォールバック (mapper が wait に 変換)
+        }
+      }
+
+      // 4. Steps を PUT (proposal + template ID マップ から マッピング)
+      const saveable = mapProposalStepsToSaveable(proposal, templateIdByStep);
       const stepsRes = await fetch(`/api/agency/ma/flows/${flowId}/steps`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
