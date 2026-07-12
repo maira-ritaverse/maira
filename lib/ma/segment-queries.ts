@@ -18,6 +18,39 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { SegmentFilterSchema, type SegmentFilter } from "./segment-dsl";
 
 /**
+ * 一覧 表示 用 の セグメント 行。
+ */
+export type SegmentListItem = {
+  id: string;
+  name: string;
+  description: string | null;
+  filter_dsl_json: SegmentFilter;
+  friend_count_cache: number | null;
+  last_computed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/**
+ * 自組織 の セグメント 一覧 を 返す。 一覧 UI と Flow ビルダー の
+ * target_segment_id 選択肢 で 共用。
+ */
+export async function listSegmentsForOrg(
+  client: SupabaseClient,
+  organizationId: string,
+): Promise<SegmentListItem[]> {
+  const { data, error } = await client
+    .from("line_segments")
+    .select(
+      "id, name, description, filter_dsl_json, friend_count_cache, last_computed_at, created_at, updated_at",
+    )
+    .eq("organization_id", organizationId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as SegmentListItem[];
+}
+
+/**
  * セグメント filter に 一致 する 友だち の line_user_id[] を 返す。
  * filter は Zod で 検証 して から RPC に 渡す (壊れた JSON で PG を 落とさない)。
  */
