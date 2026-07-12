@@ -123,21 +123,21 @@ export function SegmentsScreen({ initialSegments, isAdmin, tags }: Props) {
         {isAdmin && (
           <div className="space-y-2">
             <Button className="w-full" onClick={() => setEdit(blankEditState())}>
-              + 新規 セグメント
+              + 新しいセグメント
             </Button>
             <Button variant="outline" className="w-full" onClick={() => setAiModalOpen(true)}>
               <Sparkles className="mr-1 size-4" aria-hidden />
-              AI で 生成
+              AI に提案してもらう
             </Button>
           </div>
         )}
         {segments.length === 0 ? (
           <EmptyState
-            title="セグメント が ありません"
+            title="まだセグメントがありません"
             description={
               isAdmin
-                ? "「+ 新規」 から 作成 して ください。"
-                : "admin が 作成 する と 表示 されます。"
+                ? "「+ 新しいセグメント」から作成してください。"
+                : "管理者が作成するとここに表示されます。"
             }
           />
         ) : (
@@ -155,9 +155,7 @@ export function SegmentsScreen({ initialSegments, isAdmin, tags }: Props) {
                   </CardHeader>
                   <CardContent className="py-2 pt-0">
                     <div className="text-muted-foreground text-xs">
-                      {s.friend_count_cache != null
-                        ? `${s.friend_count_cache} 人 マッチ`
-                        : "未 計算"}
+                      {s.friend_count_cache != null ? `${s.friend_count_cache} 人が該当` : "未計算"}
                     </div>
                   </CardContent>
                 </Card>
@@ -171,14 +169,14 @@ export function SegmentsScreen({ initialSegments, isAdmin, tags }: Props) {
       <div>
         {!edit ? (
           <EmptyState
-            title="左 の 一覧 から 選択 して ください"
-            description="または 「+ 新規 セグメント」 で 新規 作成。"
+            title="左の一覧から選択してください"
+            description="または「+ 新しいセグメント」で新規作成します。"
           />
         ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-2">
               <div className="text-sm font-medium">
-                {edit.id ? "セグメント を 編集" : "新規 セグメント"}
+                {edit.id ? "セグメントを編集" : "新しいセグメント"}
               </div>
               <div className="flex items-center gap-2">
                 {saveMsg && <span className="text-muted-foreground text-xs">{saveMsg}</span>}
@@ -186,7 +184,7 @@ export function SegmentsScreen({ initialSegments, isAdmin, tags }: Props) {
                   閉じる
                 </Button>
                 <Button disabled={!isAdmin || saving || !edit.name.trim()} onClick={save}>
-                  {saving ? "保存 中..." : "保存"}
+                  {saving ? "保存中..." : "保存"}
                 </Button>
               </div>
             </div>
@@ -203,7 +201,7 @@ export function SegmentsScreen({ initialSegments, isAdmin, tags }: Props) {
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="seg-desc">説明 (任意)</Label>
+                <Label htmlFor="seg-desc">説明(任意)</Label>
                 <Input
                   id="seg-desc"
                   value={edit.description}
@@ -215,7 +213,7 @@ export function SegmentsScreen({ initialSegments, isAdmin, tags }: Props) {
             </div>
 
             <div className="space-y-2">
-              <Label>条件 (SegmentCondition ツリー)</Label>
+              <Label>絞り込み条件</Label>
               <ConditionEditor
                 condition={edit.root}
                 disabled={!isAdmin}
@@ -223,7 +221,7 @@ export function SegmentsScreen({ initialSegments, isAdmin, tags }: Props) {
                 onChange={(next) => setEdit({ ...edit, root: next })}
               />
               <p className="text-muted-foreground text-xs">
-                保存 時 に PG 側 で filter を 検証 + マッチ 数 を 再計算 します。
+                保存すると条件が反映され、該当する人数が再計算されます。
               </p>
             </div>
           </div>

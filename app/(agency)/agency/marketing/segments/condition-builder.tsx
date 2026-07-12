@@ -22,22 +22,22 @@ import { isPhase1ImplementedKind, type SegmentCondition } from "@/lib/ma/segment
 type KindOption = { value: SegmentCondition["kind"]; label: string; group: string };
 
 const KIND_OPTIONS: KindOption[] = [
-  { value: "and", label: "AND (すべて 満たす)", group: "合成" },
-  { value: "or", label: "OR (どれか 満たす)", group: "合成" },
-  { value: "not", label: "NOT (否定)", group: "合成" },
-  { value: "has_tag", label: "タグ を 持って いる", group: "タグ" },
-  { value: "not_has_tag", label: "タグ を 持って いない", group: "タグ" },
-  { value: "field_equals", label: "自由項目 が 特定 値", group: "自由項目" },
-  { value: "field_exists", label: "自由項目 が 存在", group: "自由項目" },
-  { value: "days_since_last_activity_gte", label: "最終 活動 から N 日 以上", group: "活動" },
-  { value: "days_since_added_gte", label: "追加 から N 日 以上", group: "活動" },
-  { value: "days_since_added_lte", label: "追加 から N 日 以内", group: "活動" },
-  { value: "clicked_link_in_flow", label: "Flow の リンク を クリック 済", group: "行動" },
-  { value: "score_gte", label: "スコア N 以上 (Phase 2)", group: "予約" },
-  { value: "score_lte", label: "スコア N 以下 (Phase 2)", group: "予約" },
-  { value: "entry_source_in", label: "登録元 が いずれか (Phase 3)", group: "予約" },
-  { value: "conversion_event_present", label: "CV イベント 発生 済 (Phase 2)", group: "予約" },
-  { value: "conversion_event_absent", label: "CV イベント なし (Phase 2)", group: "予約" },
+  { value: "and", label: "すべての条件を満たす(AND)", group: "組み合わせ" },
+  { value: "or", label: "いずれかの条件を満たす(OR)", group: "組み合わせ" },
+  { value: "not", label: "条件を満たさない(NOT)", group: "組み合わせ" },
+  { value: "has_tag", label: "タグを持っている", group: "タグ" },
+  { value: "not_has_tag", label: "タグを持っていない", group: "タグ" },
+  { value: "field_equals", label: "自由項目が特定の値", group: "自由項目" },
+  { value: "field_exists", label: "自由項目が入力済み", group: "自由項目" },
+  { value: "days_since_last_activity_gte", label: "最終活動から◯日以上", group: "活動" },
+  { value: "days_since_added_gte", label: "追加から◯日以上", group: "活動" },
+  { value: "days_since_added_lte", label: "追加から◯日以内", group: "活動" },
+  { value: "clicked_link_in_flow", label: "Flow のリンクをクリック済", group: "行動" },
+  { value: "score_gte", label: "スコア◯以上(準備中)", group: "準備中" },
+  { value: "score_lte", label: "スコア◯以下(準備中)", group: "準備中" },
+  { value: "entry_source_in", label: "登録元がいずれか(準備中)", group: "準備中" },
+  { value: "conversion_event_present", label: "目標達成イベントあり(準備中)", group: "準備中" },
+  { value: "conversion_event_absent", label: "目標達成イベントなし(準備中)", group: "準備中" },
 ];
 
 /** kind 変更 時 に 挿入 する デフォルト 条件 */
@@ -116,9 +116,9 @@ export function ConditionEditor({
         {!isPhase1 && (
           <span
             className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px]"
-            title="PG 側 は false 固定。 Phase 2/3 実装 で 有効 化。"
+            title="このタイプの条件はまだサポートしていません。実際の絞り込みでは常に false になります。"
           >
-            未実装
+            準備中
           </span>
         )}
         {onRemove && (
@@ -139,7 +139,7 @@ export function ConditionEditor({
         <div className="space-y-2">
           {condition.conditions.length === 0 && (
             <p className="text-muted-foreground text-xs">
-              条件 が ありません。 「+ 追加」 で 子 条件 を 加えて ください。
+              条件がまだありません。「+ 条件を追加」で子条件を足してください。
             </p>
           )}
           {condition.conditions.map((sub, idx) => (
@@ -171,7 +171,7 @@ export function ConditionEditor({
               });
             }}
           >
-            + 条件 追加
+            + 条件を追加
           </Button>
         </div>
       )}
@@ -206,7 +206,7 @@ export function ConditionEditor({
           </div>
         ) : (
           <LeafInputRow
-            label="tag_id (UUID)"
+            label="タグ ID(UUID)"
             value={condition.tag_id}
             disabled={disabled}
             onChange={(v) => onChange({ ...condition, tag_id: v })}

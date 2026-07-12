@@ -397,32 +397,32 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments }: Props) 
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" disabled={!isAdmin} onClick={addStep}>
-            + ステップ 追加
+            + ステップを追加
           </Button>
           <Button variant="outline" size="sm" disabled={!isAdmin} onClick={resetLayout}>
-            レイアウト リセット
+            レイアウトをリセット
           </Button>
           <Button variant="outline" size="sm" onClick={() => setMetaExpanded((v) => !v)}>
-            {metaExpanded ? "▼" : "▶"} Flow メタ 情報
+            {metaExpanded ? "▼" : "▶"} Flow の詳細設定
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={() => setAiImproveOpen(true)}
             disabled={steps.length === 0}
-            title={steps.length === 0 ? "ステップ が ない Flow は レビュー でき ません" : ""}
+            title={steps.length === 0 ? "ステップがない Flow はレビューできません" : ""}
           >
             <Sparkles className="mr-1 size-3" aria-hidden />
-            AI 改善 提案
+            AI に改善してもらう
           </Button>
           <span className="text-muted-foreground text-xs">
-            トリガー: {flow.trigger_type} / ステップ: {steps.length}
+            起動タイミング: {flow.trigger_type} / ステップ: {steps.length}
           </span>
         </div>
         <div className="flex items-center gap-2">
           {saveMsg && <span className="text-muted-foreground text-xs">{saveMsg}</span>}
           <Button disabled={!isAdmin || saving} onClick={save}>
-            {saving ? "保存 中..." : "保存"}
+            {saving ? "保存中..." : "保存"}
           </Button>
         </div>
       </div>
@@ -454,17 +454,17 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments }: Props) 
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <div className="space-y-1">
-              <Label htmlFor="flow-meta-goal">目標 イベント (CV)</Label>
+              <Label htmlFor="flow-meta-goal">達成目標(CV イベント)</Label>
               <Input
                 id="flow-meta-goal"
                 value={meta.goal_event_key}
                 disabled={!isAdmin}
                 onChange={(e) => setMeta({ ...meta, goal_event_key: e.target.value })}
-                placeholder="meeting_confirmed 等"
+                placeholder="meeting_confirmed など"
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="flow-meta-segment">対象 セグメント</Label>
+              <Label htmlFor="flow-meta-segment">対象セグメント</Label>
               <select
                 id="flow-meta-segment"
                 className="border-input bg-background w-full rounded border px-3 py-2 text-sm"
@@ -472,7 +472,7 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments }: Props) 
                 disabled={!isAdmin}
                 onChange={(e) => setMeta({ ...meta, target_segment_id: e.target.value || null })}
               >
-                <option value="">(絞込 なし)</option>
+                <option value="">(絞り込みなし)</option>
                 {segments.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
@@ -481,7 +481,7 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments }: Props) 
               </select>
             </div>
             <div className="space-y-1">
-              <Label htmlFor="flow-meta-max">1 日 送信 上限</Label>
+              <Label htmlFor="flow-meta-max">1日あたりの送信上限</Label>
               <Input
                 id="flow-meta-max"
                 type="number"
@@ -508,7 +508,7 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments }: Props) 
               onChange={(e) => setMeta({ ...meta, allow_reentry: e.target.checked })}
             />
             <Label htmlFor="flow-meta-reentry" className="text-sm">
-              一度 完了/中断 した 友だち を 再度 enroll 可能 に する (allow_reentry)
+              一度完了または停止した友だちを、再度対象にする
             </Label>
           </div>
         </div>
@@ -551,8 +551,8 @@ export function FlowEditor({ flow, isAdmin, tags, templates, segments }: Props) 
       </div>
 
       <div className="text-muted-foreground border-border border-t pt-2 text-[11px]">
-        操作:ノード ドラッグ で 移動 / ハンドル ドラッグ で 接続 / 選択 して Delete で 削除 /
-        「レイアウト リセット」 で 自動 縦積み に 戻す
+        操作: ステップをドラッグして移動 / ハンドルからドラッグして接続 / 選択して Delete で削除 /
+        「レイアウトをリセット」で自動配置に戻す
       </div>
 
       <AiImproveModal open={aiImproveOpen} onOpenChange={setAiImproveOpen} flowId={flow.id} />
