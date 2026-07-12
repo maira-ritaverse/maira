@@ -51,6 +51,12 @@ export default async function ZoomDiagnosticPage() {
 
   // ─── 1. 環境変数チェック ──────────────────────────
   const zoomConfig = getZoomConfig();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  const isSiteUrlHttps = siteUrl.startsWith("https://");
+  const isSiteUrlLocalhost =
+    siteUrl.includes("localhost") || siteUrl.includes("127.0.0.1") || siteUrl === "";
+  const isSiteUrlPreview = siteUrl.includes("vercel.app");
+
   const envChecks: StatusLine[] = [
     {
       label: "ZOOM_CLIENT_ID",
@@ -74,11 +80,45 @@ export default async function ZoomDiagnosticPage() {
     },
     {
       label: "NEXT_PUBLIC_SITE_URL",
-      ok: Boolean(process.env.NEXT_PUBLIC_SITE_URL),
-      detail: process.env.NEXT_PUBLIC_SITE_URL ?? "未設定",
-      hint: "本番では https://maira.pro のような公開 URL を設定。 Redirect URI / Webhook URL の base として使われます。",
+      ok: isSiteUrlHttps && !isSiteUrlLocalhost ? true : "warn",
+      detail: siteUrl || "未設定",
+      hint: isSiteUrlLocalhost
+        ? "localhost または未設定です。 本番の Vercel では https://maira.pro のような公開 URL に設定してください。 これが localhost の場合、Zoom OAuth は必ず Error 240 になります。"
+        : !isSiteUrlHttps
+          ? "http:// になっています。 Zoom は https のみを許可するので Error 240 になります。"
+          : isSiteUrlPreview
+            ? "Vercel プレビュー URL のように見えます。 Zoom App にこの URL も Development 側の Redirect URL として登録されている必要があります。"
+            : undefined,
     },
   ];
+
+  // ─── 1.5. Error 240 リスク判定 ──────────────────────
+  // Zoom OAuth Error 240 は redirect URI / scope の不一致で発生する。
+  // 完全な検証は Zoom API を叩く必要があるが、代表的な原因を事前チェックする。
+  const err240Reasons: string[] = [];
+  if (isSiteUrlLocalhost) {
+    err240Reasons.push(
+      "NEXT_PUBLIC_SITE_URL が localhost または未設定。 Zoom は公開 URL を要求します。",
+    );
+  } else if (!isSiteUrlHttps) {
+    err240Reasons.push("NEXT_PUBLIC_SITE_URL が http:// です。 https:// が必須。");
+  }
+  if (!zoomConfig) {
+    err240Reasons.push("Zoom 設定が不完全(CLIENT_ID / SECRET / SITE_URL のいずれかが未設定)。");
+  }
+  const err240Line: StatusLine = {
+    label: "Error 240 リスク(Zoom OAuth)",
+    ok: err240Reasons.length === 0 ? true : false,
+    detail:
+      err240Reasons.length === 0
+        ? "現状の設定では OAuth に成功するはず"
+        : `${err240Reasons.length} 件のリスクを検出`,
+    hint:
+      err240Reasons.length > 0
+        ? `以下を修正してください:\n${err240Reasons.map((r) => `・${r}`).join("\n")}\n\nそれでも Error 240 が出る場合は Zoom Marketplace 側の Redirect URL が上記の Callback URL と 完全一致(末尾スラッシュや大文字小文字も含めて)しているか、 Scopes に上記 8 個が全部登録されているか、を確認してください。`
+        : "Zoom Marketplace 側の Redirect URL と Scopes 登録も併せて確認するとより安全です。",
+  };
+  envChecks.push(err240Line);
 
   // ─── 2. このユーザーの Zoom 接続状態 ─────────────
   const zoomStatus = await getZoomConnectionStatus(supabase, user.id);
@@ -190,7 +230,7 @@ export default async function ZoomDiagnosticPage() {
             <code className="rounded bg-white px-1 py-0.5">{webhookEndpoint}</code>
           </div>
         </div>
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap gap-3">
           <a
             href="https://marketplace.zoom.us/user/build"
             target="_blank"
@@ -199,6 +239,15 @@ export default async function ZoomDiagnosticPage() {
           >
             <ExternalLink className="size-3" aria-hidden />
             Zoom Marketplace の管理画面を開く
+          </a>
+          <a
+            href="/zoom-review"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary inline-flex items-center gap-1 text-xs underline underline-offset-2"
+          >
+            <ExternalLink className="size-3" aria-hidden />
+            レビュアー向けテストガイド(公開ページ)を開く
           </a>
         </div>
       </div>
