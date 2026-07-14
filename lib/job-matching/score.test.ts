@@ -5,6 +5,7 @@ import {
   buildClientContextFromProfile,
   buildPrompt,
   computeInputsHash,
+  sanitizeSeekerRationale,
 } from "./score";
 
 const baseClient = {
@@ -150,6 +151,56 @@ describe("aiRankingSchema", () => {
       ],
     });
     expect(v.success).toBe(false);
+  });
+});
+
+describe("sanitizeSeekerRationale", () => {
+  // 求職者 に 露出 する rationale から 成約報酬 情報 が 漏れない こと を 検証。
+  // Claude が プロンプト 指示 を 無視 した ケース の 最終 防衛。
+  it("通常の rationale はそのまま返す", () => {
+    const r = sanitizeSeekerRationale("経験と希望職種の相性が高い求人です");
+    expect(r.redacted).toBe(false);
+    expect(r.rationale).toBe("経験と希望職種の相性が高い求人です");
+  });
+
+  it("「成約報酬」 が 含まれる と redacted される", () => {
+    const r = sanitizeSeekerRationale("成約報酬が高くマッチ度も高い");
+    expect(r.redacted).toBe(true);
+    expect(r.rationale).not.toContain("成約報酬");
+  });
+
+  it("「報酬」 単独 でも redacted される", () => {
+    const r = sanitizeSeekerRationale("報酬が魅力的な求人です");
+    expect(r.redacted).toBe(true);
+    expect(r.rationale).not.toContain("報酬");
+  });
+
+  it("「フィー」 が 含まれる と redacted される", () => {
+    const r = sanitizeSeekerRationale("エージェント フィー が 高い");
+    expect(r.redacted).toBe(true);
+    expect(r.rationale).not.toContain("フィー");
+  });
+
+  it("英語 「fee」 が 単語 と して 含まれる と redacted される", () => {
+    const r = sanitizeSeekerRationale("This job has a high fee attached");
+    expect(r.redacted).toBe(true);
+  });
+
+  it("「placement fee」 が 含まれる と redacted される (case insensitive)", () => {
+    expect(sanitizeSeekerRationale("Placement Fee is high").redacted).toBe(true);
+    expect(sanitizeSeekerRationale("placement_fee = 500").redacted).toBe(true);
+  });
+
+  it("「万円」 単独 は 年収 と 区別 でき ない ので redacted しない", () => {
+    // 誤検知 を 避ける ため、 万円 は 対象 外 (年収 の 話 で 頻出)
+    const r = sanitizeSeekerRationale("600 万円 の 年収 条件 に 合致");
+    expect(r.redacted).toBe(false);
+  });
+
+  it("「feed」 の よう な 単語 内 の fee は 誤検知 しない", () => {
+    // \bfee\b (word boundary) で 部分 一致 を 避ける
+    const r = sanitizeSeekerRationale("Reliable feedback culture");
+    expect(r.redacted).toBe(false);
   });
 });
 

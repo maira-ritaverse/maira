@@ -23,11 +23,10 @@ import {
   buildClientContextFromProfile,
   buildPrompt,
   computeInputsHash,
+  sanitizeSeekerRationale,
   type AiRanking,
   type FeePreset,
 } from "./score";
-
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * 求職者向け 推薦 で 使う preset を 決定 する。
@@ -41,15 +40,26 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  *
  * 結果 として、 求職者 の 利益 を 損なう「エージェント の 収益 だけ で 順位 を 歪める」
  * リスク を 最小 化 する。
+ *
+ * ⚠ 実装 上 の 注意 (2026-07-14 fix):
+ *   organization_ai_recommendation_settings の RLS SELECT は
+ *   organization_id = current_user_organization_id() だが、 求職者 は
+ *   organization_members に 属さない ため 常に NULL が 返り、 opt-in が
+ *   完全 に 死に コード化 して いた。
+ *   ここ では 求職者 が 既に list_open_jobs_for_seeker RPC 経由 で その 組織 と
+ *   linked で ある 事 を 確認 した 後 (rows.organization_id が RPC で
+ *   client_records.linked_user_id ガード 済) に service_role で narrow read する。
+ *   ・SELECT 列 は preset / apply_to_seeker_view のみ (fee 値 は 一切 触ら ない)
+ *   ・organization_id は 呼び出し 側 で 単一化 された "only" 1 件 のみ
+ *   ・service client は サーバー のみ (lib/supabase/service.ts が ブラウザ で throw)
  */
-async function resolveSeekerFeePreset(
-  supabase: SupabaseClient,
-  organizationIds: string[],
-): Promise<FeePreset> {
+async function resolveSeekerFeePreset(organizationIds: string[]): Promise<FeePreset> {
   const uniqueIds = Array.from(new Set(organizationIds));
   if (uniqueIds.length !== 1) return "fit_focused";
   const [only] = uniqueIds;
-  const { data } = await supabase
+
+  const admin = createServiceClient();
+  const { data } = await admin
     .from("organization_ai_recommendation_settings")
     .select("preset, apply_to_seeker_view")
     .eq("organization_id", only)
@@ -79,8 +89,15 @@ type SeekerJobRow = {
   updated_at: string;
 };
 
+/**
+ * 求職者 レスポンス で 返す 求人 情報。
+ *
+ * ⚠ placementFee は 型レベル で 除外 する (defense-in-depth)。
+ * 万一 mapItems が jobsForPrompt (fee 入り) を 誤って 使う typo が 入っても
+ * TypeScript コンパイル エラー で 検知 できる。
+ */
 export type SeekerRecommendedJob = {
-  job: JobPosting & { organizationName: string };
+  job: Omit<JobPosting, "placementFee"> & { organizationName: string };
   score: number;
   rationale: string;
 };
@@ -131,10 +148,7 @@ export async function getSeekerJobRecommendations(
     : null;
 
   // 3.4) 求職者側 の 有効 preset を 決定 (opt-in の 単一 組織 のみ 反映、 それ 以外 は fit_focused)
-  const feePreset = await resolveSeekerFeePreset(
-    supabase,
-    rows.map((r) => r.organization_id),
-  );
+  const feePreset = await resolveSeekerFeePreset(rows.map((r) => r.organization_id));
 
   // 3.5) 現在の入力ハッシュ → キャッシュチェック
   const inputsHash = computeInputsHash({
@@ -215,12 +229,30 @@ export async function getSeekerJobRecommendations(
   });
   const jsonText = extractJsonFromText(completion.text.trim());
   const parsed = JSON.parse(jsonText) as unknown;
-  const validated = aiRankingSchema.parse(parsed) as AiRanking;
+  const validatedRaw = aiRankingSchema.parse(parsed) as AiRanking;
+
+  // 6.5) rationale の 事後 サニタイズ (LLM が プロンプト 指示 を 破って 報酬 を
+  //      書いた 場合 の 最終 防衛)。 サニタイズ 済 の 値 を 以降 の レスポンス と
+  //      キャッシュ に 使う ので、 「一度 でも 漏れた rationale が キャッシュ に
+  //      永続化 して 何度 も 求職者 に 返る」 事態 を 防ぐ。
+  let redactedCount = 0;
+  const validated: AiRanking = {
+    items: validatedRaw.items.map((it) => {
+      const { rationale, redacted } = sanitizeSeekerRationale(it.rationale);
+      if (redacted) redactedCount += 1;
+      return { ...it, rationale };
+    }),
+  };
+  if (redactedCount > 0) {
+    console.warn(
+      `[seeker recommendations] rationale sanitize: ${redactedCount} item(s) contained money terms and were redacted (user=${user.id})`,
+    );
+  }
 
   // 7) 捏造 ID を弾いて top 5
   const items = mapItems(validated, jobs);
 
-  // 8) キャッシュに upsert
+  // 8) キャッシュに upsert (サニタイズ 済 の rationale を 使う)
   const encryptedRankings = await encryptField(
     JSON.stringify({ items: validated.items.slice(0, 5) }),
   );

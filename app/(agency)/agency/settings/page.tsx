@@ -189,9 +189,9 @@ export default async function SettingsPage() {
                 className="hover:bg-accent -m-4 flex items-center gap-3 rounded-md p-4 transition-colors"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium">AI 求人推薦の 設定(管理者向け)</p>
+                  <p className="font-medium">AI 求人推薦の設定(管理者向け)</p>
                   <p className="text-muted-foreground text-xs">
-                    推薦の 傾き(フィット / バランス / 報酬重視)と 求職者への 反映を 選ぶ
+                    推薦の傾き(フィット / バランス / 報酬重視)と求職者への反映を選ぶ
                   </p>
                 </div>
                 <span className="text-muted-foreground text-sm">→</span>

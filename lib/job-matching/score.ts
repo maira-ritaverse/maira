@@ -235,6 +235,36 @@ export function buildPrompt(args: {
 }
 
 /**
+ * 求職者向け rationale の 事後 サニタイズ。
+ *
+ * プロンプト で 「rationale に 報酬 / fee 情報 を 書か ない で」 と 指示 して いる が、
+ * LLM が 指示 を 無視 する 可能 性 が ある ため 事後 チェック として 用意 する。
+ * ヒット した rationale は 安全 な 汎用 文言 で 置き換え、 サーバー に warn ログ を 残す。
+ *
+ * 対象 パターン:
+ *   ・「報酬」 (成約報酬 / 報酬額 / 報酬 単独)
+ *   ・「フィー」
+ *   ・「fee」 単語 (英字 大小)
+ *   ・「placement fee」 「placement_fee」
+ *
+ * "万円" は 年収 (salary) の 文脈 で 頻出 する ため 意図的 に 判定 対象 に 含めない。
+ * これ は 求職者 経路 で のみ 呼ぶ 純関数 (agency 経路 で は 使わ ない)。
+ */
+const SEEKER_RATIONALE_MONEY_PATTERN = /報酬|フィー|placement[_ ]?fee|\bfee\b/i;
+const SEEKER_SAFE_FALLBACK_RATIONALE =
+  "ご希望と 求人内容 の 相性 が 高い ため、 上位 に お勧め します。";
+
+export function sanitizeSeekerRationale(rationale: string): {
+  rationale: string;
+  redacted: boolean;
+} {
+  if (SEEKER_RATIONALE_MONEY_PATTERN.test(rationale)) {
+    return { rationale: SEEKER_SAFE_FALLBACK_RATIONALE, redacted: true };
+  }
+  return { rationale, redacted: false };
+}
+
+/**
  * 入力データのハッシュ。キャリアプロフィール更新時刻 + open 求人 ID/更新時刻 から算出。
  * 同じ入力なら必ず同じ値、どれかが変わったら値が変わる。
  *

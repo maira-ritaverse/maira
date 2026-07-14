@@ -36,6 +36,7 @@ export function JobForm() {
     handleSubmit,
     control,
     reset: resetForm,
+    getValues,
     formState: { errors },
   } = useForm<CreateJobFormInput, unknown, CreateJobRequest>({
     resolver: zodResolver(createJobRequestSchema),
@@ -116,6 +117,10 @@ export function JobForm() {
               break_time: d.break_time,
               holidays: d.holidays,
               application_qualifications: d.application_qualifications,
+              // 成約報酬 は AI 抽出 対象 外 (求人票 から は 取れ ない agency-private 情報)。
+              // resetForm は 明示 されない フィールド を undefined に 飛ばす ので、
+              // ユーザー が 先に 入力 して いた 値 を getValues で 明示 に 保持 する。
+              placement_fee: getValues("placement_fee"),
             });
           }}
         />

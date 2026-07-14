@@ -40,11 +40,22 @@ const PRESET_DESCRIPTIONS: Record<Preset, string> = {
 };
 
 export function AiRecommendationSettingsForm({ initialPreset, initialApplyToSeekerView }: Props) {
-  const [preset, setPreset] = useState<Preset>(initialPreset);
-  const [applyToSeekerView, setApplyToSeekerView] = useState(initialApplyToSeekerView);
+  const [preset, setPresetState] = useState<Preset>(initialPreset);
+  const [applyToSeekerView, setApplyToSeekerViewState] = useState(initialApplyToSeekerView);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const router = useRouter();
+
+  // 変更 が 入ったら 直前 の 「保存 しました」 表示 を 消す。
+  // 古い トースト が 残り 続けて、 未保存 の 変更 が 保存済 と 誤認 される の を 防ぐ。
+  function setPreset(next: Preset) {
+    setPresetState(next);
+    setMsg(null);
+  }
+  function setApplyToSeekerView(next: boolean) {
+    setApplyToSeekerViewState(next);
+    setMsg(null);
+  }
 
   async function save() {
     setSaving(true);
@@ -127,9 +138,9 @@ export function AiRecommendationSettingsForm({ initialPreset, initialApplyToSeek
           <div className="flex items-start gap-2 rounded border border-blue-300 bg-blue-50 p-3 text-xs text-blue-900">
             <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
             <p>
-              求職者が 単一組織 と 連携している 場合のみ 適用され ます。 複数の 連携先が ある
-              求職者に対しては、 意図しない 組織へ 影響が 及ばない よう、 自動的に フィット重視に
-              フォールバック します。
+              求職者が 単一の 組織とだけ 連携している 場合に 適用されます。 複数の 連携先が ある
+              求職者には、 意図しない 組織へ 影響が 及ばないよう、 自動で フィット重視の 推薦に
+              切り替わります。
             </p>
           </div>
         )}
