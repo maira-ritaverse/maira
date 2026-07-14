@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { AppSidebar } from "@/components/features/app-sidebar";
 import { MobileNavDrawer } from "@/components/features/mobile-nav-drawer";
 import { NotificationBell } from "@/components/features/notifications/notification-bell";
+import { Toaster } from "@/components/features/admin/toaster";
+import { ToastProvider } from "@/lib/admin/toast/store";
 import {
   PopupChatLauncher,
   PopupChatProvider,
@@ -69,34 +71,38 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // ポップアップチャットは認証後の領域全体で利用するため、ここで Provider を張る。
     // Launcher/Window 自体は内部で「現在の応募ID」を見て表示制御するので、
     // 応募詳細ページ以外では何も描画されない。
+    // ToastProvider も 同じ 領域 全体 で useToast() を 使える よう ここ で 張る。
     <PopupChatProvider>
-      {/* h-screen overflow-hidden で サイドバー / ヘッダー を 固定、 main 内 のみ スクロール。 */}
-      <div className="bg-background flex h-screen overflow-hidden">
-        <AppSidebar invitedCount={invitedCount} />
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <header className="flex h-14 shrink-0 items-center justify-between gap-1 border-b px-4">
-            {/* モバイル ナビ トリガー (md 未満)。 desktop 用 sidebar は 左側 に 常設。 */}
-            <MobileNavDrawer invitedCount={invitedCount} />
-            <div className="flex items-center gap-1">
-              <NotificationBell />
-              <UserMenu
-                email={user.email ?? ""}
-                displayName={profile?.display_name ?? null}
-                settingsHref="/app/settings"
-                avatarUrl={resolveAvatarPublicUrl(
-                  supabase,
-                  (profile as { avatar_storage_path: string | null } | null)?.avatar_storage_path ??
-                    null,
-                )}
-              />
-            </div>
-          </header>
-          <main className="flex-1 overflow-auto p-6">{children}</main>
+      <ToastProvider>
+        {/* h-screen overflow-hidden で サイドバー / ヘッダー を 固定、 main 内 のみ スクロール。 */}
+        <div className="bg-background flex h-screen overflow-hidden">
+          <AppSidebar invitedCount={invitedCount} />
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <header className="flex h-14 shrink-0 items-center justify-between gap-1 border-b px-4">
+              {/* モバイル ナビ トリガー (md 未満)。 desktop 用 sidebar は 左側 に 常設。 */}
+              <MobileNavDrawer invitedCount={invitedCount} />
+              <div className="flex items-center gap-1">
+                <NotificationBell />
+                <UserMenu
+                  email={user.email ?? ""}
+                  displayName={profile?.display_name ?? null}
+                  settingsHref="/app/settings"
+                  avatarUrl={resolveAvatarPublicUrl(
+                    supabase,
+                    (profile as { avatar_storage_path: string | null } | null)
+                      ?.avatar_storage_path ?? null,
+                  )}
+                />
+              </div>
+            </header>
+            <main className="flex-1 overflow-auto p-6">{children}</main>
+          </div>
         </div>
-      </div>
-      <PopupChatLauncher />
-      <PopupChatWindow />
-      {requirePolicy && <PrivacyPolicyModal hasPrior={hasPriorPolicy} />}
+        <PopupChatLauncher />
+        <PopupChatWindow />
+        {requirePolicy && <PrivacyPolicyModal hasPrior={hasPriorPolicy} />}
+        <Toaster />
+      </ToastProvider>
     </PopupChatProvider>
   );
 }

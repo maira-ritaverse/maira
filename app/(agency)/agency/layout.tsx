@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import { AgencySidebar } from "@/components/features/agency/agency-sidebar";
 import { NotificationBell } from "@/components/features/notifications/notification-bell";
 import { PrivacyPolicyModal } from "@/components/features/privacy-policy-modal";
+import { Toaster } from "@/components/features/admin/toaster";
 import { UserMenu } from "@/components/features/user-menu";
+import { ToastProvider } from "@/lib/admin/toast/store";
 import {
   getTrialCountdown,
   isPlanReadOnly,
@@ -95,37 +97,43 @@ export default async function AgencyLayout({ children }: { children: React.React
   //   ・main 内 だけ overflow-auto で スクロール する
   //   ・ヘッダー も main column の トップ で 固定 表示 さ れる
   return (
-    <div className="bg-background flex h-screen overflow-hidden">
-      <AgencySidebar organizationName={role.organization.name} memberRole={role.member.role} />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center justify-end gap-2 border-b px-4">
-          <NotificationBell />
-          <UserMenu
-            email={user.email ?? ""}
-            displayName={profile?.display_name ?? null}
-            settingsHref="/agency/settings"
-            avatarUrl={resolveAvatarPublicUrl(
-              supabase,
-              (profile as { avatar_storage_path: string | null } | null)?.avatar_storage_path ??
-                null,
-            )}
+    // ToastProvider を エージェント 全画面 で 有効 化。 useToast() が どの Server / Client
+    // Component からも 呼べる 状態 に なる (Client Component 側 で 呼ぶ 前提)。
+    // <Toaster /> は 画面 右下 に 積む 表示 コンポーネント。 layout 内 に 1 個 だけ 置く。
+    <ToastProvider>
+      <div className="bg-background flex h-screen overflow-hidden">
+        <AgencySidebar organizationName={role.organization.name} memberRole={role.member.role} />
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <header className="flex h-14 shrink-0 items-center justify-end gap-2 border-b px-4">
+            <NotificationBell />
+            <UserMenu
+              email={user.email ?? ""}
+              displayName={profile?.display_name ?? null}
+              settingsHref="/agency/settings"
+              avatarUrl={resolveAvatarPublicUrl(
+                supabase,
+                (profile as { avatar_storage_path: string | null } | null)?.avatar_storage_path ??
+                  null,
+              )}
+            />
+          </header>
+          {bannerStatus && <ReadOnlyBanner status={bannerStatus} />}
+          <main className="flex-1 overflow-auto p-6">{children}</main>
+        </div>
+        {requirePolicy && <PrivacyPolicyModal hasPrior={hasPriorPolicy} />}
+        {showReminder && plan && (
+          <TrialReminderModal
+            daysRemaining={trialDays!}
+            trialEndsAt={plan.trial_ends_at!}
+            hasSubscription={Boolean(plan.stripe_subscription_id)}
           />
-        </header>
-        {bannerStatus && <ReadOnlyBanner status={bannerStatus} />}
-        <main className="flex-1 overflow-auto p-6">{children}</main>
-      </div>
-      {requirePolicy && <PrivacyPolicyModal hasPrior={hasPriorPolicy} />}
-      {showReminder && plan && (
-        <TrialReminderModal
-          daysRemaining={trialDays!}
-          trialEndsAt={plan.trial_ends_at!}
-          hasSubscription={Boolean(plan.stripe_subscription_id)}
-        />
-      )}
-      {/* readOnly は 上部 バナー + 各 write API 側 の requireWritableOrgPlan で ガード する。
+        )}
+        {/* readOnly は 上部 バナー + 各 write API 側 の requireWritableOrgPlan で ガード する。
           この layout では 参照 だけ 残して 直接 の redirect は し ない (「読み 取り 専用 で
           既存 データ は 見られる」 が UX 要件 のため)。 */}
-      <span data-plan-read-only={readOnly ? "1" : "0"} className="hidden" aria-hidden />
-    </div>
+        <span data-plan-read-only={readOnly ? "1" : "0"} className="hidden" aria-hidden />
+      </div>
+      <Toaster />
+    </ToastProvider>
   );
 }

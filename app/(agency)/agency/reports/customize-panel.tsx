@@ -20,6 +20,8 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { apiRequest, errorToJapanese } from "@/lib/errors/messages";
+import { useToast } from "@/lib/admin/toast/store";
 
 export type SectionMeta = {
   id: string;
@@ -42,7 +44,7 @@ export function CustomizePanel({ allSections, initialOrder, initialHidden, isAdm
   );
   const [hidden, setHidden] = useState<Set<string>>(() => new Set(initialHidden));
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const { showToast } = useToast();
   const router = useRouter();
 
   // 権限で使えるセクションだけに絞る(この画面で操作対象になる集合)
@@ -74,14 +76,12 @@ export function CustomizePanel({ allSections, initialOrder, initialHidden, isAdm
   function reset() {
     setOrder(allSections.map((s) => s.id));
     setHidden(new Set());
-    setMsg(null);
   }
 
   async function save() {
     setSaving(true);
-    setMsg(null);
     try {
-      const res = await fetch("/api/agency/reports/preferences", {
+      await apiRequest("/api/agency/reports/preferences", {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -89,17 +89,11 @@ export function CustomizePanel({ allSections, initialOrder, initialHidden, isAdm
           hidden_sections: Array.from(hidden),
         }),
       });
-      if (!res.ok) {
-        const b = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
-        setMsg(`保存失敗: ${b.message ?? b.error ?? res.status}`);
-        return;
-      }
-      setMsg("保存しました");
+      showToast("success", "レポート表示を保存しました");
       router.refresh();
-      // 少し待ってから閉じる(ユーザーが「保存されたな」と体感する時間)
-      setTimeout(() => setOpen(false), 500);
+      setOpen(false);
     } catch (e) {
-      setMsg(`保存失敗: ${e instanceof Error ? e.message : String(e)}`);
+      showToast("error", errorToJapanese(e));
     } finally {
       setSaving(false);
     }
@@ -212,7 +206,6 @@ export function CustomizePanel({ allSections, initialOrder, initialHidden, isAdm
                 デフォルトに戻す
               </button>
               <div className="flex items-center gap-2">
-                {msg && <span className="text-muted-foreground text-xs">{msg}</span>}
                 <Button size="sm" disabled={saving} onClick={save}>
                   {saving ? "保存中..." : "保存"}
                 </Button>
