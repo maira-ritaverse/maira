@@ -34,6 +34,8 @@ type JobPostingRow = {
   // 20260629000010
   hero_image_path: string | null;
   line_share_image_path: string | null;
+  // 20260714000001。 成約報酬 (万円)。 求職者 に は 露出 しない (agency-private)。
+  placement_fee: number | null;
   created_by_member_id: string | null;
   created_at: string;
   updated_at: string;
@@ -63,6 +65,7 @@ function rowToJobPosting(row: JobPostingRow): JobPosting {
     applicationQualifications: row.application_qualifications,
     heroImagePath: row.hero_image_path,
     lineShareImagePath: row.line_share_image_path,
+    placementFee: row.placement_fee,
     createdByMemberId: row.created_by_member_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

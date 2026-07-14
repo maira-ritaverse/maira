@@ -79,6 +79,7 @@ describe("buildPrompt", () => {
           applicationQualifications: null,
           heroImagePath: null,
           lineShareImagePath: null,
+          placementFee: null,
           createdByMemberId: null,
           createdAt: "2026-06-01T00:00:00Z",
           updatedAt: "2026-06-01T00:00:00Z",

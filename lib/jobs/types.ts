@@ -41,6 +41,9 @@ export type JobPosting = {
   // 20260629000010 で追加。 求人 メイン画像 / LINE 配信用 画像 の Storage パス。
   heroImagePath: string | null;
   lineShareImagePath: string | null;
+  // 20260714000001 で追加。 成約時 の エージェント 報酬額 (万円、 nullable)。
+  // 求職者 に は 絶対 に 露出 しない (agency-private)。 seeker RPC の SELECT 列 には 追加 しない こと。
+  placementFee: number | null;
   createdByMemberId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -74,6 +77,10 @@ const labourField = z.string().max(6000).optional().or(z.literal(""));
 const descriptionField = z.string().max(20000).optional().or(z.literal(""));
 const shortTextField = z.string().max(500).optional().or(z.literal(""));
 
+// 成約報酬 (万円) は salary と 同じ 0〜100000 のレンジで管理。
+// 非公開列 (求職者には見せない) だが、 バリデーション ルール は 公開 の 数値 と 同一。
+const placementFeeField = salaryField;
+
 export const createJobRequestSchema = z.object({
   company_name: z.string().min(1, "求人企業名を入力してください").max(500),
   position: z.string().min(1, "職種を入力してください").max(500),
@@ -93,6 +100,7 @@ export const createJobRequestSchema = z.object({
   break_time: labourField,
   holidays: labourField,
   application_qualifications: labourField,
+  placement_fee: placementFeeField.optional(),
 });
 
 export type CreateJobRequest = z.infer<typeof createJobRequestSchema>;
@@ -116,6 +124,7 @@ export const updateJobRequestSchema = z.object({
   break_time: labourField,
   holidays: labourField,
   application_qualifications: labourField,
+  placement_fee: placementFeeField.optional(),
 });
 
 export type UpdateJobRequest = z.infer<typeof updateJobRequestSchema>;

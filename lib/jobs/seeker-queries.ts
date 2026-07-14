@@ -67,6 +67,9 @@ export async function getJobForSeeker(jobId: string): Promise<SeekerJobDetail | 
     locationChangeScope: row.location_change_scope,
     smokingPreventionMeasure: row.smoking_prevention_measure,
     probationPeriod: row.probation_period,
+    // placement_fee は 求職者 に は 絶対 に 露出 しない (agency-private)。
+    // 現在 の seeker RPC (get_job_for_seeker) は そもそも placement_fee を
+    // SELECT しない が、 マッピング 層 で 明示 に null を 入れる こと で 多層 防御 に する。
     workHours: row.work_hours,
     breakTime: row.break_time,
     holidays: row.holidays,
@@ -74,6 +77,7 @@ export async function getJobForSeeker(jobId: string): Promise<SeekerJobDetail | 
     // 求職者 向け RPC は 画像 列 を 返さ ない 想定。 必要 になれば RPC 側 を 拡張 する。
     heroImagePath: null,
     lineShareImagePath: null,
+    placementFee: null,
     createdByMemberId: null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

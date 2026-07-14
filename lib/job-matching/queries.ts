@@ -20,7 +20,39 @@ import {
   buildPrompt,
   computeInputsHash,
   type AiRanking,
+  type FeePreset,
 } from "./score";
+
+/**
+ * 組織 の AI 推薦 プリセット を 取得。
+ *
+ * 行 が 無ければ 既定 (fit_focused, apply_to_seeker_view=false) を 返す。
+ * SELECT は RLS で 組織 メンバー なら 誰 でも 読める ため、 admin 判定 は 呼び出し 側 で 不要。
+ *
+ * 呼び出し 側:
+ *   ・エージェント 経路 (queries.ts): apply_to_seeker_view の 値 に 関わらず preset を 適用
+ *   ・求職者 経路 (seeker.ts): apply_to_seeker_view = true の とき だけ 適用、
+ *     false なら 常に fit_focused (Phase 2 で 実装)
+ */
+export async function getOrganizationAiRecommendationPreset(
+  organizationId: string,
+): Promise<{ preset: FeePreset; applyToSeekerView: boolean }> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("organization_ai_recommendation_settings")
+    .select("preset, apply_to_seeker_view")
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  type Row = { preset: string; apply_to_seeker_view: boolean };
+  const row = data as Row | null;
+  const raw = row?.preset;
+  const preset: FeePreset = raw === "balanced" || raw === "fee_focused" ? raw : "fit_focused";
+  return {
+    preset,
+    applyToSeekerView: row?.apply_to_seeker_view ?? false,
+  };
+}
 
 export type CachedRecommendation = {
   ranking: AiRanking;
@@ -79,6 +111,9 @@ export async function getCachedRecommendation(args: {
 
 /**
  * Claude を呼んで AI ランキングを生成し、キャッシュに upsert する。
+ *
+ * 組織 の AI 推薦 プリセット (fit_focused / balanced / fee_focused) を 反映。
+ * エージェント 経路 は apply_to_seeker_view の 値 に 関わらず、 常に preset を 適用 する。
  */
 export async function recomputeAndCacheRecommendation(args: {
   client: ClientRow;
@@ -95,14 +130,19 @@ export async function recomputeAndCacheRecommendation(args: {
       ? await decodeCareerProfileBlob(encrypted)
       : null;
 
-  // 2) プロンプト構築
+  // 2) 組織 の 推薦 プリセット を 取得 (未 設定 なら fit_focused)
+  const { preset: feePreset } = await getOrganizationAiRecommendationPreset(
+    args.client.organization_id,
+  );
+
+  // 3) プロンプト構築
   const ctx = buildClientContextFromProfile(profile, {
     desired_annual_income: args.client.desired_annual_income,
     desired_locations: args.client.desired_locations,
   });
-  const prompt = buildPrompt({ client: ctx, jobs: args.jobs });
+  const prompt = buildPrompt({ client: ctx, jobs: args.jobs, feePreset });
 
-  // 3) Claude 呼び出し
+  // 4) Claude 呼び出し
   const completion = await generateText({
     model: getModel(MODELS.CONVERSATION),
     system:
@@ -113,16 +153,17 @@ export async function recomputeAndCacheRecommendation(args: {
   const parsed = JSON.parse(jsonText) as unknown;
   const validated = aiRankingSchema.parse(parsed);
 
-  // 4) 求人 ID の整合チェック(LLM が捏造した ID を弾く)
+  // 5) 求人 ID の整合チェック(LLM が捏造した ID を弾く)
   const validIds = new Set(args.jobs.map((j) => j.id));
   const items = validated.items.filter((i) => validIds.has(i.job_posting_id)).slice(0, 5);
   const ranking: AiRanking = { items };
 
-  // 5) hash 再計算 + upsert
+  // 6) hash 再計算 + upsert (preset も 含める ので、 preset 変更 で キャッシュ 自動 陳腐化)
   const inputsHash = computeInputsHash({
     careerProfileUpdatedAt: null, // 復号データから直接取れないため null 固定(他要素で差分検出)
     clientUpdatedAt: args.client.updated_at,
     jobs: args.jobs.map((j) => ({ id: j.id, updated_at: j.updatedAt })),
+    feePreset,
   });
 
   const encryptedRankings = await encryptField(JSON.stringify(ranking));
@@ -144,11 +185,21 @@ export async function recomputeAndCacheRecommendation(args: {
 
 /**
  * 現在の入力ハッシュを計算するヘルパ(API 側でキャッシュ判定に使う)。
+ *
+ * feePreset を 含める ことで、 admin が プリセット を 切り替えた 際、 API 側 の
+ * cache freshness 判定 で 自動 的 に stale と 判定 され 再 生成 が 走る。
  */
-export function computeCurrentInputsHash(args: { client: ClientRow; jobs: JobPosting[] }): string {
+export async function computeCurrentInputsHash(args: {
+  client: ClientRow;
+  jobs: JobPosting[];
+}): Promise<string> {
+  const { preset: feePreset } = await getOrganizationAiRecommendationPreset(
+    args.client.organization_id,
+  );
   return computeInputsHash({
     careerProfileUpdatedAt: null,
     clientUpdatedAt: args.client.updated_at,
     jobs: args.jobs.map((j) => ({ id: j.id, updated_at: j.updatedAt })),
+    feePreset,
   });
 }

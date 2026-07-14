@@ -59,7 +59,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     });
   }
 
-  const inputsHash = computeCurrentInputsHash({ client: clientRow, jobs: openJobs });
+  const inputsHash = await computeCurrentInputsHash({ client: clientRow, jobs: openJobs });
 
   // 「興味あり」表明済み job_posting_id の集合(seeker 側で表明した求人)
   const linkedUserId = (linkedUserRow.data as { linked_user_id: string | null } | null)
