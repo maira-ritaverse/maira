@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { NlSearchBar, type NlSearchChip } from "@/components/features/search/nl-search-bar";
+import type { JobSearchFilters } from "@/lib/search/nl-parse-schema";
 import {
   formatSalaryRange,
   jobStatusLabels,
@@ -111,13 +113,76 @@ export function JobsListClient({ jobs }: Props) {
     <div className="space-y-4">
       {/* フィルタ行 */}
       <div className="space-y-2">
+        {/* AI 検索バー (トグル OFF が既定、ON にすると自然文を Claude が構造化する) */}
+        <NlSearchBar<JobSearchFilters>
+          resource="jobs"
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
+          placeholder="会社名・職種・勤務地・スキル・本文で検索"
+          aiPlaceholder="例: 年収 500 万以上でリモートワーク可の Web エンジニア"
+          currentFilters={{
+            searchQuery,
+            statusFilter,
+            locationKeyword,
+            minSalary: minSalary === "" ? null : Number(minSalary),
+            maxSalary: maxSalary === "" ? null : Number(maxSalary),
+            remainingText: "",
+            confidence: "high",
+          }}
+          onApplyAiFilters={(f) => {
+            // AI が返した各フィールドを個別 setState に展開。
+            // remainingText は searchQuery にマージして自由検索へ流す。
+            const mergedQuery = [f.searchQuery, f.remainingText]
+              .map((s) => s.trim())
+              .filter((s) => s.length > 0)
+              .join(" ");
+            setSearchQuery(mergedQuery);
+            setStatusFilter(f.statusFilter);
+            setLocationKeyword(f.locationKeyword);
+            setMinSalary(f.minSalary === null ? "" : String(f.minSalary));
+            setMaxSalary(f.maxSalary === null ? "" : String(f.maxSalary));
+          }}
+          renderChips={(f) => {
+            const chips: NlSearchChip[] = [];
+            if (f.searchQuery && f.searchQuery.trim().length > 0) {
+              chips.push({
+                key: "q",
+                label: `キーワード: ${f.searchQuery}`,
+                onRemove: () => setSearchQuery(""),
+              });
+            }
+            if (f.statusFilter !== "all") {
+              chips.push({
+                key: "status",
+                label: `ステータス: ${jobStatusLabels[f.statusFilter as JobStatus]}`,
+                onRemove: () => setStatusFilter("all"),
+              });
+            }
+            if (f.locationKeyword.trim().length > 0) {
+              chips.push({
+                key: "loc",
+                label: `勤務地: ${f.locationKeyword}`,
+                onRemove: () => setLocationKeyword(""),
+              });
+            }
+            if (f.minSalary !== null) {
+              chips.push({
+                key: "smin",
+                label: `年収: ${f.minSalary} 万以上`,
+                onRemove: () => setMinSalary(""),
+              });
+            }
+            if (f.maxSalary !== null) {
+              chips.push({
+                key: "smax",
+                label: `年収: ${f.maxSalary} 万以下`,
+                onRemove: () => setMaxSalary(""),
+              });
+            }
+            return chips;
+          }}
+        />
         <div className="flex flex-wrap items-center gap-3">
-          <Input
-            placeholder="会社名・職種・勤務地で検索"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="max-w-xs"
-          />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as JobStatusFilter)}

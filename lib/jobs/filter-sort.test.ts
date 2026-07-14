@@ -54,6 +54,33 @@ describe("applyJobsFilterSort", () => {
     expect(r.map((x) => x.id)).toEqual(["a"]);
   });
 
+  it("スコープ拡張: description / スキル欄にもマッチする", () => {
+    const r = applyJobsFilterSort(
+      [
+        job({ id: "a", description: "TypeScript の SPA 開発", requiredSkills: null }),
+        job({ id: "b", requiredSkills: "TypeScript 3 年以上", description: null }),
+        job({ id: "c", preferredSkills: "TypeScript 経験優遇" }),
+        job({ id: "d", position: "営業" }),
+      ],
+      { ...baseOpts, searchQuery: "TypeScript" },
+    );
+    expect(r.map((x) => x.id).sort()).toEqual(["a", "b", "c"]);
+  });
+
+  it("スペース区切りは AND (「Web エンジニア」で 2 語両方含む必要)", () => {
+    const r = applyJobsFilterSort(
+      [
+        // "Webエンジニア" は NFKC 後 "webエンジニア" となり "web" と "エンジニア" の
+        // 両トークンが 1 つの文字列内で連続して存在する → AND ヒット
+        job({ id: "a", position: "Webエンジニア", location: "東京" }),
+        // "Web デザイナー" は "web" は当たるが "エンジニア" が無いので不一致
+        job({ id: "b", position: "Web デザイナー", location: "東京" }),
+      ],
+      { ...baseOpts, searchQuery: "Web エンジニア" },
+    );
+    expect(r.map((x) => x.id)).toEqual(["a"]);
+  });
+
   it("ステータスフィルタ", () => {
     const r = applyJobsFilterSort(
       [job({ id: "a", status: "open" }), job({ id: "b", status: "paused" })],

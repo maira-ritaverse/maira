@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NlSearchBar, type NlSearchChip } from "@/components/features/search/nl-search-bar";
+import type { ClientSearchFilters } from "@/lib/search/nl-parse-schema";
 import {
   defaultColumnConfig,
   loadColumnConfig,
@@ -489,13 +491,105 @@ export function ClientsViewTabs({
       )}
 
       {/* 検索・フィルタ行(両ビュー共通) */}
+      {/* AI 検索バー (トグル OFF が既定、ON にすると自然文を Claude が構造化する) */}
+      <NlSearchBar<ClientSearchFilters>
+        resource="clients"
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+        placeholder="氏名・カナ・メール・電話・都道府県・タグで検索"
+        aiPlaceholder="例: 東京在住 30 代 営業経験ありで面接待ちの人"
+        currentFilters={{
+          searchQuery,
+          statusFilter,
+          entrySiteFilter,
+          prefectureFilter,
+          // 内部 state は string 型で持っているが、実値は必ず ClientSearchFilters の
+          // 雇用形態 enum 値 (または "all" / "unset") なので安全にキャスト。
+          employmentTypeFilter: employmentTypeFilter as ClientSearchFilters["employmentTypeFilter"],
+          silenceFilter,
+          tagFilter,
+          remainingText: "",
+          confidence: "high",
+        }}
+        onApplyAiFilters={(f) => {
+          const mergedQuery = [f.searchQuery, f.remainingText]
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0)
+            .join(" ");
+          setSearchQuery(mergedQuery);
+          setStatusFilter(f.statusFilter);
+          setEntrySiteFilter(f.entrySiteFilter);
+          setPrefectureFilter(f.prefectureFilter);
+          setEmploymentTypeFilter(f.employmentTypeFilter);
+          setSilenceFilter(f.silenceFilter);
+          setTagFilter(f.tagFilter);
+        }}
+        renderChips={(f) => {
+          const chips: NlSearchChip[] = [];
+          if (f.searchQuery && f.searchQuery.trim().length > 0) {
+            chips.push({
+              key: "q",
+              label: `キーワード: ${f.searchQuery}`,
+              onRemove: () => setSearchQuery(""),
+            });
+          }
+          if (f.statusFilter !== "all") {
+            const label = clientStatusLabels[f.statusFilter as Exclude<StatusFilter, "all">];
+            chips.push({
+              key: "status",
+              label: `対応状況: ${label}`,
+              onRemove: () => setStatusFilter("all"),
+            });
+          }
+          if (f.entrySiteFilter !== "all") {
+            chips.push({
+              key: "entry",
+              label: `媒体: ${f.entrySiteFilter === "unset" ? "未設定" : f.entrySiteFilter}`,
+              onRemove: () => setEntrySiteFilter("all"),
+            });
+          }
+          if (f.prefectureFilter !== "all") {
+            chips.push({
+              key: "pref",
+              label: `都道府県: ${f.prefectureFilter === "unset" ? "未設定" : f.prefectureFilter}`,
+              onRemove: () => setPrefectureFilter("all"),
+            });
+          }
+          if (f.employmentTypeFilter !== "all") {
+            const et = f.employmentTypeFilter;
+            const label =
+              et === "unset" ? "未設定" : clientEmploymentTypeLabels[et as ClientEmploymentType];
+            chips.push({
+              key: "emp",
+              label: `雇用形態: ${label}`,
+              onRemove: () => setEmploymentTypeFilter("all"),
+            });
+          }
+          if (f.silenceFilter !== "all") {
+            const silenceLabel: Record<Exclude<SilenceFilter, "all">, string> = {
+              "14d": "14日以上対応なし",
+              "30d": "30日以上対応なし",
+              "60d": "60日以上対応なし",
+              "90d": "90日以上対応なし",
+              never: "一度も対応なし",
+            };
+            chips.push({
+              key: "silence",
+              label: silenceLabel[f.silenceFilter as Exclude<SilenceFilter, "all">],
+              onRemove: () => setSilenceFilter("all"),
+            });
+          }
+          for (const tag of f.tagFilter) {
+            chips.push({
+              key: `tag:${tag}`,
+              label: `タグ: ${tag}`,
+              onRemove: () => setTagFilter((prev) => prev.filter((t) => t !== tag)),
+            });
+          }
+          return chips;
+        }}
+      />
       <div className="flex flex-wrap items-center gap-3">
-        <Input
-          placeholder="氏名・氏名カナ・メールで検索"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="max-w-xs"
-        />
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}

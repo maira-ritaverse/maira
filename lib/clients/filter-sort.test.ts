@@ -104,6 +104,59 @@ describe("applyClientsFilterSort — 検索", () => {
   it("前後空白だけのクエリは空クエリと同じ扱い(trim)", () => {
     expect(applyClientsFilterSort(fixtures, { ...baseOpts, searchQuery: "   " })).toHaveLength(3);
   });
+
+  it("スコープ拡張: 電話 / 都道府県 / エントリー元 / タグにもマッチ", () => {
+    const withExtras: ClientForFilterSort[] = [
+      {
+        ...client("A", "a@x.com", "job_matching", "2026-06-01", "リクナビ"),
+        phone: "090-1234-5678",
+        prefecture: "東京都",
+        crmTags: ["急ぎ"],
+      },
+      {
+        ...client("B", "b@x.com", "job_matching", "2026-06-02"),
+        phone: null,
+        prefecture: "大阪府",
+      },
+    ];
+    // 電話番号の一部でヒット
+    expect(
+      applyClientsFilterSort(withExtras, { ...baseOpts, searchQuery: "090-1234" }).map(
+        (c) => c.name,
+      ),
+    ).toEqual(["A"]);
+    // 都道府県でヒット
+    expect(
+      applyClientsFilterSort(withExtras, { ...baseOpts, searchQuery: "東京" }).map((c) => c.name),
+    ).toEqual(["A"]);
+    // エントリー元でヒット
+    expect(
+      applyClientsFilterSort(withExtras, { ...baseOpts, searchQuery: "リクナビ" }).map(
+        (c) => c.name,
+      ),
+    ).toEqual(["A"]);
+    // CRM タグでヒット
+    expect(
+      applyClientsFilterSort(withExtras, { ...baseOpts, searchQuery: "急ぎ" }).map((c) => c.name),
+    ).toEqual(["A"]);
+  });
+
+  it("スペース区切りは AND (「東京 急ぎ」で両方含む必要)", () => {
+    const fx: ClientForFilterSort[] = [
+      {
+        ...client("A", "a@x.com", "job_matching", "2026-06-01"),
+        prefecture: "東京都",
+        crmTags: ["急ぎ"],
+      },
+      {
+        ...client("B", "b@x.com", "job_matching", "2026-06-02"),
+        prefecture: "東京都",
+        crmTags: [],
+      },
+    ];
+    const r = applyClientsFilterSort(fx, { ...baseOpts, searchQuery: "東京 急ぎ" });
+    expect(r.map((c) => c.name)).toEqual(["A"]);
+  });
 });
 
 describe("applyClientsFilterSort — ステータス絞り込み", () => {

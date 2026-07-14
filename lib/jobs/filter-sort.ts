@@ -11,7 +11,12 @@ export type JobSortColumn = "company" | "position" | "createdAt" | "salary";
 export type JobSortDirection = "asc" | "desc";
 export type JobStatusFilter = JobStatus | "all";
 
-/** フィルタ / ソートに必要な最小フィールド(JobPosting の Pick 派生) */
+/**
+ * フィルタ / ソートに必要な最小フィールド(JobPosting の Pick 派生)。
+ *
+ * description / requiredSkills / preferredSkills は自由検索スコープ拡張(2026-07)で
+ * オプショナル追加。旧テスト fixture 互換を維持するために optional にしてある。
+ */
 export type JobForFilterSort = {
   id: string;
   companyName: string;
@@ -22,6 +27,9 @@ export type JobForFilterSort = {
   status: JobStatus;
   employmentType: string | null;
   createdAt: string;
+  description?: string | null;
+  requiredSkills?: string | null;
+  preferredSkills?: string | null;
 };
 
 export type JobFilterSortOptions = {
@@ -39,6 +47,18 @@ export type JobFilterSortOptions = {
 
 function normalizeForSearch(s: string): string {
   return s.trim().normalize("NFKC").toLowerCase();
+}
+
+/**
+ * 検索クエリを空白区切りの AND トークン列に分解する。
+ * 全角/半角スペース混在に対応するため NFKC → 空白正規化 → split。
+ * 各トークンは normalizeForSearch と同じ丸め方(NFKC + toLowerCase)にする。
+ * 空トークンは除外する。
+ */
+function tokenizeSearchQuery(raw: string): string[] {
+  const normalized = raw.trim().normalize("NFKC").toLowerCase();
+  if (normalized === "") return [];
+  return normalized.split(/\s+/u).filter((t) => t.length > 0);
 }
 
 /**
@@ -67,13 +87,27 @@ export function applyJobsFilterSort<T extends JobForFilterSort>(
 ): T[] {
   let result: ReadonlyArray<T> = jobs;
 
-  const q = normalizeForSearch(opts.searchQuery);
-  if (q) {
+  // 検索クエリはスペース区切りで AND 分割する(「Web エンジニア」→ ["web", "エンジニア"])。
+  // 各トークンが「いずれかの検索対象列」にマッチすればその求人は残す。
+  // 検索対象は 求人カード上の可視情報 (会社名 / 職種 / 勤務地 / 雇用形態) +
+  // 詳細本文 (description / 必須スキル / 歓迎スキル)。8 列の労基フィールドは
+  // 一覧検索で優先度が低いため対象外(必要になれば追加する)。
+  const tokens = tokenizeSearchQuery(opts.searchQuery);
+  if (tokens.length > 0) {
     result = result.filter((j) => {
-      if (normalizeForSearch(j.companyName).includes(q)) return true;
-      if (normalizeForSearch(j.position).includes(q)) return true;
-      if (j.location && normalizeForSearch(j.location).includes(q)) return true;
-      return false;
+      const haystack = [
+        j.companyName,
+        j.position,
+        j.location,
+        j.employmentType,
+        j.description,
+        j.requiredSkills,
+        j.preferredSkills,
+      ]
+        .filter((v): v is string => typeof v === "string" && v.length > 0)
+        .map(normalizeForSearch)
+        .join("\n");
+      return tokens.every((t) => haystack.includes(t));
     });
   }
 

@@ -72,6 +72,13 @@ export type ClientForFilterSort = {
   intakeDate?: string | null;
   /** 推薦進捗(referralBreakdown)— 合計件数を比較に使う */
   referralBreakdown?: { total: number };
+  // ── 自由検索スコープ拡張(2026-07)。既存 fixture 互換のため optional。 ───
+  /** 市区町村(住所の細分) */
+  city?: string | null;
+  /** 希望業界(自由文の複数タグ) */
+  desiredIndustries?: string[];
+  /** 希望勤務地(自由文の複数タグ) */
+  desiredLocations?: string[];
 };
 
 /**
@@ -118,6 +125,23 @@ export type FilterSortOptions = {
 };
 
 /**
+ * 検索クエリの正規化 (NFKC + 小文字化)。求人側 normalizeForSearch と同じルール。
+ * 半角/全角と大小文字の差異を吸収する。
+ */
+function normalizeForClientSearch(s: string): string {
+  return s.trim().normalize("NFKC").toLowerCase();
+}
+
+/**
+ * 検索クエリを空白区切りの AND トークン列に分解する (求人側と同ルール)。
+ */
+function tokenizeClientSearchQuery(raw: string): string[] {
+  const normalized = raw.trim().normalize("NFKC").toLowerCase();
+  if (normalized === "") return [];
+  return normalized.split(/\s+/u).filter((t) => t.length > 0);
+}
+
+/**
  * entrySite を「絞り込みキー」に正規化する。null / 空 / 空白のみは "unset"。
  * ここを純関数化することで、entrySiteOptions(件数集計)とフィルタ判定で
  * 同じキー導出ロジックを共有できる。
@@ -142,16 +166,33 @@ export function applyClientsFilterSort<T extends ClientForFilterSort>(
 ): T[] {
   let result: ReadonlyArray<T> = clients;
 
-  // 検索(氏名 / 氏名カナ / メールに部分一致、大文字小文字無視)。
-  // 氏名カナは null 可なので存在確認してから includes。
-  // 五十音検索が EMPRO 名簿の標準なので、name_kana も検索対象に含める。
-  const q = opts.searchQuery.trim().toLowerCase();
-  if (q) {
+  // 検索 (自由検索スコープ拡張 2026-07)。
+  //   ・スペース区切りで AND 分割 (「山田 東京」→ ["山田","東京"])。
+  //   ・対象列: 氏名 / 氏名カナ / メール + 電話 / 都道府県 / 市区町村 /
+  //             エントリー元 / CRM タグ / 希望業界 / 希望勤務地 / 担当者名。
+  //   ・NFKC 正規化 + toLowerCase で全半角と大小文字の差異を吸収 (求人側と統一)。
+  //   ・暗号化列 (メモ / 履歴書本体) は復号せず対象外。復号込みの検索は Tier 2 で。
+  const tokens = tokenizeClientSearchQuery(opts.searchQuery);
+  if (tokens.length > 0) {
     result = result.filter((c) => {
-      if (c.name.toLowerCase().includes(q)) return true;
-      if (c.email && c.email.toLowerCase().includes(q)) return true;
-      if (c.nameKana && c.nameKana.toLowerCase().includes(q)) return true;
-      return false;
+      const parts: (string | null | undefined)[] = [
+        c.name,
+        c.email,
+        c.nameKana,
+        c.phone,
+        c.prefecture,
+        c.city,
+        c.entrySite,
+        c.assigneeName,
+        ...(c.crmTags ?? []),
+        ...(c.desiredIndustries ?? []),
+        ...(c.desiredLocations ?? []),
+      ];
+      const haystack = parts
+        .filter((v): v is string => typeof v === "string" && v.length > 0)
+        .map(normalizeForClientSearch)
+        .join("\n");
+      return tokens.every((t) => haystack.includes(t));
     });
   }
 
