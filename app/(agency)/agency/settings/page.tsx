@@ -37,22 +37,24 @@ export default async function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <PageHeading title="個人設定" description="通知の受け取り方や各種連携を変更できます" />
+      <PageHeading title="設定" description="個人向けの設定と、組織全体の管理をここから行います" />
 
       {/*
         2 カラム レイアウト:
-          ・左: 通知設定 (頻繁 に 触る ため 一番 目立つ 位置)
-          ・右: その他 の 設定 (連携 / テンプレート / 管理者 向け)
-        md 未満 は 1 カラム に 折り返す。
+          ・左: 個人設定(通知 / プロフィール / パスワード / 連携)
+          ・右: 組織設定(推薦文テンプレ + 管理者向けの各種)
+        セクションヘッダーで「これは個人?組織?」の混乱を防ぐ。
+        (以前は「個人設定」というタイトルなのに課金・AI・メール送信など
+         組織全体の設定が混在していて、admin が billing を探せなかった)
       */}
       <div className="grid gap-6 md:grid-cols-2">
-        {/* 左: 通知設定 のみ */}
-        <div>
-          <NotificationPrefsForm initialPrefs={prefs} />
-        </div>
-
-        {/* 右: その他 を まとめて */}
+        {/* 左: 個人設定 */}
         <div className="space-y-3">
+          <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+            個人
+          </h2>
+          <NotificationPrefsForm initialPrefs={prefs} />
+
           {/* プロフィール 編集 (表示名 + アバター) */}
           <Card className="p-4">
             <Link
@@ -114,6 +116,13 @@ export default async function SettingsPage() {
               <span className="text-muted-foreground text-sm">→</span>
             </Link>
           </Card>
+        </div>
+
+        {/* 右: 組織設定(推薦文テンプレは全メンバー閲覧、以降は admin のみ) */}
+        <div className="space-y-3">
+          <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+            組織{isAdmin ? "(管理者向け)" : ""}
+          </h2>
 
           {/* 推薦文テンプレート(全メンバー閲覧、admin 編集) */}
           <Card className="p-4">

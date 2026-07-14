@@ -228,8 +228,16 @@ export function JobForm() {
             placeholder="例:120"
           />
           <p className="text-muted-foreground text-xs">
-            AI 推薦の 傾き(設定 → AI 求人推薦の 設定)で「バランス」や「報酬重視」を 選ぶと、 この
-            金額を 考慮 した ランキング に なります。 求職者には 金額は 一切 見えません。
+            <a
+              href="/agency/settings/ai-recommendation"
+              className="text-primary underline underline-offset-2"
+              target="_blank"
+              rel="noreferrer"
+            >
+              AI 推薦の傾き設定
+            </a>
+            で「バランス」や「報酬重視」を選ぶと、 この金額を考慮したランキングになります。
+            求職者には金額は一切見えません。
           </p>
           {errors.placement_fee && (
             <p className="text-sm text-red-600">{errors.placement_fee.message}</p>

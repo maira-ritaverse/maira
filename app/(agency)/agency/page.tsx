@@ -23,8 +23,10 @@ import {
 
 import { NextMeetingWidget } from "@/components/features/meetings/next-meeting-widget";
 import { getNextMeetingForHost } from "@/lib/meetings/queries";
+import { getMyLineChannel } from "@/lib/line/queries";
 
 import { MyTasksWidget } from "./my-tasks-widget";
+import { SetupProgressWidget, type SetupStep } from "./setup-progress-widget";
 
 /**
  * /agency ダッシュボード(ランディング)
@@ -65,7 +67,10 @@ export default async function AgencyDashboardPage() {
   const orgId = role.organization.id;
   const memberId = role.member.id;
 
+  const isAdmin = role.member.role === "admin";
+
   // 並列取得:クライアント / 自分のタスク / 直近の対応履歴 / 総件数 / 次の面談 / AI 残数 / 今月 KPI
+  // admin だけ セットアップ進捗 (LINE / 求人 / AI 推薦) の 状態 も 一緒 に 引く。
   const [
     clients,
     myTasksRes,
@@ -74,6 +79,9 @@ export default async function AgencyDashboardPage() {
     nextMeeting,
     aiTotalQuota,
     monthlyKpi,
+    lineChannel,
+    jobCountRes,
+    aiRecoSettingsRes,
   ] = await Promise.all([
     listClientRecordsWithUpdateBadge(orgId, user.id),
     supabase
@@ -94,6 +102,21 @@ export default async function AgencyDashboardPage() {
     getNextMeetingForHost(supabase, user.id, { withinHours: 24 }),
     getOrgAiTotalQuotaSummary(),
     getMonthlyActivityKpi(orgId),
+    // セットアップ進捗 用: admin のみ 実際 に 使う ので、 非 admin では すべて null 相当 に なる
+    isAdmin ? getMyLineChannel(supabase) : Promise.resolve(null),
+    isAdmin
+      ? supabase
+          .from("job_postings")
+          .select("id", { count: "exact", head: true })
+          .eq("organization_id", orgId)
+      : Promise.resolve({ count: 0 }),
+    isAdmin
+      ? supabase
+          .from("organization_ai_recommendation_settings")
+          .select("organization_id")
+          .eq("organization_id", orgId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   // ────────────────────────────────────────────
@@ -164,6 +187,40 @@ export default async function AgencyDashboardPage() {
   };
   const recentInteractions = (recentInteractionsRes.data ?? []) as RecentInteractionRow[];
 
+  // admin 向け セットアップ 進捗 (未 完了 の 間 だけ ウィジェット が 出る)
+  const setupSteps: SetupStep[] = isAdmin
+    ? [
+        {
+          id: "line",
+          label: "LINE を 接続",
+          description: "求職者と LINE でやり取りできるようにします",
+          href: "/agency/settings/integrations/line",
+          done: lineChannel != null,
+        },
+        {
+          id: "job",
+          label: "求人を 1 件 登録",
+          description: "AI 推薦や 応募管理の 起点になります",
+          href: "/agency/jobs/new",
+          done: ((jobCountRes as { count: number | null }).count ?? 0) > 0,
+        },
+        {
+          id: "client",
+          label: "求職者を 1 件 登録",
+          description: "実データが 入ると KPI とレポートが 機能します",
+          href: "/agency/clients/new",
+          done: (totalClientCount ?? 0) > 0,
+        },
+        {
+          id: "ai-reco",
+          label: "AI 求人推薦の 傾きを 選ぶ",
+          description: "フィット重視 / バランス / 報酬重視 から 選択",
+          href: "/agency/settings/ai-recommendation",
+          done: (aiRecoSettingsRes as { data: unknown }).data != null,
+        },
+      ]
+    : [];
+
   return (
     // ダッシュボードはウィジェット並べ替え + 2 列対応のため max-w-7xl の広めに。
     // モバイルは px-4 / デスクトップは lg:px-6 でコンテンツ余白を保つ。
@@ -172,6 +229,9 @@ export default async function AgencyDashboardPage() {
         <h1 className="text-2xl font-bold">ダッシュボード</h1>
         <p className="text-muted-foreground mt-1 text-sm">{role.organization.name} の今の状態</p>
       </div>
+
+      {/* admin 向け セットアップ チェックリスト。 完了すると 自動的に 消える */}
+      {isAdmin && <SetupProgressWidget steps={setupSteps} />}
 
       {/* 次の面談(24h 以内に予定があるときだけ表示) */}
       <NextMeetingWidget initial={nextMeeting} />

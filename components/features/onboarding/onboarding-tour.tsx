@@ -156,24 +156,8 @@ export function OnboardingTour({ autoStart, forceStart = false, onClose }: Props
         </div>
       ),
     },
-    // ステップ8.5:AI ヒアリング(音声からの履歴書/職務経歴書自動生成)
-    {
-      target: '[data-tour="nav-career-intake"]',
-      placement: "right",
-      title: "AI ヒアリングで自動生成",
-      content: (
-        <div className="space-y-2">
-          <p>
-            キャリア面談の音声をアップロードすると、AI が文字起こし → 構造化抽出 →
-            履歴書/職務経歴書の下書きまで一括で行います。
-          </p>
-          <p className="text-muted-foreground text-sm">
-            証明写真も「自撮りを AI で証明写真化(履歴書編集ページ)」する機能があります。
-          </p>
-        </div>
-      ),
-    },
-    // ステップ8.6:AI 求人推薦
+    // (旧ステップ 8.5「AI ヒアリング」は該当ナビが削除されたため削除済み)
+    // ステップ8.5:AI 求人推薦
     {
       target: '[data-tour="nav-recommended-jobs"]',
       placement: "right",

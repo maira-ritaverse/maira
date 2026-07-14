@@ -21,7 +21,9 @@ type Props = {
 
 const STORAGE_KEY = "maira-seeker-sidebar";
 
-const AVAILABLE_ITEMS: ItemDescriptor[] = [
+// モバイル ドロワー (mobile-nav-drawer.tsx) からも 参照 する ため export。
+// 求職者 の 主要 動線 は 全部 ここ に 並ぶ。
+export const SEEKER_NAV_ITEMS: ItemDescriptor[] = [
   { id: "dashboard", href: "/app", icon: "dashboard", defaultLabel: "ダッシュボード" },
   {
     id: "diagnosis",
@@ -118,7 +120,7 @@ export function AppSidebar({ invitedCount = 0 }: Props) {
   return (
     <CustomizableSidebar
       storageKey={STORAGE_KEY}
-      availableItems={AVAILABLE_ITEMS}
+      availableItems={SEEKER_NAV_ITEMS}
       defaultLayout={DEFAULT_LAYOUT}
       isActive={isActive}
       badges={badges}
