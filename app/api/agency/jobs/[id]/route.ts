@@ -80,6 +80,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   if (d.application_qualifications !== undefined) {
     updateData.application_qualifications = d.application_qualifications || null;
   }
+  // 20260714000001。 成約報酬 (万円、 agency-private)。
+  // 未指定 は 部分 更新 の セマンティクス に 合わせて スキップ、 明示 の null は 更新 する。
+  if (d.placement_fee !== undefined) updateData.placement_fee = d.placement_fee;
 
   if (Object.keys(updateData).length === 0) {
     return NextResponse.json({ success: true });

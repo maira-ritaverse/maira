@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { Lock } from "lucide-react";
+
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { getJobPosting } from "@/lib/jobs/queries";
@@ -123,6 +125,17 @@ export default async function JobDetailPage({ params }: RouteParams) {
             <span className="text-muted-foreground text-xs">
               {formatSalaryRange(job.salaryMin, job.salaryMax)}
             </span>
+            {job.placementFee != null && (
+              // 成約報酬 バッジ。 求職者 側 の 画面 / API に は 一切 露出 しない。
+              // 「非公開」 表記 を 明示 する ことで、 エージェント の 誤解 (「求職者 に も 見える の?」) を 防ぐ。
+              <span
+                className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                title="求職者には表示されません"
+              >
+                <Lock className="size-3" aria-hidden />
+                成約報酬 {job.placementFee}万円(非公開)
+              </span>
+            )}
           </div>
         </div>
         <div className="flex gap-2">

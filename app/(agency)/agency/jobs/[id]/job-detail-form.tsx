@@ -70,6 +70,8 @@ export function JobDetailForm({ job, heroImageUrl, lineShareImageUrl }: Props) {
       break_time: job.breakTime ?? "",
       holidays: job.holidays ?? "",
       application_qualifications: job.applicationQualifications ?? "",
+      // 成約報酬。 求職者 に は 露出 しない (agency-private)。
+      placement_fee: job.placementFee,
     },
   });
 
@@ -194,6 +196,32 @@ export function JobDetailForm({ job, heroImageUrl, lineShareImageUrl }: Props) {
               <p className="text-sm text-red-600">{errors.salary_max.message}</p>
             )}
           </div>
+        </div>
+
+        {/* 成約報酬 (agency-private)。 求職者側 の 画面 / API に は 一切 露出 しない。 */}
+        <div className="space-y-2">
+          <Label htmlFor="placement_fee" className="flex items-center gap-2">
+            <span>成約報酬(万円)</span>
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-normal text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              非公開・求職者には見えません
+            </span>
+          </Label>
+          <Input
+            id="placement_fee"
+            type="number"
+            min="0"
+            max="100000"
+            {...register("placement_fee")}
+            disabled={isPending}
+            placeholder="例:120"
+          />
+          <p className="text-muted-foreground text-xs">
+            AI 推薦の 傾き(設定 → AI 求人推薦の 設定)で「バランス」や「報酬重視」を 選ぶと、 この
+            金額を 考慮 した ランキング に なります。 求職者には 金額は 一切 見えません。
+          </p>
+          {errors.placement_fee && (
+            <p className="text-sm text-red-600">{errors.placement_fee.message}</p>
+          )}
         </div>
 
         <div className="space-y-2">

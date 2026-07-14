@@ -68,6 +68,9 @@ export async function POST(request: Request) {
       break_time: d.break_time || null,
       holidays: d.holidays || null,
       application_qualifications: d.application_qualifications || null,
+      // 20260714000001。 成約報酬 (万円、 nullable、 agency-private)。
+      // 求職者側 に は 一切 露出 しない (seeker RPC の SELECT 列 には 含めない こと)。
+      placement_fee: d.placement_fee ?? null,
     })
     .select("id")
     .single();
