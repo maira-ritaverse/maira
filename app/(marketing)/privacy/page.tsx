@@ -160,17 +160,179 @@ export default function PrivacyPolicyPage() {
             </ul>
           </div>
 
-          <div className="space-y-2">
-            <p className="font-medium">7-2. Google 連携(Calendar)</p>
+          <div className="space-y-3">
+            <p className="font-medium">7-2. Google 連携(Calendar / Meet)</p>
             <p>
-              Google Calendar への面談予定作成(Meet URL 付き)を行うため、本人が明示的に承認した{" "}
-              <code className="text-xs">calendar.events</code> スコープのみ使用します。
-              <br />
-              2026 年 6 月 19 日に <code className="text-xs">drive.readonly</code>{" "}
-              スコープは撤去しました(Google Restricted scope の運用負荷回避のため)。Google Meet
-              録画は ユーザーが Maira に 手動アップロードする 運用に 切り替えています。
-              トークンの暗号化保管、解除時の即時破棄、第三者提供の禁止は Zoom 連携と同じ方針です。
+              Google Calendar への面談予定作成(Google Meet URL 付き)を行うため、本人が明示的に
+              承認した以下のスコープのみ使用します。 Restricted スコープは一切使用しません (2026 年
+              6 月 19 日に <code className="text-xs">drive.readonly</code> スコープを撤去、 Google
+              Meet 録画は Maira への手動アップロード運用に切替済み)。
             </p>
+
+            <div className="space-y-1">
+              <p className="text-sm font-medium">要求スコープ(いずれも Sensitive)</p>
+              <ul className="ml-6 list-disc space-y-1">
+                <li>
+                  <code className="text-xs">openid</code> / <code className="text-xs">email</code>
+                  :本人の Google アカウント識別(google_sub / google_email)のため
+                </li>
+                <li>
+                  <code className="text-xs">https://www.googleapis.com/auth/calendar.events</code>
+                  :Maira 内で作成した面談予定を Google Calendar のイベントとして作成 (Google Meet
+                  URL 自動発行)、および同イベントの更新・削除のため
+                </li>
+              </ul>
+            </div>
+
+            {/* Google の OAuth 検証で要求される 5 項目の開示。 見出しを英語も併記して、
+                Google 側レビュアーがブラウザ翻訳せずとも該当箇所を追えるようにする。 */}
+            <div className="space-y-1">
+              <p className="text-sm font-medium">7-2-1. アクセスするデータ(Data Access)</p>
+              <p>本サービスが Google API を通じて取得するデータは以下に限定されます。</p>
+              <ul className="ml-6 list-disc space-y-1">
+                <li>
+                  Google アカウントの識別子(<code className="text-xs">sub</code>)と メールアドレス
+                </li>
+                <li>
+                  本サービスから作成した Google Calendar
+                  イベントのメタデータ(タイトル・開始/終了時刻・ 参加者一覧・Meet URL)およびイベント
+                  ID
+                </li>
+              </ul>
+              <p>
+                取得しないもの:過去に作成された他のカレンダーイベント、他のカレンダーの内容、 Google
+                Drive のファイル、Gmail の内容、連絡先、Chat メッセージ。
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-sm font-medium">7-2-2. データの利用目的(Data Use)</p>
+              <p>取得した Google データは以下の目的にのみ使用します。</p>
+              <ul className="ml-6 list-disc space-y-1">
+                <li>
+                  ユーザー本人が Maira 内で作成した面談予定を、本人の Google Calendar に Meet URL
+                  付きイベントとして反映するため
+                </li>
+                <li>反映後の Meet URL を Maira 上に表示し、参加者に共有するため</li>
+                <li>予定の再スケジュール・キャンセルを Google Calendar 側にも反映するため</li>
+                <li>
+                  接続状態の維持と接続本人の識別 (Google
+                  アカウントの誤接続・別アカウントへの切替検知)のため
+                </li>
+              </ul>
+              <p>
+                広告配信、行動プロファイリング、金融審査、その他ユーザー向け機能以外の目的には
+                <strong>一切利用しません</strong>。
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-sm font-medium">7-2-3. データの提供先(Data Transfer)</p>
+              <p>
+                Google から取得した個人データを、以下のいずれにも
+                <strong>提供・販売しません</strong>。
+              </p>
+              <ul className="ml-6 list-disc space-y-1">
+                <li>広告ネットワーク・アドテク企業</li>
+                <li>データブローカー・データ販売事業者</li>
+                <li>信用スコア・金融審査事業者</li>
+                <li>本サービスと無関係な第三者一般</li>
+              </ul>
+              <p>
+                Maira のインフラベンダー(Vercel、Supabase)は、
+                本サービス提供に必要なホスティング・データベース処理のためにのみ Google データを
+                取り扱い、独自の分析・目的外利用は行いません(それぞれの Data Processing Agreement
+                に基づく)。
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-sm font-medium">7-2-4. データの保護(Data Protection)</p>
+              <ul className="ml-6 list-disc space-y-1">
+                <li>
+                  Google OAuth アクセストークン・リフレッシュトークンは AES-256-GCM
+                  方式でサーバーサイド暗号化して保管
+                </li>
+                <li>すべての Google API 通信は TLS 1.2 以上の暗号化通信で行う</li>
+                <li>
+                  データベース(Supabase / PostgreSQL)は Row Level Security で
+                  本人と接続許諾を受けたエージェント担当者のみアクセス可能
+                </li>
+                <li>
+                  スタッフによる不正アクセスを防ぐため、本番データベースへの直接アクセスは
+                  監査ログ対象とし、業務上必要な場合に限定
+                </li>
+              </ul>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-sm font-medium">
+                7-2-5. データの保管期間・削除(Data Retention &amp; Deletion)
+              </p>
+              <ul className="ml-6 list-disc space-y-1">
+                <li>
+                  Google OAuth トークン:本人が「Google 連携解除」を実行した時点で Maira
+                  側から即時削除、および Google 側のトークン失効 API を呼び出して破棄
+                </li>
+                <li>
+                  Maira 内の面談予定情報:元となった Maira の面談予定が削除された時点で 対応する
+                  Google Calendar イベントも削除。 Maira アカウントを退会した場合は 30
+                  日以内に関連する全データを削除
+                </li>
+                <li>
+                  ユーザーからの明示的な削除要求は Maira サポート窓口 (
+                  <a href="mailto:support@maira.pro" className="text-primary underline">
+                    support@maira.pro
+                  </a>
+                  ) で受付、7 営業日以内に対応
+                </li>
+              </ul>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-sm font-medium">
+                7-2-6. Limited Use 準拠(Google API Services User Data Policy)
+              </p>
+              <p>
+                本サービスによる Google Workspace API から受領したデータの取り扱いは、
+                <a
+                  href="https://developers.google.com/terms/api-services-user-data-policy"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary underline"
+                >
+                  Google API Services User Data Policy
+                </a>
+                (Limited Use 要件を含む)に準拠します。 具体的には以下を遵守します。
+              </p>
+              <ul className="ml-6 list-disc space-y-1">
+                <li>
+                  Google ユーザーデータは、本ポリシー 7-2-2 に記載したユーザー向け機能の
+                  提供・改善以外の目的には使用しません
+                </li>
+                <li>
+                  Google ユーザーデータは、AI / 機械学習モデル(Anthropic Claude 等)の
+                  学習・改善には使用しません。 個別ユーザーの当該セッション内で回答生成に
+                  利用する場合も、当該ユーザーの明示的な操作に基づく場合に限ります
+                </li>
+                <li>
+                  Google ユーザーデータを、AI / 機械学習モデルの学習に使用する第三者サービスに
+                  転送することはありません。 本サービスが利用する AI API プロバイダー
+                  (Anthropic)とは、モデル学習に本サービスの入出力を使用しない旨の 契約(zero data
+                  retention / no training)を結んでいます
+                </li>
+                <li>
+                  Google ユーザーデータを、人間のレビュアーが読める形で扱うことは、
+                  法令遵守、セキュリティ調査、ユーザー同意に基づくサポート対応のいずれかに
+                  限定します
+                </li>
+              </ul>
+              <p className="mt-1 rounded bg-slate-50 p-2 text-xs italic dark:bg-slate-900">
+                Compliance statement (English): The use of raw or derived user data received from
+                Google Workspace APIs by Maira will adhere to the Google API Services User Data
+                Policy, including the Limited Use requirements.
+              </p>
+            </div>
           </div>
         </section>
 
