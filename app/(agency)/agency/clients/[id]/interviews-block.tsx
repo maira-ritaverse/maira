@@ -6,14 +6,20 @@
  * 顧客 詳細 の 応募 セクション 内 で referral 単位 に レンダー する。
  * 「1 次 面接 予定 → 実施 済 に 更新 → 2 次 面接 追加」 という 業務 フロー を
  * この ブロック 単独 で 完結 でき る よう に する。
+ *
+ * 2026-07-14 UX 改善: window.confirm を ConfirmDialog に、
+ * "HTTP N" などの dev ジャーゴンエラーを toast + errorToJapanese に置換。
+ * 保存 / 削除 成功時は success toast を出す。
  */
 import { CalendarClock, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState, useTransition } from "react";
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { Interview, InterviewKind, InterviewResult } from "@/lib/interviews/types";
 import { KIND_LABEL, RESULT_LABEL } from "@/lib/interviews/types";
+import { apiRequest, errorToJapanese } from "@/lib/errors/messages";
+import { useToast } from "@/lib/admin/toast/store";
 
 type Props = {
   referralId: string;
@@ -56,23 +62,21 @@ function resultTone(result: InterviewResult): string {
 export function InterviewsBlock({ referralId }: Props) {
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const { showToast } = useToast();
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
-      const res = await fetch(`/api/agency/interviews?referral_id=${referralId}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const res = await apiRequest(`/api/agency/interviews?referral_id=${referralId}`);
       const json = (await res.json()) as { interviews: Interview[] };
       setInterviews(json.interviews ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "取得 失敗");
+      showToast("error", errorToJapanese(err));
     } finally {
       setLoading(false);
     }
-  }, [referralId]);
+  }, [referralId, showToast]);
 
   useEffect(() => {
     // マウント 時 に 面接 一覧 を fetch。 サーバ 側 fetch (RSC) で 渡す 手 も あるが
@@ -101,17 +105,11 @@ export function InterviewsBlock({ referralId }: Props) {
         </Button>
       </div>
 
-      {error && (
-        <Alert variant="destructive" className="mb-1.5">
-          <AlertDescription>エラー: {error}</AlertDescription>
-        </Alert>
-      )}
-
       {showAdd && <AddInterviewForm referralId={referralId} onCreated={load} />}
 
       {interviews.length === 0 && !loading && !showAdd && (
         <p className="text-muted-foreground py-1 text-[11px]">
-          まだ 面接 が 登録 され て いま せん。 「追加」 から 1 次 面接 を 登録 して ください。
+          まだ面接が登録されていません。 「追加」から 1 次面接を登録してください。
         </p>
       )}
 
@@ -137,17 +135,16 @@ function AddInterviewForm({
   const [when, setWhen] = useState("");
   const [notes, setNotes] = useState("");
   const [isPending, startTransition] = useTransition();
-  const [err, setErr] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   const submit = () => {
     if (!when) {
-      setErr("日時 を 入力 して ください");
+      showToast("error", "日時を入力してください");
       return;
     }
     startTransition(async () => {
-      setErr(null);
       try {
-        const res = await fetch("/api/agency/interviews", {
+        await apiRequest("/api/agency/interviews", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -157,16 +154,13 @@ function AddInterviewForm({
             notes: notes.trim() || null,
           }),
         });
-        if (!res.ok) {
-          const j = (await res.json().catch(() => ({}))) as { error?: string };
-          throw new Error(j.error ?? `HTTP ${res.status}`);
-        }
         setKind("first");
         setWhen("");
         setNotes("");
+        showToast("success", `${KIND_LABEL[kind]} を追加しました`);
         onCreated();
       } catch (e) {
-        setErr(e instanceof Error ? e.message : "作成 失敗");
+        showToast("error", errorToJapanese(e));
       }
     });
   };
@@ -208,9 +202,8 @@ function AddInterviewForm({
           disabled={isPending || !when}
           onClick={submit}
         >
-          {isPending ? "追加 中..." : "追加"}
+          {isPending ? "追加中..." : "追加"}
         </Button>
-        {err && <span className="text-[10px] text-red-600">{err}</span>}
       </div>
     </div>
   );
@@ -218,38 +211,34 @@ function AddInterviewForm({
 
 function InterviewRow({ interview, onChanged }: { interview: Interview; onChanged: () => void }) {
   const [isPending, startTransition] = useTransition();
-  const [err, setErr] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const { showToast } = useToast();
 
   const updateResult = (next: InterviewResult) => {
     startTransition(async () => {
-      setErr(null);
       try {
-        const res = await fetch(`/api/agency/interviews/${interview.id}`, {
+        await apiRequest(`/api/agency/interviews/${interview.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ result: next }),
         });
-        if (!res.ok) {
-          const j = (await res.json().catch(() => ({}))) as { error?: string };
-          throw new Error(j.error ?? `HTTP ${res.status}`);
-        }
+        showToast("success", `結果を「${RESULT_LABEL[next]}」に更新しました`);
         onChanged();
       } catch (e) {
-        setErr(e instanceof Error ? e.message : "更新 失敗");
+        showToast("error", errorToJapanese(e));
       }
     });
   };
 
-  const remove = () => {
-    if (!confirm(`${KIND_LABEL[interview.kind]} を 削除 しま すか?`)) return;
+  const doRemove = () => {
     startTransition(async () => {
-      setErr(null);
       try {
-        const res = await fetch(`/api/agency/interviews/${interview.id}`, { method: "DELETE" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        await apiRequest(`/api/agency/interviews/${interview.id}`, { method: "DELETE" });
+        showToast("success", `${KIND_LABEL[interview.kind]} を削除しました`);
+        setConfirmOpen(false);
         onChanged();
       } catch (e) {
-        setErr(e instanceof Error ? e.message : "削除 失敗");
+        showToast("error", errorToJapanese(e));
       }
     });
   };
@@ -258,92 +247,103 @@ function InterviewRow({ interview, onChanged }: { interview: Interview; onChange
   const [editingTime, setEditingTime] = useState(false);
   const saveTime = () => {
     startTransition(async () => {
-      setErr(null);
       try {
-        const res = await fetch(`/api/agency/interviews/${interview.id}`, {
+        await apiRequest(`/api/agency/interviews/${interview.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ scheduled_at: new Date(t).toISOString() }),
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         setEditingTime(false);
+        showToast("success", "面接時刻を更新しました");
         onChanged();
       } catch (e) {
-        setErr(e instanceof Error ? e.message : "更新 失敗");
+        showToast("error", errorToJapanese(e));
       }
     });
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 rounded-md bg-white px-2 py-1 text-xs dark:bg-slate-950/40">
-      <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold dark:bg-slate-700">
-        {KIND_LABEL[interview.kind]}
-      </span>
-      {editingTime ? (
-        <>
-          <input
-            type="datetime-local"
-            value={t}
-            onChange={(e) => setT(e.target.value)}
-            className="border-input bg-background rounded-md border px-1 py-0.5 text-[11px]"
-          />
-          <Button
+    <>
+      <div className="flex flex-wrap items-center gap-1.5 rounded-md bg-white px-2 py-1 text-xs dark:bg-slate-950/40">
+        <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold dark:bg-slate-700">
+          {KIND_LABEL[interview.kind]}
+        </span>
+        {editingTime ? (
+          <>
+            <input
+              type="datetime-local"
+              value={t}
+              onChange={(e) => setT(e.target.value)}
+              className="border-input bg-background rounded-md border px-1 py-0.5 text-[11px]"
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-6 px-1 text-[10px]"
+              disabled={isPending}
+              onClick={saveTime}
+            >
+              保存
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-6 px-1 text-[10px]"
+              onClick={() => setEditingTime(false)}
+            >
+              キャンセル
+            </Button>
+          </>
+        ) : (
+          <button
             type="button"
-            size="sm"
-            variant="ghost"
-            className="h-6 px-1 text-[10px]"
-            disabled={isPending}
-            onClick={saveTime}
+            className="hover:underline"
+            onClick={() => setEditingTime(true)}
+            title="時刻を変更"
           >
-            保存
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-6 px-1 text-[10px]"
-            onClick={() => setEditingTime(false)}
-          >
-            キャンセル
-          </Button>
-        </>
-      ) : (
-        <button
-          type="button"
-          className="hover:underline"
-          onClick={() => setEditingTime(true)}
-          title="時刻 を 変更"
+            {formatJst(interview.scheduledAt)}
+          </button>
+        )}
+        <select
+          value={interview.result}
+          onChange={(e) => updateResult(e.target.value as InterviewResult)}
+          disabled={isPending}
+          className={`rounded px-1 py-0.5 text-[10px] font-medium ${resultTone(interview.result)}`}
         >
-          {formatJst(interview.scheduledAt)}
-        </button>
-      )}
-      <select
-        value={interview.result}
-        onChange={(e) => updateResult(e.target.value as InterviewResult)}
-        disabled={isPending}
-        className={`rounded px-1 py-0.5 text-[10px] font-medium ${resultTone(interview.result)}`}
-      >
-        {RESULT_OPTIONS.map((r) => (
-          <option key={r} value={r}>
-            {RESULT_LABEL[r]}
-          </option>
-        ))}
-      </select>
-      {interview.notes && (
-        <span className="text-muted-foreground truncate text-[10px]">({interview.notes})</span>
-      )}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="ml-auto h-6 px-1 text-red-600 hover:text-red-700"
-        disabled={isPending}
-        onClick={remove}
-        aria-label="削除"
-      >
-        <Trash2 className="h-3 w-3" />
-      </Button>
-      {err && <span className="basis-full text-[10px] text-red-600">{err}</span>}
-    </div>
+          {RESULT_OPTIONS.map((r) => (
+            <option key={r} value={r}>
+              {RESULT_LABEL[r]}
+            </option>
+          ))}
+        </select>
+        {interview.notes && (
+          <span className="text-muted-foreground truncate text-[10px]">({interview.notes})</span>
+        )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="ml-auto h-6 px-1 text-red-600 hover:text-red-700"
+          disabled={isPending}
+          onClick={() => setConfirmOpen(true)}
+          aria-label="削除"
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={`${KIND_LABEL[interview.kind]} を削除しますか?`}
+        description="この操作は取り消せません。 削除しても referral 自体は残ります。"
+        confirmLabel="削除"
+        destructive
+        pending={isPending}
+        onConfirm={doRemove}
+      />
+    </>
   );
 }

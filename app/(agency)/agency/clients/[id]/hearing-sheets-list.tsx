@@ -3,9 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch, getErrorMessage } from "@/lib/api/client-fetch";
@@ -14,6 +14,7 @@ import {
   type HearingSheet,
   type HearingSheetContent,
 } from "@/lib/agency-client-documents/types";
+import { useToast } from "@/lib/admin/toast/store";
 
 type Props = {
   clientRecordId: string;
@@ -28,10 +29,9 @@ export function HearingSheetsList({ clientRecordId, initialItems }: Props) {
   const router = useRouter();
   const [items, setItems] = useState<HearingSheet[]>(initialItems);
   const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   const handleCreate = () => {
-    setError(null);
     startTransition(async () => {
       try {
         const res = await apiFetch<{ item: HearingSheet }>("/api/agency/hearing-sheets", {
@@ -40,9 +40,10 @@ export function HearingSheetsList({ clientRecordId, initialItems }: Props) {
         });
         if (!res?.item) throw new Error("response_missing_item");
         setItems((prev) => [res.item, ...prev]);
+        showToast("success", "新規ヒアリングシートを作成しました");
         router.refresh();
       } catch (err) {
-        setError(getErrorMessage(err));
+        showToast("error", getErrorMessage(err));
       }
     });
   };
@@ -54,11 +55,6 @@ export function HearingSheetsList({ clientRecordId, initialItems }: Props) {
           {pending ? "作成中…" : "+ 新規ヒアリング"}
         </Button>
       </div>
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
       {items.length === 0 ? (
         <Card className="text-muted-foreground p-6 text-sm">
           まだヒアリングシートはありません。「+ 新規ヒアリング」から始めてください。
@@ -94,13 +90,13 @@ function HearingSheetEditor({
   const [content, setContent] = useState<HearingSheetContent>(sheet.content);
   const [pending, startTransition] = useTransition();
   const [savedAt, setSavedAt] = useState<Date | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const { showToast } = useToast();
 
   const update = (patch: Partial<HearingSheetContent>) =>
     setContent((prev) => ({ ...prev, ...patch }));
 
   const save = (nextStatus?: "draft" | "finalized") => {
-    setError(null);
     startTransition(async () => {
       try {
         // 過保護 zod validate(最大長などをここで弾く)
@@ -121,21 +117,29 @@ function HearingSheetEditor({
         if (!res?.item) throw new Error("response_missing_item");
         onChange(res.item);
         setSavedAt(new Date());
+        showToast(
+          "success",
+          nextStatus === "finalized"
+            ? "ヒアリングを確定しました"
+            : nextStatus === "draft"
+              ? "編集を再開しました"
+              : "ヒアリングを保存しました",
+        );
       } catch (err) {
-        setError(getErrorMessage(err));
+        showToast("error", getErrorMessage(err));
       }
     });
   };
 
   const handleDelete = () => {
-    if (!confirm("このヒアリングシートを削除します。実行しますか?")) return;
-    setError(null);
     startTransition(async () => {
       try {
         await apiFetch(`/api/agency/hearing-sheets/${sheet.id}`, { method: "DELETE" });
+        showToast("success", "ヒアリングシートを削除しました");
+        setConfirmOpen(false);
         onDelete();
       } catch (err) {
-        setError(getErrorMessage(err));
+        showToast("error", getErrorMessage(err));
       }
     });
   };
@@ -160,12 +164,6 @@ function HearingSheetEditor({
           {sheet.status === "finalized" ? "確定済" : "編集中"}
         </span>
       </div>
-
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <Question
@@ -236,7 +234,7 @@ function HearingSheetEditor({
           {savedAt ? `${savedAt.toLocaleTimeString("ja-JP")} に保存しました` : ""}
         </p>
         <div className="flex flex-wrap gap-2">
-          <Button variant="ghost" size="sm" onClick={handleDelete} disabled={pending}>
+          <Button variant="ghost" size="sm" onClick={() => setConfirmOpen(true)} disabled={pending}>
             削除
           </Button>
           {sheet.status === "draft" ? (
@@ -260,6 +258,17 @@ function HearingSheetEditor({
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="このヒアリングシートを削除しますか?"
+        description="この操作は取り消せません。 記録した内容は復元できなくなります。"
+        confirmLabel="削除"
+        destructive
+        pending={pending}
+        onConfirm={handleDelete}
+      />
     </Card>
   );
 }
