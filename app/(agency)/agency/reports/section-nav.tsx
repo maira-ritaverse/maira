@@ -5,29 +5,26 @@
  *
  * ・レポート各セクションの見出しリンクを縦に並べる
  * ・スクロールに応じて active 表示を切り替える(IntersectionObserver)
- * ・モバイルでは非表示(top margin もエコにする)
+ * ・モバイルでは非表示
+ *
+ * セクション一覧は page.tsx から受け取る(SECTION_CATALOG と表示設定を
+ * 反映した順序で渡ってくる)。 ここでハードコードしないことで、カスタマイズ
+ * パネルの並び順とサイドバーの並び順が常に同期する。
  */
 import { useEffect, useState } from "react";
 
-const SECTIONS = [
-  { id: "kpi", label: "サマリー" },
-  { id: "achievement", label: "目標達成率" },
-  { id: "roi", label: "ROI(admin)" },
-  { id: "trend", label: "時系列トレンド" },
-  { id: "monthly-deals", label: "成約・売上" },
-  { id: "placement-rate", label: "成約率" },
-  { id: "funnel", label: "選考ファネル" },
-  { id: "company", label: "企業別" },
-  { id: "entry-source", label: "エントリーサイト別" },
-  { id: "advisor", label: "アドバイザー別" },
-  { id: "phase-duration", label: "所要日数" },
-  { id: "status-distribution", label: "ステータス分布" },
-];
+type Section = { id: string; label: string };
 
-export function SectionNav() {
-  const [activeId, setActiveId] = useState<string>("kpi");
+type Props = {
+  sections: Section[];
+};
+
+export function SectionNav({ sections }: Props) {
+  const [activeId, setActiveId] = useState<string>(sections[0]?.id ?? "");
 
   useEffect(() => {
+    if (sections.length === 0) return;
+
     const observer = new IntersectionObserver(
       (entries) => {
         // 一番上に近い可視要素を active に
@@ -39,17 +36,19 @@ export function SectionNav() {
       { rootMargin: "-20% 0px -60% 0px", threshold: 0 },
     );
 
-    for (const s of SECTIONS) {
+    for (const s of sections) {
       const el = document.getElementById(s.id);
       if (el) observer.observe(el);
     }
     return () => observer.disconnect();
-  }, []);
+  }, [sections]);
+
+  if (sections.length === 0) return null;
 
   return (
     <nav className="no-print sticky top-4 hidden w-40 shrink-0 space-y-0.5 self-start text-sm md:block">
       <p className="text-muted-foreground mb-2 text-xs font-semibold">レポート項目</p>
-      {SECTIONS.map((s) => {
+      {sections.map((s) => {
         const isActive = activeId === s.id;
         return (
           <a

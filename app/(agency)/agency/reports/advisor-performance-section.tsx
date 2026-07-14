@@ -57,63 +57,101 @@ function AdminTable({ data, noData }: { data: AdvisorPerformance; noData: boolea
   // 売上ランキング(未割当を除いた実メンバーのみ)+ ビジュアル比較用の max
   const rankable = data.rows.filter((r) => !r.isUnassigned);
   const maxRevenue = Math.max(1, ...rankable.map((r) => r.netRevenue));
+
+  // 世界標準の「Revenue per Recruiter」= CA 1 人あたりの生産性。 サマリタイルで表示
+  const activeCount = rankable.filter((r) => r.placementCount > 0).length;
+  const totalRevenue = rankable.reduce((s, r) => s + r.netRevenue, 0);
+  const memberCount = rankable.length;
+  const avgRevenuePerMember = memberCount > 0 ? Math.round(totalRevenue / memberCount) : 0;
+  const topRevenue = rankable.length > 0 ? rankable[0].netRevenue : 0;
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[560px] text-sm">
-        <thead>
-          <tr className="text-muted-foreground border-b text-left text-xs">
-            <th className="py-2 pr-2 font-normal">#</th>
-            <th className="py-2 pr-3 font-normal">アドバイザー</th>
-            <th className="py-2 pr-3 text-right font-normal">担当 referral</th>
-            <th className="py-2 pr-3 text-right font-normal">成約</th>
-            <th className="py-2 pr-3 text-right font-normal">純売上</th>
-            <th className="py-2 font-normal">売上シェア</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.rows.map((row, idx) => {
-            const rank = row.isUnassigned ? null : idx + 1;
-            const pct = maxRevenue > 0 ? (row.netRevenue / maxRevenue) * 100 : 0;
-            return (
-              <tr
-                key={row.memberId ?? "unassigned"}
-                className={`border-b last:border-b-0 ${row.isUnassigned ? "text-muted-foreground" : ""}`}
-              >
-                <td className="text-muted-foreground py-2 pr-2 text-xs tabular-nums">
-                  {rank ?? "-"}
-                </td>
-                <td className="py-2 pr-3">
-                  {row.isUnassigned ? (
-                    <span className="italic">未割当</span>
-                  ) : (
-                    (row.displayName ?? "(表示名未設定)")
-                  )}
-                </td>
-                <td className="py-2 pr-3 text-right tabular-nums">{row.referralCount}</td>
-                <td className="py-2 pr-3 text-right tabular-nums">{row.placementCount}</td>
-                <td className="py-2 pr-3 text-right tabular-nums">{formatYen(row.netRevenue)}</td>
-                <td className="py-2">
-                  {row.isUnassigned ? (
-                    <span className="text-muted-foreground text-xs">-</span>
-                  ) : (
-                    <div className="h-2 w-full rounded bg-slate-100 dark:bg-slate-800">
-                      <div
-                        className="h-2 rounded bg-emerald-500"
-                        style={{ width: `${Math.max(2, pct)}%` }}
-                      />
-                    </div>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      {noData && (
-        <p className="text-muted-foreground mt-3 text-xs">
-          この期間にはまだ実績データがありません。
-        </p>
-      )}
+    <>
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <SummaryTile label="アクティブメンバー" value={`${activeCount} / ${memberCount} 名`} />
+        <SummaryTile
+          label="1 人あたり平均売上"
+          value={`¥${avgRevenuePerMember.toLocaleString("ja-JP")}`}
+          emphasize
+        />
+        <SummaryTile label="トップ成績" value={`¥${topRevenue.toLocaleString("ja-JP")}`} />
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px] text-sm">
+          <thead>
+            <tr className="text-muted-foreground border-b text-left text-xs">
+              <th className="py-2 pr-2 font-normal">#</th>
+              <th className="py-2 pr-3 font-normal">アドバイザー</th>
+              <th className="py-2 pr-3 text-right font-normal">担当 referral</th>
+              <th className="py-2 pr-3 text-right font-normal">成約</th>
+              <th className="py-2 pr-3 text-right font-normal">純売上</th>
+              <th className="py-2 font-normal">売上シェア</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.rows.map((row, idx) => {
+              const rank = row.isUnassigned ? null : idx + 1;
+              const pct = maxRevenue > 0 ? (row.netRevenue / maxRevenue) * 100 : 0;
+              return (
+                <tr
+                  key={row.memberId ?? "unassigned"}
+                  className={`border-b last:border-b-0 ${row.isUnassigned ? "text-muted-foreground" : ""}`}
+                >
+                  <td className="text-muted-foreground py-2 pr-2 text-xs tabular-nums">
+                    {rank ?? "-"}
+                  </td>
+                  <td className="py-2 pr-3">
+                    {row.isUnassigned ? (
+                      <span className="italic">未割当</span>
+                    ) : (
+                      (row.displayName ?? "(表示名未設定)")
+                    )}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums">{row.referralCount}</td>
+                  <td className="py-2 pr-3 text-right tabular-nums">{row.placementCount}</td>
+                  <td className="py-2 pr-3 text-right tabular-nums">{formatYen(row.netRevenue)}</td>
+                  <td className="py-2">
+                    {row.isUnassigned ? (
+                      <span className="text-muted-foreground text-xs">-</span>
+                    ) : (
+                      <div className="h-2 w-full rounded bg-slate-100 dark:bg-slate-800">
+                        <div
+                          className="h-2 rounded bg-emerald-500"
+                          style={{ width: `${Math.max(2, pct)}%` }}
+                        />
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {noData && (
+          <p className="text-muted-foreground mt-3 text-xs">
+            この期間にはまだ実績データがありません。
+          </p>
+        )}
+      </div>
+    </>
+  );
+}
+
+function SummaryTile({
+  label,
+  value,
+  emphasize = false,
+}: {
+  label: string;
+  value: string;
+  emphasize?: boolean;
+}) {
+  return (
+    <div className="rounded-md border p-3">
+      <p className="text-muted-foreground text-xs">{label}</p>
+      <p className={`mt-1 tabular-nums ${emphasize ? "text-lg font-semibold" : "text-base"}`}>
+        {value}
+      </p>
     </div>
   );
 }

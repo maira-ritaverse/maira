@@ -1873,3 +1873,144 @@ type KpiSummaryRpcJson = {
   start_date?: string;
   end_date?: string;
 };
+
+// ============================================
+// 業界ベンチマーク:充足日数 (Time to Fill)
+//
+// 応募(referrals.created_at)から 成約(placements.event_date)までの
+// 平均・中央値を出す。 世界標準では 44 日前後(2026 年時点)。
+//
+// 参考:業界平均 36-42 日、高度人材 60-90 日。
+// 短いほど「マッチング速度と選考効率が高い」= 経営の武器になる指標。
+//
+// event_type='placement' に限定(additional / refund は成約日ではない)。
+// 遡及入力で負値になるケースはノイズ除去。
+// ============================================
+
+export type TimeToFillSummary = {
+  /** 平均日数(小数 1 桁)。 サンプル 0 なら null */
+  averageDays: number | null;
+  /** 中央値(平均が外れ値に引きずられないための併記) */
+  medianDays: number | null;
+  sampleCount: number;
+  /** 業界平均。 UI で「短いほど良い」の基準として表示 */
+  benchmarkDays: number;
+  period: Period;
+};
+
+export async function getTimeToFill(
+  organizationId: string,
+  period: Period,
+): Promise<TimeToFillSummary> {
+  const supabase = await createClient();
+
+  const { data } = await supabase
+    .from("placements")
+    .select("event_date, referral_id, referrals(created_at)")
+    .eq("organization_id", organizationId)
+    .eq("event_type", "placement")
+    .gte("event_date", period.from)
+    .lte("event_date", period.to);
+
+  type PRow = {
+    event_date: string;
+    referrals?: { created_at?: string | null } | null;
+  };
+  const rows = (data ?? []) as PRow[];
+
+  const days: number[] = [];
+  for (const p of rows) {
+    const createdAt = p.referrals?.created_at;
+    if (!createdAt) continue;
+    // event_date は date、created_at は timestamptz。 両方 UTC 00:00 基準の日数差にする
+    const eventMs = new Date(p.event_date + "T00:00:00Z").getTime();
+    const createdMs = new Date(createdAt).getTime();
+    const diff = (eventMs - createdMs) / 86_400_000;
+    if (diff < 0) continue; // 遡及入力のノイズ
+    days.push(diff);
+  }
+
+  const sampleCount = days.length;
+  if (sampleCount === 0) {
+    return { averageDays: null, medianDays: null, sampleCount: 0, benchmarkDays: 42, period };
+  }
+
+  const avg = days.reduce((s, v) => s + v, 0) / sampleCount;
+  const sorted = [...days].sort((a, b) => a - b);
+  const median =
+    sampleCount % 2 === 0
+      ? (sorted[sampleCount / 2 - 1] + sorted[sampleCount / 2]) / 2
+      : sorted[Math.floor(sampleCount / 2)];
+
+  return {
+    averageDays: Math.round(avg * 10) / 10,
+    medianDays: Math.round(median * 10) / 10,
+    sampleCount,
+    benchmarkDays: 42,
+    period,
+  };
+}
+
+// ============================================
+// 業界ベンチマーク:内定承諾率 (Offer Acceptance Rate)
+//
+// 内定を出した後に、実際に承諾された割合。
+// 世界標準では 82%(80% 未満は要注意サイン)。
+// エージェントの武器化:承諾率の低さ = 求人マッチング不備 or フォロー不足の
+// 早期警告になるため、経営が最も気にする指標のひとつ。
+//
+// 集計方式:referral_status_history から
+//   from_status='offer' AND to_status IN ('joined','declined')
+// の遷移件数を期間内で数える。 changed_at 基準。
+// ============================================
+
+export type OfferAcceptanceRate = {
+  acceptedCount: number;
+  declinedCount: number;
+  /** accepted + declined。 母数 */
+  totalDecisions: number;
+  /** % 表記(小数 1 桁)。 母数 0 なら null */
+  rate: number | null;
+  benchmarkPercent: number;
+  period: Period;
+};
+
+export async function getOfferAcceptanceRate(
+  organizationId: string,
+  period: Period,
+): Promise<OfferAcceptanceRate> {
+  const supabase = await createClient();
+
+  const startIso = `${period.from}T00:00:00+09:00`;
+  const endExclusiveIso = `${nextJstDay(period.to)}T00:00:00+09:00`;
+
+  const { data } = await supabase
+    .from("referral_status_history")
+    .select("to_status")
+    .eq("organization_id", organizationId)
+    .eq("from_status", "offer")
+    .in("to_status", ["joined", "declined"])
+    .gte("changed_at", startIso)
+    .lt("changed_at", endExclusiveIso);
+
+  type Row = { to_status: string };
+  const rows = (data ?? []) as Row[];
+
+  let accepted = 0;
+  let declined = 0;
+  for (const r of rows) {
+    if (r.to_status === "joined") accepted += 1;
+    else if (r.to_status === "declined") declined += 1;
+  }
+  const total = accepted + declined;
+  const rate = total === 0 ? null : Math.round((accepted / total) * 1000) / 10;
+
+  return {
+    acceptedCount: accepted,
+    declinedCount: declined,
+    totalDecisions: total,
+    rate,
+    benchmarkPercent: 82,
+    period,
+  };
+}
