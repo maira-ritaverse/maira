@@ -9,7 +9,7 @@
  *   Zoom Marketplace のレビュースレッドから別途送る。
  * ・URL や scope 情報は公開されて問題ない情報のみ。
  */
-import { CheckCircle2, ExternalLink, Info, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ExternalLink, Info, ShieldCheck } from "lucide-react";
 
 export const metadata = {
   title: "Zoom App Review Test Guide - Maira",
@@ -138,26 +138,70 @@ export default function ZoomReviewGuidePage() {
       </Section>
 
       <Section number={5} title="Create a Zoom meeting from Maira / Maira から Zoom 会議を作成">
-        <ol className="list-decimal space-y-1 pl-5 text-sm">
+        <div className="mb-3 rounded border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+          <div className="mb-1 flex items-center gap-1 font-semibold">
+            <AlertTriangle className="size-4" aria-hidden />
+            Important — the &ldquo;面談を予約&rdquo; button only appears on the client&nbsp;
+            <em>detail</em> page, not on the client list page
+          </div>
+          <p className="mb-2">
+            If you use browser Find (Ctrl/Cmd+F) on the list page (
+            <code className="rounded bg-white/70 px-1">/agency/clients</code>), you will get{" "}
+            <strong>0 matches</strong>. That is expected — you must open a specific client first by
+            clicking on the row of one of the seeded dummy clients (テスト太郎 / サンプル花子 /
+            デモ一郎).
+          </p>
+          <p className="mb-2">
+            The <strong>Calendar page</strong> (
+            <code className="rounded bg-white/70 px-1">/agency/calendar</code>) is not for creating
+            Zoom meetings — it only creates manual (offline) calendar entries. Zoom meetings can
+            only be created from a client detail page.
+          </p>
+        </div>
+
+        <ol className="list-decimal space-y-2 pl-5 text-sm">
           <li>
-            Go to <code className="rounded bg-slate-100 px-1">{base}/agency/clients</code> and open
-            any client&rsquo;s detail page.
+            Open the client list at{" "}
+            <code className="rounded bg-slate-100 px-1">{base}/agency/clients</code>.
           </li>
           <li>
-            Click <strong>&ldquo;面談を予約&rdquo; (Schedule Meeting)</strong>.
+            <strong>Click on the row</strong> of any of the pre-seeded clients:
+            <span className="ml-1 rounded bg-slate-100 px-1 font-medium">テスト 太郎</span>,{" "}
+            <span className="rounded bg-slate-100 px-1 font-medium">サンプル 花子</span>, or{" "}
+            <span className="rounded bg-slate-100 px-1 font-medium">デモ 一郎</span>. The whole row
+            is clickable and will navigate to the client&rsquo;s detail page (URL becomes{" "}
+            <code className="rounded bg-slate-100 px-1">/agency/clients/&lt;client-id&gt;</code>).
           </li>
           <li>
-            Choose <strong>&ldquo;Zoom&rdquo;</strong> as the location; enter a title, date/time.
+            On the detail page, look at the <strong>top-right</strong> area. You will see a button
+            labeled <strong>&ldquo;面談を予約&rdquo; (Schedule Meeting)</strong>. Click it.
           </li>
           <li>
-            Click <strong>Save</strong>.
+            A dialog opens. Choose <strong>&ldquo;Zoom&rdquo;</strong> as the location, enter a
+            title and date/time.
+          </li>
+          <li>
+            Click <strong>&ldquo;保存&rdquo; (Save)</strong>.
           </li>
           <li>
             Maira calls Zoom&rsquo;s{" "}
             <code className="rounded bg-slate-100 px-1">POST /users/me/meetings</code> using your
-            OAuth token and the meeting URL is saved and shared with the client.
+            OAuth token, and the meeting URL is saved to the client&rsquo;s meeting history (visible
+            on the same detail page under &ldquo;面談履歴 / Meeting history&rdquo;).
           </li>
         </ol>
+
+        <div className="mt-3 rounded border bg-slate-50 p-3 text-xs text-slate-700">
+          <div className="mb-1 font-semibold">
+            If &ldquo;面談を予約&rdquo; is disabled or missing
+          </div>
+          <p>
+            It means Zoom is not yet connected. Go back to{" "}
+            <code className="rounded bg-white px-1">/agency/settings/integrations</code> and finish
+            Step 3 first. When connected, the dialog will show &ldquo;Zoom&rdquo; as a selectable
+            option.
+          </p>
+        </div>
       </Section>
 
       <Section number={6} title="Disconnect / 連携解除">
