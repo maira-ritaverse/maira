@@ -30,7 +30,7 @@ jobs:
           # 互換性のあるメジャーバージョンを明示。ローカルは pnpm 11 系。
           version: 11
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           # 24 系は LTS ではないが、ローカル(v24.15)と揃える方が再現性が高い。
           # ローカル開発側を LTS に下げる予定があれば、ここと同時に変える。
@@ -50,7 +50,7 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: 11
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
@@ -65,7 +65,7 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: 11
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
