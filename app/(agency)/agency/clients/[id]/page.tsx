@@ -48,6 +48,7 @@ import { AgencyCvsSection } from "./agency-cvs-section";
 import { AgencyResumesSection } from "./agency-resumes-section";
 import { DisclosableProfileSection } from "./disclosable-profile-section";
 import { AgencyDocumentsSection } from "./documents-section";
+import { SourceDocumentsSection } from "./source-documents-section";
 import { HearingSheetsSection } from "./hearing-sheets-section";
 import { InteractionsSection } from "./interactions-section";
 import { IntakeUploadSection } from "./intake-upload-section";
@@ -485,13 +486,15 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
       {activeTab === "documents" && (
         <SectionLayoutContainer
           storageKey="agency-client-detail-documents"
-          defaultOrder={["agency-resumes", "agency-cvs", "documents"]}
+          defaultOrder={["source-documents", "agency-resumes", "agency-cvs", "documents"]}
           titles={{
+            "source-documents": "元書類(アップロード)",
             "agency-resumes": "履歴書(エージェント作成)",
             "agency-cvs": "職務経歴書(エージェント作成)",
             documents: "求職者本人提出の書類(連携時)",
           }}
           sections={{
+            "source-documents": <SourceDocumentsSection clientRecordId={client.id} />,
             "agency-resumes": (
               <AgencyResumesSection
                 organizationId={role.organization.id}
