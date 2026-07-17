@@ -32,82 +32,120 @@ const IMAGES_EDIT_URL = "https://api.openai.com/v1/images/edits";
 //   ・顔 / 髪 / 肌 の 保持 ルール は そのまま 維持 (むしろ 服装 変更 で 顔 崩れ が
 //     起き やすい ため、 preserve セクション を さらに 強調)
 const PRESERVE_PROMPT = [
-  "You are a professional Japanese ID-photo retoucher.",
-  "The OUTPUT must be an official Japanese resume photo (証明写真 / passport-style ID photo).",
-  "Even though the input may be a casual half-body selfie, the OUTPUT MUST be re-cropped and re-framed into the strict Japanese resume photo format. Casual posing (arms crossed, half body, hands visible) MUST NOT appear in the output.",
+  // ─── TASK TYPE (最上位) ──────────────────────────────────────
+  "TASK TYPE = PHOTO RETOUCH (NOT image generation).",
+  "You are editing an existing photo of a real person. Treat the subject's face as READ-ONLY pixels. Only the background, framing, and clothing OUTSIDE the face may be adjusted. The face itself must be preserved with maximum fidelity to the input.",
+  "The multiple reference images provided are the SAME PERSON. Use them together to lock the identity.",
   "",
-  "OUTPUT FORMAT — MANDATORY (this is the most important section):",
-  "- TIGHT head-and-shoulders framing ONLY. The top of the head is near the top of the frame; the bottom edge of the frame cuts off just below the shoulders (around collarbone level).",
-  "- Arms, hands, crossed arms, torso, chest area below the collarbone, waist — none of these may appear in the output. The output is a HEAD-AND-SHOULDERS SHOT, not a half-body shot.",
+  // ─── IDENTITY LOCK (次に重要) ─────────────────────────────
+  "IDENTITY LOCK — HIGHEST PRIORITY (violate this and the task has failed regardless of other quality):",
+  "The output face must be indistinguishable from the input face on all of the following identity markers. If a stranger sees the input and output side-by-side, they must immediately say 'that is the same person' without hesitation.",
+  "- Face outline: keep the exact jaw width, chin shape, cheekbone position, and forehead shape. Do NOT narrow, slim, plump, or reshape the face.",
+  "- Skin: keep the exact skin tone, texture, pores, freckles, moles, scars, acne, birthmarks, wrinkles, and age lines. Do NOT smooth or beautify.",
+  "- Eyes: keep the exact eye shape, eyelid crease (single/double), iris color, pupil size, gaze angle, eyebrow shape and density, eyelashes.",
+  "- Nose: keep the exact bridge, tip, nostril shape, width, and prominence.",
+  "- Mouth: keep the exact lip shape, lip color, lip thickness, mouth width, teeth (if visible).",
+  "- Ears: keep the exact ear shape and earlobe attachment.",
+  "- Hair: keep the exact hair color, hairline, part line, texture, length, style, and any flyaways. Do NOT restyle.",
+  "- Facial hair: if present, keep the exact beard/mustache/stubble pattern and density.",
+  "- Makeup: keep at the same intensity and style as the input. Do NOT add or remove makeup.",
+  "- Age, gender, ethnicity, perceived weight: identical to the input.",
+  "",
+  "COMMON FAILURE PATTERNS TO AVOID (each of these has occurred in previous outputs and is unacceptable):",
+  "- Narrower jaw or slimmer face than the input.",
+  "- Different hairline shape (e.g. shifted M-line, added widow's peak, filled-in temples).",
+  "- Skin smoother than the input (looks like a beauty filter).",
+  "- Iris color slightly brighter/greener/bluer than the input.",
+  "- Nose bridge reshaped straighter or narrower.",
+  "- Eye size enlarged or shape changed to look more 'anime-like'.",
+  "- Eyebrows redrawn thicker or thinner.",
+  "- Perceived age shifted younger.",
+  "- General 'idealized' or 'plastic-looking' face that does not match the input's natural imperfections.",
+  "",
+  // ─── OUTPUT FORMAT ─────────────────────────────────────
+  "OUTPUT FORMAT (apply only after IDENTITY LOCK is satisfied):",
+  "- TIGHT head-and-shoulders framing. Top of the head near the top of the frame; bottom edge cuts off just below the shoulders (around collarbone level).",
+  "- Arms, hands, crossed arms, torso below the collarbone, waist — none of these may appear.",
   "- Subject centered, facing directly forward (no tilt, no profile).",
-  "- Neutral closed-mouth expression. No teeth showing, no big smile.",
+  "- Neutral closed-mouth expression matching the input's mouth position. No teeth showing, no big smile.",
   "- Both eyes open, looking straight at the camera lens.",
   "- Background: plain solid light-gray (around #E8E8E8) or off-white. No patterns, no shadows, no objects, no walls visible.",
-  "- Lighting: soft, even, professional studio lighting. No harsh face shadows. Keep natural skin tone.",
+  "- Lighting: soft, even, professional studio lighting. No harsh face shadows. Keep natural skin tone from the input (do not brighten or warm the skin).",
   "- Aspect ratio: portrait, 3:4.",
   "",
-  "PRESERVE EXACTLY (the output face must be the SAME PERSON):",
-  "- Facial identity, bone structure, face shape, face proportions, perceived weight.",
-  "- Skin tone, skin texture, freckles, moles, scars, acne, birthmarks.",
-  "- Eye shape, eye color, eyelid shape, eyebrows, eyelashes.",
-  "- Nose shape, mouth shape, lip shape, lip color, teeth.",
-  "- Hair color, hair style, hairline, hair length, hair texture.",
-  "- Ears and earlobes.",
-  "- Facial hair (beard, mustache, stubble) if present.",
-  "- Makeup level and style if present.",
-  "- Age, gender, ethnicity.",
-  "- The COLOR and STYLE of the visible upper clothing (collar / lapel area only — do not invent new garments, do not change jacket color).",
-  "",
+  // ─── DO NOT ─────────────────────────────────────
   "DO NOT:",
   "- Do not show arms, hands, crossed arms, torso, chest area below the collarbone. Japanese resume photos NEVER show arms.",
   "- Do not redraw, regenerate, smooth, beautify, slim, plump, or sculpt the face. The output face MUST be visibly the same person.",
   "- Do not change the person's age, gender, ethnicity, perceived weight, or facial features.",
   "- Do not add glasses, accessories, jewelry, hats, ties, scarves, logos, text, or watermarks that are not in the original.",
   "- Do not remove glasses, earrings, or clothing that ARE in the original.",
-  "- Do not change the color of the clothing.",
+  "- Do not change the color or style of the visible clothing (collar/lapel area).",
   "",
+  // ─── FAILURE CONDITIONS ─────────────────────────────
   "FAILURE CONDITIONS (if any of these are true, the task has failed):",
   "- The output shows arms, hands, or torso below the shoulders.",
   "- The output face is visibly a different person from the input.",
+  "- Any of the COMMON FAILURE PATTERNS above are present.",
   "- The background is not a plain solid light-gray or off-white.",
   "- The framing is not a tight head-and-shoulders shot.",
 ].join("\n");
 
 // style="business": 元服装を 保持 する 制約 を 外し、 見た目 の 性別 に 応じた
-// ビジネス フォーマル に 差し替える プロンプト。 顔 保持 ルール は そのまま。
+// ビジネス フォーマル に 差し替える プロンプト。 顔 保持 ルール は preserve と
+// 同型 で 最上位 に 配置 (服装 差替 で 顔 崩れ が 起き やすい ため、 むしろ
+// 強調)。
 const BUSINESS_PROMPT = [
-  "You are a professional Japanese ID-photo retoucher.",
-  "The OUTPUT must be an official Japanese resume photo (証明写真 / passport-style ID photo) where the subject is wearing BUSINESS FORMAL ATTIRE, regardless of what the subject was wearing in the input.",
-  "Even though the input is a casual selfie (T-shirt, hoodie, casual jacket, blouse, etc.), the OUTPUT MUST show the subject in Japanese business formal attire suitable for a resume photo.",
+  // ─── TASK TYPE (最上位) ──────────────────────────────────────
+  "TASK TYPE = PHOTO RETOUCH WITH CLOTHING REPLACEMENT (NOT image generation).",
+  "You are editing an existing photo of a real person. Treat the subject's face as READ-ONLY pixels. Only the background, framing, and the clothing (jacket / shirt / tie / blouse) may be adjusted. The face itself must be preserved with maximum fidelity to the input.",
+  "The multiple reference images provided are the SAME PERSON. Use them together to lock the identity.",
   "",
-  "BUSINESS ATTIRE — CHOOSE BASED ON THE SUBJECT'S APPARENT GENDER:",
+  // ─── IDENTITY LOCK ──────────────────────────────────────
+  "IDENTITY LOCK — HIGHEST PRIORITY (violate this and the task has failed regardless of clothing quality):",
+  "The output face must be indistinguishable from the input face on all of the following identity markers. If a stranger sees the input and output side-by-side, they must immediately say 'that is the same person' without hesitation.",
+  "- Face outline: keep the exact jaw width, chin shape, cheekbone position, and forehead shape. Do NOT narrow, slim, plump, or reshape the face.",
+  "- Skin: keep the exact skin tone, texture, pores, freckles, moles, scars, acne, birthmarks, wrinkles, and age lines. Do NOT smooth or beautify.",
+  "- Eyes: keep the exact eye shape, eyelid crease (single/double), iris color, pupil size, gaze angle, eyebrow shape and density, eyelashes.",
+  "- Nose: keep the exact bridge, tip, nostril shape, width, and prominence.",
+  "- Mouth: keep the exact lip shape, lip color, lip thickness, mouth width, teeth (if visible).",
+  "- Ears: keep the exact ear shape and earlobe attachment.",
+  "- Hair: keep the exact hair color, hairline, part line, texture, length, style, and any flyaways. Do NOT restyle.",
+  "- Facial hair: if present, keep the exact beard/mustache/stubble pattern and density.",
+  "- Makeup: keep at the same intensity and style as the input. Do NOT add or remove makeup.",
+  "- Age, gender, ethnicity, perceived weight: identical to the input.",
+  "",
+  "COMMON FAILURE PATTERNS TO AVOID:",
+  "- Narrower jaw or slimmer face than the input (very common when replacing clothing).",
+  "- Different hairline shape (e.g. shifted M-line, added widow's peak, filled-in temples).",
+  "- Skin smoother than the input (looks like a beauty filter).",
+  "- Iris color slightly brighter/greener/bluer than the input.",
+  "- Nose bridge reshaped straighter or narrower.",
+  "- Eye size enlarged or shape changed to look more 'anime-like'.",
+  "- Eyebrows redrawn thicker or thinner.",
+  "- Perceived age shifted younger.",
+  "- General 'idealized' or 'plastic-looking' face that does not match the input's natural imperfections.",
+  "",
+  // ─── BUSINESS ATTIRE (この タスク の 差別化 ポイント) ──
+  "BUSINESS ATTIRE — CHOOSE BASED ON THE SUBJECT'S APPARENT GENDER (apply only to the clothing region, NEVER touch the face region):",
   "- Male-presenting subject: dark navy or charcoal-black business suit jacket (single-breasted, notched lapel), white dress shirt, conservative dark solid tie (navy, dark blue, dark red, or dark gray). Standard Japanese salaryman resume photo look.",
   "- Female-presenting subject: dark navy or charcoal-black tailored business jacket, plain white blouse or shell underneath (crew or v-neck, no ruffles). NO tie by default. Neat, conservative Japanese office attire.",
   "- Ambiguous / cannot tell: default to the male-presenting attire above.",
   "- Do NOT invent unusual accessories (pocket square, brooch, name badge, boutonniere, etc.).",
   "- The attire must look clean, well-pressed, and neutral in color (no bright reds, yellows, pastels).",
   "",
-  "OUTPUT FORMAT — MANDATORY:",
-  "- TIGHT head-and-shoulders framing ONLY. The top of the head is near the top of the frame; the bottom edge of the frame cuts off just below the shoulders (around collarbone level).",
+  // ─── OUTPUT FORMAT ─────────────────────────────────────
+  "OUTPUT FORMAT (apply only after IDENTITY LOCK is satisfied):",
+  "- TIGHT head-and-shoulders framing. Top of the head near the top of the frame; bottom edge cuts off just below the shoulders (around collarbone level).",
   "- Arms, hands, crossed arms, torso below the collarbone, waist — none of these may appear.",
   "- Subject centered, facing directly forward (no tilt, no profile).",
-  "- Neutral closed-mouth expression. No teeth showing, no big smile.",
+  "- Neutral closed-mouth expression matching the input's mouth position. No teeth showing, no big smile.",
   "- Both eyes open, looking straight at the camera lens.",
   "- Background: plain solid light-gray (around #E8E8E8) or off-white. No patterns, no shadows, no objects.",
-  "- Lighting: soft, even, professional studio lighting. No harsh face shadows. Keep natural skin tone.",
+  "- Lighting: soft, even, professional studio lighting. No harsh face shadows. Keep natural skin tone from the input (do not brighten or warm the skin).",
   "- Aspect ratio: portrait, 3:4.",
   "",
-  "PRESERVE EXACTLY (the output face must be the SAME PERSON — this is the most important rule):",
-  "- Facial identity, bone structure, face shape, face proportions, perceived weight.",
-  "- Skin tone, skin texture, freckles, moles, scars, acne, birthmarks.",
-  "- Eye shape, eye color, eyelid shape, eyebrows, eyelashes.",
-  "- Nose shape, mouth shape, lip shape, lip color, teeth.",
-  "- Hair color, hair style, hairline, hair length, hair texture.",
-  "- Ears and earlobes.",
-  "- Facial hair (beard, mustache, stubble) if present.",
-  "- Makeup level and style if present.",
-  "- Age, gender, ethnicity.",
-  "",
+  // ─── DO NOT ─────────────────────────────────────
   "DO NOT:",
   "- Do not redraw, regenerate, smooth, beautify, slim, plump, or sculpt the face. The output face MUST be visibly the same person.",
   "- Do not change the person's age, gender, ethnicity, perceived weight, or facial features.",
@@ -115,9 +153,11 @@ const BUSINESS_PROMPT = [
   "- Do not add hats, jewelry (beyond small stud earrings if already present), scarves, name badges, logos, text, or watermarks.",
   "- Do not use bright non-business colors (red, yellow, pink, pastel) for the jacket or tie.",
   "",
+  // ─── FAILURE CONDITIONS ─────────────────────────────
   "FAILURE CONDITIONS:",
   "- The output shows arms, hands, or torso below the shoulders.",
   "- The output face is visibly a different person from the input.",
+  "- Any of the COMMON FAILURE PATTERNS above are present.",
   "- The subject is not wearing business formal attire.",
   "- The attire is bright, casual, or has non-business patterns.",
 ].join("\n");
@@ -159,7 +199,26 @@ export async function aiEnhanceSelfie(input: {
   const promptToUse = promptFor(input.style ?? "preserve");
   const form = new FormData();
   form.append("model", "gpt-image-1");
-  form.append("image", input.imageBlob, input.filename);
+
+  // gpt-image-1 の /images/edits は image フィールド を 複数回 送る と
+  // 「同じ 被写体 の 複数 参照 画像」 として 扱う (公式 仕様、 最大 16 枚)。
+  // ユーザー は 通常 1 枚 しか 持って いない ため 同じ 画像 を 3 回 送って
+  // 「この 顔 で 確定」 という シグナル を 強める (identity anchoring)。
+  //
+  // OpenAI の 課金 は 出力 画像 単位 の ため、 入力 を 増やして も コスト は 増えない。
+  // 効果 は 個別 差 が ある が、 プロンプト の IDENTITY LOCK と 併せて 別人化 を
+  // 目立ちにくく する 効果 が 期待 できる。
+  //
+  // Blob は fetch で 消費 される と 再利用 できない ため、 arrayBuffer で 一度
+  // 読んでから 3 つ の File インスタンス に 複製 する。
+  const imageBytes = await input.imageBlob.arrayBuffer();
+  const imageMime = input.imageBlob.type || "image/png";
+  const REFERENCE_COUNT = 3;
+  for (let i = 0; i < REFERENCE_COUNT; i++) {
+    const copy = new File([imageBytes], input.filename, { type: imageMime });
+    form.append("image", copy);
+  }
+
   form.append("prompt", promptToUse);
   form.append("size", "1024x1536"); // 縦長 = 履歴書の 3:4
   // quality を high に 上げて モデル の 表現 余裕 を 増やし、
