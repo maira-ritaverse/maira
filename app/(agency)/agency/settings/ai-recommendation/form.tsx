@@ -1,14 +1,14 @@
 "use client";
 
 /**
- * AI 推薦 プリセット 設定 フォーム (admin 専用)。
+ * AI 推薦プリセット設定フォーム(admin 専用)。
  *
- * ・3 プリセット を ラジオ で 選択
- * ・「求職者本人 の 推薦 にも 反映」 トグル
- * ・保存 で /api/agency/ai-recommendation-settings に PUT、 router.refresh() で 反映
+ * ・3 プリセットをラジオで選択
+ * ・「求職者本人の推薦にも反映」トグル
+ * ・保存で /api/agency/ai-recommendation-settings に PUT、router.refresh() で反映
  *
- * UI で 各プリセット の 挙動 を 明文化 し、 特に fee_focused 選択時 は 「求職者 の 利益 を
- * 損なう リスク が ある」 と 警告 する。
+ * UI で各プリセットの挙動を明文化し、特に fee_focused 選択時は「求職者の利益を
+ * 損なうリスクがある」と警告する。
  */
 import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -32,11 +32,11 @@ const PRESET_LABELS: Record<Preset, string> = {
 
 const PRESET_DESCRIPTIONS: Record<Preset, string> = {
   fit_focused:
-    "求職者の 強み・診断・希望条件 との マッチ度 だけで 判定します。 成約報酬は 一切 考慮しません(既定)。",
+    "求職者の強み・診断・希望条件とのマッチ度だけで判定します。成約報酬は一切考慮しません(既定)。",
   balanced:
-    "フィットを 主軸に、 同程度の 候補が 並んだ ときの タイブレーカー として 成約報酬が 高い 求人を 上位に します。",
+    "フィットを主軸に、同程度の候補が並んだときのタイブレーカーとして成約報酬が高い求人を上位にします。",
   fee_focused:
-    "成約報酬が 高い 求人を 強く 上位に 出しつつ、 フィットの 最低ラインは 保ちます。 求職者の 満足度が 下がる リスクがあるので、 慎重に 選んで ください。",
+    "成約報酬が高い求人を強く上位に出しつつ、フィットの最低ラインは保ちます。求職者の満足度が下がるリスクがあるので、慎重に選んでください。",
 };
 
 export function AiRecommendationSettingsForm({ initialPreset, initialApplyToSeekerView }: Props) {
@@ -46,8 +46,8 @@ export function AiRecommendationSettingsForm({ initialPreset, initialApplyToSeek
   const [msg, setMsg] = useState<string | null>(null);
   const router = useRouter();
 
-  // 変更 が 入ったら 直前 の 「保存 しました」 表示 を 消す。
-  // 古い トースト が 残り 続けて、 未保存 の 変更 が 保存済 と 誤認 される の を 防ぐ。
+  // 変更が入ったら直前の「保存しました」表示を消す。
+  // 古いトーストが残り続けて、未保存の変更が保存済と誤認されるのを防ぐ。
   function setPreset(next: Preset) {
     setPresetState(next);
     setMsg(null);
@@ -85,9 +85,9 @@ export function AiRecommendationSettingsForm({ initialPreset, initialApplyToSeek
 
   return (
     <div className="space-y-4">
-      {/* プリセット 選択 */}
+      {/* プリセット選択 */}
       <Card className="space-y-3 p-5">
-        <h2 className="text-base font-semibold">推薦の 傾き</h2>
+        <h2 className="text-base font-semibold">推薦の傾き</h2>
         <div className="space-y-2">
           {(Object.keys(PRESET_LABELS) as Preset[]).map((key) => (
             <PresetRadio
@@ -105,21 +105,21 @@ export function AiRecommendationSettingsForm({ initialPreset, initialApplyToSeek
           <div className="flex items-start gap-2 rounded border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
             <p>
-              報酬重視は 短期的な 売上を 押し上げる 効果が ある 反面、 求職者の 満足度・定着率を
-              下げる 恐れが あります。 継続的に モニタリングし、 悪化する ようなら バランス以下に
-              戻して ください。
+              報酬重視は短期的な売上を押し上げる効果がある反面、求職者の満足度・定着率を
+              下げる恐れがあります。継続的にモニタリングし、悪化するようならバランス以下に
+              戻してください。
             </p>
           </div>
         )}
       </Card>
 
-      {/* 求職者本人 の 推薦 への 反映 */}
+      {/* 求職者本人の推薦への反映 */}
       <Card className="space-y-3 p-5">
-        <h2 className="text-base font-semibold">求職者本人の マイページ 推薦 にも 反映</h2>
+        <h2 className="text-base font-semibold">求職者本人のマイページ推薦にも反映</h2>
         <p className="text-muted-foreground text-xs">
-          既定は オフ (エージェント 見立て のみ)。 オンに すると、 求職者本人が 自分の マイページで
-          見る 推薦順にも この 設定が 適用され ます。 求職者に 成約報酬額 自体は 一切 見えません
-          (数値 は 常に 非公開)。
+          既定はオフ(エージェント見立てのみ)。オンにすると、求職者本人が自分のマイページで
+          見る推薦順にもこの設定が適用されます。求職者に成約報酬額自体は一切見えません
+          (数値は常に非公開)。
         </p>
         <div className="flex items-center gap-2">
           <input
@@ -130,7 +130,7 @@ export function AiRecommendationSettingsForm({ initialPreset, initialApplyToSeek
             className="size-4 cursor-pointer"
           />
           <label htmlFor="apply-toggle" className="cursor-pointer text-sm">
-            求職者本人向け 推薦にも 反映する
+            求職者本人向け推薦にも反映する
           </label>
         </div>
 
@@ -138,8 +138,8 @@ export function AiRecommendationSettingsForm({ initialPreset, initialApplyToSeek
           <div className="flex items-start gap-2 rounded border border-blue-300 bg-blue-50 p-3 text-xs text-blue-900">
             <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
             <p>
-              求職者が 単一の 組織とだけ 連携している 場合に 適用されます。 複数の 連携先が ある
-              求職者には、 意図しない 組織へ 影響が 及ばないよう、 自動で フィット重視の 推薦に
+              求職者が単一の組織とだけ連携している場合に適用されます。複数の連携先がある
+              求職者には、意図しない組織へ影響が及ばないよう、自動でフィット重視の推薦に
               切り替わります。
             </p>
           </div>

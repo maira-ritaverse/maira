@@ -9,14 +9,14 @@ import { AiRecommendationSettingsForm } from "./form";
 /**
  * /agency/settings/ai-recommendation
  *
- * admin のみ:AI 求人推薦 の プリセット と、 求職者本人 向け 推薦 に 反映 するか の トグル を 設定。
- * ・fit_focused (既定): 求職者 の フィット だけ で 判定
- * ・balanced:          fit を 軸 に 成約報酬 を 副次的 な タイブレーカー に する
- * ・fee_focused:       成約報酬 を 強く 重視 (fit の 最低 ライン は 保つ)
+ * admin のみ: AI 求人推薦のプリセットと、求職者本人向け推薦に反映するかのトグルを設定。
+ * ・fit_focused(既定): 求職者のフィットだけで判定
+ * ・balanced: fit を軸に成約報酬を副次的なタイブレーカーにする
+ * ・fee_focused: 成約報酬を強く重視(fit の最低ラインは保つ)
  *
- * 求職者 側 への 反映 (apply_to_seeker_view) を 有効 に する と、
- * 求職者本人 の マイページ 推薦 でも 同じ preset で 並ぶ (単一 連携 組織 のときのみ)。
- * 求職者 に 成約報酬 の 金額 は 一切 見えない (UI にも API にも 露出 しない)。
+ * 求職者側への反映(apply_to_seeker_view)を有効にすると、
+ * 求職者本人のマイページ推薦でも同じ preset で並ぶ(単一連携組織のときのみ)。
+ * 求職者に成約報酬の金額は一切見えない(UI にも API にも露出しない)。
  */
 export default async function AgencyAiRecommendationSettingsPage() {
   const supabase = await createClient();
@@ -52,8 +52,8 @@ export default async function AgencyAiRecommendationSettingsPage() {
       <div>
         <h1 className="mt-1 text-2xl font-bold">AI 求人推薦の設定</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          AI が 求職者に 求人を おすすめする 際の 傾きを 3 択で 選べます。 成約報酬を 考慮に
-          入れるか どうか は 組織で 統一 された ルールに なります。
+          AI が求職者に求人をおすすめする際の傾きを 3 択で選べます。成約報酬を考慮に
+          入れるかどうかは組織で統一されたルールになります。
         </p>
       </div>
 
