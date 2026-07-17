@@ -34,6 +34,7 @@ import { CustomizePanel, type SectionMeta } from "./customize-panel";
 import { EntrySourceSection } from "./entry-source-section";
 import { ExportMenu } from "./export-menu";
 import { KpiHeadline } from "./kpi-headline";
+import { MemberSelector, type ReportMemberOption } from "./member-selector";
 import { MonthlyDealsSection } from "./monthly-deals-section";
 import { PeriodFilter } from "./period-filter";
 import { PhaseDurationSection } from "./phase-duration-section";
@@ -54,7 +55,13 @@ import { TrendSection } from "./trend-section";
  * ・SectionNav / CustomizePanel も同じカタログを共有する
  * ・PrintButton で印刷 / PDF 出力(サイドバーは非表示化)
  */
-type SearchParams = Promise<{ period?: string; from?: string; to?: string }>;
+type SearchParams = Promise<{
+  period?: string;
+  from?: string;
+  to?: string;
+  /** admin 専用 の 「対象 メンバー」 フィルタ (uuid)。 未指定 = 組織全体 */
+  member?: string;
+}>;
 
 /**
  * セクションカタログ(表示順のデフォルト = この配列の並び)。
@@ -105,7 +112,23 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
     isAdmin,
   };
 
-  // データ + カスタマイズ設定を並列で取得
+  // ── メンバー フィルタ の 解決 (admin のみ)
+  //   ・selector の 選択肢 と 「?member= が 自組織 メンバー か」 の 検証 を 兼ねる
+  //   ・非 admin (advisor) は 既に viewer 経由 で 自分 の データ しか 見え ない ため、
+  //     この セレクター は 出さ ない & 受け取った ?member パラメータ も 無視 する
+  const memberOptions: ReportMemberOption[] = isAdmin
+    ? await fetchMemberOptions(supabase, role.organization.id)
+    : [];
+  const memberIdSet = new Set(memberOptions.map((m) => m.memberId));
+  const selectedMemberId =
+    isAdmin && params.member && memberIdSet.has(params.member) ? params.member : null;
+  const selectedMemberName = selectedMemberId
+    ? (memberOptions.find((m) => m.memberId === selectedMemberId)?.displayName ?? null)
+    : null;
+
+  // データ + カスタマイズ設定を並列で取得。 selectedMemberId が null の 場合 は
+  // 従来 通り 組織 全体 集計 (undefined 相当 の 挙動)。
+  const memberFilter = selectedMemberId ?? undefined;
   const [
     kpiCurrent,
     kpiPrevious,
@@ -124,27 +147,29 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
     offerAcceptance,
     preferences,
   ] = await Promise.all([
-    getKpiSummary(role.organization.id, period),
-    getKpiSummary(role.organization.id, previousPeriod),
-    getMonthlyTrend(role.organization.id),
-    getClientStatusDistribution(role.organization.id),
-    getReferralStatusDistribution(role.organization.id),
-    getMonthlyDealsRevenue(role.organization.id, period),
-    getPlacementRate(role.organization.id, period),
-    getSelectionFunnel(role.organization.id, period),
-    getSelectionFunnelByCandidate(role.organization.id, period),
-    getAdvisorPerformance(role.organization.id, viewer, period),
-    getPhaseDuration(role.organization.id, period),
-    getCompanyReport(role.organization.id, period),
-    getEntrySourceReport(role.organization.id, period),
-    getTimeToFill(role.organization.id, period),
-    getOfferAcceptanceRate(role.organization.id, period),
+    getKpiSummary(role.organization.id, period, memberFilter),
+    getKpiSummary(role.organization.id, previousPeriod, memberFilter),
+    getMonthlyTrend(role.organization.id, undefined, memberFilter),
+    getClientStatusDistribution(role.organization.id, memberFilter),
+    getReferralStatusDistribution(role.organization.id, memberFilter),
+    getMonthlyDealsRevenue(role.organization.id, period, memberFilter),
+    getPlacementRate(role.organization.id, period, memberFilter),
+    getSelectionFunnel(role.organization.id, period, memberFilter),
+    getSelectionFunnelByCandidate(role.organization.id, period, memberFilter),
+    getAdvisorPerformance(role.organization.id, viewer, period, memberFilter),
+    getPhaseDuration(role.organization.id, period, memberFilter),
+    getCompanyReport(role.organization.id, period, memberFilter),
+    getEntrySourceReport(role.organization.id, period, memberFilter),
+    getTimeToFill(role.organization.id, period, memberFilter),
+    getOfferAcceptanceRate(role.organization.id, period, memberFilter),
     fetchPreferences(role.organization.id, user.id),
   ]);
 
+  // 目標達成率 は 組織 全体 目標 なので、 メンバー 指定時 は null (非表示)。
+  // ROI は コスト が 組織 全体 で 分解 不能 なので 同 じく null (非表示)。
   const [achievement, roi] = await Promise.all([
-    getAchievementForPeriod(role.organization.id, period, kpiCurrent),
-    isAdmin ? getRoiSummary(role.organization.id, period) : Promise.resolve(null),
+    getAchievementForPeriod(role.organization.id, period, kpiCurrent, memberFilter),
+    isAdmin ? getRoiSummary(role.organization.id, period, memberFilter) : Promise.resolve(null),
   ]);
 
   // Cost per Hire は admin かつコスト入力があるときのみ
@@ -162,6 +187,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
   const showExport = canExport(role);
 
   // ID → 描画中身の Map。 セクションが増えたら ここに 1 行追加するだけで OK。
+  // null を 返す と セクション 自体 を 出さ ない (下記 visibleSections フィルタ)。
   const renderers: Record<string, ReactNode> = {
     kpi: (
       <div className="space-y-2">
@@ -178,8 +204,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
         costPerHire={costPerHireData}
       />
     ),
-    achievement: <AchievementSection rows={achievement} isAdmin={isAdmin} />,
-    roi: isAdmin && roi ? <RoiSection data={roi} isAdmin={isAdmin} /> : null,
+    // メンバー 指定時 は 目標 達成率 (組織 全体 の 目標) は 表示 しない
+    achievement: selectedMemberId ? null : (
+      <AchievementSection rows={achievement} isAdmin={isAdmin} />
+    ),
+    // メンバー 指定時 は ROI (組織 全体 の コスト) は 表示 しない
+    roi: isAdmin && roi && !selectedMemberId ? <RoiSection data={roi} isAdmin={isAdmin} /> : null,
     trend: <TrendSection data={trend} />,
     "monthly-deals": <MonthlyDealsSection data={monthlyDeals} />,
     "placement-rate": <PlacementRateSection data={placementRate} />,
@@ -211,6 +241,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
             <h1 className="text-2xl font-bold">レポート</h1>
             <p className="text-muted-foreground mt-1 text-sm">
               {role.organization.name} の活動状況をまとめます
+              {selectedMemberName && (
+                <>
+                  {" ・ "}
+                  <span className="text-foreground font-medium">対象: {selectedMemberName}</span>
+                </>
+              )}
             </p>
           </div>
           <div className="no-print flex flex-wrap items-center justify-end gap-2">
@@ -233,8 +269,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
           </div>
         </div>
 
-        <div className="no-print">
+        <div className="no-print flex flex-wrap items-center gap-4">
           <PeriodFilter period={period} />
+          {isAdmin && memberOptions.length > 0 && (
+            <MemberSelector members={memberOptions} currentMemberId={selectedMemberId} />
+          )}
         </div>
 
         {visibleSections.map((section) => {
@@ -285,6 +324,36 @@ async function fetchPreferences(
 function asStringArray(v: unknown): string[] {
   if (!Array.isArray(v)) return [];
   return v.filter((x): x is string => typeof x === "string");
+}
+
+/**
+ * MemberSelector 用 の 組織 メンバー 一覧 を 取得。
+ *
+ * SECURITY DEFINER RPC (list_organization_member_display_names) 経由 で、
+ * profiles の RLS を 緩めず に (member_id, display_name) だけ を 公開 する。
+ * 呼出 側 は admin 判定 済み だが、 RPC 自体 も 呼出 user が 対象 organization
+ * の member か どうか を チェック する ので 多層 防御。
+ *
+ * display_name が null の メンバー (プロフィール 未設定) は 「(名前未設定)」 と
+ * selector 側 で 表示 する ので ここ で は 落とさ ない。
+ */
+type SupabaseServer = Awaited<ReturnType<typeof createClient>>;
+
+async function fetchMemberOptions(
+  supabase: SupabaseServer,
+  organizationId: string,
+): Promise<ReportMemberOption[]> {
+  const { data, error } = await supabase.rpc("list_organization_member_display_names", {
+    target_organization_id: organizationId,
+  });
+  if (error || !data) return [];
+  const rows = data as Array<{ member_id: string; display_name: string | null }>;
+  return rows
+    .map((r) => ({
+      memberId: r.member_id,
+      displayName: r.display_name ?? "",
+    }))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName, "ja"));
 }
 
 /**

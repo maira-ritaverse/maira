@@ -124,6 +124,70 @@ export function computePreviousPeriod(current: Period): Period {
 }
 
 // ============================================
+// メンバースコープ (エージェント別絞込) の共通ヘルパ
+// ============================================
+
+/**
+ * memberId が指定されているとき、対象メンバーが担当する
+ * client_records.id の集合を取得。 undefined / null なら null を返す。
+ *
+ * 呼出側は memberId を渡すか否かで組織全体 / メンバー別を切替える。
+ * 未割当 (assigned_member_id = null) の client_records はメンバー個人には
+ * 含めない (呼び出し側の選択肢に「未割当」は今回追加しない方針)。
+ *
+ * 戻り値:
+ *   ・null   → memberId 未指定。 呼出側はフィルタなしで組織全体を集計
+ *   ・[]     → メンバー担当の client_records が 0 件。 呼出側は「全て 0」で
+ *              返るように .in("client_record_id", []) 等で早期 empty にする
+ *   ・[...]  → 対象 id 配列
+ *
+ * この helper は RLS を効かせる為に user-context の createClient を使う。
+ * organization_id で二重チェックすることで他組織のメンバー ID を渡された
+ * 場合にも早期 [] を返せる (RLS が緩んだ場合の多層防御)。
+ */
+export async function getMemberScopedClientIds(
+  organizationId: string,
+  memberId: string | null | undefined,
+): Promise<string[] | null> {
+  if (!memberId) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("client_records")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("assigned_member_id", memberId);
+  if (error || !data) return [];
+  return (data as Array<{ id: string }>).map((r) => r.id);
+}
+
+/**
+ * scoped client_ids を referral_id 集合に変換する内部ヘルパ。
+ *
+ * placements / interviews / referral_status_history のように
+ * client_record_id 列を持たず referral_id で紐付くテーブルを
+ * メンバースコープで絞る際、事前に referral_id 集合が必要になる。
+ * getAdvisorPerformanceForSelf と同じ二段フィルタ手法。
+ *
+ * scopedClientIds が null なら null (フィルタなし)、[] なら [] (即空)、
+ * それ以外は該当する referrals.id を org スコープで取得して返す。
+ */
+async function getMemberScopedReferralIds(
+  organizationId: string,
+  scopedClientIds: string[] | null,
+): Promise<string[] | null> {
+  if (scopedClientIds === null) return null;
+  if (scopedClientIds.length === 0) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("referrals")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .in("client_record_id", scopedClientIds);
+  if (error || !data) return [];
+  return (data as Array<{ id: string }>).map((r) => r.id);
+}
+
+// ============================================
 // KPI サマリ(ヘッドライン用)
 // ============================================
 
@@ -149,44 +213,83 @@ export type KpiSummary = {
  *
  * getMonthlyDealsRevenue と冪等・整合するよう、金額集計は
  * aggregatePlacements を再利用する。
+ *
+ * memberId が指定されている場合は、担当 client_records に紐づく
+ * referrals / placements / interviews のみを集計する。
+ * placements / interviews は client_record_id を持たないため、
+ * 先に referral_id 集合へ変換してから .in() で絞る。
  */
-export async function getKpiSummary(organizationId: string, period: Period): Promise<KpiSummary> {
+export async function getKpiSummary(
+  organizationId: string,
+  period: Period,
+  memberId?: string | null,
+): Promise<KpiSummary> {
   const supabase = await createClient();
 
-  // 1. placements(成約 + 売上)
-  const { data: placementsRaw } = await supabase
-    .from("placements")
-    .select("id, organization_id, referral_id, event_type, amount, event_date")
-    .eq("organization_id", organizationId)
-    .gte("event_date", period.from)
-    .lte("event_date", period.to);
+  // メンバースコープを先に解決。 担当 client_records が 0 件なら以降のクエリは
+  // すべて 0 件確定なので早期リターン (無駄なクエリと PostgREST の空 IN 罠を回避)。
+  const scopedClientIds = await getMemberScopedClientIds(organizationId, memberId);
+  if (scopedClientIds !== null && scopedClientIds.length === 0) {
+    return { period, placementCount: 0, netRevenue: 0, applicationCount: 0, interviewCount: 0 };
+  }
+  const scopedReferralIds = await getMemberScopedReferralIds(organizationId, scopedClientIds);
 
-  const placements = (placementsRaw ?? []) as Array<PlacementRowMinimal>;
+  // 1. placements(成約 + 売上)
+  //    scopedReferralIds が [] のときは referral 経由の紐付けが無いので 0 件確定
+  let placementsRaw: PlacementRowMinimal[] = [];
+  if (scopedReferralIds === null || scopedReferralIds.length > 0) {
+    let placementsQuery = supabase
+      .from("placements")
+      .select("id, organization_id, referral_id, event_type, amount, event_date")
+      .eq("organization_id", organizationId)
+      .gte("event_date", period.from)
+      .lte("event_date", period.to);
+    if (scopedReferralIds !== null) {
+      placementsQuery = placementsQuery.in("referral_id", scopedReferralIds);
+    }
+    const { data } = await placementsQuery;
+    placementsRaw = (data ?? []) as PlacementRowMinimal[];
+  }
+
+  const placements = placementsRaw;
   const totals = aggregatePlacements(placements.map(toPlacementForAggregate));
   const placementCount = placements.filter((p) => p.event_type === "placement").length;
 
   // 2. referrals(応募):期間内の作成件数
-  const { count: applicationCount } = await supabase
+  let referralsCountQuery = supabase
     .from("referrals")
     .select("id", { count: "exact", head: true })
     .eq("organization_id", organizationId)
     .gte("created_at", `${period.from}T00:00:00Z`)
     .lte("created_at", `${period.to}T23:59:59Z`);
+  if (scopedClientIds !== null) {
+    referralsCountQuery = referralsCountQuery.in("client_record_id", scopedClientIds);
+  }
+  const { count: applicationCount } = await referralsCountQuery;
 
   // 3. interviews(面談):期間内の scheduled_at
-  const { count: interviewCount } = await supabase
-    .from("interviews")
-    .select("id", { count: "exact", head: true })
-    .eq("organization_id", organizationId)
-    .gte("scheduled_at", `${period.from}T00:00:00Z`)
-    .lte("scheduled_at", `${period.to}T23:59:59Z`);
+  //    scopedReferralIds が [] なら 0 件確定でクエリ自体を省略
+  let interviewCount = 0;
+  if (scopedReferralIds === null || scopedReferralIds.length > 0) {
+    let interviewsCountQuery = supabase
+      .from("interviews")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+      .gte("scheduled_at", `${period.from}T00:00:00Z`)
+      .lte("scheduled_at", `${period.to}T23:59:59Z`);
+    if (scopedReferralIds !== null) {
+      interviewsCountQuery = interviewsCountQuery.in("referral_id", scopedReferralIds);
+    }
+    const { count } = await interviewsCountQuery;
+    interviewCount = count ?? 0;
+  }
 
   return {
     period,
     placementCount,
     netRevenue: totals.netRevenue,
     applicationCount: applicationCount ?? 0,
-    interviewCount: interviewCount ?? 0,
+    interviewCount,
   };
 }
 
@@ -212,6 +315,7 @@ export type MonthlyTrendBucket = {
 export async function getMonthlyTrend(
   organizationId: string,
   now: Date = new Date(),
+  memberId?: string | null,
 ): Promise<MonthlyTrendBucket[]> {
   const supabase = await createClient();
 
@@ -235,26 +339,64 @@ export async function getMonthlyTrend(
   const rangeToDay = new Date(Date.UTC(lastY, lastM, 0)).getUTCDate();
   const rangeTo = `${lastMonth}-${String(rangeToDay).padStart(2, "0")}`;
 
+  // メンバースコープ:担当 client_records が 0 件なら全月 0 で返す。
+  const scopedClientIds = await getMemberScopedClientIds(organizationId, memberId);
+  if (scopedClientIds !== null && scopedClientIds.length === 0) {
+    return months.map((mo) => ({
+      month: mo,
+      label: `${parseInt(mo.split("-")[1], 10)}月`,
+      placementCount: 0,
+      netRevenue: 0,
+      applicationCount: 0,
+      interviewCount: 0,
+    }));
+  }
+  const scopedReferralIds = await getMemberScopedReferralIds(organizationId, scopedClientIds);
+  const scopedReferralEmpty = scopedReferralIds !== null && scopedReferralIds.length === 0;
+
   // 並列取得(placements / referrals / interviews)
+  // scopedReferralIds が [] のときは placements / interviews は 0 件確定なのでクエリを省略。
+  const placementsBase = supabase
+    .from("placements")
+    .select("event_type, amount, event_date")
+    .eq("organization_id", organizationId)
+    .gte("event_date", rangeFrom)
+    .lte("event_date", rangeTo);
+  const placementsQuery =
+    scopedReferralIds === null
+      ? placementsBase
+      : scopedReferralEmpty
+        ? null
+        : placementsBase.in("referral_id", scopedReferralIds);
+
+  const referralsBase = supabase
+    .from("referrals")
+    .select("created_at")
+    .eq("organization_id", organizationId)
+    .gte("created_at", `${rangeFrom}T00:00:00Z`)
+    .lte("created_at", `${rangeTo}T23:59:59Z`);
+  const referralsQuery =
+    scopedClientIds === null
+      ? referralsBase
+      : referralsBase.in("client_record_id", scopedClientIds);
+
+  const interviewsBase = supabase
+    .from("interviews")
+    .select("scheduled_at")
+    .eq("organization_id", organizationId)
+    .gte("scheduled_at", `${rangeFrom}T00:00:00Z`)
+    .lte("scheduled_at", `${rangeTo}T23:59:59Z`);
+  const interviewsQuery =
+    scopedReferralIds === null
+      ? interviewsBase
+      : scopedReferralEmpty
+        ? null
+        : interviewsBase.in("referral_id", scopedReferralIds);
+
   const [placementsRes, referralsRes, interviewsRes] = await Promise.all([
-    supabase
-      .from("placements")
-      .select("event_type, amount, event_date")
-      .eq("organization_id", organizationId)
-      .gte("event_date", rangeFrom)
-      .lte("event_date", rangeTo),
-    supabase
-      .from("referrals")
-      .select("created_at")
-      .eq("organization_id", organizationId)
-      .gte("created_at", `${rangeFrom}T00:00:00Z`)
-      .lte("created_at", `${rangeTo}T23:59:59Z`),
-    supabase
-      .from("interviews")
-      .select("scheduled_at")
-      .eq("organization_id", organizationId)
-      .gte("scheduled_at", `${rangeFrom}T00:00:00Z`)
-      .lte("scheduled_at", `${rangeTo}T23:59:59Z`),
+    placementsQuery ?? Promise.resolve({ data: [] as unknown[] }),
+    referralsQuery,
+    interviewsQuery ?? Promise.resolve({ data: [] as unknown[] }),
   ]);
 
   type PRow = { event_type: string; amount: number | null; event_date: string };
@@ -324,23 +466,42 @@ export type CompanyReportRow = {
 export async function getCompanyReport(
   organizationId: string,
   period: Period,
+  memberId?: string | null,
 ): Promise<CompanyReportRow[]> {
   const supabase = await createClient();
 
+  // メンバースコープ:担当 client_records が 0 件なら空配列で返す
+  const scopedClientIds = await getMemberScopedClientIds(organizationId, memberId);
+  if (scopedClientIds !== null && scopedClientIds.length === 0) return [];
+  const scopedReferralIds = await getMemberScopedReferralIds(organizationId, scopedClientIds);
+  const scopedReferralEmpty = scopedReferralIds !== null && scopedReferralIds.length === 0;
+
   // 期間内の referrals + placements を取得
-  const { data: refs } = await supabase
+  let refsQuery = supabase
     .from("referrals")
     .select("id, job_posting_id, created_at, job_postings(company_name)")
     .eq("organization_id", organizationId)
     .gte("created_at", `${period.from}T00:00:00Z`)
     .lte("created_at", `${period.to}T23:59:59Z`);
+  if (scopedClientIds !== null) refsQuery = refsQuery.in("client_record_id", scopedClientIds);
+  const { data: refs } = await refsQuery;
 
-  const { data: placements } = await supabase
-    .from("placements")
-    .select("event_type, amount, referral_id, referrals(job_postings(company_name))")
-    .eq("organization_id", organizationId)
-    .gte("event_date", period.from)
-    .lte("event_date", period.to);
+  // placements は referral_id 経由でしかメンバーに紐づけられないため、
+  // scopedReferralIds が [] なら 0 件確定 → クエリを省略。
+  let placements: unknown[] | null = [];
+  if (!scopedReferralEmpty) {
+    let placementsQuery = supabase
+      .from("placements")
+      .select("event_type, amount, referral_id, referrals(job_postings(company_name))")
+      .eq("organization_id", organizationId)
+      .gte("event_date", period.from)
+      .lte("event_date", period.to);
+    if (scopedReferralIds !== null) {
+      placementsQuery = placementsQuery.in("referral_id", scopedReferralIds);
+    }
+    const { data } = await placementsQuery;
+    placements = data;
+  }
 
   type RefRow = { id: string; job_postings?: { company_name?: string } | null };
   type PRow = {
@@ -408,32 +569,53 @@ export type EntrySourceReportRow = {
 export async function getEntrySourceReport(
   organizationId: string,
   period: Period,
+  memberId?: string | null,
 ): Promise<EntrySourceReportRow[]> {
   const supabase = await createClient();
 
+  // メンバースコープ:担当 client_records が 0 件なら空配列
+  const scopedClientIds = await getMemberScopedClientIds(organizationId, memberId);
+  if (scopedClientIds !== null && scopedClientIds.length === 0) return [];
+  const scopedReferralIds = await getMemberScopedReferralIds(organizationId, scopedClientIds);
+  const scopedReferralEmpty = scopedReferralIds !== null && scopedReferralIds.length === 0;
+
   // 期間内に作成された client_records の entry_source 分布
-  const { data: clients } = await supabase
+  let clientsQuery = supabase
     .from("client_records")
     .select("id, entry_source_code, created_at")
     .eq("organization_id", organizationId)
     .gte("created_at", `${period.from}T00:00:00Z`)
     .lte("created_at", `${period.to}T23:59:59Z`);
+  // client_records 本体はメンバーで直接絞れる
+  if (memberId) clientsQuery = clientsQuery.eq("assigned_member_id", memberId);
+  const { data: clients } = await clientsQuery;
 
-  const { data: refs } = await supabase
+  let refsQuery = supabase
     .from("referrals")
     .select("id, client_record_id, client_records(entry_source_code)")
     .eq("organization_id", organizationId)
     .gte("created_at", `${period.from}T00:00:00Z`)
     .lte("created_at", `${period.to}T23:59:59Z`);
+  if (scopedClientIds !== null) refsQuery = refsQuery.in("client_record_id", scopedClientIds);
+  const { data: refs } = await refsQuery;
 
-  const { data: placements } = await supabase
-    .from("placements")
-    .select(
-      "event_type, amount, referral_id, referrals(client_record_id, client_records(entry_source_code))",
-    )
-    .eq("organization_id", organizationId)
-    .gte("event_date", period.from)
-    .lte("event_date", period.to);
+  // placements は scopedReferralIds が [] のときはクエリ省略
+  let placements: unknown[] | null = [];
+  if (!scopedReferralEmpty) {
+    let placementsQuery = supabase
+      .from("placements")
+      .select(
+        "event_type, amount, referral_id, referrals(client_record_id, client_records(entry_source_code))",
+      )
+      .eq("organization_id", organizationId)
+      .gte("event_date", period.from)
+      .lte("event_date", period.to);
+    if (scopedReferralIds !== null) {
+      placementsQuery = placementsQuery.in("referral_id", scopedReferralIds);
+    }
+    const { data } = await placementsQuery;
+    placements = data;
+  }
 
   type CRow = { entry_source_code: string | null };
   type RRow = { client_records?: { entry_source_code?: string | null } | null };
@@ -519,7 +701,13 @@ export async function getAchievementForPeriod(
   organizationId: string,
   period: Period,
   actual: KpiSummary,
+  memberId?: string | null,
 ): Promise<AchievementRow[] | null> {
+  // report_targets は組織全体でしか設定されない (メンバー別目標は現状未対応)。
+  // memberId 指定時は「メンバー別 actual vs 組織全体 target」の比較になり
+  // 意味を成さないため、明示的に null を返し UI 側でセクションを非表示にする。
+  if (memberId) return null;
+
   const supabase = await createClient();
 
   // period 内の月を列挙
@@ -622,8 +810,20 @@ export type RoiSummary = {
  *
  * ROI = (純売上 - コスト合計) / コスト合計 × 100
  * period の月に対応する report_costs 行があれば集計、無ければ 0。
+ *
+ * memberId 指定時は null を返す。
+ * コスト (report_costs.marketing_cost / tool_cost / personnel_cost / other_cost) は
+ * 組織全体でしか記録されておらず、メンバー単位に按分する手段が無い。
+ * 「メンバー別 売上 vs 組織全体 コスト」を計算しても意味を成さないため、
+ * ここでは明示的に null を返し UI 側で ROI セクションを非表示にする。
  */
-export async function getRoiSummary(organizationId: string, period: Period): Promise<RoiSummary> {
+export async function getRoiSummary(
+  organizationId: string,
+  period: Period,
+  memberId?: string | null,
+): Promise<RoiSummary | null> {
+  if (memberId) return null;
+
   const supabase = await createClient();
   const months = enumerateMonthsFromPeriod(period);
 
@@ -746,13 +946,18 @@ export type StatusDistribution<T extends string> = {
  */
 export async function getClientStatusDistribution(
   organizationId: string,
+  memberId?: string | null,
 ): Promise<StatusDistribution<ClientStatus>> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  // client_records 本体はメンバー列を直接持つので eq で絞る。
+  // 空 IN 罠にかからず、helper を経由する必要も無い (対象 0 件でも counts が空になるだけ)。
+  let query = supabase
     .from("client_records")
     .select("status")
     .eq("organization_id", organizationId);
+  if (memberId) query = query.eq("assigned_member_id", memberId);
+  const { data, error } = await query;
 
   // 取得失敗時は空分布を返す(画面側で 0 件として描画される)
   const rows = error || !data ? [] : (data as Array<{ status: string }>);
@@ -785,13 +990,27 @@ export async function getClientStatusDistribution(
  */
 export async function getReferralStatusDistribution(
   organizationId: string,
+  memberId?: string | null,
 ): Promise<StatusDistribution<ReferralStatus>> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("referrals")
-    .select("status")
-    .eq("organization_id", organizationId);
+  // referrals は client_record_id 経由でメンバーに紐づく。
+  // 担当 client_records が 0 件なら以降のクエリは無意味なので早期に空で返す。
+  const scopedClientIds = await getMemberScopedClientIds(organizationId, memberId);
+  if (scopedClientIds !== null && scopedClientIds.length === 0) {
+    const sortedConfig = [...referralStatusConfig].sort((a, b) => a.order - b.order);
+    const buckets: StatusBucket<ReferralStatus>[] = sortedConfig.map((cfg) => ({
+      status: cfg.value,
+      label: cfg.label,
+      count: 0,
+      color: referralStatusColors[cfg.value],
+    }));
+    return { buckets, total: 0 };
+  }
+
+  let query = supabase.from("referrals").select("status").eq("organization_id", organizationId);
+  if (scopedClientIds !== null) query = query.in("client_record_id", scopedClientIds);
+  const { data, error } = await query;
 
   const rows = error || !data ? [] : (data as Array<{ status: string }>);
 
@@ -902,15 +1121,15 @@ export type MonthlyDealsRevenue = {
 export async function getMonthlyDealsRevenue(
   organizationId: string,
   period: Period,
+  memberId?: string | null,
 ): Promise<MonthlyDealsRevenue> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("placements")
-    .select("id, organization_id, referral_id, event_type, amount, event_date")
-    .eq("organization_id", organizationId)
-    .gte("event_date", period.from)
-    .lte("event_date", period.to);
+  // メンバースコープ:placements は referral_id 経由でしか絞れない。
+  // 担当 client_records も referrals も 0 件なら空バケットで早期リターン。
+  const scopedClientIds = await getMemberScopedClientIds(organizationId, memberId);
+  const scopedReferralIds = await getMemberScopedReferralIds(organizationId, scopedClientIds);
+  const scopedReferralEmpty = scopedReferralIds !== null && scopedReferralIds.length === 0;
 
   type Row = {
     id: string;
@@ -920,8 +1139,20 @@ export async function getMonthlyDealsRevenue(
     amount: number | null;
     event_date: string;
   };
-
-  const rows: Row[] = error || !data ? [] : (data as Row[]);
+  let rows: Row[] = [];
+  if (!scopedReferralEmpty) {
+    let placementsQuery = supabase
+      .from("placements")
+      .select("id, organization_id, referral_id, event_type, amount, event_date")
+      .eq("organization_id", organizationId)
+      .gte("event_date", period.from)
+      .lte("event_date", period.to);
+    if (scopedReferralIds !== null) {
+      placementsQuery = placementsQuery.in("referral_id", scopedReferralIds);
+    }
+    const { data, error } = await placementsQuery;
+    rows = error || !data ? [] : (data as Row[]);
+  }
 
   // event_date から YYYY-MM を取って月別に振り分け。
   // aggregatePlacements を再利用するため、最低限のフィールドを Placement 型に詰め直す。
@@ -1113,6 +1344,7 @@ function reachedStage(status: ReferralStatus, minStage: ReferralStatus): boolean
 export async function getSelectionFunnel(
   organizationId: string,
   period: Period,
+  memberId?: string | null,
 ): Promise<SelectionFunnel> {
   const supabase = await createClient();
 
@@ -1121,12 +1353,28 @@ export async function getSelectionFunnel(
   const startIso = `${period.from}T00:00:00+09:00`;
   const endExclusiveIso = `${nextJstDay(period.to)}T00:00:00+09:00`;
 
-  const { data, error } = await supabase
+  // メンバースコープ:担当 client_records が 0 件なら 母数 0 で早期リターン。
+  const scopedClientIds = await getMemberScopedClientIds(organizationId, memberId);
+  if (scopedClientIds !== null && scopedClientIds.length === 0) {
+    return {
+      stages: buildFunnelStages(
+        { recommended: 0, screening: 0, interview: 0, offer: 0, joined: 0 },
+        0,
+      ),
+      base: 0,
+      declinedCount: 0,
+      period,
+    };
+  }
+
+  let query = supabase
     .from("referrals")
     .select("status")
     .eq("organization_id", organizationId)
     .gte("created_at", startIso)
     .lt("created_at", endExclusiveIso);
+  if (scopedClientIds !== null) query = query.in("client_record_id", scopedClientIds);
+  const { data, error } = await query;
 
   const rows: Array<{ status: string }> = error || !data ? [] : (data as Array<{ status: string }>);
 
@@ -1183,18 +1431,35 @@ export async function getSelectionFunnel(
 export async function getSelectionFunnelByCandidate(
   organizationId: string,
   period: Period,
+  memberId?: string | null,
 ): Promise<SelectionFunnel> {
   const supabase = await createClient();
 
   const startIso = `${period.from}T00:00:00+09:00`;
   const endExclusiveIso = `${nextJstDay(period.to)}T00:00:00+09:00`;
 
-  const { data, error } = await supabase
+  // メンバースコープ:担当 client_records が 0 件なら 母数 0 で早期リターン。
+  const scopedClientIds = await getMemberScopedClientIds(organizationId, memberId);
+  if (scopedClientIds !== null && scopedClientIds.length === 0) {
+    return {
+      stages: buildFunnelStages(
+        { recommended: 0, screening: 0, interview: 0, offer: 0, joined: 0 },
+        0,
+      ),
+      base: 0,
+      declinedCount: 0,
+      period,
+    };
+  }
+
+  let query = supabase
     .from("referrals")
     .select("client_record_id, status")
     .eq("organization_id", organizationId)
     .gte("created_at", startIso)
     .lt("created_at", endExclusiveIso);
+  if (scopedClientIds !== null) query = query.in("client_record_id", scopedClientIds);
+  const { data, error } = await query;
 
   type Row = { client_record_id: string; status: string };
   const rows: Row[] = error || !data ? [] : (data as Row[]);
@@ -1376,11 +1641,25 @@ export async function getAdvisorPerformance(
   organizationId: string,
   viewer: AdvisorPerformanceViewer,
   period: Period,
+  memberId?: string | null,
 ): Promise<AdvisorPerformance> {
-  if (viewer.isAdmin) {
+  // advisor は自分以外を要求されても常に自分だけ返す (サーバ側二重防御)。
+  // memberId が指定されていても viewer.memberId に上書きされる。
+  if (!viewer.isAdmin) {
+    return getAdvisorPerformanceForSelf(organizationId, viewer, period);
+  }
+
+  // admin: 全体表示なら従来通り。 memberId 指定時は admin 集計を取ってから
+  // 該当行 1 件だけに絞る (roster ベースで 0 件メンバーも含まれるので
+  // 対象メンバーが必ず 1 行残る)。 beta 規模なので後段フィルタで十分。
+  if (!memberId) {
     return getAdvisorPerformanceForAdmin(organizationId, period);
   }
-  return getAdvisorPerformanceForSelf(organizationId, viewer, period);
+  const full = await getAdvisorPerformanceForAdmin(organizationId, period);
+  const rows = full.rows
+    .filter((r) => r.memberId === memberId)
+    .map((r) => ({ ...r, isYou: r.memberId === viewer.memberId }));
+  return { ...full, rows };
 }
 
 /**
@@ -1702,17 +1981,39 @@ const canonicalPhaseIntervals: { from: ReferralStatus; to: ReferralStatus; label
 export async function getPhaseDuration(
   organizationId: string,
   period: Period,
+  memberId?: string | null,
 ): Promise<PhaseDuration> {
   const supabase = await createClient();
 
+  // メンバースコープ: referral_status_history は referral_id 経由でしか
+  // メンバーに紐づけられない。 対象 referral が 0 件なら空区間で早期リターン。
+  const scopedClientIds = await getMemberScopedClientIds(organizationId, memberId);
+  const scopedReferralIds = await getMemberScopedReferralIds(organizationId, scopedClientIds);
+  const scopedReferralEmpty = scopedReferralIds !== null && scopedReferralIds.length === 0;
+  if (scopedReferralEmpty) {
+    const intervals: PhaseDurationBucket[] = canonicalPhaseIntervals.map((iv) => ({
+      key: `${iv.from}->${iv.to}`,
+      fromStatus: iv.from,
+      toStatus: iv.to,
+      label: iv.label,
+      averageDays: null,
+      sampleCount: 0,
+    }));
+    return { intervals, period };
+  }
+
   // history を referral_id, changed_at の順で取得。
   // referral_id が同じ行が固まって出るので、走査時にグルーピングしやすい。
-  const { data, error } = await supabase
+  let historyQuery = supabase
     .from("referral_status_history")
     .select("referral_id, to_status, changed_at")
     .eq("organization_id", organizationId)
     .order("referral_id", { ascending: true })
     .order("changed_at", { ascending: true });
+  if (scopedReferralIds !== null) {
+    historyQuery = historyQuery.in("referral_id", scopedReferralIds);
+  }
+  const { data, error } = await historyQuery;
 
   type HistRow = { referral_id: string; to_status: string; changed_at: string };
   const rows: HistRow[] = error || !data ? [] : (data as HistRow[]);
@@ -1830,8 +2131,36 @@ export type PlacementRate = {
 export async function getPlacementRate(
   organizationId: string,
   period: Period,
+  memberId?: string | null,
 ): Promise<PlacementRate> {
   const supabase = await createClient();
+
+  // memberId 指定時は RPC を使わずに TS 側で計算する。
+  // 既存 RPC (get_referral_kpi_summary) はメンバー引数を持たず、
+  // by_member 版も「全担当者を返す」形なので、単一メンバーに絞るには
+  // client_record_id フィルタ付きの直接 SELECT の方がシンプル。
+  if (memberId) {
+    const scopedClientIds = await getMemberScopedClientIds(organizationId, memberId);
+    if (scopedClientIds === null || scopedClientIds.length === 0) {
+      return { period, totalReferrals: 0, totalPlacements: 0, rate: null };
+    }
+    // JST 半開区間で referrals.created_at を絞る (RPC 内のロジックと同じ)。
+    const startIso = `${period.from}T00:00:00+09:00`;
+    const endExclusiveIso = `${nextJstDay(period.to)}T00:00:00+09:00`;
+    const { data: refRows } = await supabase
+      .from("referrals")
+      .select("status")
+      .eq("organization_id", organizationId)
+      .in("client_record_id", scopedClientIds)
+      .gte("created_at", startIso)
+      .lt("created_at", endExclusiveIso);
+    const rows = (refRows ?? []) as Array<{ status: string }>;
+    const totalReferrals = rows.length;
+    const totalPlacements = rows.filter((r) => r.status === "joined").length;
+    const rate =
+      totalReferrals === 0 ? null : Math.round((totalPlacements / totalReferrals) * 10000) / 100;
+    return { period, totalReferrals, totalPlacements, rate };
+  }
 
   const { data, error } = await supabase.rpc("get_referral_kpi_summary", {
     p_organization_id: organizationId,
@@ -1901,16 +2230,27 @@ export type TimeToFillSummary = {
 export async function getTimeToFill(
   organizationId: string,
   period: Period,
+  memberId?: string | null,
 ): Promise<TimeToFillSummary> {
   const supabase = await createClient();
 
-  const { data } = await supabase
+  // メンバースコープ: placements は referral_id 経由でメンバーに紐付く。
+  // referral 0 件なら 早期に空結果で返す。
+  const scopedClientIds = await getMemberScopedClientIds(organizationId, memberId);
+  const scopedReferralIds = await getMemberScopedReferralIds(organizationId, scopedClientIds);
+  if (scopedReferralIds !== null && scopedReferralIds.length === 0) {
+    return { averageDays: null, medianDays: null, sampleCount: 0, benchmarkDays: 42, period };
+  }
+
+  let query = supabase
     .from("placements")
     .select("event_date, referral_id, referrals(created_at)")
     .eq("organization_id", organizationId)
     .eq("event_type", "placement")
     .gte("event_date", period.from)
     .lte("event_date", period.to);
+  if (scopedReferralIds !== null) query = query.in("referral_id", scopedReferralIds);
+  const { data } = await query;
 
   type PRow = {
     event_date: string;
@@ -1978,13 +2318,29 @@ export type OfferAcceptanceRate = {
 export async function getOfferAcceptanceRate(
   organizationId: string,
   period: Period,
+  memberId?: string | null,
 ): Promise<OfferAcceptanceRate> {
   const supabase = await createClient();
 
   const startIso = `${period.from}T00:00:00+09:00`;
   const endExclusiveIso = `${nextJstDay(period.to)}T00:00:00+09:00`;
 
-  const { data } = await supabase
+  // メンバースコープ: referral_status_history は referral_id で絞る。
+  // 対象 referral 0 件なら 空結果で早期リターン。
+  const scopedClientIds = await getMemberScopedClientIds(organizationId, memberId);
+  const scopedReferralIds = await getMemberScopedReferralIds(organizationId, scopedClientIds);
+  if (scopedReferralIds !== null && scopedReferralIds.length === 0) {
+    return {
+      acceptedCount: 0,
+      declinedCount: 0,
+      totalDecisions: 0,
+      rate: null,
+      benchmarkPercent: 82,
+      period,
+    };
+  }
+
+  let query = supabase
     .from("referral_status_history")
     .select("to_status")
     .eq("organization_id", organizationId)
@@ -1992,6 +2348,8 @@ export async function getOfferAcceptanceRate(
     .in("to_status", ["joined", "declined"])
     .gte("changed_at", startIso)
     .lt("changed_at", endExclusiveIso);
+  if (scopedReferralIds !== null) query = query.in("referral_id", scopedReferralIds);
+  const { data } = await query;
 
   type Row = { to_status: string };
   const rows = (data ?? []) as Row[];
