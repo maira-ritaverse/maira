@@ -843,6 +843,10 @@ function ResumePhotoField({
   const [isUploading, setIsUploading] = useState(false);
   // AI 仕上げ比較モーダルに渡す元ファイル(null なら閉じている)
   const [aiCompareFile, setAiCompareFile] = useState<File | null>(null);
+  // AI 生成 スタイル。 "preserve" (既定) = 元 服装 を 保つ、 "business" = ビジネス
+  // フォーマル に 差し替え (見た目 の 性別 に 応じて 男性 は スーツ+ネクタイ、 女性 は
+  // スーツ+ブラウス を AI が 自動 選択)。 モーダル に そのまま 渡す。
+  const [aiStyle, setAiStyle] = useState<"preserve" | "business">("preserve");
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const aiFileInputRef = useRef<HTMLInputElement>(null);
@@ -1015,8 +1019,24 @@ function ResumePhotoField({
           {/*
             AI 仕上げ:自撮りを OpenAI で証明写真風(白背景・正面・3:4)に変換。
             通常アップロードとは別 input(別 ref)で切り分ける。
+            服装は「元のまま」または「ビジネス服装に変換」を選べる。
           */}
-          <div>
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <label className="text-muted-foreground text-[11px]" htmlFor="ai-style-select">
+                服装
+              </label>
+              <select
+                id="ai-style-select"
+                value={aiStyle}
+                onChange={(e) => setAiStyle(e.target.value as "preserve" | "business")}
+                disabled={isUploading}
+                className="border-input bg-background rounded-md border px-2 py-1 text-xs"
+              >
+                <option value="preserve">元のまま</option>
+                <option value="business">ビジネス服装に変換</option>
+              </select>
+            </div>
             <label
               className="inline-flex cursor-pointer items-center gap-1 text-emerald-700 underline-offset-4 hover:underline dark:text-emerald-300"
               aria-label="自撮り写真を AI で証明写真にする"
@@ -1033,6 +1053,8 @@ function ResumePhotoField({
             </label>
             <p className="text-muted-foreground mt-1 text-[11px]">
               背景を整え、3:4 トリミングします。元 / AI 仕上げ後を比較してから保存できます。
+              {aiStyle === "business" &&
+                "ビジネス服装に変換すると、顔の印象がわずかにずれるケースがあります。"}
             </p>
           </div>
           {hasPhoto && (
@@ -1070,6 +1092,7 @@ function ResumePhotoField({
         <PhotoAiCompareModal
           resumeId={resumeId}
           originalFile={aiCompareFile}
+          style={aiStyle}
           onClose={() => {
             setAiCompareFile(null);
             if (aiFileInputRef.current) aiFileInputRef.current.value = "";

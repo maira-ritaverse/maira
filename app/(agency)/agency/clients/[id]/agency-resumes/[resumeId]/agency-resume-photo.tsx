@@ -36,6 +36,9 @@ export function AgencyResumePhoto({ resumeId, initialPreviewUrl, hasPhoto }: Pro
   const [originalUrl, setOriginalUrl] = useState<string | null>(null);
   const [aiBlob, setAiBlob] = useState<Blob | null>(null);
   const [aiUrl, setAiUrl] = useState<string | null>(null);
+  // AI 生成 スタイル。 "preserve" = 元 服装 を 保つ、 "business" = ビジネス
+  // フォーマル (男性 = スーツ+ネクタイ、 女性 = スーツ+ブラウス を AI が 自動 選択) に 差し替え。
+  const [aiStyle, setAiStyle] = useState<"preserve" | "business">("preserve");
 
   // Blob URL のリーク防止
   useEffect(() => {
@@ -115,6 +118,7 @@ export function AgencyResumePhoto({ resumeId, initialPreviewUrl, hasPhoto }: Pro
     startTransition(async () => {
       const fd = new FormData();
       fd.append("file", originalFile);
+      fd.append("style", aiStyle);
       try {
         const res = await fetch(`/api/agency/client-resumes/${resumeId}/photo/ai-enhance`, {
           method: "POST",
@@ -237,6 +241,23 @@ export function AgencyResumePhoto({ resumeId, initialPreviewUrl, hasPhoto }: Pro
             <PhotoCompare label="AI 加工版" url={aiUrl} placeholderText="まだ生成していません" />
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {!aiUrl && (
+              <div className="mr-auto flex items-center gap-1.5">
+                <label htmlFor="agency-ai-style-select" className="text-muted-foreground text-xs">
+                  服装
+                </label>
+                <select
+                  id="agency-ai-style-select"
+                  value={aiStyle}
+                  onChange={(e) => setAiStyle(e.target.value as "preserve" | "business")}
+                  disabled={pending}
+                  className="border-input bg-background rounded-md border px-2 py-1 text-xs"
+                >
+                  <option value="preserve">元のまま</option>
+                  <option value="business">ビジネス服装に変換</option>
+                </select>
+              </div>
+            )}
             <Button variant="ghost" size="sm" onClick={handleCancel} disabled={pending}>
               キャンセル
             </Button>

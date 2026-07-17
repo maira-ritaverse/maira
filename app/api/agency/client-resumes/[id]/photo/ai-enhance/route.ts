@@ -73,8 +73,12 @@ export async function POST(request: Request, { params }: RouteParams) {
     );
   }
 
-  // 1) AI 仕上げ(quality=medium 固定:コストと品質のバランス)
-  const ai = await aiEnhanceSelfie({ imageBlob: file, filename: "selfie.png" });
+  // style は "preserve" (既定) か "business" のみ許可。 それ以外は preserve に fallback。
+  const rawStyle = formData.get("style");
+  const style: "preserve" | "business" = rawStyle === "business" ? "business" : "preserve";
+
+  // 1) AI 仕上げ
+  const ai = await aiEnhanceSelfie({ imageBlob: file, filename: "selfie.png", style });
   if (!ai.ok) {
     const status = ai.reason === "not_configured" ? 503 : 502;
     return NextResponse.json({ error: ai.reason, message: ai.message }, { status });

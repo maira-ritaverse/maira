@@ -15,6 +15,12 @@ type Props = {
   resumeId: string;
   /** AI に投げる元の自撮り(File) */
   originalFile: File;
+  /**
+   * 生成スタイル。
+   * - "preserve": 元 の 服装 を 保つ (背景 + フレーミング のみ 証明写真 化)
+   * - "business": ビジネス フォーマル (男性 = スーツ+ネクタイ、女性 = スーツ+ブラウス を AI が 自動 選択) に 差し替え
+   */
+  style: "preserve" | "business";
   onClose: () => void;
   onSaved: (photoPath: string) => void;
 };
@@ -33,7 +39,7 @@ type Props = {
  *   ・「保存前に止められる」UX を保証するため、サーバ側は ai-enhance では保存しない
  *   ・保存パスは通常 POST /photo の 1 本に揃え、整合性のリスクを減らす
  */
-export function PhotoAiCompareModal({ resumeId, originalFile, onClose, onSaved }: Props) {
+export function PhotoAiCompareModal({ resumeId, originalFile, style, onClose, onSaved }: Props) {
   const [stage, setStage] = useState<"processing" | "ready" | "saving" | "error">("processing");
   const [error, setError] = useState<string | null>(null);
   const [aiBlob, setAiBlob] = useState<Blob | null>(null);
@@ -53,6 +59,7 @@ export function PhotoAiCompareModal({ resumeId, originalFile, onClose, onSaved }
       try {
         const form = new FormData();
         form.append("file", originalFile);
+        form.append("style", style);
         const res = await fetch(`/api/resumes/${resumeId}/photo/ai-enhance`, {
           method: "POST",
           body: form,
@@ -90,7 +97,7 @@ export function PhotoAiCompareModal({ resumeId, originalFile, onClose, onSaved }
     return () => {
       cancelled = true;
     };
-  }, [originalFile, resumeId]);
+  }, [originalFile, resumeId, style]);
 
   // AI Blob のローカル URL は明示 revoke しないとリークするので、置換 / unmount 時に開放
   useEffect(() => {
@@ -135,10 +142,14 @@ export function PhotoAiCompareModal({ resumeId, originalFile, onClose, onSaved }
     >
       <div className="bg-background w-full max-w-2xl space-y-4 rounded-lg border p-5 shadow-lg">
         <div>
-          <h2 className="text-lg font-semibold">AI 証明写真の確認</h2>
+          <h2 className="text-lg font-semibold">
+            AI 証明写真の確認{style === "business" ? "(ビジネス服装に変換)" : ""}
+          </h2>
           <p className="text-muted-foreground mt-1 text-xs">
             元画像と AI
             仕上げ後を比較してから保存します。お顔の印象が違うと感じたら「やり直す」をお選びください。
+            {style === "business" &&
+              "ビジネス服装に変換すると、顔の印象がずれるケースが少し増えます。気になる場合は「服装そのまま」でお試しください。"}
           </p>
         </div>
 
