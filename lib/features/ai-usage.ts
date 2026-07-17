@@ -25,6 +25,9 @@ export type AiUsageKind =
   | "agency_resume_draft"
   | "job_extract_from_document"
   | "csv_column_mapping"
+  // 求職者 の 元書類 (履歴書 / 職務経歴書 PDF・画像) から client_records
+  // プロフィール項目 を AI で 抽出 (Vision 経由、 1 回 あたり ¥10-30 程度)
+  | "agency_client_document_extract"
   // 求職者 ドキュメント 作成系 (月次リセット + ブーストチケット で +10 件 × 3 ヶ月)
   | "seeker_resume_create"
   | "seeker_cv_create"
@@ -58,6 +61,7 @@ const KIND_SCOPE: Record<AiUsageKind, KindScope> = {
   agency_resume_draft: "agency_org",
   job_extract_from_document: "agency_org",
   csv_column_mapping: "agency_org",
+  agency_client_document_extract: "agency_org",
   seeker_resume_create: "seeker_per_user",
   seeker_cv_create: "seeker_per_user",
   seeker_resume_ai_draft: "seeker_per_user",
@@ -113,6 +117,11 @@ export const JOB_EXTRACT_FROM_DOCUMENT_ADDON_MONTHLY = 300;
 // CSV 1 つの 取り込みで 1 回 だけ 呼ばれる ので、ファイル数 上限 = 月次回数 上限。
 export const CSV_COLUMN_MAPPING_FREE_MONTHLY = 100;
 export const CSV_COLUMN_MAPPING_ADDON_MONTHLY = 1000;
+
+// 求職者 の 元書類 から プロフィール 抽出 (Vision 経由、 求人抽出 と 同 規模)。
+// 1 顧客 につき 数 回 程度 の 呼出 を 想定 (履歴書 / 職務経歴書 / その他)。
+export const AGENCY_CLIENT_DOCUMENT_EXTRACT_FREE_MONTHLY = 50;
+export const AGENCY_CLIENT_DOCUMENT_EXTRACT_ADDON_MONTHLY = 500;
 
 // 求職者 ドキュメント 作成数 制限 (月次リセット)
 // 5 件 を 超える 作成は seeker_doc_create_boosts チケット で +10 件 × 3 ヶ月。
@@ -181,6 +190,10 @@ function defaultLimitFor(kind: AiUsageKind, addon: boolean): number {
         : JOB_EXTRACT_FROM_DOCUMENT_FREE_MONTHLY;
     case "csv_column_mapping":
       return addon ? CSV_COLUMN_MAPPING_ADDON_MONTHLY : CSV_COLUMN_MAPPING_FREE_MONTHLY;
+    case "agency_client_document_extract":
+      return addon
+        ? AGENCY_CLIENT_DOCUMENT_EXTRACT_ADDON_MONTHLY
+        : AGENCY_CLIENT_DOCUMENT_EXTRACT_FREE_MONTHLY;
     case "seeker_resume_create":
       return SEEKER_RESUME_CREATE_FREE_MONTHLY;
     case "seeker_cv_create":

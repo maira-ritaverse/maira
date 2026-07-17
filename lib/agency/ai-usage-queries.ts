@@ -5,6 +5,7 @@
 import { utcMonthStart } from "@/lib/features/usage-limits";
 import { createClient } from "@/lib/supabase/server";
 import {
+  AGENCY_CLIENT_DOCUMENT_EXTRACT_FREE_MONTHLY,
   AGENCY_CLIENT_SUMMARY_FREE_MONTHLY,
   AGENCY_CV_DRAFT_FREE_MONTHLY,
   AGENCY_LINE_CLIENT_EXTRACT_FREE_MONTHLY,
@@ -172,6 +173,7 @@ export const AI_KIND_FREE_DEFAULT: Record<AiUsageKind, number> = {
   agency_ma_flow_generation: AGENCY_MA_FLOW_GENERATION_FREE_MONTHLY,
   agency_ma_segment_generation: AGENCY_MA_SEGMENT_GENERATION_FREE_MONTHLY,
   agency_ma_flow_improvement: AGENCY_MA_FLOW_IMPROVEMENT_FREE_MONTHLY,
+  agency_client_document_extract: AGENCY_CLIENT_DOCUMENT_EXTRACT_FREE_MONTHLY,
 };
 
 export type AiQuotaRow = {

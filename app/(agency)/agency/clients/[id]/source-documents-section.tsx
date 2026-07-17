@@ -15,7 +15,16 @@
  *   ・削除 は ConfirmDialog を 挟む
  *   ・エラー は toast で 日本語 メッセージ に して 出す
  */
-import { Download, FileText, Image as ImageIcon, Loader2, Trash2, Upload } from "lucide-react";
+import {
+  Download,
+  FileText,
+  Image as ImageIcon,
+  Loader2,
+  Sparkles,
+  Trash2,
+  Upload,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -29,6 +38,8 @@ import {
   type SourceDocument,
   type SourceDocumentType,
 } from "@/lib/agency-client-source-documents/types";
+
+import { DocumentExtractPreviewModal } from "./document-extract-preview-modal";
 
 type Props = {
   clientRecordId: string;
@@ -54,12 +65,15 @@ function iconForMime(mime: string) {
 
 export function SourceDocumentsSection({ clientRecordId }: Props) {
   const { showToast } = useToast();
+  const router = useRouter();
   const [docs, setDocs] = useState<SourceDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [documentType, setDocumentType] = useState<SourceDocumentType>("resume");
   const [confirmDeleteDoc, setConfirmDeleteDoc] = useState<SourceDocument | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // AI 抽出 プレビュー モーダル の 対象 ドキュメント (null = 閉じ 状態)
+  const [extractingDoc, setExtractingDoc] = useState<SourceDocument | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -258,6 +272,15 @@ export function SourceDocumentsSection({ clientRecordId }: Props) {
               <Button
                 size="sm"
                 variant="ghost"
+                onClick={() => setExtractingDoc(d)}
+                aria-label={`${d.fileName} を AI でプロフィールに反映`}
+                title="AI でプロフィールに反映"
+              >
+                <Sparkles className="size-4" aria-hidden />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
                 onClick={() => setConfirmDeleteDoc(d)}
                 aria-label={`${d.fileName} を削除`}
                 className="text-red-600 hover:text-red-700"
@@ -285,6 +308,30 @@ export function SourceDocumentsSection({ clientRecordId }: Props) {
         pending={deleting}
         onConfirm={handleDelete}
       />
+
+      {/* AI 抽出 → プレビュー → 保存 モーダル。 保存 後 は toast + ページ 再読込 で
+          client_records 側 の 表示 に 最新値 を 反映 する (このセクションは 書類 一覧
+          しか 持たない ため、 プロフィール表示 の 更新 は router.refresh 経由 で 呼ぶ)。 */}
+      {extractingDoc && (
+        <DocumentExtractPreviewModal
+          clientRecordId={clientRecordId}
+          docId={extractingDoc.id}
+          fileName={extractingDoc.fileName}
+          onClose={() => setExtractingDoc(null)}
+          onSaved={(count) => {
+            setExtractingDoc(null);
+            showToast(
+              "success",
+              count > 0
+                ? `${count} 件のプロフィール項目を反映しました`
+                : "反映する項目が選択されていませんでした",
+            );
+            // 親ページ (Server Component) を revalidate して プロフィール表示 に
+            // 最新値 を 反映 させる。 このセクション自体 は 書類 一覧 しか 持たない。
+            router.refresh();
+          }}
+        />
+      )}
     </Card>
   );
 }

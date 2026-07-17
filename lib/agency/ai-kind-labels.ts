@@ -24,6 +24,7 @@ export const AI_KIND_LABEL: Record<string, string> = {
   agency_ma_flow_generation: "Flow ビルダー AI 生成",
   agency_ma_segment_generation: "Segment ビルダー AI 生成",
   agency_ma_flow_improvement: "Flow 改善 提案 AI",
+  agency_client_document_extract: "求職者 元書類 → プロフィール AI 反映",
 };
 
 /** 上限設定 UI で「組織横断」「求職者 1 人あたり」を 表示する分類 */
@@ -43,6 +44,7 @@ export const AI_KIND_SCOPE_LABEL: Record<string, "agency_org" | "seeker_per_user
   agency_ma_flow_generation: "agency_org",
   agency_ma_segment_generation: "agency_org",
   agency_ma_flow_improvement: "agency_org",
+  agency_client_document_extract: "agency_org",
 };
 
 /**
@@ -65,6 +67,7 @@ export const AI_KIND_UNIT_COST_USD: Record<string, number> = {
   agency_ma_flow_generation: 0.05, // Claude 構造 化 出力 (約 3k input + 2k output 想定)
   agency_ma_segment_generation: 0.03, // Claude 構造 化 (約 2k input + 1k output 想定)
   agency_ma_flow_improvement: 0.06, // Flow 全体 を レビュー (約 4k input + 2k output 想定)
+  agency_client_document_extract: 0.13, // Claude vision PDF/画像、 求人抽出 と 同等
 };
 
 export function estimateCostUsd(byKind: Record<string, number>): number {
