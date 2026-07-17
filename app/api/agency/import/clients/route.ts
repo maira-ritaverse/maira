@@ -411,7 +411,9 @@ export async function POST(request: Request) {
       organization_id: role.organization.id,
       assigned_member_id: resolvedAssigneeMemberId,
       name: d.name,
-      email: d.email,
+      // email は任意入力に対応済 (createClientRequestSchema)。 空文字 / undefined は
+      // null に倒し、他フィールドと挙動を揃える (重複判定 / 招待送信 で 「値あり = 非空文字列」)。
+      email: d.email || null,
       phone: d.phone || null,
       status: d.status,
       notes: d.notes || null,

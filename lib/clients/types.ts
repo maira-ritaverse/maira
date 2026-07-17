@@ -357,9 +357,12 @@ const tagArrayField = z.preprocess(
 );
 
 // クライアント登録リクエスト
+// email は任意入力。LINE 由来の顧客や、メールアドレスをまだ聞けていない顧客も
+// 登録できるように optional にしている(client_records.email は DB でも nullable)。
+// 入力する場合はメール形式の検証はかける。空文字も許容(UI から未入力で送るケース)。
 export const createClientRequestSchema = z.object({
   name: z.string().min(1, "氏名を入力してください").max(100),
-  email: z.string().email("正しいメールアドレスを入力してください"),
+  email: z.string().email("正しいメールアドレスを入力してください").optional().or(z.literal("")),
   phone: z.string().max(20).optional().or(z.literal("")),
   status: z
     .enum(["initial_meeting", "job_matching", "in_screening", "offer", "completed", "declined"])
@@ -383,7 +386,8 @@ export type CreateClientRequest = z.infer<typeof createClientRequestSchema>;
 // クライアント更新リクエスト
 export const updateClientRequestSchema = z.object({
   name: z.string().min(1).max(100).optional(),
-  email: z.string().email().optional(),
+  // 空文字も受ける(UI から「メール未入力に戻す」ケース → サーバ側で null に倒す)。
+  email: z.string().email().optional().or(z.literal("")),
   phone: z.string().max(20).optional().or(z.literal("")),
   status: z
     .enum(["initial_meeting", "job_matching", "in_screening", "offer", "completed", "declined"])

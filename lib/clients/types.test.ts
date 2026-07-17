@@ -108,9 +108,16 @@ describe("createClientRequestSchema", () => {
     expect(r.success).toBe(false);
   });
 
-  it("不正な email 形式は失敗", () => {
+  it("不正な email 形式は失敗(空文字ではない場合のみ検証がかかる)", () => {
     const r = createClientRequestSchema.safeParse({ name: "X", email: "not-an-email" });
     expect(r.success).toBe(false);
+  });
+
+  it("email は省略可・空文字も可(LINE 由来の顧客等でメール未取得を許容)", () => {
+    // 省略
+    expect(createClientRequestSchema.safeParse({ name: "X" }).success).toBe(true);
+    // 空文字
+    expect(createClientRequestSchema.safeParse({ name: "X", email: "" }).success).toBe(true);
   });
 
   it("phone は省略可・空文字も可(任意項目)", () => {

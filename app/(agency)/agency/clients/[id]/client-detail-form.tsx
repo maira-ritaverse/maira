@@ -234,13 +234,12 @@ export function ClientDetailForm({ client, seekerPhoto }: Props) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="email">
-            メールアドレス <span className="text-red-600">*</span>
-          </Label>
+          <Label htmlFor="email">メールアドレス</Label>
           <Input id="email" type="email" {...register("email")} disabled={isPending} />
           {errors.email && <p className="text-sm text-red-600">{errors.email.message}</p>}
           <p className="text-muted-foreground text-xs">
-            このメールで求職者がMairaに登録すると、自動的に連携できます
+            任意入力。登録しておくと招待メール送信や、求職者が同じメールで Maira に
+            登録した際の自動連携に使えます。未入力にしたい場合は空欄で保存してください。
           </p>
         </div>
 

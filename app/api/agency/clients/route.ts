@@ -60,7 +60,9 @@ export async function POST(request: Request) {
       organization_id: role.organization.id,
       assigned_member_id: role.member.id,
       name,
-      email,
+      // email は任意入力。空文字は null に倒す(重複判定 / 招待送信の判定を
+      // 「値あり = 非空文字列」で揃えるため)。
+      email: email || null,
       phone: phone || null,
       status,
       notes: notes || null,

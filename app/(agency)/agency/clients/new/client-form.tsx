@@ -101,9 +101,7 @@ export function ClientForm() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="email">
-            メールアドレス <span className="text-red-600">*</span>
-          </Label>
+          <Label htmlFor="email">メールアドレス</Label>
           <Input
             id="email"
             type="email"
@@ -113,7 +111,8 @@ export function ClientForm() {
           />
           {errors.email && <p className="text-sm text-red-600">{errors.email.message}</p>}
           <p className="text-muted-foreground text-xs">
-            求職者がこのメールでMairaに登録すると、自動的に連携できます
+            任意入力。登録しておくと招待メール送信や、求職者が同じメールで Maira に
+            登録した際の自動連携に使えます。LINE 経由の顧客等で未取得なら空欄で OK。
           </p>
         </div>
 

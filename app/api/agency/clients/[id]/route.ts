@@ -54,7 +54,8 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   const updateData: Record<string, unknown> = {};
   const d = parsed.data;
   if (d.name !== undefined) updateData.name = d.name;
-  if (d.email !== undefined) updateData.email = d.email;
+  // email は任意化済。 空文字 は null に 倒す (未入力 に 戻したい ケース)。
+  if (d.email !== undefined) updateData.email = d.email || null;
   if (d.phone !== undefined) updateData.phone = d.phone || null;
   if (d.status !== undefined) updateData.status = d.status;
   if (d.assigned_member_id !== undefined) {
