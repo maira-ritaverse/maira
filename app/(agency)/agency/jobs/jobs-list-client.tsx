@@ -30,10 +30,16 @@ type Props = {
   jobs: JobPosting[];
 };
 
+// ステータス タブ に 表示 する 順序 (募集中 → 停止中 → 終了)。
+// 「すべて」 タブ は 意図 的 に 出さない (要件: 3 分類 で フォルダ 分け)。
+const STATUS_TABS: JobStatus[] = ["open", "paused", "closed"];
+
 export function JobsListClient({ jobs }: Props) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<JobStatusFilter>("all");
+  // 既定 タブ = 「募集中」。 停止中 / 終了 の 求人 は 通常 見せず、 タブ で 明示 的 に
+  // 切り替えて もらう 運用 に する (エージェント の 日常 業務 は 募集中 中心)。
+  const [statusFilter, setStatusFilter] = useState<JobStatusFilter>("open");
   const [locationKeyword, setLocationKeyword] = useState("");
   const [minSalary, setMinSalary] = useState<string>("");
   const [maxSalary, setMaxSalary] = useState<string>("");
@@ -46,6 +52,15 @@ export function JobsListClient({ jobs }: Props) {
   const [bulkError, setBulkError] = useState<string | null>(null);
 
   const locationOptions = useMemo(() => buildJobLocationOptions(jobs), [jobs]);
+
+  // タブ の 件数 バッジ 用: ステータス 別 の 全体 件数 (検索 / 勤務地 / 年収 の
+  // 絞込 を 加味 しない)。 「今 どこ に 何 件 あるか」 を 常時 見せた 方 が 探し
+  // やすい ため、 タブ ラベル は 絞込 と 独立 に 集計 する。
+  const statusCounts = useMemo(() => {
+    const counts: Record<JobStatus, number> = { open: 0, paused: 0, closed: 0 };
+    for (const j of jobs) counts[j.status]++;
+    return counts;
+  }, [jobs]);
 
   const opts: JobFilterSortOptions = useMemo(
     () => ({
@@ -151,13 +166,9 @@ export function JobsListClient({ jobs }: Props) {
                 onRemove: () => setSearchQuery(""),
               });
             }
-            if (f.statusFilter !== "all") {
-              chips.push({
-                key: "status",
-                label: `ステータス: ${jobStatusLabels[f.statusFilter as JobStatus]}`,
-                onRemove: () => setStatusFilter("all"),
-              });
-            }
+            // ステータス は タブ UI で 常に 表示 されて いる ので chip で 重複表示 しない。
+            // AI が statusFilter を 変えた 場合 は 上部 の タブ の active 状態 が
+            // 切り替わる ため、 chip なし でも 何が 起きた か 分かる。
             if (f.locationKeyword.trim().length > 0) {
               chips.push({
                 key: "loc",
@@ -182,19 +193,43 @@ export function JobsListClient({ jobs }: Props) {
             return chips;
           }}
         />
+        {/* ステータス タブ (募集中 / 停止中 / 終了)。
+            AI 検索 が statusFilter="all" を 返す 可能性 は 残る が、 その 場合 は
+            どの タブ も active に なら ない (全 件 表示 の 状態)。 通常 導線 は タブ
+            クリック で 明示 的 に 選択 する。 */}
+        <div
+          role="tablist"
+          aria-label="求人 の ステータス"
+          className="border-border flex items-center gap-1 border-b"
+        >
+          {STATUS_TABS.map((s) => {
+            const active = statusFilter === s;
+            return (
+              <button
+                key={s}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setStatusFilter(s)}
+                className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors ${
+                  active
+                    ? "border-primary text-foreground font-medium"
+                    : "text-muted-foreground hover:text-foreground border-transparent"
+                }`}
+              >
+                {jobStatusLabels[s]}
+                <span
+                  className={`inline-flex min-w-6 items-center justify-center rounded-full px-1.5 py-0.5 text-xs ${
+                    active ? "bg-primary/15 text-foreground" : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {statusCounts[s]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
         <div className="flex flex-wrap items-center gap-3">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as JobStatusFilter)}
-            className="border-input bg-background rounded-lg border px-3 py-1.5 text-sm"
-          >
-            <option value="all">すべてのステータス</option>
-            {Object.entries(jobStatusLabels).map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </select>
           <input
             list="job-locations"
             placeholder="勤務地で絞り込み"
