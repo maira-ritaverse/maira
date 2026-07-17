@@ -225,7 +225,7 @@ async function main() {
   console.log("════════════════════════════════════════════════");
   console.log("  Reviewer Account Ready");
   console.log("════════════════════════════════════════════════");
-  console.log(`  Login URL: https://www.maira.pro/login`);
+  console.log(`  Login URL: https://app.maira.pro/login`);
   console.log(`  Email:     ${REVIEWER_EMAIL}`);
   // パスワードは実行者が env で渡した値と同一なので画面上には出さない
   //(スクショ・ターミナル録画から漏れるリスクを下げる)。 実行者は

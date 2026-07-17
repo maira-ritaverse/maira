@@ -16,7 +16,7 @@
 
 ### Step 1: 組織アカウントの作成
 
-1. `https://www.maira.pro/signup` で組織管理者としてサインアップ
+1. `https://app.maira.pro/signup` で組織管理者としてサインアップ
 2. メール確認 → ログイン
 3. 組織名を入力(後から変更可能)
 

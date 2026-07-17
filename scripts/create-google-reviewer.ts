@@ -191,7 +191,7 @@ async function main() {
   console.log("════════════════════════════════════════════════");
   console.log("  Google OAuth Reviewer Account Ready");
   console.log("════════════════════════════════════════════════");
-  console.log(`  Login URL: https://www.maira.pro/login`);
+  console.log(`  Login URL: https://app.maira.pro/login`);
   console.log(`  Email:     ${REVIEWER_EMAIL}`);
   console.log(`  Password:  (env REVIEWER_PASSWORD の値がそのまま設定されました)`);
   console.log(`  Org:       ${ORG_NAME} (${orgId})`);

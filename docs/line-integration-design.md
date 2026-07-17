@@ -35,7 +35,7 @@
 │ LINE Platform                                          │
 │   ・Channel = エージェント企業の 公式アカウント            │
 │   ・Channel Access Token (長期) を Maira が 預かる       │
-│   ・Webhook URL = https://maira.pro/api/webhooks/line/X  │
+│   ・Webhook URL = https://app.maira.pro/api/webhooks/line/X │
 └────────────┬──────────────────────────────────────────┘
              ↕ Webhook (受信) + REST API (送信)
 ┌────────────┴──────────────────────────────────────────┐

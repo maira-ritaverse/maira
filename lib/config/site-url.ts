@@ -12,14 +12,20 @@
  *   ・env が設定済なら末尾スラッシュを除去して返す
  *   ・未設定なら NODE_ENV で出し分け:
  *       development → http://localhost:3000(ローカル dev サーバ前提)
- *       それ以外    → https://maira.pro(プレースホルダ、本番は env 必須)
+ *       それ以外    → https://app.maira.pro(プレースホルダ、本番は env 必須)
+ *
+ * fallback を app サブドメインにしている理由:
+ *   ・maira.pro / www.maira.pro は Xserver 上の WordPress LP を返す。
+ *     Next.js アプリの内部リンク (/login, /signup, /invite/... 等) は
+ *     LP には存在しない → fallback で LP を指すと 404 になる。
+ *   ・Next.js アプリは app.maira.pro のみ。fallback もそれに合わせる。
  *
  * 注意:
  *   ・絶対 URL が必要な場面(メール本文 / OG / robots / sitemap / OAuth redirect)で使う
  *   ・相対パスで足りる場面(SSR の Link)では使わない
  */
 
-const PRODUCTION_FALLBACK = "https://maira.pro";
+const PRODUCTION_FALLBACK = "https://app.maira.pro";
 const DEV_FALLBACK = "http://localhost:3000";
 
 /**

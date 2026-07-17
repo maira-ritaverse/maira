@@ -1,5 +1,7 @@
 import type { MetadataRoute } from "next";
 
+import { getSiteUrl } from "@/lib/config/site-url";
+
 /**
  * /sitemap.xml 動的生成
  *
@@ -10,7 +12,7 @@ import type { MetadataRoute } from "next";
  * sitemap に載せると意図しない検索インデックスにつながるので除外する。
  */
 export default function sitemap(): MetadataRoute.Sitemap {
-  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://maira.pro").replace(/\/$/, "");
+  const siteUrl = getSiteUrl();
   const now = new Date();
   const paths: Array<{ path: string; priority: number; freq: "weekly" | "monthly" }> = [
     { path: "/", priority: 1.0, freq: "weekly" },

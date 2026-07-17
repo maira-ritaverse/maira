@@ -33,9 +33,14 @@ Webアプリ(PWA)です。
 - AI: Anthropic API (Claude Sonnet 4.6)
 - 決済: Stripe Subscription
 - ホスティング: Vercel
-- メール送信: Resend(`maira.pro` ドメインで verify 済)
+- メール送信: Resend(`maira.pro` ドメインで verify 済。 DKIM = `resend._domainkey.maira.pro`、Return-Path = `send.maira.pro` サブドメイン)
 - メール受信: ImprovMX 無料プラン(catch-all で `*@maira.pro` → `maira.ritaverse@gmail.com` に転送)
-- DNS: お名前.com(ネームサーバーは `01-04.dnsv.jp`、DNS レコード設定を利用)。Cloudflare は使っていない
+- DNS: **Xserver DNS(NS: `ns1〜5.xserver.jp`)**。 レジストラ側で NS を必ず Xserver 一本に統一する(Vercel の `ns1/ns2.vercel-dns.com` を混ぜると SPF/DKIM が引けず招待メールが Gmail まで届かなくなる)。 Cloudflare は使っていない
+- ドメイン構成:
+  - `maira.pro` / `www.maira.pro` = **Xserver 上 の WordPress LP**(A レコードが Xserver の IP)
+  - `app.maira.pro` = **Vercel の Next.js アプリ**(CNAME で Vercel に向く)
+  - Next.js 側のマーケティングページ(`/privacy` `/terms` `/support` `/contact` `/roi` 等)は
+    LP には存在しない → アプリ内リンク / メール本文 / OAuth redirect は必ず `app.maira.pro` を使う。 [lib/config/site-url.ts](lib/config/site-url.ts) の fallback も app サブドメイン。
 - アイコン: lucide-react
 - フォーム: react-hook-form + zod
 - 暗号化: Web Crypto API(外部ライブラリ禁止)

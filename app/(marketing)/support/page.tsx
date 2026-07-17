@@ -8,7 +8,7 @@ import Link from "next/link";
  * ・サービス全体 / Zoom 連携 / Google 連携 のよくある質問への リンク
  * ・障害情報の通知先
  *
- * URL: https://www.maira.pro/support
+ * URL: https://app.maira.pro/support
  */
 export const metadata = {
   title: "サポート | Maira",

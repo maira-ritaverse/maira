@@ -83,7 +83,7 @@ export default async function ZoomDiagnosticPage() {
       ok: isSiteUrlHttps && !isSiteUrlLocalhost ? true : "warn",
       detail: siteUrl || "未設定",
       hint: isSiteUrlLocalhost
-        ? "localhost または未設定です。 本番の Vercel では https://maira.pro のような公開 URL に設定してください。 これが localhost の場合、Zoom OAuth は必ず Error 240 になります。"
+        ? "localhost または未設定です。 本番の Vercel では https://app.maira.pro のような公開 URL に設定してください。 これが localhost の場合、Zoom OAuth は必ず Error 240 になります。"
         : !isSiteUrlHttps
           ? "http:// になっています。 Zoom は https のみを許可するので Error 240 になります。"
           : isSiteUrlPreview
@@ -205,7 +205,7 @@ export default async function ZoomDiagnosticPage() {
     },
   ];
 
-  const publicSiteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://maira.pro";
+  const publicSiteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://app.maira.pro";
   const oauthCallback = `${publicSiteUrl.replace(/\/$/, "")}/api/integrations/zoom/callback`;
   const webhookEndpoint = `${publicSiteUrl.replace(/\/$/, "")}/api/webhooks/zoom/recording`;
 

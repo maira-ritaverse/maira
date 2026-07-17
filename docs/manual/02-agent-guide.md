@@ -7,7 +7,7 @@
 
 ### ログイン
 
-1. `https://www.maira.pro` にアクセス
+1. `https://app.maira.pro/login` にアクセス
 2. 「ログイン」をクリック
 3. メールアドレスとパスワードを入力
 4. 自動で `/agency` にリダイレクト

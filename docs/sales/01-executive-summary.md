@@ -5,7 +5,8 @@
 **Maira(マイラ)** は、転職エージェント企業向けの業務効率化 SaaS です。
 クライアント(求職者)管理・公式 LINE 連携・面談スケジュール・AI による書類作成・進捗管理までを1つの画面で完結させ、エージェント1人あたりの対応可能数を従来の2倍に引き上げます。
 
-- **公式サイト**: https://www.maira.pro
+- **公式 LP**: https://maira.pro(Xserver 上 の WordPress)
+- **アプリ**: https://app.maira.pro(Next.js。 /login /signup /roi /contact /privacy 等 は こちら)
 - **想定顧客**: 中小〜中堅エージェント企業(社員5〜50名)
 - **提供形態**: クラウド SaaS(Webブラウザのみ、PWA 対応)
 - **運営**: 株式会社Revorise
@@ -37,7 +38,7 @@
 
 **年間 約2,000万円規模の効果**(中堅エージェント企業の典型値)
 
-> 各社の数字を入れて即試算 → https://www.maira.pro/roi
+> 各社の数字を入れて即試算 → https://app.maira.pro/roi
 
 ---
 
@@ -115,8 +116,8 @@
 
 ## 次のステップ
 
-1. **資料請求**: https://www.maira.pro/#cta
-2. **ROI 試算**: https://www.maira.pro/roi (現状の数字を入れて即試算)
-3. **デモ依頼**: https://www.maira.pro/contact
+1. **資料請求**: https://maira.pro/#cta (LP の CTA)
+2. **ROI 試算**: https://app.maira.pro/roi (現状の数字を入れて即試算)
+3. **デモ依頼**: https://app.maira.pro/contact
 
 ご質問・個別商談は support@maira.pro まで。

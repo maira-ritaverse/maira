@@ -10,7 +10,7 @@ Verification team, in a single 3–5 minute YouTube video (unlisted).
 - **Language**: English narration (Google reviewers). Japanese subtitles optional.
 - **Upload**: YouTube unlisted, share link in the Google reply
 - **Recording tool**: QuickTime / OBS / Loom — anything that captures full desktop screen at 1080p+
-- **Environment**: Production (`https://www.maira.pro`) with the reviewer account seeded via
+- **Environment**: Production (`https://app.maira.pro`) with the reviewer account seeded via
   `scripts/create-google-reviewer.ts`. Do NOT use staging (Google wants Live App demo, but
   new scope on staging is OK if quota risk is a concern — see the reply email).
 
@@ -24,18 +24,19 @@ Verification team, in a single 3–5 minute YouTube video (unlisted).
 
 ### Scene 1: Introduction (0:00 – 0:20)
 
-**Screen**: Maira homepage (`https://www.maira.pro`)
+**Screen**: Maira app top (`https://app.maira.pro`)
 
 **Narration (EN)**:
 
 > "This is a demonstration video for Google OAuth verification of Maira,
-> a recruitment agency SaaS. Maira is developed by Revorise Inc. and hosted at maira.pro.
+> a recruitment agency SaaS. Maira is developed by Revorise Inc. and hosted at maira.pro
+> (the app itself is served from app.maira.pro).
 > The Google Cloud project is `maira-prod`. I will demonstrate all three requested OAuth
 > scopes: `openid`, `email`, and `calendar.events`."
 
 **Screen actions**:
 
-- Show the Maira homepage briefly (2 sec)
+- Show the Maira app top page briefly (2 sec)
 - Cursor moves to the Login button
 
 ### Scene 2: Sign in with the reviewer account (0:20 – 0:40)
@@ -239,7 +240,7 @@ Avoid these by re-recording if any of them applies:
 4. **Silent scopes** — If a scope is requested but never demonstrated, it will be rejected.
    `openid` and `email` are demonstrated implicitly (the app knows who signed in),
    but if the reviewer is strict, add a "Signed in as: [reviewer email]" annotation.
-5. **Wrong environment** — Recording must be against production (`maira.pro`) with the
+5. **Wrong environment** — Recording must be against production (`app.maira.pro`) with the
    verified Cloud Console client ID.
 
 ---

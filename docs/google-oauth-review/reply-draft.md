@@ -88,7 +88,7 @@ criterion for the maira-prod project (Project Number: 765106046848).
 ---
 
 - Active Test Credentials (please treat as confidential):
-    * Login URL: https://www.maira.pro/login
+    * Login URL: https://app.maira.pro/login
     * Email:     [FILL_IN: e.g. google-cloud-reviewer@maira.pro]
     * Password:  [FILL_IN: strong random password shared out-of-band if you prefer]
 
@@ -101,7 +101,7 @@ criterion for the maira-prod project (Project Number: 765106046848).
 
 - Clear Integration Access: Step-by-step navigation to the Google integration
   entry point:
-    1. Sign in at https://www.maira.pro/login with the reviewer credentials above.
+    1. Sign in at https://app.maira.pro/login with the reviewer credentials above.
     2. Click the gear icon (top-right) to open Settings.
     3. Click "連携・アドオン" (Integrations). URL: /agency/settings/integrations
     4. Find the "Google Calendar / Meet" card.
@@ -118,7 +118,7 @@ criterion for the maira-prod project (Project Number: 765106046848).
 ---
 
 Our privacy policy is at:
-    https://www.maira.pro/privacy
+    https://app.maira.pro/privacy
 
 Section 7-2 ("Google 連携 (Calendar / Meet)") contains the required disclosures.
 For reviewer convenience, English translations of the key statements follow.
@@ -186,7 +186,7 @@ LLM. Our contract with Anthropic includes zero data retention and no training
 use of Maira's API traffic.
 
 Limited Use Compliance Statement (also published at
-https://www.maira.pro/privacy section 7-2-6):
+https://app.maira.pro/privacy section 7-2-6):
 
 "The use of raw or derived user data received from Google Workspace APIs by
 Maira will adhere to the Google API Services User Data Policy, including the
@@ -238,7 +238,7 @@ support@maira.pro
 - [ ] `[FILL_IN: ...]` を すべて 埋めた
 - [ ] YouTube URL は unlisted かつ ログイン なしで 再生できる
 - [ ] レビュアー credentials は 実際に ログイン できる (`scripts/create-google-reviewer.ts` 実行済)
-- [ ] プラポリ の 7-2 セクション更新分 が 本番 (maira.pro) に デプロイ 済
+- [ ] プラポリ の 7-2 セクション更新分 が 本番 (app.maira.pro) に デプロイ 済
 - [ ] Cloud Console の scope 設定 が 上記 3 つ と 完全 一致 (drive.readonly 残ってない)
 - [ ] 送信者は自動 address なので **Reply All ではなく Reply**
 

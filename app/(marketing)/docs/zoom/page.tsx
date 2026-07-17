@@ -6,7 +6,7 @@ import Link from "next/link";
  * Zoom Marketplace 申請の必須 URL:Documentation URL に指定する公開ページ。
  * 連携の追加・利用・削除を ステップ毎に 解説する。
  *
- * URL: https://www.maira.pro/docs/zoom
+ * URL: https://app.maira.pro/docs/zoom
  */
 export const metadata = {
   title: "Zoom 連携の使い方 | Maira",

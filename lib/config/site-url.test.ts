@@ -25,7 +25,7 @@ describe("getSiteUrl", () => {
   it("env が空文字 + production なら fallback", () => {
     process.env.NEXT_PUBLIC_SITE_URL = "";
     vi.stubEnv("NODE_ENV", "production");
-    expect(getSiteUrl()).toBe("https://maira.pro");
+    expect(getSiteUrl()).toBe("https://app.maira.pro");
   });
 
   it("development では localhost:3000 にフォールバック", () => {
@@ -33,9 +33,9 @@ describe("getSiteUrl", () => {
     expect(getSiteUrl()).toBe("http://localhost:3000");
   });
 
-  it("production では https://maira.pro にフォールバック", () => {
+  it("production では https://app.maira.pro にフォールバック", () => {
     vi.stubEnv("NODE_ENV", "production");
-    expect(getSiteUrl()).toBe("https://maira.pro");
+    expect(getSiteUrl()).toBe("https://app.maira.pro");
   });
 });
 

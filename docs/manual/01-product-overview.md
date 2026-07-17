@@ -4,7 +4,8 @@
 
 Maira(マイラ)は、転職エージェント企業向けの業務効率化SaaSです。クライアント(求職者)管理、公式LINE連携、面談スケジュール、AI による書類作成、進捗管理までを1つの画面で完結させます。
 
-- 公式サイト: https://www.maira.pro
+- 公式 LP: https://maira.pro(Xserver 上 の WordPress)
+- アプリ本体: https://app.maira.pro(Next.js。 /login /signup /roi /contact /privacy 等)
 - 想定ユーザー: 中小〜中堅の転職エージェント企業(社員 5〜50 名)
 - 提供形態: クラウド SaaS(Webブラウザのみ、PWA 対応)
 - 価格: 月額サブスクリプション(プラン詳細は別途お問い合わせ)
@@ -86,13 +87,13 @@ Maira(マイラ)は、転職エージェント企業向けの業務効率化SaaS
 
 ## アクセスとログイン
 
-- URL: https://www.maira.pro
+- URL: https://app.maira.pro
 - 推奨ブラウザ: Chrome / Safari / Edge の最新版
 - スマートフォン: PWA としてホーム画面に追加可能
 - ログイン方法: メール + パスワード、または Google アカウント(設定後)
 
 ## サポート
 
-- お問い合わせ: https://www.maira.pro/contact
-- ヘルプ: https://www.maira.pro/support
+- お問い合わせ: https://app.maira.pro/contact
+- ヘルプ: https://app.maira.pro/support
 - 一次返信 SLA: 1 営業日以内

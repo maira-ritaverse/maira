@@ -305,7 +305,9 @@ Deno.serve(async (req) => {
         const { subject, body } = expandSubjectAndBody(subjectTemplate, bodyTemplate, ctx);
 
         // 本文 内 URL を トラッキング 短縮 URL に 置換 (クリック 計測)
-        const siteUrl = (Deno.env.get("NEXT_PUBLIC_SITE_URL") ?? "https://www.maira.pro").replace(
+        // fallback は app サブドメイン (Next.js アプリ の /r/{id} が click tracking の
+        // ハンドラ。 maira.pro root は WordPress LP を返し 404 になるため使えない)。
+        const siteUrl = (Deno.env.get("NEXT_PUBLIC_SITE_URL") ?? "https://app.maira.pro").replace(
           /\/$/,
           "",
         );

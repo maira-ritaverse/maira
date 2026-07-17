@@ -1,5 +1,7 @@
 import type { MetadataRoute } from "next";
 
+import { getSiteUrl } from "@/lib/config/site-url";
+
 /**
  * /robots.txt 動的生成
  *
@@ -10,9 +12,10 @@ import type { MetadataRoute } from "next";
  *   - 公開 LP / 規約 / プライバシーポリシー / 共有リンクのみ index 許可
  *   - 認証必須エリア(/app, /agency)+ API + 認証コールバック等は disallow
  *   - 共有リンク(/share/intake/*, /f/*)は意図的に index 許可(B2B 用途)
+ *   - fallback は app.maira.pro(Next.js は app サブドメインのみ)
  */
 export default function robots(): MetadataRoute.Robots {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://maira.pro";
+  const siteUrl = getSiteUrl();
   return {
     rules: [
       {

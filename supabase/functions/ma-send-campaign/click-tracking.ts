@@ -13,7 +13,7 @@ export type WrapUrlsArgs = {
   /** 任意。 紐付け なし でも 集計 可能 */
   sendLogId?: string | null;
   body: string;
-  /** デフォルト site URL (例 https://www.maira.pro)。 末尾 スラッシュ 無し */
+  /** デフォルト site URL (例 https://app.maira.pro)。 末尾 スラッシュ 無し */
   siteUrl: string;
 };
 

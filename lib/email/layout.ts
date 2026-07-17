@@ -31,7 +31,7 @@ export function renderEmailLayout({ previewTitle, bodyHtml }: EmailLayoutArgs): 
               <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                   <td style="vertical-align:middle;padding-right:10px;">
-                    <img src="https://www.maira.pro/icon-192.png" width="28" height="28" alt="Maira" style="display:block;border:0;">
+                    <img src="https://app.maira.pro/icon-192.png" width="28" height="28" alt="Maira" style="display:block;border:0;">
                   </td>
                   <td style="vertical-align:middle;font-size:16px;font-weight:700;letter-spacing:0.05em;color:#111;">Maira</td>
                 </tr>

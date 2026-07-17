@@ -18,7 +18,7 @@ import { createServiceClient } from "@/lib/supabase/service";
  * 1 件 → bubble、 複数 → carousel (最大 12 件)。
  *
  * URL は LIFF が 設定 されて いれば LIFF URL、 無ければ
- * `https://maira.pro/app/jobs/{id}` (求職者側 詳細ページ)。
+ * `https://app.maira.pro/jobs/{id}` (求職者側 詳細ページ)。
  *
  * 送信後 line_messages.related_job_id を 単発紐付け で 更新 (1 件 目 のみ)。
  */

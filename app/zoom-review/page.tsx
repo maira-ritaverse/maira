@@ -11,6 +11,8 @@
  */
 import { AlertTriangle, CheckCircle2, ExternalLink, Info, ShieldCheck } from "lucide-react";
 
+import { getSiteUrl } from "@/lib/config/site-url";
+
 export const metadata = {
   title: "Zoom App Review Test Guide - Maira",
   description:
@@ -20,8 +22,7 @@ export const metadata = {
 export const dynamic = "force-static";
 
 export default function ZoomReviewGuidePage() {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://maira.pro";
-  const base = siteUrl.replace(/\/$/, "");
+  const base = getSiteUrl();
 
   return (
     <main className="mx-auto min-h-screen max-w-3xl bg-white p-6">
@@ -242,7 +243,7 @@ export default function ZoomReviewGuidePage() {
 
       <div className="mt-8 flex justify-between border-t pt-4 text-xs text-slate-500">
         <a
-          href="https://maira.pro/privacy"
+          href={`${base}/privacy`}
           target="_blank"
           rel="noreferrer"
           className="inline-flex items-center gap-1 underline"
@@ -251,7 +252,7 @@ export default function ZoomReviewGuidePage() {
           Privacy Policy
         </a>
         <a
-          href="https://maira.pro/terms"
+          href={`${base}/terms`}
           target="_blank"
           rel="noreferrer"
           className="inline-flex items-center gap-1 underline"

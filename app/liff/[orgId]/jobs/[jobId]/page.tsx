@@ -11,7 +11,7 @@ import { LiffJobView } from "./liff-job-view";
  *
  * フロー:
  *   1. URL は LINE が `https://liff.line.me/{liffId}/jobs/{jobId}` を redirect で 着地
- *      (Endpoint URL = https://maira.pro/liff/{orgId})
+ *      (Endpoint URL = https://app.maira.pro/liff/{orgId})
  *   2. クライアント側 で LIFF SDK init → ID Token 取得 → 求職者 認証
  *   3. 求人詳細 を 表示 → 「応募 する」ボタン → /liff/[orgId]/apply/[jobId] へ
  *
