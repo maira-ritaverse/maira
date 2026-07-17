@@ -200,24 +200,16 @@ export async function aiEnhanceSelfie(input: {
   const form = new FormData();
   form.append("model", "gpt-image-1");
 
-  // gpt-image-1 の /images/edits は image フィールド を 複数回 送る と
-  // 「同じ 被写体 の 複数 参照 画像」 として 扱う (公式 仕様、 最大 16 枚)。
-  // ユーザー は 通常 1 枚 しか 持って いない ため 同じ 画像 を 3 回 送って
-  // 「この 顔 で 確定」 という シグナル を 強める (identity anchoring)。
+  // gpt-image-1 の /images/edits は 1 枚 の 入力 画像 のみ 受け付ける。
+  // 一時期、 identity anchoring を 狙って 同一 selfie を 3 枚 参照 と して 送る
+  // 実装 に して いた が、 OpenAI から 「Duplicate parameter: 'image'」 の 400 が 返り
+  // 動作 しなかった。 「image[]」 の 配列 syntax も 同じ 結果 (multi-image は
+  // gpt-image-1.5 以降 の 対応 と 推測)。
   //
-  // OpenAI の 課金 は 出力 画像 単位 の ため、 入力 を 増やして も コスト は 増えない。
-  // 効果 は 個別 差 が ある が、 プロンプト の IDENTITY LOCK と 併せて 別人化 を
-  // 目立ちにくく する 効果 が 期待 できる。
-  //
-  // Blob は fetch で 消費 される と 再利用 できない ため、 arrayBuffer で 一度
-  // 読んでから 3 つ の File インスタンス に 複製 する。
-  const imageBytes = await input.imageBlob.arrayBuffer();
-  const imageMime = input.imageBlob.type || "image/png";
-  const REFERENCE_COUNT = 3;
-  for (let i = 0; i < REFERENCE_COUNT; i++) {
-    const copy = new File([imageBytes], input.filename, { type: imageMime });
-    form.append("image", copy);
-  }
+  // 複数枚 送信 は gpt-image-1.5 系 へ の モデル 切替 と セット で 別途 検証 する。
+  // 現状 の 顔 再現度 改善 は プロンプト の IDENTITY LOCK / COMMON FAILURE PATTERNS
+  // 側 に 全 て 集約 されて いる。
+  form.append("image", input.imageBlob, input.filename);
 
   form.append("prompt", promptToUse);
   form.append("size", "1024x1536"); // 縦長 = 履歴書の 3:4
