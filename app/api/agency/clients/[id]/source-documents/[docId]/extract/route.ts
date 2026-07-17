@@ -8,7 +8,10 @@ import {
   extractClientFromDocument,
   isSupportedClientExtractMime,
 } from "@/lib/clients/ai-extract-from-document";
-import { CLIENT_EXTRACTION_FIELD_KEYS } from "@/lib/ai/prompts/client-extract-from-document";
+import {
+  CLIENT_EXTRACTION_FIELD_KEYS,
+  CLIENT_EXTRACTION_KEY_TO_CAMEL,
+} from "@/lib/ai/prompts/client-extract-from-document";
 import { getClientRecordWithDecrypted } from "@/lib/clients/queries";
 import { checkAiUsageLimit, recordAiUsage } from "@/lib/features/ai-usage";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -69,7 +72,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
     return NextResponse.json(
       {
         error: "over_quota",
-        message: `組織の月次 AI 利用上限に達しました (${usage.current} / ${usage.limit})。 来月のリセット後、 または 管理者が 設定変更後に 再試行してください。`,
+        message: `組織の月次 AI 利用上限に達しました (${usage.current} / ${usage.limit})。来月のリセット後、または管理者が設定変更後に再試行してください。`,
         current: usage.current,
         limit: usage.limit,
         resetsAt: usage.resetsAt,
@@ -84,7 +87,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
     return NextResponse.json(
       {
         error: "unsupported_mime",
-        message: `AI 抽出 に 対応 して いない 形式 です (${doc.mimeType})。`,
+        message: `AI抽出に対応していない形式です (${doc.mimeType})。`,
       },
       { status: 400 },
     );
@@ -96,7 +99,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
     return NextResponse.json(
       {
         error: "file_too_large",
-        message: `AI 抽出 対象 の ファイル サイズ は ${CLIENT_EXTRACT_MAX_BYTES / 1024 / 1024}MB 以下 に して ください。 大きい PDF は ページ を 分割 して 保存 し 直す か、 手入力 して ください。`,
+        message: `AI抽出対象のファイルサイズは${CLIENT_EXTRACT_MAX_BYTES / 1024 / 1024}MB以下にしてください。大きいPDFはページを分割して保存し直すか、手入力してください。`,
       },
       { status: 400 },
     );
@@ -109,7 +112,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
     return NextResponse.json(
       {
         error: "storage_read_failed",
-        message: dl.error?.message ?? "元書類 の 読込 に 失敗しました",
+        message: dl.error?.message ?? "元書類の読込に失敗しました",
       },
       { status: 500 },
     );
@@ -128,8 +131,8 @@ export async function POST(_request: Request, { params }: RouteParams) {
         error: ai.reason,
         message:
           ai.reason === "schema_error"
-            ? "AI 出力 の 構造 が 不正 でした。 再度 お試し ください。"
-            : "AI 呼び出し に 失敗 しました。 時間 を 置いて 再度 お試し ください。",
+            ? "AI出力の構造が不正でした。再度お試しください。"
+            : "AI呼び出しに失敗しました。時間を置いて再度お試しください。",
         detail: ai.message,
       },
       { status },
@@ -138,41 +141,34 @@ export async function POST(_request: Request, { params }: RouteParams) {
 
   // ── 現状 の client_record を 取得 (プレビュー UI の 差分 表示 用)。
   //    復号 込み だ が、 復号 に 失敗 して も extraction は 返せる ので try/catch。
-  let current: Record<string, unknown> = {};
+  //    キー は CLIENT_EXTRACTION_FIELD_KEYS × CLIENT_EXTRACTION_KEY_TO_CAMEL の
+  //    対応 で 機械 的 に 埋め る (手書き マッピング だと フィールド 追加 時 に
+  //    ここ の 更新 漏れ で 「差分 プレビュー が 常に 空 → 誤 上書き」 に なる)。
+  const current: Record<string, unknown> = {};
   try {
     const client = await getClientRecordWithDecrypted(clientRecordId);
     if (client) {
-      current = {
-        name: client.name ?? "",
-        name_kana: client.nameKana ?? "",
-        birth_date: client.birthDate ?? "",
-        gender: client.gender ?? "",
-        nationality: client.nationality ?? "",
-        marital_status: client.maritalStatus ?? "",
-        phone: client.phone ?? "",
-        phone2: client.phone2 ?? "",
-        email: client.email ?? "",
-        email2: client.email2 ?? "",
-        postal_code: client.postalCode ?? "",
-        prefecture: client.prefecture ?? "",
-        city: client.city ?? "",
-        street: client.street ?? "",
-        building: client.building ?? "",
-        current_employment_type: client.currentEmploymentType ?? "",
-        current_annual_income: client.currentAnnualIncome,
-        final_education: client.finalEducation ?? "",
-        experience_industries: client.experienceIndustries ?? [],
-        experience_occupations: client.experienceOccupations ?? [],
-        desired_industries: client.desiredIndustries ?? [],
-        desired_occupations: client.desiredOccupations ?? [],
-        desired_locations: client.desiredLocations ?? [],
-        desired_annual_income: client.desiredAnnualIncome,
-        job_change_timing: client.jobChangeTiming ?? "",
-        education_detail: client.educationDetail ?? "",
-        skills: client.skills ?? "",
-        job_change_reason: client.jobChangeReason ?? "",
-        desired_conditions: client.desiredConditions ?? "",
-      };
+      const record = client as unknown as Record<string, unknown>;
+      for (const key of CLIENT_EXTRACTION_FIELD_KEYS) {
+        const camel = CLIENT_EXTRACTION_KEY_TO_CAMEL[key];
+        const raw = record[camel];
+        // 数値 (年収) は null を そのまま (0 と 未入力 の 区別 を UI で 判定)、
+        // 文字列 は null → ""、 配列 は null → [] に 正規化 して 抽出値 と キー を
+        // 揃える (プレビュー 側 の hasDiff / displayValue が シンプル に なる)。
+        if (key === "current_annual_income" || key === "desired_annual_income") {
+          current[key] = raw ?? null;
+        } else if (
+          key === "experience_industries" ||
+          key === "experience_occupations" ||
+          key === "desired_industries" ||
+          key === "desired_occupations" ||
+          key === "desired_locations"
+        ) {
+          current[key] = Array.isArray(raw) ? raw : [];
+        } else {
+          current[key] = typeof raw === "string" ? raw : "";
+        }
+      }
     }
   } catch (err) {
     console.warn("[client-extract] current fetch failed", err);
@@ -189,14 +185,12 @@ export async function POST(_request: Request, { params }: RouteParams) {
   });
 
   // ── レスポンス。 抽出結果 は client_records キー に 揃って いる の で、 呼出 側
-  //    が field key で 直接 loop できる。
+  //    が CLIENT_EXTRACTION_FIELD_KEYS を そのまま import して loop できる。
   const { extraction_notes, confidence, ...extractedFields } = ai.result;
   return NextResponse.json({
     extracted: extractedFields,
     current,
     extractionNotes: extraction_notes,
     confidence,
-    // 呼出 側 が 参照 する 用 (単一 source of truth)。 UI 側 で は import しても OK。
-    fieldKeys: CLIENT_EXTRACTION_FIELD_KEYS,
   });
 }

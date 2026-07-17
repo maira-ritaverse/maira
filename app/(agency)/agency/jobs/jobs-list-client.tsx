@@ -152,7 +152,12 @@ export function JobsListClient({ jobs }: Props) {
               .filter((s) => s.length > 0)
               .join(" ");
             setSearchQuery(mergedQuery);
-            setStatusFilter(f.statusFilter);
+            // AI は nl-parse-schema の default "all" を返す可能性があるが、UI 側は
+            // タブ 3 種のみで "all" を表現する手段がない。 "all" を素直に反映すると
+            // どのタブも active でない不可視状態になり、ユーザーが「なぜ全件出て
+            // いるのか」「どう元に戻すか」を判断できないので、"open" に coerce する。
+            // 停止中 / 終了 を含めて検索したければユーザーが明示的にタブを切替。
+            setStatusFilter(f.statusFilter === "all" ? "open" : f.statusFilter);
             setLocationKeyword(f.locationKeyword);
             setMinSalary(f.minSalary === null ? "" : String(f.minSalary));
             setMaxSalary(f.maxSalary === null ? "" : String(f.maxSalary));
@@ -194,9 +199,8 @@ export function JobsListClient({ jobs }: Props) {
           }}
         />
         {/* ステータス タブ (募集中 / 停止中 / 終了)。
-            AI 検索 が statusFilter="all" を 返す 可能性 は 残る が、 その 場合 は
-            どの タブ も active に なら ない (全 件 表示 の 状態)。 通常 導線 は タブ
-            クリック で 明示 的 に 選択 する。 */}
+            AI 検索 が返す statusFilter は onApplyAiFilters で "open" に coerce して
+            いる ので、 UI 上 常に いずれか の タブ が active。 */}
         <div
           role="tablist"
           aria-label="求人 の ステータス"

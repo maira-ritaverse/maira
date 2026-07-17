@@ -95,6 +95,32 @@ function hasDiff(current: unknown, extracted: unknown): boolean {
   return String(c) !== String(e);
 }
 
+/**
+ * 「AI が 何も 抽出 できなかった 値」 か どうか。 空文字 / null / undefined /
+ * 空配列 が 該当。 これ ら を 現在値 (非空) に 上書き して しまう と、 うっかり
+ * 保存 で 既存 プロフィール が 消える データ 損失 バグ が 起きる。
+ *
+ * 「AI 抽出値 が 空 で 現在値 が 埋まって いる 行」 は 差分 と して 表示 は する が、
+ * 初期 チェック は OFF に する (= 明示 的 に クリア したい 場合 だけ ユーザー が
+ * チェック する)。
+ */
+function isEmptyExtracted(value: unknown): boolean {
+  if (value === null || value === undefined) return true;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === "string") return value === "";
+  // 数値 は null で なけれ ば 有効 (0 万円 も 意味 が ある 値 と して 尊重)
+  return false;
+}
+
+/**
+ * 「初期 チェック ON にす べき か」の 判定:
+ * 差分 が あり、 かつ 抽出値 が 非空 の 行 のみ。 抽出 で 空 が 返る = AI が 読めな
+ * かった 場合 が 大半 で、 それ を 現在値 に 上書き する のは データ 損失 リスク。
+ */
+function shouldPreCheck(current: unknown, extracted: unknown): boolean {
+  return hasDiff(current, extracted) && !isEmptyExtracted(extracted);
+}
+
 const CONFIDENCE_LABEL: Record<"high" | "medium" | "low", string> = {
   high: "高",
   medium: "中",
@@ -144,10 +170,14 @@ export function DocumentExtractPreviewModal({
           extractionNotes: body.extractionNotes ?? "",
           confidence: (body.confidence as "high" | "medium" | "low") ?? "medium",
         };
-        // 差分 が ある 行 だけ 初期 チェック ON
+        // 初期 チェック ON: 差分 あり かつ 抽出値 が 非空 の 行 のみ。
+        // AI が 読めなかった (= 抽出値 が 空) 項目 を 現在値 に 上書き して 空 に
+        // する のは データ 損失 なので、 初期 状態 で は チェック しない。
+        // ユーザー が 明示 的 に 「クリア したい」 と 判断 した 場合 のみ 手動 で
+        // チェック する 導線 は 残す。
         const initialChecked = new Set<ClientExtractionFieldKey>();
         for (const key of CLIENT_EXTRACTION_FIELD_KEYS) {
-          if (hasDiff(parsed.current[key], parsed.extracted[key])) {
+          if (shouldPreCheck(parsed.current[key], parsed.extracted[key])) {
             initialChecked.add(key);
           }
         }
@@ -165,14 +195,24 @@ export function DocumentExtractPreviewModal({
     };
   }, [clientRecordId, docId]);
 
-  // 行 の チェック 切替 / 一括 操作 用
-  const rowsWithDiff = useMemo(() => {
-    if (!data) return new Set<ClientExtractionFieldKey>();
-    const s = new Set<ClientExtractionFieldKey>();
+  // 行 の チェック 切替 / 一括 操作 用。 2 種 の 集合 を 分けて 持つ:
+  //   ・rowsWithDiff: 現在値 と 抽出値 が 異なる 全 行 (バッジ 表示 と 「差分の行だけ
+  //     グレー 化 しない」 判定 に 使う)
+  //   ・rowsToPreCheck: 差分 あり かつ 抽出値 が 非空 (「差分すべて選択」ボタン と
+  //     初期 チェック に 使う)。 データ 損失 リスク 行 は 除外 済み。
+  const { rowsWithDiff, rowsToPreCheck } = useMemo(() => {
+    const withDiff = new Set<ClientExtractionFieldKey>();
+    const toPre = new Set<ClientExtractionFieldKey>();
+    if (!data) return { rowsWithDiff: withDiff, rowsToPreCheck: toPre };
     for (const key of CLIENT_EXTRACTION_FIELD_KEYS) {
-      if (hasDiff(data.current[key], data.extracted[key])) s.add(key);
+      const cur = data.current[key];
+      const ext = data.extracted[key];
+      if (hasDiff(cur, ext)) {
+        withDiff.add(key);
+        if (!isEmptyExtracted(ext)) toPre.add(key);
+      }
     }
-    return s;
+    return { rowsWithDiff: withDiff, rowsToPreCheck: toPre };
   }, [data]);
 
   const toggle = (key: ClientExtractionFieldKey) => {
@@ -184,7 +224,8 @@ export function DocumentExtractPreviewModal({
     });
   };
 
-  const selectAllDiff = () => setChecked(new Set(rowsWithDiff));
+  // 「差分すべて選択」 は データ 損失 リスク の ある 空 抽出値 行 を 含めない。
+  const selectAllDiff = () => setChecked(new Set(rowsToPreCheck));
   const selectNone = () => setChecked(new Set());
 
   async function handleSave() {
@@ -264,7 +305,8 @@ export function DocumentExtractPreviewModal({
                   読み取り精度: {CONFIDENCE_LABEL[data.confidence]}
                 </span>
                 <span className="text-muted-foreground">
-                  差分あり {rowsWithDiff.size} 件 / 反映予定 {checked.size} 件
+                  差分{rowsWithDiff.size}件・反映候補{rowsToPreCheck.size}件・チェック中
+                  {checked.size}件
                 </span>
               </div>
               <div className="flex items-center gap-1 text-xs">
@@ -304,6 +346,9 @@ export function DocumentExtractPreviewModal({
                     const cur = displayValue(key, data.current[key]);
                     const ext = displayValue(key, data.extracted[key]);
                     const isChecked = checked.has(key);
+                    // 「差分あり だ が 抽出値 が 空」 = 現在値 を クリア する 危険 な 行。
+                    // 視覚 的 に 警告 して 誤 チェック を 防ぐ。
+                    const clearingCurrent = diff && isEmptyExtracted(data.extracted[key]);
                     return (
                       <tr key={key} className={diff ? "border-t" : "border-t opacity-60"}>
                         <td className="px-3 py-2 align-top">
@@ -325,6 +370,13 @@ export function DocumentExtractPreviewModal({
                         <td className="px-3 py-2 align-top text-xs">
                           {ext ? (
                             <span className={diff ? "font-medium" : ""}>{ext}</span>
+                          ) : clearingCurrent ? (
+                            <span
+                              className="text-amber-700 dark:text-amber-400"
+                              title="AI が読み取れなかった項目です。チェックすると現在値が削除されます。"
+                            >
+                              (未抽出 — チェックすると現在値を削除)
+                            </span>
                           ) : (
                             <span className="text-muted-foreground/50">(未抽出)</span>
                           )}

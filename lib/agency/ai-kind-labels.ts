@@ -24,7 +24,7 @@ export const AI_KIND_LABEL: Record<string, string> = {
   agency_ma_flow_generation: "Flow ビルダー AI 生成",
   agency_ma_segment_generation: "Segment ビルダー AI 生成",
   agency_ma_flow_improvement: "Flow 改善 提案 AI",
-  agency_client_document_extract: "求職者 元書類 → プロフィール AI 反映",
+  agency_client_document_extract: "求職者元書類 → プロフィールAI反映",
 };
 
 /** 上限設定 UI で「組織横断」「求職者 1 人あたり」を 表示する分類 */
