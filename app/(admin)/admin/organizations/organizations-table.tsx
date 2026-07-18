@@ -166,8 +166,10 @@ export function OrganizationsTable({ archived }: { archived: boolean }) {
   const handleHardDelete = async (target: OrgRow) => {
     const typed = window.prompt(
       `「${target.name}」を完全削除します。\n\n` +
-        `この操作は取り消せません。所属メンバーのアカウントは残りますが、` +
-        `クライアント / 求人 / 紹介 / 面談 / 通知などの全データが連鎖削除されます。\n\n` +
+        `この操作は取り消せません。クライアント / 求人 / 紹介 / 面談 / 通知など、` +
+        `この企業に紐づく全データが連鎖削除されます。\n\n` +
+        `所属メンバーのアカウント(auth.users)は、他組織に所属していない場合のみ削除されます。` +
+        `削除されたメールアドレスは新規登録に再利用できます。\n\n` +
         `実行するには企業名を正確に入力してください:`,
       "",
     );
@@ -178,9 +180,14 @@ export function OrganizationsTable({ archived }: { archived: boolean }) {
     }
     setActingId(target.id);
     try {
-      await apiFetch(`/api/admin/organizations/${target.id}`, { method: "DELETE" });
+      const res = await apiFetch<{ deletedOrphanUserCount?: number }>(
+        `/api/admin/organizations/${target.id}`,
+        { method: "DELETE" },
+      );
       setOrgs((prev) => prev.filter((o) => o.id !== target.id));
-      showToast("success", `${target.name} を完全削除しました`);
+      const orphanCount = res?.deletedOrphanUserCount ?? 0;
+      const suffix = orphanCount > 0 ? `(メンバー ${orphanCount} 名のアカウントも削除)` : "";
+      showToast("success", `${target.name} を完全削除しました${suffix}`);
     } catch (err) {
       showToast("error", `削除失敗:${getErrorMessage(err)}`);
     } finally {

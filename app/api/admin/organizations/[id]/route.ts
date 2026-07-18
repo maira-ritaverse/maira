@@ -271,9 +271,17 @@ export async function PATCH(request: Request, { params }: RouteParams) {
  *    すべて FK の on delete cascade で連鎖削除される。元に戻せない。
  *    UI 側からは「退会済タブで、すでに archived の組織にのみ」表示する。
  *
- * 連鎖されないもの:
- *   ・auth.users(管理者 / アドバイザー個人アカウント自体は残す。
- *     その人が別組織で使うかもしれないため)
+ * auth.users の 扱い:
+ *   ・以前 は 「他組織 で 使うかも しれない」 理由 で auth.users を 残していた が、
+ *     結果 と して 「同じ メール で 再登録 → email_already_exists 409」 と なり
+ *     「完全 削除 して やり直す」 が できない 状態 だった。
+ *   ・本 実装 は 削除 対象 org の member だった user について、 以下 3 条件 を
+ *     全 て 満たす 場合 のみ auth.users も 削除 する:
+ *       (a) 他 organization_members に 所属 が 残って いない
+ *       (b) profiles.is_maira_admin = false (Maira 運営 admin は 保護)
+ *       (c) profiles.account_type = 'organization_member'
+ *           (seeker アカウント は 別 系統 なので 触ら ない)
+ *   ・profiles は auth.users への FK cascade で 連鎖 削除 される (追加 SQL 不要)。
  *
  * 安全策:
  *   ・isMairaAdmin ガード
@@ -317,6 +325,16 @@ export async function DELETE(request: Request, { params }: RouteParams) {
     );
   }
 
+  // ── 削除前 に メンバー の user_id を 収集 (org 削除 後 は org_members が
+  //    cascade で 消えて しまう ため、 事前 に 取る 必要 が ある)
+  const { data: memberRows } = await admin
+    .from("organization_members")
+    .select("user_id")
+    .eq("organization_id", id);
+  const memberUserIds = Array.from(
+    new Set(((memberRows ?? []) as Array<{ user_id: string }>).map((r) => r.user_id)),
+  );
+
   // 監査ログ(削除前)
   await recordAuditLog({
     userId: actor.id,
@@ -326,6 +344,7 @@ export async function DELETE(request: Request, { params }: RouteParams) {
       organization_id: org.id,
       organization_name: org.name,
       archived_at: org.archived_at,
+      member_user_count: memberUserIds.length,
     },
     ipAddress: request.headers.get("x-forwarded-for"),
     userAgent: request.headers.get("user-agent"),
@@ -339,5 +358,77 @@ export async function DELETE(request: Request, { params }: RouteParams) {
     );
   }
 
-  return NextResponse.json({ ok: true, deletedName: org.name });
+  // ── 孤児 auth.users の クリーンアップ。
+  //    org 削除 後 なので、 残った organization_members を count すれば 「他 org
+  //    に 所属 が 残って いる か」 が 判定 できる。
+  //    プラット フォーム admin (is_maira_admin) と seeker は 対象外。
+  //    1 件 でも 失敗 したら warn ログ のみ で 継続 (org 削除 は 成功 済み、
+  //    残った auth.users は 手動 掃除 で 対応 する 方針)。
+  let deletedUserCount = 0;
+  for (const userId of memberUserIds) {
+    try {
+      // 他 org 所属 の 有無
+      const { count: otherMembershipCount, error: countErr } = await admin
+        .from("organization_members")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId);
+      if (countErr) {
+        console.warn("[admin/orgs/delete] membership count failed", { userId, err: countErr });
+        continue;
+      }
+      if ((otherMembershipCount ?? 0) > 0) continue;
+
+      // profiles で 運営 admin / account_type を 確認
+      const { data: profileRow } = await admin
+        .from("profiles")
+        .select("is_maira_admin, account_type")
+        .eq("id", userId)
+        .maybeSingle();
+      const prof = profileRow as {
+        is_maira_admin: boolean | null;
+        account_type: string | null;
+      } | null;
+      if (!prof) continue;
+      if (prof.is_maira_admin === true) continue;
+      if (prof.account_type !== "organization_member") continue;
+
+      // 3 条件 満たした → auth.users 削除。 profiles は cascade で 消える。
+      const { error: userDeleteErr } = await admin.auth.admin.deleteUser(userId);
+      if (userDeleteErr) {
+        console.warn("[admin/orgs/delete] auth user delete failed", {
+          userId,
+          message: userDeleteErr.message,
+        });
+        continue;
+      }
+      deletedUserCount++;
+    } catch (err) {
+      console.warn("[admin/orgs/delete] user cleanup exception", {
+        userId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // 監査ログ に 削除 した user 数 を 追記 (2 行 目 として、 完了 の 事実 を 残す)
+  if (deletedUserCount > 0) {
+    await recordAuditLog({
+      userId: actor.id,
+      action: "admin_accessed_user",
+      metadata: {
+        event_subtype: "admin_hard_deleted_org_orphan_users",
+        organization_id: org.id,
+        organization_name: org.name,
+        deleted_user_count: deletedUserCount,
+      },
+      ipAddress: request.headers.get("x-forwarded-for"),
+      userAgent: request.headers.get("user-agent"),
+    });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    deletedName: org.name,
+    deletedOrphanUserCount: deletedUserCount,
+  });
 }
