@@ -45,11 +45,20 @@ export async function GET(request: Request) {
 
   const res = NextResponse.redirect(`${origin}${next}`);
 
-  // H1 修正: type='recovery' で 認証 が 通った 場合 だけ、 短命 の パスワード リセット
-  // チケット を 発行 する。 updatePassword server action は この チケット を 必須 化
-  // する ため、 通常 ログイン セッション だけ で は 現 パスワード なし の 変更 が
-  // できない よう に なる。
-  if (type === "recovery") {
+  // H1 修正: type='recovery' / 'invite' で 認証 が 通った 場合 だけ、 短命 の
+  // パスワード リセット チケット を 発行 する。 updatePassword server action は
+  // この チケット を 必須 化 する ため、 通常 ログイン セッション だけ で は 現
+  // パスワード なし の 変更 が できない よう に なる。
+  //
+  // invite を 含める 理由:
+  //   組織 admin 招待 フロー は POST /api/admin/organizations で
+  //   generateLink({type:"invite"}) → メール リンク → /auth/confirm?type=invite&
+  //   next=/reset-password の 経路 で 動く。 recovery だけ を チケット 発行 対象
+  //   に すると 招待 ユーザー は 初回 パスワード を 設定 できず 「有効期限が切れて
+  //   います」 エラー に なる。 invite も 「メール 受信 = 本人 の 一発 証明」 と
+  //   いう 点 で recovery と 同型 の セキュリティ 前提 な ので、 同じ チケット を
+  //   発行 して 良い (むしろ しない と 招待 フロー が 完全 停止 する)。
+  if (type === "recovery" || type === "invite") {
     const {
       data: { user },
     } = await supabase.auth.getUser();

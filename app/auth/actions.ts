@@ -272,14 +272,18 @@ export async function updatePassword(newPassword: string) {
     };
   }
 
-  // H1 修正: recovery セッション 経由 かどうか を チケット cookie で 検証。
+  // H1 修正: recovery / invite セッション 経由 かどうか を チケット cookie で 検証。
   // 通常 ログイン セッション で /reset-password に 直行 する セッション 乗っ取り 経路 を 塞ぐ。
+  //
+  // エラー 文言 に は 「セッション」 の 語 を 含める こと。 reset-password-form.tsx
+  // の 分岐 が この キーワード を 検出 して、 綺麗 な 「パスワード再設定をやり直す」
+  // 誘導 UI に 切り替える。
   const cookieStore = await cookies();
   const ticket = cookieStore.get(PW_RESET_TICKET_COOKIE)?.value;
   if (!verifyPwResetTicket(ticket, user.id)) {
     return {
       error:
-        "パスワード変更 の 有効 期限 が 切れて い ます。 /forgot-password から やり 直し てください。",
+        "パスワード変更のセッションが無効です。リンクの有効期限が切れているため、再度メールリンクを開き直してください。",
     };
   }
 
