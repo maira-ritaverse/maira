@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClientRequestSchema } from "@/lib/clients/types";
+import { logClientCreate } from "@/lib/audit/client-audit-log";
 
 /**
  * POST /api/agency/import/clients
@@ -410,6 +411,9 @@ export async function POST(request: Request) {
     const insertRow: Record<string, unknown> = {
       organization_id: role.organization.id,
       assigned_member_id: resolvedAssigneeMemberId,
+      // インポート 実行者 (呼出 CA) を 起票者 と する。 CSV 上 の 「担当 者 メール」で
+      // resolvedAssigneeMemberId が 分かれた 場合 でも、 起票 は インポート した 本人。
+      created_by_member_id: role.member.id,
       name: d.name,
       // email は任意入力に対応済 (createClientRequestSchema)。 空文字 / undefined は
       // null に倒し、他フィールドと挙動を揃える (重複判定 / 招待送信 で 「値あり = 非空文字列」)。
@@ -488,6 +492,14 @@ export async function POST(request: Request) {
       });
       continue;
     }
+
+    // 新規作成 の 監査ログ を 1 行 記録 (失敗 は 握って warn のみ)。
+    // インポート 経由 の 作成 も 集計 対象 と する ため、 単発 API と 同じ 経路 で 呼ぶ。
+    await logClientCreate({
+      organizationId: role.organization.id,
+      clientRecordId: insertedRow.id as string,
+      actorMemberId: role.member.id,
+    });
 
     existingEmails.add(emailLower); // 同一 CSV 内の重複も以後はスキップ
     results.push({ rowIndex, outcome: "created", clientId: insertedRow.id as string });

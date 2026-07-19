@@ -68,6 +68,44 @@ export type LogChangeInput = {
 };
 
 /**
+ * 求職者 の 新規作成 を 1 行 記録する。
+ *
+ * 目的:
+ *   ・Phase 2 (CA 個人 信頼スコア) の 「データ 品質 = 誰 が プロフィール を
+ *     埋めた か」 の 起点 を 追跡する
+ *   ・client_records.created_by_member_id と 二重化 に なる が、 audit_log は
+ *     「作成 イベント の 時刻」も 記録する 意味 が ある (プロフィール が 後で
+ *     埋め られた 場合 の delta 分析)
+ *
+ * field_name は "__create__" 固定、 old_value / new_value は null。
+ * public intake form 経由 の セルフ 登録 (actor が null) の 場合 は 記録 しない
+ * (RLS 側 も actor_member_id が nullable なので DB に は 入る が、 集計 上 意味
+ *  を 持たない ため)。
+ *
+ * エラーは 握って warn のみ (監査 ログ 失敗 で 本処理 が 落ちない よう)。
+ */
+export async function logClientCreate(base: {
+  organizationId: string;
+  clientRecordId: string;
+  actorMemberId: string | null;
+}): Promise<void> {
+  if (!base.actorMemberId) return;
+  const supabase = await createClient();
+  const { error } = await supabase.from("client_audit_log").insert({
+    organization_id: base.organizationId,
+    client_record_id: base.clientRecordId,
+    actor_member_id: base.actorMemberId,
+    action: "create" as AuditAction,
+    field_name: "__create__",
+    old_value: null,
+    new_value: null,
+  });
+  if (error) {
+    console.warn("[audit] client_audit_log create insert failed:", error.message);
+  }
+}
+
+/**
  * 複数フィールド変更を 1 トランザクションで記録する。
  * - 値が同じフィールドはスキップ。
  * - null vs null や undefined は「未変更」として扱う。

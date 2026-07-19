@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClientRequestSchema } from "@/lib/clients/types";
+import { logClientCreate } from "@/lib/audit/client-audit-log";
 
 /**
  * POST /api/agency/clients
@@ -59,6 +60,9 @@ export async function POST(request: Request) {
     .insert({
       organization_id: role.organization.id,
       assigned_member_id: role.member.id,
+      // 新規 登録者 は 現時点 の 呼出 CA と 同じ。 assigned_member_id は 後で
+      // 変更 され うる が created_by_member_id は 履歴 と して 変更 しない。
+      created_by_member_id: role.member.id,
       name,
       // email は任意入力。空文字は null に倒す(重複判定 / 招待送信の判定を
       // 「値あり = 非空文字列」で揃えるため)。
@@ -85,6 +89,13 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+
+  // ── 新規作成 の 監査ログ (失敗 は 握って warn のみ、 本処理 は 止め ない)
+  await logClientCreate({
+    organizationId: role.organization.id,
+    clientRecordId: data.id,
+    actorMemberId: role.member.id,
+  });
 
   return NextResponse.json({ id: data.id, success: true });
 }

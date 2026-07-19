@@ -74,6 +74,9 @@ export async function POST(request: Request) {
       job_posting_id,
       notes: notes || null,
       // status はDBデフォルト 'planned' に任せる
+      // Phase 2 の 応募起票貢献 集計 に 使用。 role.member が 稀 に null に なる
+      // (organization_member レコード 未作成 の 過渡状態) 場合 は null で 素通り。
+      created_by_member_id: role.member?.id ?? null,
     })
     .select("id")
     .single();

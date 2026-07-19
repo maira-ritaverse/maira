@@ -98,6 +98,10 @@ export async function POST(request: Request) {
       client_record_id,
       referral_id: referral_id ?? null,
       assigned_member_id,
+      // タスク を 振った 側 (delegator)。 assigned_member_id は 受け取る 側 で
+      // 同 一 の こと も あれば 他人 に 振った こと も ある。 チーム リード 行動
+      // の 評価 (Phase 2) に 使用。
+      created_by_member_id: role.member.id,
       title,
       priority: priority ?? null,
       due_at: due_at ?? null,
