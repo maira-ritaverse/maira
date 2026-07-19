@@ -67,7 +67,13 @@ export async function loadFeedSources(
       .gte("starts_at", range.fromIso)
       .lte("starts_at", range.toIso)
       .order("starts_at", { ascending: true }),
-    service.from("organization_members").select("id").eq("user_id", userId).maybeSingle(),
+    service
+      .from("organization_members")
+      .select("id")
+      .eq("user_id", userId)
+      // soft delete された メンバー は 予定 表示 の 対象 外
+      .is("removed_at", null)
+      .maybeSingle(),
   ]);
 
   const memberId = (memberResult.data as { id: string } | null)?.id ?? null;

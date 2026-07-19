@@ -67,6 +67,8 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       .from("organization_members")
       .select("organization_id")
       .eq("id", d.assigned_member_id)
+      // soft delete された メンバー は 担当 に 割り当て 不可
+      .is("removed_at", null)
       .maybeSingle();
 
     if (!memberRow || memberRow.organization_id !== role.organization.id) {

@@ -498,7 +498,9 @@ async function detectCallerScope(
     const { count } = await supabase
       .from("organization_members")
       .select("id", { count: "exact", head: true })
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      // soft delete された メンバー は agency_member と して 扱わない
+      .is("removed_at", null);
     if ((count ?? 0) > 0) return "agency_member";
   }
   return "seeker";

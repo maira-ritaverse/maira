@@ -112,6 +112,7 @@ export async function acceptInvitation(token: string): Promise<AcceptInvitationR
     .from("organization_members")
     .select("organization_id")
     .eq("id", data as string)
+    .is("removed_at", null)
     .maybeSingle();
   if (memberRow?.organization_id) {
     await syncSeatCountOrEnqueueFailure({

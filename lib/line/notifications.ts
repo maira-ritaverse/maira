@@ -113,7 +113,9 @@ async function fireEmailsSafe(
       .from("organization_members")
       .select("user_id, notification_prefs")
       .eq("organization_id", args.organizationId)
-      .eq("role", "admin");
+      .eq("role", "admin")
+      // soft delete された admin は 通知 対象 外
+      .is("removed_at", null);
 
     type Row = { user_id: string; notification_prefs: NotificationPrefs | null };
     const eligible = ((admins ?? []) as Row[]).filter(

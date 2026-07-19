@@ -30,6 +30,7 @@ export default async function SettingsPage() {
     .from("organization_members")
     .select("notification_prefs")
     .eq("id", role.member.id)
+    .is("removed_at", null)
     .maybeSingle();
   const prefs = ((data?.notification_prefs as NotificationPrefs | null) ?? {}) as NotificationPrefs;
 

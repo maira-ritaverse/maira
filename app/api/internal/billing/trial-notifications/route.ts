@@ -88,6 +88,8 @@ export async function POST(request: Request) {
       .select("user_id")
       .eq("organization_id", target.plan.organization_id)
       .eq("role", "admin")
+      // soft delete された admin は トライアル 通知 対象 外
+      .is("removed_at", null)
       .limit(1)
       .maybeSingle();
     const adminUserId = (adminMember as { user_id?: string } | null)?.user_id;

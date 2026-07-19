@@ -52,7 +52,9 @@ export async function PATCH(request: Request) {
       line_intro_updated_at: new Date().toISOString(),
     })
     .eq("user_id", user.id)
-    .eq("organization_id", organization.id);
+    .eq("organization_id", organization.id)
+    // soft delete された メンバー は 自己 紹介 を 更新 させない
+    .is("removed_at", null);
   if (error) {
     return NextResponse.json({ error: "update_failed", message: error.message }, { status: 500 });
   }

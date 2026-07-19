@@ -52,8 +52,10 @@ function makeSupabase(args: MakeArgs) {
   const eqProfile = vi.fn().mockReturnValue({ maybeSingle: maybeSingleProfile });
   const selectProfile = vi.fn().mockReturnValue({ eq: eqProfile });
 
-  // organization_members: select("id", { count: "exact", head: true }).eq("user_id", userId)
-  const eqMembership = vi.fn().mockResolvedValue({ count: hasMembership ? 1 : 0, error: null });
+  // organization_members: select("id", { count: "exact", head: true }).eq("user_id", userId).is("removed_at", null)
+  // soft delete された メンバー は count 対象外 に する ため .is() が 末尾 に 付く。
+  const isMembership = vi.fn().mockResolvedValue({ count: hasMembership ? 1 : 0, error: null });
+  const eqMembership = vi.fn().mockReturnValue({ is: isMembership });
   const selectMembership = vi.fn().mockReturnValue({ eq: eqMembership });
 
   // organization_ai_quotas: select("monthly_limit").eq("kind", kind).maybeSingle()

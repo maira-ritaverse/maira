@@ -63,6 +63,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
     .from("organization_members")
     .select("id, user_id, role, created_at")
     .eq("organization_id", id)
+    // soft delete された メンバー は 一覧 に 出さない
+    .is("removed_at", null)
     .order("created_at", { ascending: true });
   const members = (membersData ?? []) as MemberRow[];
 
@@ -330,7 +332,9 @@ export async function DELETE(request: Request, { params }: RouteParams) {
   const { data: memberRows } = await admin
     .from("organization_members")
     .select("user_id")
-    .eq("organization_id", id);
+    .eq("organization_id", id)
+    // 孤児 auth.users 判定 は active メンバー ベース で 行う
+    .is("removed_at", null);
   const memberUserIds = Array.from(
     new Set(((memberRows ?? []) as Array<{ user_id: string }>).map((r) => r.user_id)),
   );
@@ -367,11 +371,12 @@ export async function DELETE(request: Request, { params }: RouteParams) {
   let deletedUserCount = 0;
   for (const userId of memberUserIds) {
     try {
-      // 他 org 所属 の 有無
+      // 他 org 所属 の 有無 (active な もの だけ 見て、 soft delete 済 は 「所属 なし」 扱い)
       const { count: otherMembershipCount, error: countErr } = await admin
         .from("organization_members")
         .select("id", { count: "exact", head: true })
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .is("removed_at", null);
       if (countErr) {
         console.warn("[admin/orgs/delete] membership count failed", { userId, err: countErr });
         continue;

@@ -48,7 +48,9 @@ export async function GET(_request: Request, context: RouteContext) {
     const { data: members } = await guard.supabase
       .from("organization_members")
       .select("user_id, role")
-      .in("user_id", userIds);
+      .in("user_id", userIds)
+      // soft delete された メンバー は ロール 表示 の 対象 外
+      .is("removed_at", null);
     for (const m of (members ?? []) as Array<{ user_id: string; role: string }>) {
       userNameMap.set(m.user_id, m.role);
     }

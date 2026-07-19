@@ -62,6 +62,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     .from("organization_members")
     .select("id, organization_id")
     .eq("id", targetMemberId)
+    // soft delete された メンバー は 副 担当 に 追加 不可
+    .is("removed_at", null)
     .single();
   if (targetErr || !targetMember || targetMember.organization_id !== role.organization.id) {
     return NextResponse.json({ error: "member_not_in_org" }, { status: 400 });

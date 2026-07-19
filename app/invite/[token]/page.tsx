@@ -188,6 +188,8 @@ export default async function InviteLandingPage({
     .from("organization_members")
     .select("id, organization_id")
     .eq("user_id", user.id)
+    // soft delete された メンバー は 「既に 所属 済み」 と 見なさない
+    .is("removed_at", null)
     .maybeSingle();
 
   if (existingMember) {

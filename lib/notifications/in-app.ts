@@ -227,7 +227,9 @@ export async function fireInAppNotification(params: FireParams): Promise<void> {
   const { data: members, error: membersErr } = await service
     .from("organization_members")
     .select("user_id, notification_prefs")
-    .eq("organization_id", params.organizationId);
+    .eq("organization_id", params.organizationId)
+    // soft delete された メンバー は 通知 対象 外
+    .is("removed_at", null);
 
   if (membersErr) {
     console.error("[notifications] failed to load org members", {

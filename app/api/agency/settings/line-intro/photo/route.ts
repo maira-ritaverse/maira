@@ -60,6 +60,7 @@ export async function POST(request: Request) {
     .select("line_intro_photo_storage_path")
     .eq("user_id", user.id)
     .eq("organization_id", organization.id)
+    .is("removed_at", null)
     .maybeSingle();
   const oldPath =
     (memberRow as { line_intro_photo_storage_path: string | null } | null)
@@ -83,7 +84,9 @@ export async function POST(request: Request) {
       line_intro_updated_at: new Date().toISOString(),
     })
     .eq("user_id", user.id)
-    .eq("organization_id", organization.id);
+    .eq("organization_id", organization.id)
+    // soft delete された メンバー は 更新 させない
+    .is("removed_at", null);
   if (updErr) {
     // ロールバック: 新規 UP 済 の オブジェクト を 削除 (await + ログ)
     const { error: rollbackErr } = await admin.storage.from(BUCKET).remove([newPath]);
@@ -124,6 +127,7 @@ export async function DELETE() {
     .select("line_intro_photo_storage_path")
     .eq("user_id", user.id)
     .eq("organization_id", organization.id)
+    .is("removed_at", null)
     .maybeSingle();
   const oldPath =
     (memberRow as { line_intro_photo_storage_path: string | null } | null)
@@ -153,7 +157,9 @@ export async function DELETE() {
       line_intro_updated_at: new Date().toISOString(),
     })
     .eq("user_id", user.id)
-    .eq("organization_id", organization.id);
+    .eq("organization_id", organization.id)
+    // soft delete された メンバー は 更新 させない
+    .is("removed_at", null);
   if (updErr) {
     return NextResponse.json(
       { error: "db_update_failed", message: updErr.message },

@@ -69,7 +69,9 @@ export async function GET(request: Request) {
 
   const { data: membersData } = await admin
     .from("organization_members")
-    .select("organization_id, role, created_at");
+    .select("organization_id, role, created_at")
+    // soft delete された メンバー は アクティブ 集計 の 対象 外
+    .is("removed_at", null);
   const members = (membersData ?? []) as MemberRow[];
 
   // クライアント(求職者)集計のため client_records も取得

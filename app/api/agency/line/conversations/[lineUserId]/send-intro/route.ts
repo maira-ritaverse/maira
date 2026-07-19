@@ -57,6 +57,8 @@ export async function POST(_request: Request, context: RouteContext) {
     .select("line_intro_headline, encrypted_line_intro_body, line_intro_photo_storage_path")
     .eq("user_id", user.id)
     .eq("organization_id", organization.id)
+    // soft delete された メンバー は 自己 紹介 送信 不可
+    .is("removed_at", null)
     .maybeSingle();
   const intro = memberRow as {
     line_intro_headline: string | null;

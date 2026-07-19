@@ -39,6 +39,7 @@ export default async function LineIntroSettingsPage() {
     )
     .eq("user_id", user.id)
     .eq("organization_id", role.organization.id)
+    .is("removed_at", null)
     .maybeSingle();
 
   const member = memberRow as {

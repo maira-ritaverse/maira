@@ -86,7 +86,9 @@ export default async function AgencyBillingPage() {
   const { count: memberCountRaw } = await supabase
     .from("organization_members")
     .select("id", { count: "exact", head: true })
-    .eq("organization_id", organizationId);
+    .eq("organization_id", organizationId)
+    // soft delete された メンバー は 席数 に 含めない
+    .is("removed_at", null);
   const memberCount = memberCountRaw ?? 1;
   const seatCountForCheckout = Math.max(3, memberCount);
 

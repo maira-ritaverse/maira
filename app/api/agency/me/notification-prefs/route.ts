@@ -20,6 +20,7 @@ export async function GET() {
     .from("organization_members")
     .select("notification_prefs")
     .eq("id", member.id)
+    .is("removed_at", null)
     .maybeSingle();
 
   if (error || !data) {
@@ -47,7 +48,8 @@ export async function PATCH(request: Request) {
   const { error } = await supabase
     .from("organization_members")
     .update({ notification_prefs: parsed.data })
-    .eq("id", member.id);
+    .eq("id", member.id)
+    .is("removed_at", null);
 
   if (error) {
     return NextResponse.json(

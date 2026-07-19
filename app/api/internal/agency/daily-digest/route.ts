@@ -49,7 +49,9 @@ export async function POST(request: Request) {
   const { data: members } = await service
     .from("organization_members")
     .select("id, user_id, organization_id, notification_prefs, organizations(name, archived_at)")
-    .eq("role", "admin");
+    .eq("role", "admin")
+    // soft delete された admin は digest 送信 対象 外
+    .is("removed_at", null);
 
   type Row = {
     id: string;

@@ -160,6 +160,8 @@ async function checkPlanReadOnlyForUser(
     .from("organization_members")
     .select("organization_id")
     .eq("user_id", userId)
+    // soft delete された メンバー は 除外
+    .is("removed_at", null)
     .maybeSingle();
   if (!memberRow) return false; // seeker or 未所属:個別 route の 401/403 に任せる
 

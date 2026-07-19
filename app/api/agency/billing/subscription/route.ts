@@ -29,7 +29,9 @@ export async function GET() {
   const { count: memberCountRaw } = await guard.supabase
     .from("organization_members")
     .select("id", { count: "exact", head: true })
-    .eq("organization_id", guard.organization.id);
+    .eq("organization_id", guard.organization.id)
+    // soft delete された メンバー は 席数 に 含めない
+    .is("removed_at", null);
   const memberCount = memberCountRaw ?? 1;
 
   const price = computePrice(plan.tier, memberCount, plan.cycle);

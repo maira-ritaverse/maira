@@ -55,7 +55,7 @@ export function computeExtraSeatQuantity(memberCount: number): SeatBreakdown {
 
 /**
  * DB から active な メンバー 数 を 引く。
- * organization_members に soft-delete 列 は 無い ので 「行 が 存在 する = active」 の 前提。
+ * removed_at IS NULL の 行 だけ が active (soft delete 済 は Stripe 課金 対象外)。
  */
 export async function countActiveMembers(
   admin: SupabaseClient,
@@ -64,7 +64,9 @@ export async function countActiveMembers(
   const { count, error } = await admin
     .from("organization_members")
     .select("id", { count: "exact", head: true })
-    .eq("organization_id", organizationId);
+    .eq("organization_id", organizationId)
+    // soft delete された メンバー は 席数 に 含めない (Stripe 課金 の 分母)
+    .is("removed_at", null);
   if (error) throw new Error(`countActiveMembers failed: ${error.message}`);
   return count ?? 0;
 }

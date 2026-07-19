@@ -142,6 +142,8 @@ export async function DELETE(_request: Request, context: RouteContext) {
       .from("organization_members")
       .select("organization_id, organizations(name)")
       .eq("user_id", user.id)
+      // soft delete された メンバー は 除外
+      .is("removed_at", null)
       .maybeSingle();
     if (roleRow) {
       const r = roleRow as {
@@ -317,6 +319,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       .from("organization_members")
       .select("organization_id, organizations(name)")
       .eq("user_id", user.id)
+      // soft delete された メンバー は 除外
+      .is("removed_at", null)
       .maybeSingle();
     if (roleRow) {
       const r = roleRow as {

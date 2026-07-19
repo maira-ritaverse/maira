@@ -65,6 +65,8 @@ export async function POST(request: Request) {
     .from("organization_members")
     .select("organization_id")
     .eq("id", assigned_member_id)
+    // soft delete された メンバー は 担当 に 割り当て 不可
+    .is("removed_at", null)
     .maybeSingle();
 
   if (!memberRow || memberRow.organization_id !== orgId) {

@@ -158,7 +158,9 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
     supabase
       .from("organization_members")
       .select("user_id, role")
-      .eq("organization_id", role.organization.id),
+      .eq("organization_id", role.organization.id)
+      // soft delete された メンバー は 担当者 セレクタ に 出さない
+      .is("removed_at", null),
     getOrgMemberAvatarMaps(supabase, role.organization.id),
   ]);
   // 表示名の解決:

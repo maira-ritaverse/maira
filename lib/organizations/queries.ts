@@ -68,6 +68,8 @@ export const getUserRole = cache(async (userId: string): Promise<UserRole> => {
     `,
     )
     .eq("user_id", userId)
+    // soft delete された メンバー は 除外 (removed_at IS NULL のみ active)
+    .is("removed_at", null)
     .maybeSingle();
 
   if (!memberRow) {

@@ -40,6 +40,8 @@ export async function POST(request: Request, context: RouteContext) {
       .from("organization_members")
       .select("user_id")
       .eq("user_id", assigneeUserId)
+      // soft delete された メンバー は 担当 に 割り当て 不可
+      .is("removed_at", null)
       .maybeSingle();
     if (!m) {
       return NextResponse.json({ error: "not_org_member" }, { status: 403 });

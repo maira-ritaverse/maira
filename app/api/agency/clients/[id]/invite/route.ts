@@ -190,6 +190,8 @@ export async function POST(request: Request, { params }: RouteParams) {
       .from("organization_members")
       .select("user_id")
       .eq("id", clientRow.assigned_member_id)
+      // soft delete された メンバー は 担当 表示 に 出さない
+      .is("removed_at", null)
       .maybeSingle();
     if (memberRow?.user_id) {
       const { data: profile } = await service
