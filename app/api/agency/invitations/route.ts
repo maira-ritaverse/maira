@@ -8,6 +8,9 @@ import {
   generateInvitationToken,
 } from "@/lib/organizations/invitations";
 import { sendInvitationEmail } from "@/lib/email/invitation";
+import { getCurrentOrganizationPlan } from "@/lib/billing/agency";
+import { getSeatCapStatus } from "@/lib/billing/seat-cap";
+import { getPlanEntitlements } from "@/lib/billing/plan-entitlements";
 
 /**
  * POST /api/agency/invitations
@@ -60,6 +63,30 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "Invalid request", details: parsed.error.format() },
       { status: 400 },
+    );
+  }
+
+  // ── 席数上限 チェック (Solo プラン等 で 席数 超過 の 招待 を 事前 に 弾く)
+  //    ・現役 メンバー + 保留中 招待 の 合算 が 上限 に 達して いれば 402
+  //    ・プラン 未開始 の 組織 は フォールバック として standard 相当 で 3 席 まで
+  //    ・issue_invitation RPC 側 の 二重防御 は Phase 5 の 別 コミット で 追加
+  const plan = await getCurrentOrganizationPlan(supabase);
+  const tier = plan?.tier ?? "standard";
+  const seatStatus = await getSeatCapStatus(supabase, role.organization.id, tier);
+  if (seatStatus.reached) {
+    const entitlements = getPlanEntitlements(tier);
+    const canInvite = entitlements.canInviteMembers;
+    return NextResponse.json(
+      {
+        error: "seat_cap_reached",
+        message: canInvite
+          ? `席数の上限 (${seatStatus.cap} 席) に達しています。プランをアップグレードするか、既存メンバーを整理してください。`
+          : "このプランでは追加のメンバー招待に対応していません。プランをアップグレードしてください。",
+        current: seatStatus.current,
+        cap: seatStatus.cap,
+        tier: seatStatus.tier,
+      },
+      { status: 402 },
     );
   }
 
