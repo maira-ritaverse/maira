@@ -5545,7 +5545,13 @@ export type Database = {
         | "advisor_message";
       organization_billing_cycle: "monthly" | "yearly";
       organization_plan_status: "trialing" | "active" | "past_due" | "canceled" | "incomplete";
-      organization_plan_tier: "standard" | "standard_rec" | "standard_pro" | "standard_premium";
+      organization_plan_tier:
+        | "standard"
+        | "standard_rec"
+        | "standard_pro"
+        | "standard_premium"
+        | "solo"
+        | "solo_pro";
       plan_type: "free" | "standard" | "pro";
       subscription_status: "active" | "past_due" | "canceled" | "trialing" | "incomplete";
       task_status: "pending" | "done" | "skipped" | "overdue";
@@ -5732,7 +5738,14 @@ export const Constants = {
       ],
       organization_billing_cycle: ["monthly", "yearly"],
       organization_plan_status: ["trialing", "active", "past_due", "canceled", "incomplete"],
-      organization_plan_tier: ["standard", "standard_rec", "standard_pro", "standard_premium"],
+      organization_plan_tier: [
+        "standard",
+        "standard_rec",
+        "standard_pro",
+        "standard_premium",
+        "solo",
+        "solo_pro",
+      ],
       plan_type: ["free", "standard", "pro"],
       subscription_status: ["active", "past_due", "canceled", "trialing", "incomplete"],
       task_status: ["pending", "done", "skipped", "overdue"],

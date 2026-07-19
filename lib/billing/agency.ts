@@ -24,6 +24,10 @@ export type PlanTier = Database["public"]["Enums"]["organization_plan_tier"];
 export type BillingCycle = Database["public"]["Enums"]["organization_billing_cycle"];
 export type PlanStatus = Database["public"]["Enums"]["organization_plan_status"];
 
+/**
+ * Team 系 プラン tier (¥25,000 base + 席数 課金 + アップグレード)。
+ * 従来 の 全 プラン。 UI で 「Team プラン 選択」 の 選択肢 として 使う。
+ */
 export const PLAN_TIERS = [
   "standard",
   "standard_rec",
@@ -31,11 +35,20 @@ export const PLAN_TIERS = [
   "standard_premium",
 ] as const satisfies readonly PlanTier[];
 
+/**
+ * Solo 系 プラン tier (1 席 固定、 セルフサーブ、 base 課金 なし)。
+ * Team 系 とは 料金 モデル が 全く 違う ため 別 配列。 computePrice など の
+ * 「Team 系 料金 計算」 系 関数 は Solo tier を 受け取ら ない。
+ */
+export const SOLO_TIERS = ["solo", "solo_pro"] as const satisfies readonly PlanTier[];
+
 export const PLAN_TIER_LABEL: Record<PlanTier, string> = {
   standard: "Standard",
   standard_rec: "Standard + 録音",
   standard_pro: "Standard + Pro",
   standard_premium: "Standard + Premium",
+  solo: "Solo",
+  solo_pro: "Solo Pro",
 };
 
 // ============================================================
@@ -61,12 +74,26 @@ export const PRICING = {
 
 /**
  * 各 tier ごとの 「アップグレード 部分」月額 (基本 ¥25,000 と 別)。
+ * Solo 系 は 料金 モデル が 別 な ので 0 (センチネル)。 computePrice に Solo tier
+ * を 渡す と 例外 を 投げる 実装 に なって いる ので、 この 値 が 実際 に 参照
+ * される 経路 は Team 系 に 限定 される。
  */
 export const TIER_UPGRADE_MONTHLY: Record<PlanTier, number> = {
   standard: 0,
   standard_rec: PRICING.recordingOptionMonthly,
   standard_pro: PRICING.proUpgradeMonthly,
   standard_premium: PRICING.premiumUpgradeMonthly,
+  solo: 0,
+  solo_pro: 0,
+};
+
+/**
+ * Solo 系 プラン の 月額 (税別)。 Team 系 と 違い 席数 課金 なし、 base 課金 なし。
+ * Phase 1 で は 参照 用 のみ、 UI / Stripe 連携 は Phase 2 で 実装。
+ */
+export const SOLO_MONTHLY_PRICE: Record<(typeof SOLO_TIERS)[number], number> = {
+  solo: 5_980,
+  solo_pro: 9_800,
 };
 
 // ============================================================
@@ -90,10 +117,16 @@ import {
   AI_TOTAL_STANDARD_MONTHLY,
   getAiTotalLimitByTier,
   getAiTotalLimitForPlan,
+  isSoloTier,
   type PlanStatusValue,
 } from "./tier-limits";
 
 export function getAiBonusForTier(tier: PlanTier): number {
+  // Solo 系 は 「Standard 500 を base と した ボーナス」 の 概念 が 通じない
+  // (Solo は 100、 Solo Pro は 200 で 独立)。 差引で -400 等 の 意味 の ない 値 が
+  // 出て 呼出 側 の 計算 を 壊さ ない よう 0 を 返す。 Solo 系 の 実 上限 は
+  // getAiTotalLimitByTier / getAiTotalLimitForPlan 経由 で 直接 取得 する こと。
+  if (isSoloTier(tier)) return 0;
   return getAiTotalLimitByTier(tier) - AI_TOTAL_STANDARD_MONTHLY;
 }
 
@@ -313,6 +346,15 @@ export function computePrice(
   seatCount: number,
   cycle: BillingCycle = "monthly",
 ): PriceBreakdown {
+  // Solo 系 は 料金 モデル が 全く 違う (base 課金 なし、 席数 課金 なし)。
+  // 誤って 呼ばれた 場合 に ¥25,000 の 請求 に なる 事故 を 防ぐ ため 明示 的 に
+  // 例外 を 投げる。 Solo の 料金 は SOLO_MONTHLY_PRICE 経由 で 参照 する こと。
+  if (tier === "solo" || tier === "solo_pro") {
+    throw new Error(
+      `computePrice does not support Solo tiers (received: ${tier}). Use SOLO_MONTHLY_PRICE[tier] for Solo pricing.`,
+    );
+  }
+
   const safeSeatCount = Math.max(0, Math.floor(seatCount));
   const extraSeats = Math.max(0, safeSeatCount - PRICING.includedSeats);
 

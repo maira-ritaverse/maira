@@ -15,8 +15,23 @@
  *     置いて 齟齬 を 防ぐ
  */
 
-/** 課金 プラン tier (organization_plans.tier enum と 一致) */
-export type PlanTierValue = "standard" | "standard_rec" | "standard_pro" | "standard_premium";
+/**
+ * 課金 プラン tier (organization_plans.tier enum と 一致)。
+ *
+ * Team 系 (¥25,000 base + 席数課金):
+ *   standard / standard_rec / standard_pro / standard_premium
+ *
+ * Solo 系 (1 席固定、 base 課金 なし、 セルフサーブ 想定):
+ *   solo (¥5,980/月、 AI 100 回)
+ *   solo_pro (¥9,800/月、 AI 200 回 + 付加機能)
+ */
+export type PlanTierValue =
+  | "standard"
+  | "standard_rec"
+  | "standard_pro"
+  | "standard_premium"
+  | "solo"
+  | "solo_pro";
 
 /** 課金 プラン ステータス (organization_plans.status enum と 一致) */
 export type PlanStatusValue = "trialing" | "active" | "past_due" | "canceled" | "incomplete";
@@ -27,8 +42,21 @@ export const AI_TOTAL_STANDARD_MONTHLY = 500;
 /** Standard_pro / Standard_premium の 月次 AI 総量 上限 */
 export const AI_TOTAL_STANDARD_PRO_MONTHLY = 1000;
 
+/** Solo の 月次 AI 総量 上限 (1 席 の 個人 プラン、 保守的 な 上限) */
+export const AI_TOTAL_SOLO_MONTHLY = 100;
+
+/** Solo Pro の 月次 AI 総量 上限 (Solo + 100 回) */
+export const AI_TOTAL_SOLO_PRO_MONTHLY = 200;
+
 /** トライアル 中 の 月次 AI 総量 上限 (Pro を 試せる ように Pro 相当) */
 export const AI_TOTAL_TRIAL_MONTHLY = 1000;
+
+/**
+ * トライアル 中 の Solo 系 の 月次 AI 総量 上限 (Solo Pro を 試せる ように
+ * Solo Pro 相当)。 Team 系 の Trial (1000) を そのまま 適用 する と 上限 が
+ * ある 意味 を なさない ので、 Solo 用 に 別途 設定。
+ */
+export const AI_TOTAL_SOLO_TRIAL_MONTHLY = 200;
 
 /** プラン 未 開始 組織 の 月次 AI 総量 上限 (安全側 で Standard 相当) */
 export const AI_TOTAL_UNPLANNED_MONTHLY = AI_TOTAL_STANDARD_MONTHLY;
@@ -40,11 +68,25 @@ export const AI_TOTAL_UNPLANNED_MONTHLY = AI_TOTAL_STANDARD_MONTHLY;
  * ここ は 「tier だけ を 見た 場合 の 数値」 に 責務 を 絞る。
  */
 export function getAiTotalLimitByTier(tier: PlanTierValue): number {
-  if (tier === "standard_pro" || tier === "standard_premium") {
-    return AI_TOTAL_STANDARD_PRO_MONTHLY;
+  switch (tier) {
+    case "standard":
+    case "standard_rec":
+      return AI_TOTAL_STANDARD_MONTHLY;
+    case "standard_pro":
+    case "standard_premium":
+      return AI_TOTAL_STANDARD_PRO_MONTHLY;
+    case "solo":
+      return AI_TOTAL_SOLO_MONTHLY;
+    case "solo_pro":
+      return AI_TOTAL_SOLO_PRO_MONTHLY;
   }
-  // standard / standard_rec は 500
-  return AI_TOTAL_STANDARD_MONTHLY;
+}
+
+/**
+ * tier が Solo 系 か どうか。 トライアル 上限 の 分岐 や UI 表示 の 出し 分け に 使う。
+ */
+export function isSoloTier(tier: PlanTierValue): boolean {
+  return tier === "solo" || tier === "solo_pro";
 }
 
 /**
@@ -68,10 +110,11 @@ export function getAiTotalLimitForPlan(
   },
   now: Date = new Date(),
 ): number {
-  // 1. トライアル 中 は Pro 相当
+  // 1. トライアル 中 は 上位相当 上限。 Solo 系 の トライアル は Solo Pro 相当
+  //    (Team 系 の Trial 1000 を Solo に 適用 する と 意味 を なさない ため)。
   if (plan.status === "trialing" && plan.trialEndsAt) {
     if (new Date(plan.trialEndsAt).getTime() > now.getTime()) {
-      return AI_TOTAL_TRIAL_MONTHLY;
+      return isSoloTier(plan.tier) ? AI_TOTAL_SOLO_TRIAL_MONTHLY : AI_TOTAL_TRIAL_MONTHLY;
     }
   }
 
