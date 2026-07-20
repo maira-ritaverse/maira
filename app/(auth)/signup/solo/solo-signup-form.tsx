@@ -38,9 +38,9 @@ const PLAN_LABEL: Record<SoloPlan, string> = {
 };
 
 const PLAN_DESCRIPTION: Record<SoloPlan, string> = {
-  solo: "1 席 / AI 月 100 回 / メール サポート 48h 以内",
+  solo: "1 席 / AI 月 100 回 / メールサポート 48h 以内",
   solo_pro:
-    "1 席 / AI 月 200 回 / CSV 一括 / 詳細レポート / 面談録音 月 5 回 / メール サポート 24h 以内",
+    "1 席 / AI 月 200 回 / CSV 一括 / 詳細レポート / 面談録音月 5 回 / メールサポート 24h 以内",
 };
 
 function fmtYen(v: number): string {
@@ -52,7 +52,7 @@ function labelForCycle(plan: SoloPlan, cycle: Cycle): string {
   if (cycle === "monthly") return `${fmtYen(monthly)} / 月 (税別)`;
   // yearly = 10 ヶ月分 (2 ヶ月割引)
   const yearly = monthly * 10;
-  return `${fmtYen(yearly)} / 年 (税別、 2 ヶ月分 割引)`;
+  return `${fmtYen(yearly)} / 年 (税別、2 ヶ月分割引)`;
 }
 
 export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
@@ -91,23 +91,21 @@ export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
         },
       });
       if (signUpError) {
-        // 「既に 登録 済 の メール」 は Supabase の エラー メッセージ に "already"
-        // を 含む こと が 多い の で 日本語 に 変換。
+        // 「既に登録済のメール」は Supabase のエラーメッセージに "already" を
+        // 含むことが多いので日本語に変換。
         const msg = signUpError.message.toLowerCase();
         if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
-          setError(
-            "この メール アドレス は 既に 登録済 です。 ログイン ページ から お進み ください。",
-          );
+          setError("このメールアドレスは既に登録済です。ログインページからお進みください。");
         } else {
-          setError(`サインアップ に 失敗 しました: ${signUpError.message}`);
+          setError(`サインアップに失敗しました: ${signUpError.message}`);
         }
         return;
       }
 
-      // session が 返って いない (メール 確認 が 必要) 場合 の 案内
+      // session が返っていない (メール確認が必要) 場合の案内
       if (!signUpData.session) {
         setError(
-          "確認 メール を お送り しました。 メール 内 の リンク を クリック して から 再度 この ページ に アクセス して プラン を 開始 して ください。",
+          "確認メールをお送りしました。メール内のリンクをクリックしてから再度このページにアクセスしてプランを開始してください。",
         );
         return;
       }
@@ -132,7 +130,7 @@ export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
       };
 
       if (!res.ok || !body.ok) {
-        setError(body.message ?? body.error ?? `プラン 開始 に 失敗 しました (HTTP ${res.status})`);
+        setError(body.message ?? body.error ?? `プラン開始に失敗しました (HTTP ${res.status})`);
         return;
       }
 
@@ -145,7 +143,7 @@ export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
         router.push(dest);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "不明 な エラー が 発生 しました");
+      setError(err instanceof Error ? err.message : "不明なエラーが発生しました");
     } finally {
       setIsSubmitting(false);
     }
@@ -164,9 +162,9 @@ export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
             className="size-16"
           />
           <div>
-            <h1 className="text-2xl font-bold">Maira Solo プラン に 登録</h1>
+            <h1 className="text-2xl font-bold">Maira Solo プランに登録</h1>
             <p className="text-muted-foreground mt-1 text-xs">
-              14 日 間 無料 で お試し いただけます (期間中 の 解約 で 課金 なし)
+              14 日間無料でお試しいただけます (期間中の解約で課金なし)
             </p>
           </div>
         </div>
@@ -198,9 +196,9 @@ export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
             </div>
           </div>
 
-          {/* 支払い サイクル 選択 */}
+          {/* 支払いサイクル選択 */}
           <div className="space-y-2">
-            <Label>支払い サイクル</Label>
+            <Label>支払いサイクル</Label>
             <div className="flex items-center gap-2">
               {(["monthly", "yearly"] as const).map((c) => {
                 const active = cycle === c;
@@ -216,7 +214,7 @@ export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
                     }`}
                     aria-pressed={active}
                   >
-                    {c === "monthly" ? "月払い" : "年払い (2 ヶ月分 割引)"}
+                    {c === "monthly" ? "月払い" : "年払い (2 ヶ月分割引)"}
                   </button>
                 );
               })}
@@ -227,7 +225,7 @@ export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
           {/* Email */}
           <div className="space-y-2">
             <Label htmlFor="email">
-              メール アドレス <span className="text-red-600">*</span>
+              メールアドレス <span className="text-red-600">*</span>
             </Label>
             <Input
               id="email"
@@ -253,7 +251,7 @@ export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
               onChange={(e) => setPassword(e.target.value)}
               disabled={isSubmitting}
             />
-            <p className="text-muted-foreground text-xs">8 文字 以上 で 入力 して ください</p>
+            <p className="text-muted-foreground text-xs">8 文字以上で入力してください</p>
           </div>
 
           {/* Organization Name (optional) */}
@@ -271,7 +269,7 @@ export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
               maxLength={100}
             />
             <p className="text-muted-foreground text-xs">
-              未入力 の 場合 は メール アドレス から 自動生成 されます
+              未入力の場合はメールアドレスから自動生成されます
             </p>
           </div>
 
@@ -282,24 +280,24 @@ export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
           )}
 
           <Button type="submit" className="w-full" disabled={isSubmitting}>
-            {isSubmitting ? "処理中…" : "14 日間 無料 で 試す"}
+            {isSubmitting ? "処理中…" : "14 日間無料で試す"}
           </Button>
 
           <p className="text-muted-foreground text-center text-xs">
-            登録 する と{" "}
+            登録すると{" "}
             <Link href="/terms" className="underline" target="_blank">
               利用規約
             </Link>{" "}
             と{" "}
             <Link href="/privacy" className="underline" target="_blank">
-              プライバシー ポリシー
+              プライバシーポリシー
             </Link>{" "}
-            に 同意 した もの と します。
+            に同意したものとします。
           </p>
         </form>
 
         <p className="text-muted-foreground text-center text-xs">
-          既 に アカウント を お持ち の 方 は{" "}
+          既にアカウントをお持ちの方は{" "}
           <Link href="/login" className="underline">
             ログイン
           </Link>

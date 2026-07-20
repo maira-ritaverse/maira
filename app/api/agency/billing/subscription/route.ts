@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 
 import { requireOrgMember } from "@/lib/api/auth-guards";
 import {
+  SOLO_MONTHLY_PRICE,
   computePrice,
   getCurrentOrganizationPlan,
   isInTrial,
   trialDaysRemaining,
 } from "@/lib/billing/agency";
+import { STRIPE_CYCLE_MONTHS, STRIPE_YEARLY_MONTHS } from "@/lib/billing/stripe-pricing";
 
 /**
  * GET /api/agency/billing/subscription
@@ -34,7 +36,26 @@ export async function GET() {
     .is("removed_at", null);
   const memberCount = memberCountRaw ?? 1;
 
-  const price = computePrice(plan.tier, memberCount, plan.cycle);
+  // Solo 系 は computePrice が throw する ため、 SOLO_MONTHLY_PRICE から 直接 計算
+  // した PriceBreakdown を 組み立て る (呼出 側 UI が Team 系 と 同 型 の shape を
+  // 期待 する ため、 base / perSeatExtra / upgrade / yearly の フィールド を 埋める)。
+  const soloKey: "solo" | "solo_pro" | null =
+    plan.tier === "solo" ? "solo" : plan.tier === "solo_pro" ? "solo_pro" : null;
+  const price =
+    soloKey !== null
+      ? (() => {
+          const monthly = SOLO_MONTHLY_PRICE[soloKey];
+          const yearly = monthly * STRIPE_YEARLY_MONTHS;
+          return {
+            base: monthly,
+            perSeatExtra: 0,
+            upgrade: 0,
+            monthlyTotal: monthly,
+            yearlyTotal: yearly,
+            yearlyMonthlyEquivalent: Math.round(yearly / STRIPE_CYCLE_MONTHS),
+          };
+        })()
+      : computePrice(plan.tier, memberCount, plan.cycle);
 
   return NextResponse.json({
     plan: {

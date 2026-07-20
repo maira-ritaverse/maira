@@ -120,6 +120,7 @@ import {
   isSoloTier,
   type PlanStatusValue,
 } from "./tier-limits";
+import { getPlanEntitlements } from "./plan-entitlements";
 
 export function getAiBonusForTier(tier: PlanTier): number {
   // Solo 系 は 「Standard 500 を base と した ボーナス」 の 概念 が 通じない
@@ -132,20 +133,28 @@ export function getAiBonusForTier(tier: PlanTier): number {
 
 /**
  * tier に 録音 機能が 含まれているか。
- * 録音 オプション or Premium で 有効。
+ *
+ * Solo プラン (Phase 1) 追加後 は plan-entitlements.ts の recordingLimit を
+ * 単一 source of truth と して 参照 する。 Solo Pro (recordingLimit=5) を
+ * true に する 必要 が あり、 従来 の ハード コード リスト (standard_rec /
+ * standard_premium) だと Solo Pro が false と なり 機能 が 使え ない drift bug
+ * が 発生 して いた。
  */
 export function hasRecordingAccessForTier(tier: PlanTier): boolean {
-  return tier === "standard_rec" || tier === "standard_premium";
+  return getPlanEntitlements(tier).recordingLimit > 0;
 }
 
 /**
- * 録音 機能の 月次 件数 上限 (含まれる プランは 50 件、 含まれない プランは 0)。
+ * 録音 機能の 月次 件数 上限。 plan-entitlements の 表 を 参照 する:
+ *   ・standard_rec / standard_premium: 50 件
+ *   ・solo_pro: 5 件 (お試し)
+ *   ・その他: 0 件
  */
 export const RECORDING_QUOTA_MONTHLY = 50;
 export const RECORDING_MAX_MINUTES_PER_FILE = 90;
 
 export function getRecordingQuotaForTier(tier: PlanTier): number {
-  return hasRecordingAccessForTier(tier) ? RECORDING_QUOTA_MONTHLY : 0;
+  return getPlanEntitlements(tier).recordingLimit;
 }
 
 // ============================================================

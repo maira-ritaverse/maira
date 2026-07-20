@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { recordAuditLog } from "@/lib/audit/audit-log";
 import { readJsonBody, requireUser } from "@/lib/api/auth-guards";
+import { isSoloSignupEnabled } from "@/lib/config/signup-mode";
 import {
   createSoloCheckoutSession,
   getOrgStripeConfig,
@@ -60,6 +61,19 @@ const bodySchema = z.object({
 const TRIAL_DAYS = 14;
 
 export async function POST(request: Request) {
+  // ── feature flag gate。 /signup/solo ページ の redirect と 一致 させ、 API を
+  //    直接 叩か れて も Solo signup が 開放 されて いない 環境 で は 弾く。
+  //    フラグ 未 設定 = ローンチ 前 = 個人 org を 作らせ ない。
+  if (!isSoloSignupEnabled()) {
+    return NextResponse.json(
+      {
+        error: "signup_closed",
+        message: "Solo プランのセルフサーブサインアップは現在受付を停止しています。",
+      },
+      { status: 403 },
+    );
+  }
+
   const guard = await requireUser();
   if (!guard.ok) return guard.response;
   const { user } = guard;
@@ -93,7 +107,7 @@ export async function POST(request: Request) {
       {
         error: "already_member",
         message:
-          "既に 別の 組織 の メンバー です。 Solo プラン は 個人事業主 / フリー の 独立 アカウント 用 な の で、 既存 組織 を 退会 して から お試し ください。",
+          "既に別の組織のメンバーです。Solo プランは個人事業主 / フリーの独立アカウント用なので、既存組織を退会してからお試しください。",
       },
       { status: 409 },
     );
@@ -124,7 +138,7 @@ export async function POST(request: Request) {
       {
         error: "has_seeker_data",
         message:
-          "この アカウント は 求職者 として 既に データ が あります。 別 メール で 新規 サインアップ して Solo プラン を お試し ください。",
+          "このアカウントは求職者として既にデータがあります。別メールで新規サインアップして Solo プランをお試しください。",
       },
       { status: 409 },
     );

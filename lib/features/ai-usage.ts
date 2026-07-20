@@ -362,11 +362,17 @@ async function getPlanBasedTotalQuota(supabase: SupabaseClient, now: Date): Prom
   };
   if (!row || !row.tier || !row.status) return AI_TOTAL_UNPLANNED_MONTHLY;
 
+  // Solo プラン (Phase 1) で 追加 された 'solo' / 'solo_pro' も 含める。
+  // 抜けて いる と row.tier='solo' が 「standard」 に normalize されて Solo user
+  // が Standard 相当 の 500 (or trial 中 の 1000) AI 上限 を 貰う 経済 保護 崩壊
+  // バグ に なる。
   const knownTiers: PlanTierValue[] = [
     "standard",
     "standard_rec",
     "standard_pro",
     "standard_premium",
+    "solo",
+    "solo_pro",
   ];
   const knownStatuses: PlanStatusValue[] = [
     "trialing",
@@ -415,9 +421,15 @@ async function getAgencyRecordingQuota(
     trial_ends_at?: string | null;
   };
 
-  // トライアル中 は 全プラン 50 件 試せる
+  // Solo 系 (Phase 1 で 追加) は トライアル 中 でも tier 別 上限 を そのまま 使う。
+  // 「Trial = Team 系 50 件 相当」 を Solo に 適用 する と 14 日 間 で 原価 ¥2,900
+  // (Whisper + Claude) が 発生 し、 Solo 月額 ¥5,980 の 50% を トライアル 中 に
+  // 消費 する 経路 に なる ため 禁止。 Team 系 は 従来通り Pro 相当 の 50 件 試せる。
   if (row.status === "trialing" && row.trial_ends_at) {
     if (new Date(row.trial_ends_at).getTime() > now.getTime()) {
+      if (row.tier === "solo" || row.tier === "solo_pro") {
+        return getPlanEntitlements(row.tier).recordingLimit;
+      }
       return 50;
     }
   }
@@ -653,13 +665,23 @@ export function getAiKindWeight(kind: AiUsageKind): number {
 }
 
 /**
- * 利用ログを INSERT する。
+ * 利用ログを 1 行 INSERT する。
  * 失敗時はログのみ(本処理は止めない)。
  *
- * kind の 重み (AI_KIND_WEIGHT) に 従い、 1 呼出 で 1〜N 行 を INSERT する。
- * 「重い kind = 2 行」 に する こと で 月次 集計 (countOrgAiUsageThisMonth /
- * countOrgTotalAiUsageThisMonth) が 自動 的 に 「重み 込み」 の 消費量 を 返す。
- * 呼出 側 コード は 一切 変更 不要 (recordAiUsage は 従来 と 同じ シグネチャ)。
+ * 重み (AI_KIND_WEIGHT) は metadata.weight フィールド に 保存 する のみ で、
+ * 行数 と して は 常 に 1 行 の 挿入。
+ *
+ * 理由:
+ *   ・以前 は 「重い kind は 2 行 INSERT」 と して 総量 集計 に 重み を 効かせて
+ *     いた が、 その 副作用 で 「kind 別 上限 (例: job_extract_from_document
+ *     FREE_MONTHLY=30)」 が 実質 半分 に なる Team プラン regression が 発生
+ *   ・kind 別 上限 は 元 々 「呼出 回数」 を 意図 した 数値 な の で、 常に 1 行 =
+ *     1 呼出 が 正しい
+ *   ・Solo プラン の 経済 保護 は 「総量 100 回」 の 上限 で 十分 (Solo user が
+ *     全部 Vision 系 100 回 使い切って も 原価 ¥2,015 = 月額 ¥5,980 の 34% で
+ *     粗利 66% は 確保)
+ *   ・weight は metadata に 残す こと で、 将来 「metadata->weight を SUM
+ *     する 集計 RPC」 で 重み 込み 判定 に 移行 可能 な 設計 を 維持
  *
  * Supabase は INSERT 失敗 を throw せず `{ error }` で 返す ため、 try/catch だけ
  * では 「黙って 失敗」 が 起きる。 error を 必ず 拾って 警告 ログ を 出す ことで
@@ -672,22 +694,15 @@ export async function recordAiUsage(
   metadata?: Record<string, unknown>,
 ): Promise<void> {
   const weight = getAiKindWeight(kind);
-  // weight=1 の 場合 は 従来 と 完全 に 同じ 挙動 (metadata に unit_index 等 を 足さない)
-  const rows =
-    weight === 1
-      ? [{ user_id: userId, kind, metadata: metadata ?? null }]
-      : Array.from({ length: weight }, (_, index) => ({
-          user_id: userId,
-          kind,
-          metadata: {
-            ...(metadata ?? {}),
-            weight_unit_index: index + 1,
-            weight_unit_total: weight,
-          },
-        }));
+  const row = {
+    user_id: userId,
+    kind,
+    // weight を metadata に 記録 (weight=1 の 場合 は 省略 して data を コンパクト化)
+    metadata: weight === 1 ? (metadata ?? null) : { ...(metadata ?? {}), weight },
+  };
 
   try {
-    const { error } = await supabase.from("ai_usage_events").insert(rows);
+    const { error } = await supabase.from("ai_usage_events").insert(row);
     if (error) {
       console.warn("[ai-usage] insert failed", {
         kind,

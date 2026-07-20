@@ -1,12 +1,12 @@
 /**
  * /pricing - 料金プラン LP
  *
- * Solo (個人事業主 / フリー CA) と Team (2-10 人 の 紹介会社) の 4 プラン を
- * 一覧 比較 + FAQ + CTA。 Solo は セルフサーブ 導線 (/signup/solo) 、 Team は
- * 商談 / 問合せ 導線 (/contact) に 誘導。
+ * Solo (個人事業主 / フリー CA) と Team (2-10人の紹介会社) の 4 プランを
+ * 一覧比較 + FAQ + CTA。 Solo は セルフサーブ導線 (/signup/solo)、 Team は
+ * 商談 / 問合せ導線 (/contact) に誘導。
  *
- * 意図 的 に シンプル な レイアウト。 プラン 数 = 4 で、 決定 に 必要 な 情報 を
- * 1 画面 に 収める (RoiPage の 学び から)。
+ * 意図的にシンプルなレイアウト。プラン数=4で、決定に必要な情報を
+ * 1画面に収める (RoiPage の学びから)。
  */
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -21,7 +21,7 @@ import { buttonVariants } from "@/components/ui/button";
 export const metadata: Metadata = {
   title: "料金プラン | Maira",
   description:
-    "Maira の 料金 プラン 一覧。 個人事業主 向け Solo (¥5,980/月) から 5 人 まで の Team Growth (¥45,000/月) まで、 稼働 規模 に 合わせて 選べます。",
+    "Maira の料金プラン一覧。個人事業主向け Solo (¥5,980/月) から 5 人までの Team Growth (¥45,000/月) まで、稼働規模に合わせて選べます。",
 };
 
 type FeatureRow = {
@@ -32,9 +32,9 @@ type FeatureRow = {
 
 const FEATURE_ROWS: FeatureRow[] = [
   { label: "求職者 CRM (管理 / 検索)", values: [true, true, true, true], category: "core" },
-  { label: "求人 管理 + PDF AI 取込", values: [true, true, true, true], category: "core" },
+  { label: "求人管理 + PDF AI 取込", values: [true, true, true, true], category: "core" },
   { label: "AI 求人推薦 (マッチング)", values: [true, true, true, true], category: "core" },
-  { label: "AI 書類 生成 (履歴書 / 職経)", values: [true, true, true, true], category: "core" },
+  { label: "AI 書類生成 (履歴書 / 職経)", values: [true, true, true, true], category: "core" },
   { label: "推薦文 AI 下書き", values: [true, true, true, true], category: "core" },
   {
     label: "元書類 → プロフィール AI 反映",
@@ -52,13 +52,13 @@ const FEATURE_ROWS: FeatureRow[] = [
     category: "core",
   },
   {
-    label: "面談 録音 → AI 議事録",
+    label: "面談録音 → AI 議事録",
     values: [false, "月5回", "月50回", "月50回"],
     category: "core",
   },
   {
     label: "レポート (KPI / 成約率 / トレンド)",
-    values: ["個人 のみ", "個人 + 詳細 PDF", "アドバイザー別", "フル"],
+    values: ["個人のみ", "個人+詳細PDF", "アドバイザー別", "フル"],
     category: "core",
   },
   { label: "メンバー招待 / 追加席", values: [false, false, true, true], category: "team" },
@@ -68,7 +68,7 @@ const FEATURE_ROWS: FeatureRow[] = [
     category: "team",
   },
   {
-    label: "CSV 一括 インポート / エクスポート",
+    label: "CSV 一括インポート / エクスポート",
     values: [false, true, true, true],
     category: "team",
   },
@@ -78,8 +78,8 @@ const FEATURE_ROWS: FeatureRow[] = [
     category: "team",
   },
   {
-    label: "メール サポート 応答 SLA",
-    values: ["48 時間 以内", "24 時間 以内", "24 時間 以内", "12 時間 以内"],
+    label: "メールサポート応答 SLA",
+    values: ["48時間以内", "24時間以内", "24時間以内", "12時間以内"],
     category: "support",
   },
   {
@@ -87,7 +87,7 @@ const FEATURE_ROWS: FeatureRow[] = [
     values: ["カード", "カード", "カード / 請求書", "カード / 請求書"],
     category: "support",
   },
-  { label: "無料 トライアル", values: ["14 日", "14 日", "30 日", "30 日"], category: "support" },
+  { label: "無料トライアル", values: ["14日", "14日", "30日", "30日"], category: "support" },
 ];
 
 const PLAN_HEADERS: {
@@ -104,75 +104,75 @@ const PLAN_HEADERS: {
   {
     key: "solo",
     label: "Solo",
-    subtitle: "個人事業主 / フリー の 1 席",
+    subtitle: "個人事業主 / フリーの 1 席",
     price: SOLO_MONTHLY_PRICE.solo,
     cycle: "月",
     seat: "1 席",
     ai: "AI 月 100 回",
-    cta: { label: "14 日間 無料 で 試す", href: "/signup/solo?plan=solo", primary: false },
+    cta: { label: "14日間無料で試す", href: "/signup/solo?plan=solo", primary: false },
   },
   {
     key: "solo_pro",
     label: "Solo Pro",
-    subtitle: "本業 として 独立 した CA",
+    subtitle: "本業として独立した CA",
     price: SOLO_MONTHLY_PRICE.solo_pro,
     cycle: "月",
     seat: "1 席",
     ai: "AI 月 200 回",
-    cta: { label: "14 日間 無料 で 試す", href: "/signup/solo?plan=solo_pro", primary: true },
+    cta: { label: "14日間無料で試す", href: "/signup/solo?plan=solo_pro", primary: true },
     highlight: true,
   },
   {
     key: "team_starter",
     label: "Team Starter",
-    subtitle: "小規模 紹介会社 (2-3 人)",
+    subtitle: "小規模紹介会社 (2-3 人)",
     price: 25000,
     cycle: "月〜",
     seat: "2-3 席",
     ai: "AI 月 500 回",
-    cta: { label: "商談 を 予約", href: "/contact", primary: false },
+    cta: { label: "商談を予約", href: "/contact", primary: false },
   },
   {
     key: "team_growth",
     label: "Team Growth",
-    subtitle: "5 人 まで の 紹介会社",
+    subtitle: "5 人までの紹介会社",
     price: 45000,
     cycle: "月〜",
     seat: "4-5 席",
     ai: "AI 月 1,000 回",
-    cta: { label: "商談 を 予約", href: "/contact", primary: false },
+    cta: { label: "商談を予約", href: "/contact", primary: false },
   },
 ];
 
 type Faq = { q: string; a: string };
 const FAQ: Faq[] = [
   {
-    q: "Solo プラン で 2 人目 の メンバー を 招待 できますか?",
-    a: "できません。 Solo / Solo Pro は 1 席 固定 です。 チーム で 使いたい 場合 は Team プラン へ アップグレード して ください。 データ は 同じ アカウント の まま 引継 ぎ 可能 です。",
+    q: "Solo プランで 2 人目のメンバーを招待できますか?",
+    a: "できません。Solo / Solo Pro は 1 席固定です。チームで使いたい場合は Team プランへアップグレードしてください。データは同じアカウントのまま引継ぎ可能です。",
   },
   {
-    q: "AI 使用量 100 回 (Solo) の 内訳 は?",
-    a: "全 kind の 合算 で 月 100 回 です (求人推薦 / 書類 AI 下書き / 推薦文 / LINE 返信案 等)。 求人 PDF 取込 や 元書類 抽出 の よう な 重い 処理 は 1 回 = 2 カウント で 消費 され ます。 通常 業務 で は 月 60-80 回 に 収まる 想定 です。",
+    q: "AI 使用量 100 回 (Solo) の内訳は?",
+    a: "全 kind の合算で月 100 回です (求人推薦 / 書類 AI 下書き / 推薦文 / LINE 返信案 等)。求人 PDF 取込や元書類抽出のような重い処理は 1 回=2 カウントで消費されます。通常業務では月 60-80 回に収まる想定です。",
   },
   {
-    q: "個人事業主 で も インボイス (適格請求書) は 発行 できますか?",
-    a: "発行 可能 です。 Stripe 経由 で 適格請求書 対応 の 領収書 が 発行 されます。 T 番号 は 支払方法 の 設定 で 追加 して ください。",
+    q: "個人事業主でもインボイス (適格請求書) は発行できますか?",
+    a: "発行可能です。Stripe 経由で適格請求書対応の領収書が発行されます。T 番号は支払方法の設定で追加してください。",
   },
   {
-    q: "求職者 の データ は 誰 が 所有 しますか?",
-    a: "Solo ユーザー 本人 に 帰属 します。 退会 時 に エクスポート 可能 で、 独立 / 会社化 で Team プラン に 移行 する 場合 も 同一 データ を 引継 げ ます。",
+    q: "求職者のデータは誰が所有しますか?",
+    a: "Solo ユーザー本人に帰属します。退会時にエクスポート可能で、独立 / 会社化で Team プランに移行する場合も同一データを引継げます。",
   },
   {
-    q: "有料職業紹介事業 の 許可 が 必要 ですか?",
-    a: "職業安定法 上、 有料 職業紹介 事業 と して の 契約 / 手数料 の 授受 に は 許可 が 必要 です。 Maira は 業務ツール の 提供 のみ で 職業紹介 自体 は 行いません。 許可 を 持たない 個人 単独 で の 業務 は 受け入れて いません。",
+    q: "有料職業紹介事業の許可が必要ですか?",
+    a: "職業安定法上、有料職業紹介事業としての契約 / 手数料の授受には許可が必要です。Maira は業務ツールの提供のみで職業紹介自体は行いません。許可を持たない個人単独での業務は受け入れていません。",
   },
   {
-    q: "支払い を 月払い から 年払い に 変更 できますか?",
-    a: "できます。 年払い は 10 ヶ月 分 の 料金 で 12 ヶ月 使え、 実質 2 ヶ月 割引 です。 Stripe Customer Portal から 切替 て ください。",
+    q: "支払いを月払いから年払いに変更できますか?",
+    a: "できます。年払いは 10 ヶ月分の料金で 12 ヶ月使え、実質 2 ヶ月割引です。Stripe Customer Portal から切替てください。",
   },
   {
-    q: "解約 する と どうなり ますか?",
-    a: "月次 更新 な の で 「次回 更新 停止」を 選ぶ と 今 期 の 期末 まで 使えて 課金 停止 され ます。 データ は 削除 されず、 再 契約 時 に 同じ 状態 から 再開 でき ます (退会 は 別途 「アカウント 削除」を 選ぶ 必要 が あり ます)。",
+    q: "解約するとどうなりますか?",
+    a: "月次更新なので「次回更新停止」を選ぶと今期の期末まで使えて課金停止されます。データは削除されず、再契約時に同じ状態から再開できます (退会は別途「アカウント削除」を選ぶ必要があります)。",
   },
 ];
 
@@ -187,17 +187,18 @@ export default function PricingPage() {
             <div className="max-w-3xl">
               <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-700">
                 <Sparkles className="size-3" />
-                14 日間 無料 で 全機能 お試し
+                14 日間無料で全機能お試し
               </div>
               <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 md:text-5xl">
-                稼働 規模 に 合わせて 選べる
+                稼働規模に合わせて選べる
                 <br />
-                <BrandMark />の 料金 プラン
+                <BrandMark />
+                の料金プラン
               </h1>
               <p className="mt-5 text-base leading-relaxed text-slate-600 md:text-lg">
-                個人事業主 の 1 席 から、 5 人 まで の 紹介会社 まで。
+                個人事業主の 1 席から、5 人までの紹介会社まで。
                 <br className="hidden md:block" />
-                AI 込み の 業務ツール を、 チーム 規模 に 合わせて 段階 的 に お使い いただけます。
+                AI 込みの業務ツールを、チーム規模に合わせて段階的にお使いいただけます。
               </p>
             </div>
           </div>
@@ -249,8 +250,7 @@ export default function PricingPage() {
               ))}
             </div>
             <p className="text-muted-foreground mt-6 text-center text-xs">
-              表示 価格 は 税別 です。 年払い は 10 ヶ月 分 の 料金 で 12 ヶ月 使えます (2 ヶ月 分
-              割引)。
+              表示価格は税別です。年払いは 10 ヶ月分の料金で 12 ヶ月使えます (2 ヶ月分割引)。
             </p>
           </div>
         </section>
@@ -258,10 +258,9 @@ export default function PricingPage() {
         {/* === 機能 比較 表 === */}
         <section className="border-b border-slate-200 bg-white py-14 lg:py-20">
           <div className="mx-auto max-w-7xl px-5 lg:px-8">
-            <h2 className="text-2xl font-bold text-slate-900 md:text-3xl">機能 比較</h2>
+            <h2 className="text-2xl font-bold text-slate-900 md:text-3xl">機能比較</h2>
             <p className="mt-3 text-sm text-slate-600">
-              全プラン 共通 の 「コア 機能」 に 加え、 プラン 別 の 差別化 ポイント を
-              まとめました。
+              全プラン共通の「コア機能」に加え、プラン別の差別化ポイントをまとめました。
             </p>
 
             <div className="mt-8 overflow-x-auto">
@@ -320,7 +319,7 @@ export default function PricingPage() {
         {/* === FAQ === */}
         <section className="border-b border-slate-200 bg-slate-50 py-14 lg:py-20">
           <div className="mx-auto max-w-4xl px-5 lg:px-8">
-            <h2 className="text-2xl font-bold text-slate-900 md:text-3xl">よくある 質問</h2>
+            <h2 className="text-2xl font-bold text-slate-900 md:text-3xl">よくある質問</h2>
             <div className="mt-8 space-y-3">
               {FAQ.map((f, idx) => (
                 <details
@@ -341,29 +340,27 @@ export default function PricingPage() {
         {/* === CTA === */}
         <section className="bg-white py-14 lg:py-20">
           <div className="mx-auto max-w-4xl px-5 text-center lg:px-8">
-            <h2 className="text-2xl font-bold text-slate-900 md:text-3xl">
-              まず は 14 日間 無料 で
-            </h2>
+            <h2 className="text-2xl font-bold text-slate-900 md:text-3xl">まずは 14 日間無料で</h2>
             <p className="mt-3 text-sm text-slate-600 md:text-base">
-              クレジット カード の 登録 は 必要 ですが、 14 日 間 は 課金 されません。
+              クレジットカードの登録は必要ですが、14 日間は課金されません。
               <br className="hidden md:block" />
-              期間中 に 解約 すれば 一切 費用 は かかり ません。
+              期間中に解約すれば一切費用はかかりません。
             </p>
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
               <Link
                 href="/signup/solo?plan=solo"
                 className={buttonVariants({ variant: "default", size: "lg" })}
               >
-                Solo を 試す (¥{SOLO_MONTHLY_PRICE.solo.toLocaleString("ja-JP")}/月)
+                Solo を試す (¥{SOLO_MONTHLY_PRICE.solo.toLocaleString("ja-JP")}/月)
               </Link>
               <Link
                 href="/signup/solo?plan=solo_pro"
                 className={buttonVariants({ variant: "outline", size: "lg" })}
               >
-                Solo Pro を 試す (¥{SOLO_MONTHLY_PRICE.solo_pro.toLocaleString("ja-JP")}/月)
+                Solo Pro を試す (¥{SOLO_MONTHLY_PRICE.solo_pro.toLocaleString("ja-JP")}/月)
               </Link>
               <Link href="/contact" className={buttonVariants({ variant: "ghost", size: "lg" })}>
-                Team は 商談 予約 →
+                Team は商談予約 →
               </Link>
             </div>
           </div>

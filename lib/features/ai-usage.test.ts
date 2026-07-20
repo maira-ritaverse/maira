@@ -351,55 +351,45 @@ describe("recordAiUsage: 重み付け", () => {
     return { supabase: { from } as unknown as SupabaseClient, insert, from };
   }
 
-  it("weight=1 kind は 単一 行 で INSERT (従来 挙動 と 同じ、 metadata に unit_index を 足さない)", async () => {
+  it("weight=1 kind は 単一 行 で INSERT (metadata そのまま)", async () => {
     const { supabase, insert, from } = makeMockClient();
     await recordAiUsage(supabase, "user-1", "photo_enhance", { resumeId: "r1" });
     expect(from).toHaveBeenCalledWith("ai_usage_events");
-    expect(insert).toHaveBeenCalledWith([
-      { user_id: "user-1", kind: "photo_enhance", metadata: { resumeId: "r1" } },
-    ]);
+    expect(insert).toHaveBeenCalledWith({
+      user_id: "user-1",
+      kind: "photo_enhance",
+      metadata: { resumeId: "r1" },
+    });
   });
 
   it("weight=1 で metadata 未指定 の 場合 は metadata=null で INSERT", async () => {
     const { supabase, insert } = makeMockClient();
     await recordAiUsage(supabase, "user-1", "job_recommendation_agency");
-    expect(insert).toHaveBeenCalledWith([
-      { user_id: "user-1", kind: "job_recommendation_agency", metadata: null },
-    ]);
+    expect(insert).toHaveBeenCalledWith({
+      user_id: "user-1",
+      kind: "job_recommendation_agency",
+      metadata: null,
+    });
   });
 
-  it("weight=2 kind は 2 行 で INSERT (metadata に weight_unit_index/total を 添える)", async () => {
+  it("weight=2 kind も 1 行 で INSERT し metadata.weight に 重み を 記録 (Team 上限 の 半減 を 避ける)", async () => {
     const { supabase, insert } = makeMockClient();
     await recordAiUsage(supabase, "user-1", "job_extract_from_document", { docId: "d1" });
-    expect(insert).toHaveBeenCalledWith([
-      {
-        user_id: "user-1",
-        kind: "job_extract_from_document",
-        metadata: { docId: "d1", weight_unit_index: 1, weight_unit_total: 2 },
-      },
-      {
-        user_id: "user-1",
-        kind: "job_extract_from_document",
-        metadata: { docId: "d1", weight_unit_index: 2, weight_unit_total: 2 },
-      },
-    ]);
+    expect(insert).toHaveBeenCalledWith({
+      user_id: "user-1",
+      kind: "job_extract_from_document",
+      metadata: { docId: "d1", weight: 2 },
+    });
   });
 
-  it("weight=2 で metadata 未指定 でも weight_unit_index/total は 記録 される", async () => {
+  it("weight=2 で metadata 未指定 でも metadata.weight は 記録 される", async () => {
     const { supabase, insert } = makeMockClient();
     await recordAiUsage(supabase, "user-1", "recommendation_letter_draft");
-    expect(insert).toHaveBeenCalledWith([
-      {
-        user_id: "user-1",
-        kind: "recommendation_letter_draft",
-        metadata: { weight_unit_index: 1, weight_unit_total: 2 },
-      },
-      {
-        user_id: "user-1",
-        kind: "recommendation_letter_draft",
-        metadata: { weight_unit_index: 2, weight_unit_total: 2 },
-      },
-    ]);
+    expect(insert).toHaveBeenCalledWith({
+      user_id: "user-1",
+      kind: "recommendation_letter_draft",
+      metadata: { weight: 2 },
+    });
   });
 
   it("INSERT が エラー を 返して も throw しない (warn ログ のみ)", async () => {

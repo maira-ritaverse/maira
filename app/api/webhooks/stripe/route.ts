@@ -227,6 +227,9 @@ function parseOrgSubscription(
   let aiBoostEnabled = false;
   // Solo tier 判定 (単一 Price で 完結 する 場合 に 使う)
   let soloTier: "solo" | "solo_pro" | null = null;
+  // Team base (standard_base) が 存在 する か。 Solo と Team が 同一 subscription に
+  // 混ざる 異常状態 を 検出 する 用 (下 で soloTier と 排他 チェック)。
+  let hasStandardBase = false;
   let baseItemId: string | null = null;
   let extraSeatItemId: string | null = null;
   let aiBoostItemId: string | null = null;
@@ -238,10 +241,12 @@ function parseOrgSubscription(
 
     if (priceId === prices.standardBaseMonthly) {
       hasBase = true;
+      hasStandardBase = true;
       cycle = "monthly";
       baseItemId = item.id;
     } else if (priceId === prices.standardBaseYearly) {
       hasBase = true;
+      hasStandardBase = true;
       cycle = "yearly";
       baseItemId = item.id;
     } else if (priceId === prices.extraSeatMonthly || priceId === prices.extraSeatYearly) {
@@ -278,12 +283,14 @@ function parseOrgSubscription(
 
   if (!hasBase) return { ok: false, reason: "no_base_line_item" };
 
-  // Solo 系 は 1 席 固定 + boost 概念 なし。 万一 subscription に extra_seat や
-  // ai_boost が 混じって いたら Team 系 と Solo 系 を 誤って 混合 して いる
-  // (料金 バグ) な ので 検出 して 500 で 弾く。
-  if (soloTier && (seatCount > 0 || aiBoostEnabled)) {
+  // Solo 系 は 1 席 固定 + boost 概念 なし。 万一 subscription に standard_base /
+  // extra_seat / ai_boost が 混じって いたら Team 系 と Solo 系 を 誤って 混合 して
+  // いる (料金 バグ / 手動 操作 ミス / 悪意 の パラメータ 改ざん) な ので 検出 して
+  // 500 で 弾く。 standard_base だけ で なく soloTier が セット されて いる 時点 で
+  // hasStandardBase = true なら 「両方 の base が 混ざって いる」 = 異常。
+  if (soloTier && (hasStandardBase || seatCount > 0 || aiBoostEnabled)) {
     console.error(
-      `[stripe-webhook] parseOrgSubscription: Solo tier subscription ${sub.id} が Team 系 line_item (extra_seat / ai_boost) を 含んで います。 料金構成 の 混同 の 可能性 が あります。`,
+      `[stripe-webhook] parseOrgSubscription: Solo tier subscription ${sub.id} に Team 系 line_item (standard_base=${hasStandardBase}, extra_seat_qty=${seatCount}, ai_boost=${aiBoostEnabled}) が 混在 して います。 料金構成 の 混同 の 可能性 が あります。`,
     );
     return { ok: false, reason: "solo_with_team_items" };
   }

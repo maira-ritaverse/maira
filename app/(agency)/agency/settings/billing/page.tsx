@@ -38,14 +38,21 @@ export const dynamic = "force-dynamic";
 
 type PlanRow = {
   organization_id: string;
-  tier: "standard" | "standard_rec" | "standard_pro" | "standard_premium";
+  tier: "standard" | "standard_rec" | "standard_pro" | "standard_premium" | "solo" | "solo_pro";
   cycle: "monthly" | "yearly";
   status: "trialing" | "active" | "past_due" | "canceled" | "incomplete";
   seat_count: number | null;
   ai_boost_enabled: boolean | null;
   trial_started_at: string | null;
   trial_ends_at: string | null;
-  trial_upgrade_choice: "standard" | "standard_rec" | "standard_pro" | "standard_premium" | null;
+  trial_upgrade_choice:
+    | "standard"
+    | "standard_rec"
+    | "standard_pro"
+    | "standard_premium"
+    | "solo"
+    | "solo_pro"
+    | null;
   current_period_start: string | null;
   current_period_end: string | null;
   next_billed_at: string | null;
@@ -158,7 +165,10 @@ export default async function AgencyBillingPage() {
             </Card>
           ) : (
             <>
-              <AiBoostToggle enabled={Boolean(plan.ai_boost_enabled)} cycle={plan.cycle} />
+              {/* Solo 系 は AI Boost の 概念 が 無い (1 席 固定 + boost 相当 は Solo Pro に 統合) */}
+              {plan.tier !== "solo" && plan.tier !== "solo_pro" && (
+                <AiBoostToggle enabled={Boolean(plan.ai_boost_enabled)} cycle={plan.cycle} />
+              )}
               <SubscribedActionsCard
                 pendingCancel={plan.canceled_at !== null}
                 status={plan.status}
