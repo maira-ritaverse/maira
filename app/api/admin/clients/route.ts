@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getAuthUsersByIds } from "@/lib/admin/auth-users";
 import { isMairaAdmin } from "@/lib/announcements/platform-queries";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -55,7 +56,11 @@ type MemberRow = {
 type OrgRow = {
   id: string;
   name: string;
-  is_personal: boolean | null;
+};
+
+type PlanTierRow = {
+  organization_id: string;
+  tier: string;
 };
 
 const LIST_LIMIT = 500;
@@ -123,11 +128,21 @@ export async function GET(request: Request) {
 
   // ── 2. 組織 名 を bulk fetch (client の organization_id を distinct 化)
   const orgIds = Array.from(new Set(clients.map((c) => c.organization_id)));
-  const { data: orgsData } = await admin
-    .from("organizations")
-    .select("id, name, is_personal")
-    .in("id", orgIds.length > 0 ? orgIds : ["00000000-0000-0000-0000-000000000000"]);
-  const orgMap = new Map<string, OrgRow>(((orgsData ?? []) as OrgRow[]).map((o) => [o.id, o]));
+  const orgIdList = orgIds.length > 0 ? orgIds : ["00000000-0000-0000-0000-000000000000"];
+  const [orgsRes, plansRes] = await Promise.all([
+    admin.from("organizations").select("id, name").in("id", orgIdList),
+    // 「個人 (Solo) org か」 は organization_plans.tier で 判定。
+    // organizations.is_personal 列 は 未 追加 な の で tier 由来 の 導出 が 正解。
+    admin
+      .from("organization_plans")
+      .select("organization_id, tier")
+      .in("organization_id", orgIdList),
+  ]);
+  const orgMap = new Map<string, OrgRow>(((orgsRes.data ?? []) as OrgRow[]).map((o) => [o.id, o]));
+  const tierByOrgId = new Map<string, string>();
+  for (const p of (plansRes.data ?? []) as PlanTierRow[]) {
+    tierByOrgId.set(p.organization_id, p.tier);
+  }
 
   // ── 3. 担当 CA / 起票者 の 名前 を bulk 解決
   //     organization_members から member_id → user_id、 その後 auth.users から email。
@@ -146,26 +161,27 @@ export async function GET(request: Request) {
     }
   }
 
-  // auth.users は listUsers で 一括 (perPage 200)。 MVP 想定 の 総 ユーザー 数。
-  const emailByUserId = new Map<string, string>();
-  const { data: authList } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
-  for (const u of authList?.users ?? []) {
-    if (u.email) emailByUserId.set(u.id, u.email);
-  }
+  // auth.users は 「必要 な user_id 集合」 に 対して 全 ページ 走査 で bulk 取得。
+  // 旧 実装 は perPage=200 で 1 ページ だけ 引いて いた ため、 auth.users が 200 を
+  // 超えた 時点 で 一部 の 担当 CA email が null に なる バグ が あった。
+  const memberUserIds = Array.from(memberToUserId.values());
+  const authUsersById = await getAuthUsersByIds(admin, memberUserIds);
 
   const emailByMemberId = new Map<string, string>();
   for (const [mid, uid] of memberToUserId.entries()) {
-    const em = emailByUserId.get(uid);
+    const em = authUsersById.get(uid)?.email;
     if (em) emailByMemberId.set(mid, em);
   }
 
   const rows = clients.map((c) => {
     const org = orgMap.get(c.organization_id);
+    const tier = tierByOrgId.get(c.organization_id);
+    const organizationIsPersonal = tier === "solo" || tier === "solo_pro";
     return {
       id: c.id,
       organizationId: c.organization_id,
       organizationName: org?.name ?? "(不明)",
-      organizationIsPersonal: Boolean(org?.is_personal),
+      organizationIsPersonal,
       name: c.name,
       nameKana: c.name_kana,
       email: c.email,

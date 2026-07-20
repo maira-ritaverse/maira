@@ -43,10 +43,18 @@ export type RecordAuditLogInput = {
   metadata?: Record<string, unknown>;
   ipAddress?: string | null;
   userAgent?: string | null;
+  /**
+   * true に する と INSERT 失敗 時 に throw する。 デフォルト は false (従来通り 握って
+   * ログ のみ)。 「暗号化 データ の 復号 表示」 の よう な コンプライアンス 上 audit が
+   * 残ら ない と 実行 して は いけない 経路 で 使う。
+   */
+  strict?: boolean;
 };
 
 /**
  * 監査ログを 1 行書き込む。失敗してもメイン処理を止めず、ログだけ吐く。
+ *
+ * strict=true の 場合 は 失敗 時 に throw して 呼出 側 で 500 に できる ように する。
  *
  * NextRequest からの呼出例:
  *   await recordAuditLog({
@@ -56,6 +64,7 @@ export type RecordAuditLogInput = {
  *   });
  */
 export async function recordAuditLog(input: RecordAuditLogInput): Promise<void> {
+  const strict = input.strict === true;
   try {
     const supabase = createServiceClient();
     const { error } = await supabase.from("audit_logs").insert({
@@ -67,9 +76,13 @@ export async function recordAuditLog(input: RecordAuditLogInput): Promise<void> 
     });
     if (error) {
       console.error("[audit-log] insert failed:", error.message, { action: input.action });
+      if (strict) {
+        throw new Error(`audit_log insert failed: ${error.message}`);
+      }
     }
   } catch (err) {
     console.error("[audit-log] unexpected failure:", err, { action: input.action });
+    if (strict) throw err;
   }
 }
 

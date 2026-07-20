@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getAuthUsersByIds } from "@/lib/admin/auth-users";
 import { isMairaAdmin } from "@/lib/announcements/platform-queries";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -52,30 +53,14 @@ export async function GET(request: Request) {
 
   const admin = createServiceClient();
 
-  // ── 1. 全 auth.users を まず 取得 (MVP は 200 件 / 1 page)
-  const { data: authList, error: authErr } = await admin.auth.admin.listUsers({
-    page: 1,
-    perPage: 200,
-  });
-  if (authErr) {
-    return NextResponse.json({ error: "list_failed", message: authErr.message }, { status: 500 });
-  }
-
-  // メール で 検索 (auth 側 は 部分一致 サーバー サポート なし)
-  const authFiltered = q
-    ? authList.users.filter((u) => (u.email ?? "").toLowerCase().includes(q))
-    : authList.users;
-  const authIds = authFiltered.map((u) => u.id);
-
-  if (authIds.length === 0) {
-    return NextResponse.json({ seekers: [], total: 0 });
-  }
-
-  // ── 2. profiles を join (account_type='seeker' で 絞る)
+  // ── 1. まず profiles を account_type='seeker' で 絞って 取得。
+  //     旧 実装 は 「listUsers({perPage:200}) → その 中 から seeker を 選ぶ」
+  //     だった が、 auth.users が 200 を 超えた 時点 で seeker が 静かに 落ちる
+  //     バグ (page 2 以降 の seeker が 一覧 に 出ない) が あった。 profiles 側 を
+  //     ソース オブ トゥルース に 変える こと で 全件 拾える ように する。
   const { data: profiles, error: profErr } = await admin
     .from("profiles")
     .select("id, display_name, account_type, onboarded_at, archived_at, archived_reason")
-    .in("id", authIds)
     .eq("account_type", "seeker");
   if (profErr) {
     return NextResponse.json(
@@ -84,7 +69,25 @@ export async function GET(request: Request) {
     );
   }
   const seekerProfiles = (profiles ?? []) as ProfileRow[];
-  const seekerIds = seekerProfiles.map((p) => p.id);
+  if (seekerProfiles.length === 0) {
+    return NextResponse.json({ seekers: [], total: 0 });
+  }
+
+  // ── 2. auth.users から 該当 id 分 だけ email / last_sign_in_at を bulk 取得
+  //     (getAuthUsersByIds は 内部 で listUsers を 全 ページ 走査 する)
+  const authUsersById = await getAuthUsersByIds(
+    admin,
+    seekerProfiles.map((p) => p.id),
+  );
+
+  // メール 検索 は auth 取得 後 に JS 側 で 部分 一致 で 絞る
+  const seekerIds = seekerProfiles
+    .filter((p) => {
+      if (!q) return true;
+      const email = authUsersById.get(p.id)?.email ?? "";
+      return email.toLowerCase().includes(q);
+    })
+    .map((p) => p.id);
   const profileMap = new Map(seekerProfiles.map((p) => [p.id, p]));
 
   if (seekerIds.length === 0) {
@@ -128,34 +131,35 @@ export async function GET(request: Request) {
     linkedOrgsByUser.set(l.linked_user_id, set);
   }
 
-  // ── 4. seeker ごと の レコード を 組み立て
-  const seekers = authFiltered
-    .filter((u) => profileMap.has(u.id))
-    .map((u) => {
-      const p = profileMap.get(u.id) as ProfileRow;
+  // ── 4. seeker ごと の レコード を 組み立て。
+  //     seekerIds は q フィルタ 後 の profile.id リスト。 対応 auth 情報 は
+  //     authUsersById から 引く (無ければ null で 埋める; auth 側 で 削除 された
+  //     ケース や listUsers ページ 走査 が 打ち切ら れた 場合 の フォールバック)。
+  const seekers = seekerIds
+    .map((id) => {
+      const p = profileMap.get(id) as ProfileRow;
+      const au = authUsersById.get(id);
       return {
-        id: u.id,
-        email: u.email ?? "",
+        id,
+        email: au?.email ?? "",
         displayName: p.display_name,
-        createdAt: u.created_at,
-        lastSignInAt: u.last_sign_in_at ?? null,
+        createdAt: au?.createdAt ?? null,
+        lastSignInAt: au?.lastSignInAt ?? null,
         onboardedAt: p.onboarded_at,
         archivedAt: p.archived_at,
         archivedReason: p.archived_reason,
-        resumeCount: resumesByUser.get(u.id) ?? 0,
-        applicationCount: applicationsByUser.get(u.id) ?? 0,
-        conversationCount: conversationsByUser.get(u.id) ?? 0,
-        linkedAgencyCount: linkedOrgsByUser.get(u.id)?.size ?? 0,
+        resumeCount: resumesByUser.get(id) ?? 0,
+        applicationCount: applicationsByUser.get(id) ?? 0,
+        conversationCount: conversationsByUser.get(id) ?? 0,
+        linkedAgencyCount: linkedOrgsByUser.get(id)?.size ?? 0,
       };
     })
-    // archived フィルタ (archived=true なら 停止 中 のみ)
     .filter((s) => (showArchived ? s.archivedAt !== null : s.archivedAt === null))
-    // 現役 は 登録日 が 新しい 順、 停止中 は アーカイブ日 が 新しい 順
     .sort((a, b) => {
       if (showArchived) {
         return (b.archivedAt ?? "") > (a.archivedAt ?? "") ? 1 : -1;
       }
-      return a.createdAt < b.createdAt ? 1 : -1;
+      return (a.createdAt ?? "") < (b.createdAt ?? "") ? 1 : -1;
     });
 
   return NextResponse.json({ seekers, total: seekers.length });

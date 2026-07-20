@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getAuthUsersByIds } from "@/lib/admin/auth-users";
 import { isMairaAdmin } from "@/lib/announcements/platform-queries";
 import { readJsonBody, requireUser } from "@/lib/api/auth-guards";
 import { recordAuditLog } from "@/lib/audit/audit-log";
@@ -69,21 +70,22 @@ export async function GET(_request: Request, { params }: RouteParams) {
     .order("created_at", { ascending: true });
   const members = (membersData ?? []) as MemberRow[];
 
-  // メンバーのメアド + 最終ログイン日 (auth.users) を解決。
-  // memberCount 規模 (数〜数十) な ので getUserById を 並列 で 発火。
+  // メンバーのメアド + 最終ログイン日 (auth.users) を bulk 取得。
+  // 旧 実装 は member ごと に getUserById を 並列 発火 して いた が、 メンバー
+  // 数 が 増える と GoTrue の rate limit (30/s 目安) に 引っかかって 一部 が
+  // 429 で 落ち、 catch{} で 握られ 「幽霊 行」 (email=null) に なって いた。
+  // 全 ページ 走査 の 1 fetch に 統一 する。
+  const authUsersById = await getAuthUsersByIds(
+    admin,
+    members.map((m) => m.user_id),
+  );
   const emailByUserId = new Map<string, string>();
   const lastSignInByUserId = new Map<string, string | null>();
-  await Promise.all(
-    members.map(async (m) => {
-      try {
-        const { data } = await admin.auth.admin.getUserById(m.user_id);
-        if (data?.user?.email) emailByUserId.set(m.user_id, data.user.email);
-        lastSignInByUserId.set(m.user_id, data?.user?.last_sign_in_at ?? null);
-      } catch {
-        // メアド / 最終ログイン取得失敗時は空のまま。UI 側でフォールバック表示。
-      }
-    }),
-  );
+  for (const m of members) {
+    const au = authUsersById.get(m.user_id);
+    if (au?.email) emailByUserId.set(m.user_id, au.email);
+    lastSignInByUserId.set(m.user_id, au?.lastSignInAt ?? null);
+  }
 
   // クライアント
   const { data: clientsData } = await admin

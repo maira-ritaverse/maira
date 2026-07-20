@@ -30,9 +30,6 @@ type OrgRow = {
   archived_at: string | null;
   archived_reason: string | null;
   recording_upload_enabled: boolean;
-  // Solo プラン (個人事業主 用 の 独立 org) は is_personal=true。
-  // /admin/organizations の 一覧 / フィルタ で 法人 と 区別 する。
-  is_personal: boolean | null;
 };
 type MemberRow = {
   organization_id: string;
@@ -70,9 +67,7 @@ export async function GET(request: Request) {
 
   const baseQuery = admin
     .from("organizations")
-    .select(
-      "id, name, created_at, archived_at, archived_reason, recording_upload_enabled, is_personal",
-    );
+    .select("id, name, created_at, archived_at, archived_reason, recording_upload_enabled");
   const { data: orgsData, error: orgsErr } = await (showArchived
     ? baseQuery.not("archived_at", "is", null).order("archived_at", { ascending: false })
     : baseQuery.is("archived_at", null).order("created_at", { ascending: false }));
@@ -163,13 +158,17 @@ export async function GET(request: Request) {
     const status = noAdmin ? "no_admin" : dormant ? "dormant" : "active";
     const aiTotal = aiTotals.get(o.id);
     const plan = planMap.get(o.id) ?? null;
+    // 「個人 (Solo) org か どう か」 は organization_plans.tier で 判定 する。
+    // organizations テーブル に is_personal 列 は 存在 しない (追加 マイグレーション
+    // が 未 作成)。 Solo プラン の enum 値 (solo / solo_pro) を そのまま 個人 判定 に 使う。
+    const isPersonal = plan?.tier === "solo" || plan?.tier === "solo_pro";
     return {
       id: o.id,
       name: o.name,
       createdAt: o.created_at,
       archivedAt: o.archived_at,
       archivedReason: o.archived_reason,
-      isPersonal: Boolean(o.is_personal),
+      isPersonal,
       memberCount: s.memberCount,
       adminCount: s.adminCount,
       advisorCount: s.advisorCount,

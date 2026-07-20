@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getAuthUsersByIds } from "@/lib/admin/auth-users";
 import { isMairaAdmin } from "@/lib/announcements/platform-queries";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -38,11 +39,19 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
   // 組織 名 と 担当 CA / 起票者 メール も 一緒 に 返す (詳細 ページ の コンテキスト)
   const organizationId = row.organization_id as string;
-  const { data: orgRow } = await admin
-    .from("organizations")
-    .select("id, name, is_personal")
-    .eq("id", organizationId)
-    .maybeSingle();
+  const [orgRes, planTierRes] = await Promise.all([
+    admin.from("organizations").select("id, name").eq("id", organizationId).maybeSingle(),
+    // 「個人 (Solo) org か」 は organization_plans.tier で 判定。
+    // organizations.is_personal 列 は 未 追加。
+    admin
+      .from("organization_plans")
+      .select("tier")
+      .eq("organization_id", organizationId)
+      .maybeSingle(),
+  ]);
+  const orgRow = orgRes.data;
+  const orgTier = (planTierRes.data as { tier?: string } | null)?.tier;
+  const organizationIsPersonal = orgTier === "solo" || orgTier === "solo_pro";
 
   const memberIds = [row.assigned_member_id, row.created_by_member_id].filter(
     (v) => typeof v === "string" && v.length > 0,
@@ -53,15 +62,13 @@ export async function GET(_request: Request, { params }: RouteParams) {
       .from("organization_members")
       .select("id, user_id")
       .in("id", memberIds);
-    const userIds = ((memberRows ?? []) as { id: string; user_id: string }[]).map((m) => m.user_id);
-    const emailByUserId = new Map<string, string>();
-    // MVP: listUsers で 一括 (総 ユーザ 数 < 200 前提)
-    const { data: authList } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
-    for (const u of authList?.users ?? []) {
-      if (u.email && userIds.includes(u.id)) emailByUserId.set(u.id, u.email);
-    }
-    for (const m of (memberRows ?? []) as { id: string; user_id: string }[]) {
-      const em = emailByUserId.get(m.user_id);
+    const rows = (memberRows ?? []) as { id: string; user_id: string }[];
+    const userIds = rows.map((m) => m.user_id);
+    // 全 ページ 走査 で email を bulk 取得 (perPage=200 の 単発 だと 200 超過 で
+    // 該当 email が null に なる)
+    const authUsersById = await getAuthUsersByIds(admin, userIds);
+    for (const m of rows) {
+      const em = authUsersById.get(m.user_id)?.email;
       if (em) emailByMemberId.set(m.id, em);
     }
   }
@@ -78,7 +85,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       id: row.id,
       organizationId,
       organizationName: (orgRow as { name?: string } | null)?.name ?? "(不明)",
-      organizationIsPersonal: Boolean((orgRow as { is_personal?: boolean } | null)?.is_personal),
+      organizationIsPersonal,
       name: row.name,
       nameKana: row.name_kana ?? null,
       email: row.email ?? null,

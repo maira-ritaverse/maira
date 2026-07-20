@@ -30,7 +30,8 @@ import { createServiceClient } from "@/lib/supabase/service";
  *   3. 求職者 データ (resumes / career_profiles / applications / conversations)
  *      チェック: 既存 求職者 と の 兼用 は 認めない
  *   4. profiles.account_type を 'organization_member' に upsert
- *   5. organizations 作成 (is_personal=true、 name は パラメータ か デフォルト)
+ *   5. organizations 作成 (name は パラメータ か デフォルト、 「個人」 か どう か は
+ *      organization_plans.tier=solo/solo_pro で 判定 する 設計)
  *   6. organization_members 作成 (role='admin')
  *   7. organization_plans 作成 (tier, cycle, status='trialing', trial_ends_at=+14 日)
  *   8. Stripe が 設定済 なら createSoloCheckoutSession を 呼び URL を 返す
@@ -43,7 +44,7 @@ import { createServiceClient } from "@/lib/supabase/service";
  *   ・rate limit は middleware / Vercel 側 に 委任 (このハンドラで は 実装 しない)
  *   ・入力 バリデーション で 予期せぬ tier / cycle を 弾く
  *   ・admin 発行 経路 (POST /api/admin/organizations) と 混同 しない よう、
- *     この route は is_personal=true 固定
+ *     この route は plan.tier=solo/solo_pro を 必ず セット する
  */
 
 export const runtime = "nodejs";
@@ -165,7 +166,9 @@ export async function POST(request: Request) {
   // ── 5. organizations 作成
   const { data: orgRow, error: orgErr } = await admin
     .from("organizations")
-    .insert({ name: organizationName, is_personal: true })
+    // organizations テーブル に は is_personal 列 が 無い (追加 マイグレーション 未 作成)。
+    // 「個人 org」 判定 は organization_plans.tier=solo/solo_pro で 一元化 している 設計。
+    .insert({ name: organizationName })
     .select("id")
     .single();
   if (orgErr || !orgRow) {

@@ -65,6 +65,39 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   const row = data as Record<string, string | null>;
 
+  // ── ★ 監査 ログ を 「復号 の 前」 に 書く (strict=true で 失敗 時 500)。
+  //     ・decryptField が throw して も 「アクセス した 事実」 は 残る (法的 追跡 の 前提)
+  //     ・audit INSERT 自体 が 失敗 する ケース (RLS drift 等) は fail-hard で
+  //       復号 レスポンス を 返さ ない ように する (コンプライアンス 保護)
+  //     ・従来 は decryptField 後 に audit を 書いて いた の で、 復号 例外 で audit
+  //       が スキップ される 穴 が あった
+  try {
+    await recordAuditLog({
+      userId: actor.id,
+      action: "admin_accessed_user",
+      metadata: {
+        event_subtype: "admin_revealed_client_encrypted_notes",
+        client_record_id: row.id,
+        organization_id: row.organization_id,
+        reason,
+      },
+      ipAddress: request.headers.get("x-forwarded-for"),
+      userAgent: request.headers.get("user-agent"),
+      strict: true,
+    });
+  } catch (err) {
+    return NextResponse.json(
+      {
+        error: "audit_failed",
+        message:
+          err instanceof Error
+            ? `監査ログの記録に失敗したため復号を中止しました: ${err.message}`
+            : "監査ログの記録に失敗したため復号を中止しました",
+      },
+      { status: 500 },
+    );
+  }
+
   // 復号 は 並列。 各 フィールド は 独立 な の で await Promise.all で 1 ラウンド。
   const [
     recommendationComment,
@@ -87,23 +120,6 @@ export async function POST(request: Request, { params }: RouteParams) {
     decryptField(row.encrypted_meeting_notes ?? null),
     decryptField(row.encrypted_status_memo ?? null),
   ]);
-
-  // ── 監査 ログ (成功 側 で 記録。 失敗 (decrypt error) は throw で 500 に なる)
-  //     audit テーブル の action enum を 拡張 する のは 影響 が 広い の で、
-  //     既存 admin_accessed_user を 流用 + event_subtype で 種別 分け する
-  //     (組織 archive 等 と 同じ パターン)。
-  await recordAuditLog({
-    userId: actor.id,
-    action: "admin_accessed_user",
-    metadata: {
-      event_subtype: "admin_revealed_client_encrypted_notes",
-      client_record_id: row.id,
-      organization_id: row.organization_id,
-      reason,
-    },
-    ipAddress: request.headers.get("x-forwarded-for"),
-    userAgent: request.headers.get("user-agent"),
-  });
 
   return NextResponse.json({
     recommendationComment: recommendationComment ?? null,

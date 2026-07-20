@@ -11,7 +11,7 @@ type SeekerRow = {
   id: string;
   email: string;
   displayName: string | null;
-  createdAt: string;
+  createdAt: string | null;
   lastSignInAt: string | null;
   onboardedAt: string | null;
   archivedAt: string | null;
@@ -164,7 +164,9 @@ function SeekerRowView({
       <td className="px-3 py-2.5 text-right text-xs">
         <MetricNumber value={s.linkedAgencyCount} />
       </td>
-      <td className="px-3 py-2.5 text-xs">{new Date(s.createdAt).toLocaleDateString("ja-JP")}</td>
+      <td className="px-3 py-2.5 text-xs">
+        {s.createdAt ? new Date(s.createdAt).toLocaleDateString("ja-JP") : "—"}
+      </td>
       {archived && (
         <td className="px-3 py-2.5 text-xs">
           {s.archivedAt ? new Date(s.archivedAt).toLocaleDateString("ja-JP") : "—"}
