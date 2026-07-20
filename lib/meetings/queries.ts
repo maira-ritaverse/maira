@@ -246,15 +246,19 @@ export async function listMeetingsByClientRecord(
 export async function updateMeetingStatus(
   client: SupabaseClient,
   id: string,
+  organizationId: string,
   status: MeetingScheduleRow["status"],
 ): Promise<void> {
   // M2 修正: 0 行 更新 (= RLS で 弾かれた / 別 host で 触れない) を silent success に
   // させ ない。 呼び 出し 元 は 事前 に host / admin 検証 して いる はず だ が、
   // 二重 防御 で 実 更新 の 行 数 を 確認 する。
+  // A6 修正: organization_id を UPDATE フィルタ に 追加 (getMeetingScheduleById
+  // と 揃える。 RLS regression 時 の 他社 データ 変更 を 防ぐ)。
   const { data, error } = await client
     .from("meeting_schedules")
     .update({ status })
     .eq("id", id)
+    .eq("organization_id", organizationId)
     .select("id");
   if (error) throw new Error(`meeting_schedules status update failed: ${error.message}`);
   if (!data || data.length === 0) {
@@ -279,6 +283,7 @@ export type ReschedulePatch = {
 export async function rescheduleMeeting(
   client: SupabaseClient,
   id: string,
+  organizationId: string,
   patch: ReschedulePatch,
 ): Promise<MeetingScheduleView> {
   const update: Record<string, unknown> = {};
@@ -293,10 +298,12 @@ export async function rescheduleMeeting(
     update.reminder_24h_sent_at = null;
     update.reminder_1h_sent_at = null;
   }
+  // A6 修正: organization_id を UPDATE フィルタ に 追加 (defense-in-depth)。
   const { data, error } = await client
     .from("meeting_schedules")
     .update(update)
     .eq("id", id)
+    .eq("organization_id", organizationId)
     .select()
     .single();
   if (error || !data) {

@@ -80,31 +80,62 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // ── MFA 有効化 済 ユーザー の AAL2 昇格 を 強制。
+  // ── MFA 有効化 済 ユーザー の AAL2 昇格 を 強制 (セキュリティ 監査 A2)。
   //     verified TOTP factor を 持って いる ユーザー が パスワード ログイン 直後
-  //     (session.aal='aal1') に アプリ を 触ろう と したら /login/mfa に redirect。
-  //     セキュリティ 監査 A2 の 対応 (opt-in MFA が 実際 に 効く 経路)。
+  //     (session.aal='aal1') に 保護 領域 を 触ろう と したら /login/mfa に redirect。
   //
-  //     除外 パス:
-  //       ・/login/mfa 自身 (ここ に 誘導 する) — 無限 ループ 防止
-  //       ・/auth/* — signOut / callback は 素通し
-  //       ・/api/* — サーバ 側 で 個別 に 判定 (SPA fetch を 途中 で 弾く と 混乱)
-  //     Server Action は /_next/ で 転送 される ので 素通し。
-  if (
-    user &&
-    !pathname.startsWith("/login") &&
-    !pathname.startsWith("/auth/") &&
-    !pathname.startsWith("/api/") &&
-    !pathname.startsWith("/_next/")
-  ) {
+  //     ★対象 の positive list に した (以前 は negative list で marketing / api
+  //       まで gate に かけて 誤爆 して いた):
+  //         ・/app       — 求職者 側
+  //         ・/agency    — CA 側
+  //         ・/admin     — 運営 側
+  //         ・/api/agency, /api/admin, /api/app — 上記 の API 版
+  //     ★fail-closed: getAuthenticatorAssuranceLevel が エラー を 返した 場合、
+  //       状態 不明 な の で 保護 側 に 倒して /login/mfa に 誘導 (元 実装 は
+  //       silent-open で MFA gate が 事実 上 無効化 され うる バグ が あった)。
+  //     ★API リクエスト は JSON 403 で 返す (fetch が redirect を 追跡 して HTML を
+  //       受け取ら ない よう に)。 UI 側 の handling は client-fetch 側 で 拾う。
+  const isMfaGuarded =
+    pathname.startsWith("/app") ||
+    pathname.startsWith("/agency") ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/api/app/") ||
+    pathname.startsWith("/api/agency/") ||
+    pathname.startsWith("/api/admin/");
+  if (user && isMfaGuarded) {
     const aalRes = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aalRes.error) {
+      console.warn("[middleware] getAuthenticatorAssuranceLevel failed", {
+        message: aalRes.error.message,
+        pathname,
+      });
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json(
+          {
+            error: "mfa_check_failed",
+            message: "MFA 状態の確認に失敗しました。再度お試しください。",
+          },
+          { status: 503 },
+        );
+      }
+      const target = new URL("/login/mfa", request.nextUrl.origin);
+      target.searchParams.set("next", pathname + request.nextUrl.search);
+      return NextResponse.redirect(target);
+    }
     const nextLevel = aalRes.data?.nextLevel;
     const currentLevel = aalRes.data?.currentLevel;
-    // nextLevel=aal2 は 「登録 済 factor が あって 昇格 が 必要」 の 意味。
-    // currentLevel=aal1 な ら まだ 昇格 して いない。
     if (nextLevel === "aal2" && currentLevel !== "aal2") {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json(
+          {
+            error: "mfa_required",
+            message: "この操作には二段階認証が必要です。ログインし直してください。",
+            redirectTo: "/login/mfa",
+          },
+          { status: 403 },
+        );
+      }
       const target = new URL("/login/mfa", request.nextUrl.origin);
-      // 元 の 遷移 先 を next に (完了 後 に 戻す)
       target.searchParams.set("next", pathname + request.nextUrl.search);
       return NextResponse.redirect(target);
     }
@@ -117,17 +148,20 @@ export async function updateSession(request: NextRequest) {
   //     Vercel preview URL への XSS で セッション riding される 可能性 が 残る ため、
   //     Origin ヘッダ が 自身 の origin と 一致 しない 書込 は 403 で 弾く。
   //     Webhook / cron / OAuth callback は 外部 origin から 来る の で 除外。
+  //
+  //     ★sec-fetch-site: "same-site" は 受理 しない (元 実装 では 受理 して いた が、
+  //       同一 eTLD+1 の maira.pro (Xserver LP) 上 の XSS から app.maira.pro への
+  //       fetch が "same-site" と 判定 され bypass 可能 だった)。 Next.js の
+  //       Server Actions は 同一 origin から 発行 される ので "same-origin" が 付く。
   if (WRITE_METHODS.has(request.method)) {
     const exempt = CSRF_EXEMPT_PREFIXES.some((p) => pathname.startsWith(p));
     if (!exempt) {
       const origin = request.headers.get("origin");
-      // Origin が 無い ケース: same-origin fetch (SPA 内) は 通常 Origin を 付与
-      // する ため、 純粋 に 無い の は 攻撃 者 の 手作り リクエスト の 可能性 が 高い。
-      // ただし 一部 の Server Action / navigation は Origin を 付けない ため、
-      // Sec-Fetch-Site の 有無 も 見て 判定 する (same-origin / same-site なら OK)。
       const secFetchSite = request.headers.get("sec-fetch-site");
       const originOk = origin === request.nextUrl.origin;
-      const fetchSiteOk = secFetchSite === "same-origin" || secFetchSite === "same-site";
+      // Server Actions の 一部 は Origin を 付けない ため sec-fetch-site の 補助 が 必要。
+      // ただし "same-site" は subdomain 経由 の 攻撃 が 通る の で 受理 しない。
+      const fetchSiteOk = secFetchSite === "same-origin";
       if (!originOk && !fetchSiteOk) {
         return NextResponse.json(
           {

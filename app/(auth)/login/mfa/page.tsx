@@ -20,7 +20,6 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { safeNextOr } from "@/lib/auth/safe-next";
-import { getFirstVerifiedTotpFactorId } from "@/lib/auth/mfa";
 import { createClient } from "@/lib/supabase/client";
 
 export default function MfaChallengePage() {
@@ -49,28 +48,74 @@ function MfaChallengeInner() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
     void (async () => {
+      setLoadError(null);
+      setLoading(true);
       // 未 ログイン (session なし) は /login に 戻す
       const {
         data: { user },
+        error: userErr,
       } = await supabase.auth.getUser();
+      if (cancelled) return;
+      if (userErr) {
+        setLoadError("認証状態の確認に失敗しました。時間をおいて再度お試しください。");
+        setLoading(false);
+        return;
+      }
       if (!user) {
         router.replace(nextParam ? `/login?next=${encodeURIComponent(nextParam)}` : "/login");
         return;
       }
-      // verified factor が 無い の に この ページ に 来た = 何 か 異常 (直リンク 等)。
-      // 通常 フロー に 戻す。
-      const fid = await getFirstVerifiedTotpFactorId(supabase);
-      if (!fid) {
+
+      // ★既 に AAL2 な ら 再チャレンジ 不要 → next へ 直行 (bookmark 直撃 対策)
+      try {
+        const aal = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aal.error) throw aal.error;
+        if (aal.data?.currentLevel === "aal2") {
+          router.replace(safeNextOr(nextParam, "/app"));
+          return;
+        }
+      } catch {
+        setLoadError("認証状態の確認に失敗しました。ネットワークを確認して再度お試しください。");
+        setLoading(false);
+        return;
+      }
+
+      // ★factor 取得 も エラー を 区別: 「本当 に 無い」 のか 「取得 失敗」 なのか
+      let listRes;
+      try {
+        listRes = await supabase.auth.mfa.listFactors();
+      } catch {
+        setLoadError("認証要素の取得に失敗しました。ネットワークを確認して再度お試しください。");
+        setLoading(false);
+        return;
+      }
+      if (listRes.error) {
+        setLoadError(`認証要素の取得に失敗しました: ${listRes.error.message}`);
+        setLoading(false);
+        return;
+      }
+      const verified = (listRes.data?.all ?? []).find(
+        (f) => f.factor_type === "totp" && f.status === "verified",
+      );
+      if (!verified) {
+        // 「本当 に 無い」 = 直リンク 等 の 想定 外 な の で 通常 フロー に 戻す
         router.replace(safeNextOr(nextParam, "/app"));
         return;
       }
-      setFactorId(fid);
+      if (cancelled) return;
+      setFactorId(verified.id);
       setLoading(false);
     })();
-  }, [supabase, router, nextParam]);
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, router, nextParam, reloadKey]);
 
   const submit = async () => {
     if (!factorId) return;
@@ -115,7 +160,20 @@ function MfaChallengeInner() {
             </Alert>
           )}
 
-          {loading ? (
+          {loadError ? (
+            <div className="space-y-3">
+              <Alert variant="destructive">
+                <AlertDescription>{loadError}</AlertDescription>
+              </Alert>
+              <Button
+                variant="outline"
+                onClick={() => setReloadKey((n) => n + 1)}
+                className="w-full"
+              >
+                再試行
+              </Button>
+            </div>
+          ) : loading ? (
             <p className="text-muted-foreground text-sm">読み込み中…</p>
           ) : (
             <form

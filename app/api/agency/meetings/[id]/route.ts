@@ -108,7 +108,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
   }
 
   try {
-    await updateMeetingStatus(supabase, id, "canceled");
+    await updateMeetingStatus(supabase, id, guard.organization.id, "canceled");
   } catch (err) {
     return NextResponse.json(
       { error: "db_update_failed", message: err instanceof Error ? err.message : "Unknown" },
@@ -282,7 +282,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   // ─── DB を更新 ──────────────────────────────────────────────────
   let updated;
   try {
-    updated = await rescheduleMeeting(supabase, id, {
+    updated = await rescheduleMeeting(supabase, id, guard.organization.id, {
       title: input.title,
       agenda: input.agenda,
       startsAt: input.startsAt,

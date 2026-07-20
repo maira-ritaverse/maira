@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { findAuthUserByEmail } from "@/lib/admin/auth-users";
 import { isMairaAdmin } from "@/lib/announcements/platform-queries";
 import { recordAuditLog } from "@/lib/audit/audit-log";
 import { readJsonBody, requireUser } from "@/lib/api/auth-guards";
@@ -253,22 +254,13 @@ export async function POST(request: Request) {
 
   const admin = createServiceClient();
 
-  // 3. 既存メアドチェック(listUsers でメアド検索:200 件まで全件取って絞り込み)
+  // 3. 既存メアドチェック (findAuthUserByEmail が listUsers を 全ページ 走査 する)。
+  //    元 実装 は perPage=200 の 単発 で auth.users が 200 を 超えた 環境 で 「実は
+  //    存在 する のに 未 発見」 と 誤判定 → org insert → 後段 の generateLink({invite})
+  //    が email_exists で 落ち → rollback で 復旧、 という 経路 が あった。
   try {
-    const { data: list, error: listErr } = await admin.auth.admin.listUsers({
-      page: 1,
-      perPage: 200,
-    });
-    if (listErr) {
-      return NextResponse.json(
-        { error: "lookup_failed", message: listErr.message },
-        { status: 500 },
-      );
-    }
-    const exists = list.users.some(
-      (u) => (u.email ?? "").toLowerCase() === adminEmail.toLowerCase(),
-    );
-    if (exists) {
+    const existing = await findAuthUserByEmail(admin, adminEmail);
+    if (existing) {
       return NextResponse.json({ error: "email_already_exists" }, { status: 409 });
     }
   } catch (err) {

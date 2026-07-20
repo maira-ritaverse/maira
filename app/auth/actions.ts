@@ -18,9 +18,22 @@ import { consumeRateLimit } from "@/lib/rate-limit/rate-limit";
  * x-forwarded-for は 「client, proxy1, proxy2」 の 順 で 並ぶ 慣例。 先頭 = 直接 の
  * client IP。 extractClientIp は Request オブジェクト を 引数 に 取る ので、
  * server action の string ヘッダ に は 別 の 抽出 関数 を 用意。
+ *
+ * x-forwarded-for が 無い 環境 (self-host / preview 等) は x-real-ip を fallback。
+ * それ も 無ければ null を 返し、 呼出 側 で 「IP 判定 不可 = 保守的 に 弾く」 経路 に
+ * 落とす (元 実装 で は "unknown" 文字列 を 一律 使って 全 攻撃者 が 同じ bucket
+ * に なり、 legitimate な アクセス を 巻き添え に する 現象 が あった)。
  */
-function extractLoginIp(xForwardedFor: string): string {
-  return xForwardedFor.split(",")[0]?.trim() || "unknown";
+function extractLoginIp(
+  xForwardedFor: string | null | undefined,
+  xRealIp: string | null | undefined,
+): string | null {
+  if (xForwardedFor) {
+    const first = xForwardedFor.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  const real = xRealIp?.trim();
+  return real || null;
 }
 
 /**
@@ -91,35 +104,48 @@ export async function login(input: LoginInput, next?: string | null) {
   const hdrs = await headers();
   const ip = hdrs.get("x-forwarded-for");
   const ua = hdrs.get("user-agent");
+  const rlIp = extractLoginIp(ip, hdrs.get("x-real-ip"));
 
   // ── credential stuffing 対策: IP と email の 2 段 で rate limit。
   //     ・IP: 60 秒 に 10 回 (誤入力 の 現実 的 上限 と 攻撃 の 差 を つける)
   //     ・email: 15 分 に 20 回 (辞書 攻撃 で 特定 アカウント を 狙い撃つ 経路)
   //     どちら か が 超過 したら 429 相当 を 返す。 監査ログ は 「rate_limited」 で 記録。
-  const rlIp = ip ? extractLoginIp(ip) : "unknown";
-  const [ipLimit, emailLimit] = await Promise.all([
-    consumeRateLimit({
-      namespace: "auth:login:ip",
-      identifier: rlIp,
-      windowSeconds: 60,
-      maxCount: 10,
-    }),
+  //
+  //     ★email は 大文字小文字 の 差 で bucket が 分離 する と case rotate で
+  //       bypass される (セキュリティ 監査 #1)。 lowercase に 正規化 して 1 bucket に 集約。
+  //     ★IP が 取れ ない (rlIp=null) は identify 不能 な の で IP bucket は skip し、
+  //       email bucket のみ で 判定 する (旧 実装 は "unknown" で 全員 巻き 添え)。
+  const normalizedEmail = input.email.trim().toLowerCase();
+  const rateLimitChecks: Array<Promise<{ limited: boolean }>> = [
     consumeRateLimit({
       namespace: "auth:login:email",
-      identifier: input.email,
+      identifier: normalizedEmail,
       windowSeconds: 15 * 60,
       maxCount: 20,
       hashIdentifier: true,
     }),
-  ]);
-  if (ipLimit.limited || emailLimit.limited) {
+  ];
+  if (rlIp !== null) {
+    rateLimitChecks.unshift(
+      consumeRateLimit({
+        namespace: "auth:login:ip",
+        identifier: rlIp,
+        windowSeconds: 60,
+        maxCount: 10,
+      }),
+    );
+  }
+  const results = await Promise.all(rateLimitChecks);
+  const ipLimited = rlIp !== null ? results[0].limited : false;
+  const emailLimited = rlIp !== null ? results[1].limited : results[0].limited;
+  if (ipLimited || emailLimited) {
     await recordAuditLog({
       userId: null,
       action: "login",
       metadata: {
         result: "rate_limited",
         email: input.email,
-        by: ipLimit.limited && emailLimit.limited ? "ip+email" : ipLimit.limited ? "ip" : "email",
+        by: ipLimited && emailLimited ? "ip+email" : ipLimited ? "ip" : "email",
       },
       ipAddress: ip,
       userAgent: ua,

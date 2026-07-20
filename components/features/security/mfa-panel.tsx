@@ -70,17 +70,21 @@ export function MfaPanel() {
     setSuccess(null);
     setBusy(true);
     try {
-      // 未 verified の 古い factor が 残って いる と enroll が 失敗 する 場合 が ある
-      // (Supabase の 仕様)。 事前 に unverified factor を 掃除。
-      const current = await listUserFactors(supabase);
-      for (const f of current) {
-        if (f.status === "unverified") {
-          await supabase.auth.mfa.unenroll({ factorId: f.id });
-        }
-      }
+      // ★friendlyName に time + 短い random suffix を 付与 (同日 の 複数 enroll で
+      //   Supabase の per-user friendly_name uniqueness に 衝突 する の を 回避、
+      //   セキュリティ 監査 MFA #8)。
+      //   secondary: 別 タブ で 進行 中 の enroll が あって も 名前 衝突 で 弾か れない。
+      const stamp =
+        new Date().toLocaleString("ja-JP", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        }) + `-${Math.floor(Math.random() * 10000).toString(36)}`;
       const { data, error: enrollErr } = await supabase.auth.mfa.enroll({
         factorType: "totp",
-        friendlyName: `Maira (${new Date().toLocaleDateString("ja-JP")})`,
+        friendlyName: `Maira (${stamp})`,
       });
       if (enrollErr || !data) {
         throw new Error(enrollErr?.message ?? "enroll_failed");

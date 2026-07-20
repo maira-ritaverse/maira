@@ -34,6 +34,8 @@ export type AuthUserSlim = {
 
 /**
  * 指定 した id 集合 に 対して auth.users を bulk 取得。 見つから ない id は Map に 入らない。
+ * 最終 ページ 到達 前 に MAX_PAGES を 使い 切って 未 発見 の target が 残った 場合、
+ * 明示的 に warn を 吐く (silent-drop の 監視 の ため)。
  */
 export async function getAuthUsersByIds(
   admin: SupabaseClient,
@@ -43,11 +45,10 @@ export async function getAuthUsersByIds(
   const found = new Map<string, AuthUserSlim>();
   if (targets.size === 0) return found;
 
+  let reachedEnd = false;
   for (let page = 1; page <= MAX_PAGES; page += 1) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage: PER_PAGE });
     if (error) {
-      // 途中 で 失敗 して も 集めた 分 は 返す。 呼出 側 で null フィールド の
-      // フォールバック 表示 に なる (完全 な silent-drop より マシ)。
       console.warn("[admin/auth-users] listUsers page failed", { page, message: error.message });
       break;
     }
@@ -62,10 +63,56 @@ export async function getAuthUsersByIds(
         });
       }
     }
-    // 全 target を 見つけたら 早期 return
     if (found.size >= targets.size) return found;
-    // 最終 ページ 判定: 200 未満 なら もう ページ は 無い
-    if (users.length < PER_PAGE) break;
+    if (users.length < PER_PAGE) {
+      reachedEnd = true;
+      break;
+    }
+  }
+  // MAX_PAGES 使い 切って 未 発見 target が 残って いる → プラット フォーム が
+  // MAX_PAGES × PER_PAGE を 超えて 拡大 した 兆候。 admin 表示 の 精度 が 落ちる
+  // 前 に モニタリング に 上げる。
+  if (!reachedEnd && found.size < targets.size) {
+    console.warn("[admin/auth-users] MAX_PAGES reached before finding all targets", {
+      targets: targets.size,
+      found: found.size,
+      maxUsersScanned: MAX_PAGES * PER_PAGE,
+    });
   }
   return found;
+}
+
+/**
+ * email で auth.users を 検索 (存在 確認 用)。 見つかれば User を、 無ければ null を 返す。
+ * listUsers を 全 ページ 走査 する (Supabase Admin API に getUserByEmail が 無い ため)。
+ */
+export async function findAuthUserByEmail(
+  admin: SupabaseClient,
+  email: string,
+): Promise<User | null> {
+  const needle = email.trim().toLowerCase();
+  if (!needle) return null;
+
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: PER_PAGE });
+    if (error) {
+      console.warn("[admin/auth-users] findAuthUserByEmail page failed", {
+        page,
+        message: error.message,
+      });
+      return null;
+    }
+    const users = (data?.users ?? []) as User[];
+    const hit = users.find((u) => (u.email ?? "").toLowerCase() === needle);
+    if (hit) return hit;
+    if (users.length < PER_PAGE) return null;
+  }
+  // MAX_PAGES 使い 切って 見つから ず = 実際 に 存在 しない か、 4000 users を
+  // 超えた か。 呼出 側 の 挙動 は 「見つからない = 新規 発行 可能」 な の で、
+  // 万が 一 該当 が 4000+ 目 に あった 場合 は 後段 の invite で email_exists が
+  // 返って rollback で 復旧 する 前提。 モニタリング に は 出す。
+  console.warn("[admin/auth-users] findAuthUserByEmail exhausted MAX_PAGES", {
+    maxUsersScanned: MAX_PAGES * PER_PAGE,
+  });
+  return null;
 }

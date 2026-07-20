@@ -69,6 +69,16 @@ describe("isSafeNextPath — 弾くケース(open redirect 対策)", () => {
     expect(isSafeNextPath("/foo\\bar")).toBe(false);
     expect(isSafeNextPath("/\\evil.com")).toBe(false);
   });
+
+  it("/api/ /_next/ /auth/ /login/mfa を弾く (フィッシング / 内部資産 / 無限ループ 防止)", () => {
+    expect(isSafeNextPath("/api/agency/clients")).toBe(false);
+    expect(isSafeNextPath("/api/admin/organizations")).toBe(false);
+    expect(isSafeNextPath("/_next/static/chunks/x.js")).toBe(false);
+    expect(isSafeNextPath("/auth/callback")).toBe(false);
+    expect(isSafeNextPath("/auth/confirm")).toBe(false);
+    expect(isSafeNextPath("/login/mfa")).toBe(false);
+    expect(isSafeNextPath("/login/mfa?next=/app")).toBe(false);
+  });
 });
 
 describe("safeNextOr", () => {

@@ -71,6 +71,32 @@ export async function GET(request: Request) {
         sameSite: ticket.sameSite,
         path: ticket.path,
       });
+
+      // ★MFA 端末 紛失 の lockout 対策 (セキュリティ 監査 MFA #3)。
+      //   パスワード リセット を メール で 完遂 して いる = メール 所有 の 証明
+      //   済み な の で、 MFA factor を 保持 して middleware で /login/mfa に
+      //   戻し 続ける と 完全 lockout に なる。 recovery 経路 で は 全 factor を
+      //   自動 解除 し、 パスワード 再設定 後 に 素の セッション で 通常 access できる
+      //   状態 に する。 再度 MFA を 使いたい ユーザー は settings/security から
+      //   再登録 する。
+      //
+      //   トレードオフ: メール 所有 = 攻撃者 も MFA を bypass できる 意味 に なるが、
+      //   もともと パスワード reset で 100% access できる の で 実質 の 追加 攻撃 面
+      //   は 無い。 「recovery コード」 を 別途 用意 する 案 は 将来 Phase で 検討。
+      try {
+        const { data: factorList } = await supabase.auth.mfa.listFactors();
+        for (const f of factorList?.all ?? []) {
+          await supabase.auth.mfa.unenroll({ factorId: f.id });
+        }
+      } catch (err) {
+        // 一部 削除 失敗 は 握る (パスワード reset 自体 は 続行)。 監査 でも
+        // recovery 経路 の factor 解除 失敗 は 通常 の アクセス 阻害 に は ならない
+        // (残った factor が middleware で 引き続き gate に かける だけ)。
+        console.warn("[auth/confirm] mfa factor clear failed during recovery", {
+          user_id: user.id,
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
   }
 

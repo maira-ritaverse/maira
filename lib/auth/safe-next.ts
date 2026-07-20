@@ -25,6 +25,21 @@ export function isSafeNextPath(next: string | null | undefined): next is string 
   if (!next.startsWith("/")) return false;
   if (next.startsWith("//")) return false;
   if (next.includes("\\")) return false;
+  // ★API / Next 内部 / 認証 経路 は 「ページ 遷移 先」 として 無効。
+  //     ・/api/*  → JSON レスポンス 直接 表示 (フィッシング 材料)
+  //     ・/_next/* → 内部 静的 資産
+  //     ・/auth/*  → callback / confirm (再 走行 で 意図 せぬ 副作用)
+  //     ・/login/mfa は MFA 検証 後 の 遷移先 として 意味 が ない (無限 ループ)
+  //     セキュリティ 監査 MFA #6 の 対応。
+  if (
+    next.startsWith("/api/") ||
+    next.startsWith("/_next/") ||
+    next.startsWith("/auth/") ||
+    next === "/login/mfa" ||
+    next.startsWith("/login/mfa?")
+  ) {
+    return false;
+  }
   return true;
 }
 
