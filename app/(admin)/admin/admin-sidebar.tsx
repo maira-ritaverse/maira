@@ -47,6 +47,7 @@ const SECTIONS: NavSection[] = [
       { href: "/admin/users", icon: "👥", label: "ユーザ", prefix: true },
       { href: "/admin/seekers", icon: "🧑‍💼", label: "求職者", prefix: true },
       { href: "/admin/organizations", icon: "🏢", label: "企業", prefix: true },
+      { href: "/admin/clients", icon: "🗂", label: "求職者CRM", prefix: true },
       { href: "/admin/contacts", icon: "📨", label: "問い合わせ", prefix: true },
       { href: "/admin/roi-leads", icon: "📈", label: "ROI 試算 リード", prefix: true },
     ],
