@@ -30,6 +30,9 @@ type OrgRow = {
   archived_at: string | null;
   archived_reason: string | null;
   recording_upload_enabled: boolean;
+  // Solo プラン (個人事業主 用 の 独立 org) は is_personal=true。
+  // /admin/organizations の 一覧 / フィルタ で 法人 と 区別 する。
+  is_personal: boolean | null;
 };
 type MemberRow = {
   organization_id: string;
@@ -45,6 +48,15 @@ type AiTotalQuotaRow = {
   monthly_limit: number;
   notes: string | null;
 };
+type PlanRow = {
+  organization_id: string;
+  tier: string;
+  cycle: string;
+  status: string;
+  trial_ends_at: string | null;
+  current_period_end: string | null;
+  canceled_at: string | null;
+};
 
 export async function GET(request: Request) {
   if (!(await isMairaAdmin())) {
@@ -58,7 +70,9 @@ export async function GET(request: Request) {
 
   const baseQuery = admin
     .from("organizations")
-    .select("id, name, created_at, archived_at, archived_reason, recording_upload_enabled");
+    .select(
+      "id, name, created_at, archived_at, archived_reason, recording_upload_enabled, is_personal",
+    );
   const { data: orgsData, error: orgsErr } = await (showArchived
     ? baseQuery.not("archived_at", "is", null).order("archived_at", { ascending: false })
     : baseQuery.is("archived_at", null).order("created_at", { ascending: false }));
@@ -87,6 +101,16 @@ export async function GET(request: Request) {
   const aiTotals = new Map<string, { limit: number; notes: string | null }>();
   for (const row of (aiTotalsData ?? []) as AiTotalQuotaRow[]) {
     aiTotals.set(row.organization_id, { limit: row.monthly_limit, notes: row.notes });
+  }
+
+  // 契約 プラン (tier / cycle / trial 状態) を bulk fetch。 Solo プラン (個人)
+  // の 判別 と トライアル 残 日 数 の 表示 に 使う。
+  const { data: plansData } = await admin
+    .from("organization_plans")
+    .select("organization_id, tier, cycle, status, trial_ends_at, current_period_end, canceled_at");
+  const planMap = new Map<string, PlanRow>();
+  for (const p of (plansData ?? []) as PlanRow[]) {
+    planMap.set(p.organization_id, p);
   }
 
   // 集計:メンバー = admin / advisor、クライアント = 総数 / linked 数
@@ -138,12 +162,14 @@ export async function GET(request: Request) {
       (s.lastMemberAt === null || now - new Date(s.lastMemberAt).getTime() > ninetyDaysMs);
     const status = noAdmin ? "no_admin" : dormant ? "dormant" : "active";
     const aiTotal = aiTotals.get(o.id);
+    const plan = planMap.get(o.id) ?? null;
     return {
       id: o.id,
       name: o.name,
       createdAt: o.created_at,
       archivedAt: o.archived_at,
       archivedReason: o.archived_reason,
+      isPersonal: Boolean(o.is_personal),
       memberCount: s.memberCount,
       adminCount: s.adminCount,
       advisorCount: s.advisorCount,
@@ -151,6 +177,17 @@ export async function GET(request: Request) {
       linkedClientCount: s.linkedClientCount,
       lastMemberAt: s.lastMemberAt,
       status,
+      // 契約 プラン (Solo 判別 と トライアル 残 日 数 の 表示 用)
+      plan: plan
+        ? {
+            tier: plan.tier,
+            cycle: plan.cycle,
+            planStatus: plan.status,
+            trialEndsAt: plan.trial_ends_at,
+            currentPeriodEnd: plan.current_period_end,
+            canceledAt: plan.canceled_at,
+          }
+        : null,
       // AI 月次総量上限 (未設定 は 既定 500 / notes は プラン名 メモ)
       aiMonthlyTotal: {
         limit: aiTotal?.limit ?? PLATFORM_AI_TOTAL_FREE_MONTHLY,

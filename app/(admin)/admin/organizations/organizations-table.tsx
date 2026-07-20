@@ -11,12 +11,25 @@ import { apiFetch, getErrorMessage } from "@/lib/api/client-fetch";
 
 type OrgStatus = "active" | "dormant" | "no_admin";
 
+type OrgPlan = {
+  tier: string;
+  cycle: string;
+  planStatus: string;
+  trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+  canceledAt: string | null;
+};
+
 type OrgRow = {
   id: string;
   name: string;
   createdAt: string;
   archivedAt: string | null;
   archivedReason: string | null;
+  // Solo プラン (個人 事業主) の org は true。 法人 (Team 系) は false。
+  isPersonal: boolean;
+  // 契約 プラン (未 契約 の org は null)
+  plan: OrgPlan | null;
   memberCount: number;
   adminCount: number;
   advisorCount: number;
@@ -31,6 +44,8 @@ type OrgRow = {
   };
   recordingUploadEnabled: boolean;
 };
+
+type KindFilter = "all" | "corporate" | "personal";
 
 type SortKey =
   | "name"
@@ -82,6 +97,9 @@ export function OrganizationsTable({ archived }: { archived: boolean }) {
   // ソート状態を localStorage に永続化(画面遷移後も復元)
   const [sortKey, setSortKey] = usePersistedState<SortKey>("admin-orgs-sortKey", "createdAt");
   const [sortDir, setSortDir] = usePersistedState<SortDir>("admin-orgs-sortDir", "desc");
+  // 種別 フィルタ (全 / 法人 / 個人)。 Solo 契約 の 個人 org を 集中 して 見たい
+  // 運用 の ため に 分離。
+  const [kindFilter, setKindFilter] = usePersistedState<KindFilter>("admin-orgs-kind", "all");
   const { showToast } = useToast();
 
   const fetchOrgs = async () => {
@@ -109,9 +127,15 @@ export function OrganizationsTable({ archived }: { archived: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [archived]);
 
+  const filteredOrgs = useMemo(() => {
+    if (kindFilter === "corporate") return orgs.filter((o) => !o.isPersonal);
+    if (kindFilter === "personal") return orgs.filter((o) => o.isPersonal);
+    return orgs;
+  }, [orgs, kindFilter]);
+
   const sortedOrgs = useMemo(() => {
-    return [...orgs].sort((a, b) => compareOrgs(a, b, sortKey, sortDir));
-  }, [orgs, sortKey, sortDir]);
+    return [...filteredOrgs].sort((a, b) => compareOrgs(a, b, sortKey, sortDir));
+  }, [filteredOrgs, sortKey, sortDir]);
 
   const toggleSort = (k: SortKey) => {
     if (sortKey === k) {
@@ -211,10 +235,35 @@ export function OrganizationsTable({ archived }: { archived: boolean }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <p className="text-muted-foreground text-xs">{orgs.length} 件</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-md border p-0.5 text-xs">
+          {(["all", "corporate", "personal"] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setKindFilter(k)}
+              className={`rounded px-2.5 py-1 transition-colors ${
+                kindFilter === k
+                  ? "bg-foreground text-background font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {k === "all" ? "全種別" : k === "corporate" ? "法人" : "個人 (Solo)"}
+            </button>
+          ))}
+        </div>
+        <p className="text-muted-foreground text-xs">{filteredOrgs.length} 件</p>
         <RefreshButton onClick={() => void fetchOrgs()} loading={loading} />
       </div>
+      {filteredOrgs.length === 0 && (
+        <p className="text-muted-foreground text-sm">
+          {kindFilter === "personal"
+            ? "個人 (Solo) の 組織 は ありません。"
+            : kindFilter === "corporate"
+              ? "法人 の 組織 は ありません。"
+              : "該当する組織がありません。"}
+        </p>
+      )}
       <div className="overflow-x-auto rounded border">
         <table className="w-full text-left text-sm">
           <thead className="bg-muted/50 text-muted-foreground sticky top-0 z-10 text-xs">
@@ -290,7 +339,15 @@ export function OrganizationsTable({ archived }: { archived: boolean }) {
                 className="hover:bg-accent/40 odd:bg-muted/10 border-t transition-colors"
               >
                 <td className="px-3 py-2.5">
-                  <div className="font-medium">{o.name}</div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-medium">{o.name}</span>
+                    {o.isPersonal && (
+                      <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold text-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+                        個人
+                      </span>
+                    )}
+                    <TierBadge plan={o.plan} />
+                  </div>
                   <div className="text-muted-foreground text-[10px]">{o.id}</div>
                 </td>
                 <td className="px-3 py-2.5 text-xs">
@@ -645,6 +702,56 @@ function RecordingUploadToggle({
     >
       {saving ? "..." : enabled ? "有効" : "無効"}
     </button>
+  );
+}
+
+/**
+ * 契約 プラン の tier / trial 状態 を バッジ 表示。 未 契約 org は null で 何 も 出さ ない。
+ */
+function TierBadge({ plan }: { plan: OrgPlan | null }) {
+  if (!plan) return null;
+  const label: Record<string, string> = {
+    solo: "Solo",
+    solo_pro: "Solo Pro",
+    standard: "Standard",
+    standard_pro: "Standard + Pro",
+    standard_rec: "Standard(旧)",
+    standard_premium: "Standard Premium(旧)",
+  };
+  const tone: Record<string, string> = {
+    solo: "bg-blue-100 text-blue-900 dark:bg-blue-950/40 dark:text-blue-200",
+    solo_pro: "bg-orange-100 text-orange-900 dark:bg-orange-950/40 dark:text-orange-200",
+    standard: "bg-purple-100 text-purple-900 dark:bg-purple-950/40 dark:text-purple-200",
+    standard_pro: "bg-purple-200 text-purple-950 dark:bg-purple-900/40 dark:text-purple-100",
+  };
+  const isTrial = plan.planStatus === "trialing";
+  const isPastDue = plan.planStatus === "past_due";
+  const isCanceled = plan.planStatus === "canceled";
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span
+        className={`rounded px-1.5 py-0.5 text-[9px] font-semibold ${
+          tone[plan.tier] ?? "bg-muted text-muted-foreground"
+        }`}
+      >
+        {label[plan.tier] ?? plan.tier}
+      </span>
+      {isTrial && (
+        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+          Trial
+        </span>
+      )}
+      {isPastDue && (
+        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+          課金失敗
+        </span>
+      )}
+      {isCanceled && (
+        <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[9px] font-semibold text-slate-800 dark:bg-slate-800 dark:text-slate-200">
+          解約済
+        </span>
+      )}
+    </span>
   );
 }
 
