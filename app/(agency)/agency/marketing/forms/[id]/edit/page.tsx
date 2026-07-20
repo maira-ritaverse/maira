@@ -7,6 +7,8 @@ import { notFound, redirect } from "next/navigation";
 
 import { PageHeading } from "@/components/ui/page-heading";
 import { getUserRole } from "@/lib/organizations/queries";
+import { getCurrentOrganizationPlan } from "@/lib/billing/agency";
+import { getPlanEntitlements } from "@/lib/billing/plan-entitlements";
 import { createClient } from "@/lib/supabase/server";
 
 import { FormBuilder } from "./form-builder";
@@ -27,6 +29,13 @@ export default async function FormEditPage({ params }: { params: RouteParams }) 
   const role = await getUserRole(user.id);
   if (role.accountType !== "organization_member" || !role.organization || !role.member) {
     redirect("/app");
+  }
+
+  // プラン tier で MA 機能 を ガード (Solo 系 は 使用 不可)。
+  const plan = await getCurrentOrganizationPlan(supabase);
+  const entitlements = getPlanEntitlements(plan?.tier ?? "standard");
+  if (!entitlements.canUseMaFlows) {
+    redirect("/agency");
   }
 
   const { data } = await supabase

@@ -12,6 +12,8 @@ import { redirect } from "next/navigation";
 
 import { PageHeading } from "@/components/ui/page-heading";
 import { getUserRole } from "@/lib/organizations/queries";
+import { getCurrentOrganizationPlan } from "@/lib/billing/agency";
+import { getPlanEntitlements } from "@/lib/billing/plan-entitlements";
 import { listFlowsForOrg } from "@/lib/ma/flow-queries";
 import { createClient } from "@/lib/supabase/server";
 import { FlowList } from "./flow-list";
@@ -29,6 +31,13 @@ export default async function FlowsPage() {
   const role = await getUserRole(user.id);
   if (role.accountType !== "organization_member" || !role.organization || !role.member) {
     redirect("/app");
+  }
+
+  // プラン tier で MA 機能 を ガード (Solo 系 は 使用 不可)。
+  const plan = await getCurrentOrganizationPlan(supabase);
+  const entitlements = getPlanEntitlements(plan?.tier ?? "standard");
+  if (!entitlements.canUseMaFlows) {
+    redirect("/agency");
   }
 
   const flows = await listFlowsForOrg(supabase, role.organization.id);

@@ -2,6 +2,8 @@ import { AlertTriangle } from "lucide-react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
+import { getCurrentOrganizationPlan } from "@/lib/billing/agency";
+import { getPlanEntitlements } from "@/lib/billing/plan-entitlements";
 import {
   getActiveConsent,
   getScenarioLastSentAt,
@@ -50,6 +52,15 @@ export default async function MarketingPage({ searchParams }: { searchParams?: S
   const role = await getUserRole(user.id);
   if (role.accountType !== "organization_member" || !role.organization || !role.member) {
     redirect("/app");
+  }
+
+  // プラン tier で MA 機能 を ガード。 Solo 系 は MA 使用不可 な ので
+  // ダッシュボード に 戻す (side nav でも 非表示 に して いる ので 直接 URL
+  // 叩き の 二重防御)。
+  const plan = await getCurrentOrganizationPlan(supabase);
+  const entitlements = getPlanEntitlements(plan?.tier ?? "standard");
+  if (!entitlements.canUseMaFlows) {
+    redirect("/agency");
   }
 
   // 並列に取得して TTFB を短くする(全て自組織分のみ、依存関係なし)

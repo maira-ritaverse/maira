@@ -14,7 +14,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { requireOrgAdmin } from "@/lib/api/auth-guards";
+import { getEntitlementsForOrg, planUpgradeRequired, requireOrgAdmin } from "@/lib/api/auth-guards";
 import { encryptField } from "@/lib/crypto/field-encryption";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -30,6 +30,13 @@ const postBody = z.object({
 export async function POST(request: Request) {
   const guard = await requireOrgAdmin();
   if (!guard.ok) return guard.response;
+  // MA 機能 は Team 系 プラン 限定 (Solo 系 は 402)。
+  const entitlements = await getEntitlementsForOrg(guard.supabase);
+  if (!entitlements.canUseMaFlows) {
+    return planUpgradeRequired(
+      "マーケティングオートメーション機能はTeamプラン以上でご利用いただけます。",
+    );
+  }
 
   const json = (await request.json().catch(() => null)) as unknown;
   const parsed = postBody.safeParse(json);

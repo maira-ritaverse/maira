@@ -9,6 +9,8 @@ import { notFound, redirect } from "next/navigation";
 import { PageHeading } from "@/components/ui/page-heading";
 import { listOrganizationLineTags } from "@/lib/line/conversation-tags";
 import { getUserRole } from "@/lib/organizations/queries";
+import { getCurrentOrganizationPlan } from "@/lib/billing/agency";
+import { getPlanEntitlements } from "@/lib/billing/plan-entitlements";
 import { listFlowAuditByFlow } from "@/lib/ma/flow-audit";
 import { getFlowAttribution } from "@/lib/ma/flow-attribution";
 import { getFlowDetail, listMaTemplatesForOrg } from "@/lib/ma/flow-queries";
@@ -33,6 +35,13 @@ export default async function FlowEditPage({ params }: { params: RouteParams }) 
   const role = await getUserRole(user.id);
   if (role.accountType !== "organization_member" || !role.organization || !role.member) {
     redirect("/app");
+  }
+
+  // プラン tier で MA 機能 を ガード (Solo 系 は 使用 不可)。
+  const plan = await getCurrentOrganizationPlan(supabase);
+  const entitlements = getPlanEntitlements(plan?.tier ?? "standard");
+  if (!entitlements.canUseMaFlows) {
+    redirect("/agency");
   }
 
   const [flow, tags, templates, segments, attribution, auditLog] = await Promise.all([

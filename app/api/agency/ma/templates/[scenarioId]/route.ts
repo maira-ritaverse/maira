@@ -14,8 +14,21 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
+import { getCurrentOrganizationPlan } from "@/lib/billing/agency";
+import { getPlanEntitlements } from "@/lib/billing/plan-entitlements";
 import { getTemplateForScenario, upsertTemplate } from "@/lib/ma/queries";
 import { upsertTemplateSchema } from "@/lib/ma/types";
+
+/** MA 機能 は Team 系 プラン 限定 (Solo 系 は 402)。 */
+function maNotAvailable() {
+  return NextResponse.json(
+    {
+      error: "feature_not_available",
+      message: "マーケティングオートメーション機能はTeamプラン以上でご利用いただけます。",
+    },
+    { status: 402 },
+  );
+}
 
 type RouteContext = { params: Promise<{ scenarioId: string }> };
 
@@ -35,6 +48,9 @@ export async function GET(_request: Request, { params }: RouteContext) {
   if (role.accountType !== "organization_member" || !role.organization) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const plan = await getCurrentOrganizationPlan(supabase);
+  if (!getPlanEntitlements(plan?.tier ?? "standard").canUseMaFlows) return maNotAvailable();
 
   try {
     const template = await getTemplateForScenario(role.organization.id, scenarioId);
@@ -70,6 +86,9 @@ export async function PUT(request: Request, { params }: RouteContext) {
     // 配信文面の編集は admin のみ。advisor は閲覧のみ可。
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const plan = await getCurrentOrganizationPlan(supabase);
+  if (!getPlanEntitlements(plan?.tier ?? "standard").canUseMaFlows) return maNotAvailable();
 
   let body: unknown;
   try {

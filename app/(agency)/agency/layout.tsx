@@ -6,6 +6,7 @@ import { PrivacyPolicyModal } from "@/components/features/privacy-policy-modal";
 import { Toaster } from "@/components/features/admin/toaster";
 import { UserMenu } from "@/components/features/user-menu";
 import { ToastProvider } from "@/lib/admin/toast/store";
+import { getPlanEntitlements } from "@/lib/billing/plan-entitlements";
 import {
   getTrialCountdown,
   isPlanReadOnly,
@@ -54,11 +55,12 @@ export default async function AgencyLayout({ children }: { children: React.React
   }
 
   // 組織アーカイブ + 課金プラン を まとめて 取得 (別クエリを直列にしないため)
+  // tier は サイドバー の 機能 ゲート (MA 項目 の 出し分け) に 使う。
   const [{ data: orgRow }, { data: planRow }] = await Promise.all([
     supabase.from("organizations").select("archived_at").eq("id", role.organization.id).single(),
     supabase
       .from("organization_plans")
-      .select("status, trial_ends_at, stripe_subscription_id, is_billing_exempt")
+      .select("tier, status, trial_ends_at, stripe_subscription_id, is_billing_exempt")
       .eq("organization_id", role.organization.id)
       .maybeSingle(),
   ]);
@@ -72,8 +74,16 @@ export default async function AgencyLayout({ children }: { children: React.React
   const hasPriorPolicy = policyAcceptance.acceptedAt !== null;
 
   // 課金プランに基づくバナー / モーダル判定
-  const plan = (planRow ?? null) as PlanReadState | null;
+  // planRow は tier を 追加 select して いる の で、 バナー 判定 用 の 形 に narrow して 渡す。
+  const plan = (planRow ?? null) as (PlanReadState & { tier: string | null }) | null;
   const readOnly = isPlanReadOnly(plan);
+
+  // プラン tier に よる 機能 開放 表 (サイドバー の 出し 分け に 使う)。
+  // 行 なし (未開始 組織) は "standard" 相当 に フォールバック。 これ に よって
+  // Solo 系 の 組織 で のみ 「マーケティング」 リンク が 消える。
+  const sidebarEntitlements = getPlanEntitlements(
+    (plan?.tier as Parameters<typeof getPlanEntitlements>[0] | null | undefined) ?? "standard",
+  );
   const bannerStatus = !plan
     ? null
     : plan.status === "canceled"
@@ -102,7 +112,11 @@ export default async function AgencyLayout({ children }: { children: React.React
     // <Toaster /> は 画面 右下 に 積む 表示 コンポーネント。 layout 内 に 1 個 だけ 置く。
     <ToastProvider>
       <div className="bg-background flex h-screen overflow-hidden">
-        <AgencySidebar organizationName={role.organization.name} memberRole={role.member.role} />
+        <AgencySidebar
+          organizationName={role.organization.name}
+          memberRole={role.member.role}
+          canUseMaFlows={sidebarEntitlements.canUseMaFlows}
+        />
         <div className="flex flex-1 flex-col overflow-hidden">
           <header className="flex h-14 shrink-0 items-center justify-end gap-2 border-b px-4">
             <NotificationBell />

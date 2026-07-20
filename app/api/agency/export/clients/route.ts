@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { canExport } from "@/lib/permissions/server";
+import { getCurrentOrganizationPlan } from "@/lib/billing/agency";
+import { getPlanEntitlements } from "@/lib/billing/plan-entitlements";
 import { listClientRecordsWithAssignee } from "@/lib/clients/queries";
 import { EXPORT_COLUMNS, parseExportColumnsParam } from "@/lib/clients/export-columns";
 import { buildCsvFilename, csvFormat, toCsv } from "@/lib/csv/format";
@@ -32,6 +34,19 @@ export async function GET(request: Request) {
   }
   if (!canExport(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // プラン tier に よる CSV エクスポート 可否 (Solo は 不可)。
+  const plan = await getCurrentOrganizationPlan(supabase);
+  const entitlements = getPlanEntitlements(plan?.tier ?? "standard");
+  if (!entitlements.canUseCsvExport) {
+    return NextResponse.json(
+      {
+        error: "feature_not_available",
+        message: "CSV エクスポートはSolo Pro以上でご利用いただけます。",
+      },
+      { status: 402 },
+    );
   }
 
   // 列選択をクエリから読み取り、列定義リストに引き当てる。

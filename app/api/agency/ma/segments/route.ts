@@ -9,12 +9,21 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { requireOrgAdmin, requireOrgMember } from "@/lib/api/auth-guards";
+import {
+  getEntitlementsForOrg,
+  planUpgradeRequired,
+  requireOrgAdmin,
+  requireOrgMember,
+} from "@/lib/api/auth-guards";
 import { countFriendsBySegmentFilter, listSegmentsForOrg } from "@/lib/ma/segment-queries";
 import { SegmentFilterSchema, type SegmentFilter } from "@/lib/ma/segment-dsl";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
+
+/** MA 機能 は Team 系 プラン 限定。 Solo 系 で は 402 で 弾く。 */
+const MA_UPGRADE_MESSAGE =
+  "マーケティングオートメーション機能はTeamプラン以上でご利用いただけます。";
 
 // ────────────────────────────────────────
 // GET
@@ -22,6 +31,8 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const guard = await requireOrgMember();
   if (!guard.ok) return guard.response;
+  const entitlements = await getEntitlementsForOrg(guard.supabase);
+  if (!entitlements.canUseMaFlows) return planUpgradeRequired(MA_UPGRADE_MESSAGE);
 
   try {
     const segments = await listSegmentsForOrg(guard.supabase, guard.organization.id);
@@ -44,6 +55,8 @@ const postBody = z.object({
 export async function POST(request: Request) {
   const guard = await requireOrgAdmin();
   if (!guard.ok) return guard.response;
+  const entitlements = await getEntitlementsForOrg(guard.supabase);
+  if (!entitlements.canUseMaFlows) return planUpgradeRequired(MA_UPGRADE_MESSAGE);
 
   const json = (await request.json().catch(() => null)) as unknown;
   const parsed = postBody.safeParse(json);
@@ -98,6 +111,8 @@ const patchBody = z.object({
 export async function PATCH(request: Request) {
   const guard = await requireOrgAdmin();
   if (!guard.ok) return guard.response;
+  const entitlements = await getEntitlementsForOrg(guard.supabase);
+  if (!entitlements.canUseMaFlows) return planUpgradeRequired(MA_UPGRADE_MESSAGE);
 
   const json = (await request.json().catch(() => null)) as unknown;
   const parsed = patchBody.safeParse(json);

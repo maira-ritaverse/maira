@@ -9,7 +9,7 @@
 import { generateObject } from "ai";
 import { NextResponse } from "next/server";
 
-import { requireOrgAdmin } from "@/lib/api/auth-guards";
+import { getEntitlementsForOrg, planUpgradeRequired, requireOrgAdmin } from "@/lib/api/auth-guards";
 import { assertAnthropicConfigured, getModel, MODELS } from "@/lib/ai/client";
 import {
   AIFlowImprovementSchema,
@@ -26,6 +26,13 @@ type RouteContext = { params: Promise<{ id: string }> };
 export async function POST(_request: Request, context: RouteContext) {
   const guard = await requireOrgAdmin();
   if (!guard.ok) return guard.response;
+  // MA 機能 は Team 系 プラン 限定 (Solo 系 は 402)。
+  const entitlements = await getEntitlementsForOrg(guard.supabase);
+  if (!entitlements.canUseMaFlows) {
+    return planUpgradeRequired(
+      "マーケティングオートメーション機能はTeamプラン以上でご利用いただけます。",
+    );
+  }
 
   try {
     assertAnthropicConfigured();

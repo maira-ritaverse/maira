@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { canExport } from "@/lib/permissions/server";
+import { getCurrentOrganizationPlan } from "@/lib/billing/agency";
+import { getPlanEntitlements } from "@/lib/billing/plan-entitlements";
 import { buildCsvFilename, csvFormat, toCsv } from "@/lib/csv/format";
 import { csvResponse } from "@/lib/csv/response";
 import { getUserRole } from "@/lib/organizations/queries";
@@ -25,6 +27,19 @@ export async function GET() {
   }
   if (!canExport(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // プラン tier に よる CSV エクスポート 可否 (Solo は 不可)。
+  const plan = await getCurrentOrganizationPlan(supabase);
+  const entitlements = getPlanEntitlements(plan?.tier ?? "standard");
+  if (!entitlements.canUseCsvExport) {
+    return NextResponse.json(
+      {
+        error: "feature_not_available",
+        message: "CSV エクスポートはSolo Pro以上でご利用いただけます。",
+      },
+      { status: 402 },
+    );
   }
 
   const { data, error } = await supabase

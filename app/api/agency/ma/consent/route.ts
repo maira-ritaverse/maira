@@ -17,8 +17,21 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
+import { getCurrentOrganizationPlan } from "@/lib/billing/agency";
+import { getPlanEntitlements } from "@/lib/billing/plan-entitlements";
 import { recordConsent, revokeConsent } from "@/lib/ma/queries";
 import { currentConsentVersion, recordConsentSchema, revokeConsentSchema } from "@/lib/ma/types";
+
+/** MA 機能 は Team 系 プラン 限定 (Solo 系 は 402)。 */
+const MA_UPGRADE_MESSAGE =
+  "マーケティングオートメーション機能はTeamプラン以上でご利用いただけます。";
+
+function maNotAvailable() {
+  return NextResponse.json(
+    { error: "feature_not_available", message: MA_UPGRADE_MESSAGE },
+    { status: 402 },
+  );
+}
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -39,6 +52,10 @@ export async function POST(request: Request) {
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  // MA 機能 は Team 系 プラン 限定。
+  const plan = await getCurrentOrganizationPlan(supabase);
+  if (!getPlanEntitlements(plan?.tier ?? "standard").canUseMaFlows) return maNotAvailable();
 
   let body: unknown;
   try {
@@ -101,6 +118,11 @@ export async function DELETE(request: Request) {
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  // MA 機能 は Team 系 プラン 限定 (Solo 系 は 撤回 API も 呼べない が、
+  // 直接 URL 叩き 経路 を 塞ぐ ため 一律 402 で 弾く)。
+  const plan = await getCurrentOrganizationPlan(supabase);
+  if (!getPlanEntitlements(plan?.tier ?? "standard").canUseMaFlows) return maNotAvailable();
 
   let body: unknown;
   try {

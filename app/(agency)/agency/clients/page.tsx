@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { canExport } from "@/lib/permissions/server";
+import { getCurrentOrganizationPlan } from "@/lib/billing/agency";
+import { getPlanEntitlements } from "@/lib/billing/plan-entitlements";
 import {
   getClientDistributionStats,
   listClientRecordsWithUpdateBadge,
@@ -58,7 +60,12 @@ export default async function ClientsPage() {
   const clientTeamIdsByClientId = Object.fromEntries(
     Array.from(clientTeamsMap.entries()).map(([k, v]) => [k, v]),
   );
-  const showExport = canExport(role);
+  // プラン tier に よる CSV 使用可否。 Solo は import / export 共 に 不可、
+  // Solo Pro は 両方 可、 Team 系 は 全部 可 (canExport 権限 も 併せて 見る)。
+  const plan = await getCurrentOrganizationPlan(supabase);
+  const entitlements = getPlanEntitlements(plan?.tier ?? "standard");
+  const showExport = canExport(role) && entitlements.canUseCsvExport;
+  const showCsvImport = entitlements.canUseCsvImport;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -69,7 +76,7 @@ export default async function ClientsPage() {
         </div>
         <div className="flex items-center gap-2">
           {showExport && <ExportDialog />}
-          <CsvImportDialog />
+          {showCsvImport && <CsvImportDialog />}
           <Button render={<Link href="/agency/clients/new" />}>+ 求職者を登録</Button>
         </div>
       </div>

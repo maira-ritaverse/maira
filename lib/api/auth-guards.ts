@@ -27,6 +27,8 @@
 import { NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
 
+import { getCurrentOrganizationPlan } from "@/lib/billing/agency";
+import { getPlanEntitlements, type PlanEntitlements } from "@/lib/billing/plan-entitlements";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient } from "@/lib/supabase/server";
 
@@ -159,6 +161,35 @@ export async function requireUser(): Promise<AuthedUserContext | AuthFail> {
   }
 
   return { ok: true, user, supabase };
+}
+
+/**
+ * 現組織 の PlanEntitlements を 取得 する ヘルパー。
+ *
+ * プラン 未開始 (行 なし) は "standard" 相当 に フォールバック し 既存 挙動 を 維持。
+ * (Solo 系 の 発行 は Phase 2 以降 の セルフサーブ 導線 で 開始 する ため、
+ *  現時点 で 行 なし の 組織 = 招待 経由 の Team 顧客。)
+ */
+export async function getEntitlementsForOrg(
+  supabase: SupabaseServerClient,
+): Promise<PlanEntitlements> {
+  const plan = await getCurrentOrganizationPlan(supabase);
+  return getPlanEntitlements(plan?.tier ?? "standard");
+}
+
+/**
+ * 「今 の 料金 プラン で は 使えない」 を 表す 402 レスポンス。
+ * 認可 失敗 (403) と は 区別 する ため 402 (Payment Required) を 採用。
+ * message は 日本語 で 具体 的 な アップグレード 誘導 を 含める こと。
+ */
+export function planUpgradeRequired(message: string): NextResponse {
+  return NextResponse.json(
+    {
+      error: "feature_not_available",
+      message,
+    },
+    { status: 402 },
+  );
 }
 
 /**

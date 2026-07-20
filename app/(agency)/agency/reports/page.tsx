@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { canExport } from "@/lib/permissions/server";
+import { getCurrentOrganizationPlan } from "@/lib/billing/agency";
+import { getPlanEntitlements } from "@/lib/billing/plan-entitlements";
 import {
   computePreviousPeriod,
   getAchievementForPeriod,
@@ -106,19 +108,28 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
   const previousPeriod = computePreviousPeriod(period);
   const isAdmin = role.member.role === "admin";
 
+  // プラン tier 別 の レポート 機能 開放。
+  // ・canUseAdvancedReports = false (Solo / Solo Pro) → アドバイザー別 絞込 セレクター を 非表示
+  //   (1 席 プラン で は 「対象 メンバー」 という 概念 が そもそも 意味 を なさない)
+  const plan = await getCurrentOrganizationPlan(supabase);
+  const entitlements = getPlanEntitlements(plan?.tier ?? "standard");
+
   const viewer = {
     memberId: role.member.id,
     userId: user.id,
     isAdmin,
   };
 
-  // ── メンバー フィルタ の 解決 (admin のみ)
+  // ── メンバー フィルタ の 解決 (admin のみ、 かつ 上位 プラン のみ)
   //   ・selector の 選択肢 と 「?member= が 自組織 メンバー か」 の 検証 を 兼ねる
   //   ・非 admin (advisor) は 既に viewer 経由 で 自分 の データ しか 見え ない ため、
   //     この セレクター は 出さ ない & 受け取った ?member パラメータ も 無視 する
-  const memberOptions: ReportMemberOption[] = isAdmin
-    ? await fetchMemberOptions(supabase, role.organization.id)
-    : [];
+  //   ・Solo / Solo Pro は 1 席 固定 な ので 呼ぶ 意味 が なく、 memberOptions を 空 に する
+  //     (下 の 描画 分岐 で 自動 的 に 非表示)
+  const memberOptions: ReportMemberOption[] =
+    isAdmin && entitlements.canUseAdvancedReports
+      ? await fetchMemberOptions(supabase, role.organization.id)
+      : [];
   const memberIdSet = new Set(memberOptions.map((m) => m.memberId));
   const selectedMemberId =
     isAdmin && params.member && memberIdSet.has(params.member) ? params.member : null;
@@ -184,7 +195,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
         }
       : null;
 
-  const showExport = canExport(role);
+  // レポート の CSV エクスポート は canExport 権限 + プラン tier の canUseCsvExport の 両方 必要。
+  const showExport = canExport(role) && entitlements.canUseCsvExport;
 
   // ID → 描画中身の Map。 セクションが増えたら ここに 1 行追加するだけで OK。
   // null を 返す と セクション 自体 を 出さ ない (下記 visibleSections フィルタ)。

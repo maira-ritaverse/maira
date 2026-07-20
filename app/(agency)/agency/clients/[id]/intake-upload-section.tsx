@@ -11,6 +11,8 @@
 import { Lock } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
+import { getCurrentOrganizationPlan } from "@/lib/billing/agency";
+import { getPlanEntitlements } from "@/lib/billing/plan-entitlements";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 
@@ -51,7 +53,14 @@ export async function IntakeUploadSection({ clientRecordId, clientLinked, client
     recordingUploadEnabled = Boolean(orgRow?.recording_upload_enabled);
   }
 
-  if (!recordingUploadEnabled) {
+  // プラン tier に よる 録音 機能 開放 (Solo=0, Solo Pro=5, standard_rec/premium=50、
+  // それ 以外 は 0)。 recordingLimit === 0 で は そもそも 使えない ので UI を 隠す。
+  // トライアル 中 は API 側 で 50 件 に 引き上げ ら れる が、 UI は プラン に 追従。
+  const plan = await getCurrentOrganizationPlan(supabase);
+  const entitlements = getPlanEntitlements(plan?.tier ?? "standard");
+  const recordingAllowedByPlan = entitlements.recordingLimit > 0;
+
+  if (!recordingUploadEnabled || !recordingAllowedByPlan) {
     return (
       <Card className="space-y-2 p-5">
         <div className="flex items-center gap-2">

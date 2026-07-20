@@ -14,11 +14,20 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { requireOrgAdmin, requireOrgMember } from "@/lib/api/auth-guards";
+import {
+  getEntitlementsForOrg,
+  planUpgradeRequired,
+  requireOrgAdmin,
+  requireOrgMember,
+} from "@/lib/api/auth-guards";
 import { logFlowAudit } from "@/lib/ma/flow-audit";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
+
+/** MA 機能 は Team 系 プラン 限定 (Solo 系 は 402)。 */
+const MA_UPGRADE_MESSAGE =
+  "マーケティングオートメーション機能はTeamプラン以上でご利用いただけます。";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -28,6 +37,8 @@ type RouteContext = { params: Promise<{ id: string }> };
 export async function GET(_request: Request, context: RouteContext) {
   const guard = await requireOrgMember();
   if (!guard.ok) return guard.response;
+  const entitlements = await getEntitlementsForOrg(guard.supabase);
+  if (!entitlements.canUseMaFlows) return planUpgradeRequired(MA_UPGRADE_MESSAGE);
 
   const { id: flowId } = await context.params;
 
@@ -88,6 +99,8 @@ const putBody = z.object({
 export async function PUT(request: Request, context: RouteContext) {
   const guard = await requireOrgAdmin();
   if (!guard.ok) return guard.response;
+  const entitlements = await getEntitlementsForOrg(guard.supabase);
+  if (!entitlements.canUseMaFlows) return planUpgradeRequired(MA_UPGRADE_MESSAGE);
 
   const { id: flowId } = await context.params;
   const json = (await request.json().catch(() => null)) as unknown;

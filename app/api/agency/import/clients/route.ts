@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
+import { getCurrentOrganizationPlan } from "@/lib/billing/agency";
+import { getPlanEntitlements } from "@/lib/billing/plan-entitlements";
 import { createClientRequestSchema } from "@/lib/clients/types";
 import { logClientCreate } from "@/lib/audit/client-audit-log";
 
@@ -288,6 +290,20 @@ export async function POST(request: Request) {
   const role = await getUserRole(user.id);
   if (role.accountType !== "organization_member" || !role.organization || !role.member) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // プラン tier に よる CSV インポート 可否。 Solo は 不可、 Solo Pro / Team 系 は 可。
+  // 認可 (403) と 区別 する ため 「料金 プラン 不足」 は 402 (Payment Required)。
+  const plan = await getCurrentOrganizationPlan(supabase);
+  const entitlements = getPlanEntitlements(plan?.tier ?? "standard");
+  if (!entitlements.canUseCsvImport) {
+    return NextResponse.json(
+      {
+        error: "feature_not_available",
+        message: "CSV インポートはSolo Pro以上でご利用いただけます。",
+      },
+      { status: 402 },
+    );
   }
 
   // ボディサイズの先制チェック(誤コピペで巨大 CSV が来る事故防止)

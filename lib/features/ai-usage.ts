@@ -13,6 +13,10 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { getPlanEntitlements } from "@/lib/billing/plan-entitlements";
+// PlanTierValue は 下 の 「tier-limits.ts の 定数 を 単一 source of truth に する」
+// import で 併せて 取り込む ので ここ では 追加 しない。
+
 import { hasAddon } from "./entitlements";
 import { utcMonthStart, utcNextMonthStart } from "./usage-limits";
 
@@ -418,7 +422,10 @@ async function getAgencyRecordingQuota(
     }
   }
 
-  return row.tier === "standard_rec" || row.tier === "standard_premium" ? 50 : 0;
+  // tier 別 の 上限 は plan-entitlements.ts の 表 (recordingLimit) を 単一 source of truth
+  // として 参照 する。 Solo=0 / Solo Pro=5 / standard_rec, standard_premium=50 / それ以外=0。
+  if (!row.tier) return 0;
+  return getPlanEntitlements(row.tier as PlanTierValue).recordingLimit;
 }
 
 // (getPlanTierAiBonus は tier-limits.ts への 委譲 で 不要 に なった ため 削除)

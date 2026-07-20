@@ -12,7 +12,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { requireOrgAdmin, requireOrgMember } from "@/lib/api/auth-guards";
+import {
+  getEntitlementsForOrg,
+  planUpgradeRequired,
+  requireOrgAdmin,
+  requireOrgMember,
+} from "@/lib/api/auth-guards";
 import { logFlowAudit } from "@/lib/ma/flow-audit";
 import { listFlowsForOrg } from "@/lib/ma/flow-queries";
 import { getLineFlowPresetByKey } from "@/lib/ma/flow-presets";
@@ -23,9 +28,17 @@ export const dynamic = "force-dynamic";
 // ────────────────────────────────────────
 // GET
 // ────────────────────────────────────────
+/**
+ * MA 機能 は Team 系 プラン 限定。 Solo 系 で は 使えない ので 402 で 弾く。
+ */
+const MA_UPGRADE_MESSAGE =
+  "マーケティングオートメーション機能はTeamプラン以上でご利用いただけます。";
+
 export async function GET() {
   const guard = await requireOrgMember();
   if (!guard.ok) return guard.response;
+  const entitlements = await getEntitlementsForOrg(guard.supabase);
+  if (!entitlements.canUseMaFlows) return planUpgradeRequired(MA_UPGRADE_MESSAGE);
 
   try {
     const flows = await listFlowsForOrg(guard.supabase, guard.organization.id);
@@ -52,6 +65,8 @@ const postBody = z.object({
 export async function POST(request: Request) {
   const guard = await requireOrgAdmin();
   if (!guard.ok) return guard.response;
+  const entitlements = await getEntitlementsForOrg(guard.supabase);
+  if (!entitlements.canUseMaFlows) return planUpgradeRequired(MA_UPGRADE_MESSAGE);
 
   const json = (await request.json().catch(() => null)) as unknown;
   const parsed = postBody.safeParse(json);
@@ -147,6 +162,8 @@ const patchBody = z.object({
 export async function PATCH(request: Request) {
   const guard = await requireOrgAdmin();
   if (!guard.ok) return guard.response;
+  const entitlements = await getEntitlementsForOrg(guard.supabase);
+  if (!entitlements.canUseMaFlows) return planUpgradeRequired(MA_UPGRADE_MESSAGE);
 
   const json = (await request.json().catch(() => null)) as unknown;
   const parsed = patchBody.safeParse(json);

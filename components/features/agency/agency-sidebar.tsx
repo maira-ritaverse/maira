@@ -13,11 +13,20 @@ import type { OrganizationRole } from "@/lib/organizations/types";
  *
  * 並び替え・グループ化・非表示はユーザの localStorage で管理。
  * role に応じて availableItems を出し分け(admin 限定の「メンバー管理」)。
+ * プラン tier に応じて 出し分け:
+ *   ・canUseMaFlows=false (Solo 系) → 「マーケティング」 リンク を 非表示
+ *     (該当 URL 直叩き は 各 page.tsx 側 で 更に redirect し て 二重防御)。
  */
 
 type Props = {
   organizationName: string;
   memberRole: OrganizationRole;
+  /**
+   * プラン tier に よる 機能 開放 表。 プラン 未開始 (行 なし) は "standard" 相当 で
+   * フォールバック する ので、 親 側 で undefined 相当 に して 全項目 表示 に 戻す
+   * 誘惑 は 排して、 呼出 側 で 必ず 計算 して 渡す。
+   */
+  canUseMaFlows: boolean;
 };
 
 const STORAGE_KEY = "maira-agency-sidebar";
@@ -98,13 +107,18 @@ const DEFAULT_LAYOUT: SidebarLayout = {
   hiddenItemIds: [],
 };
 
-export function AgencySidebar({ organizationName, memberRole }: Props) {
+export function AgencySidebar({ organizationName, memberRole, canUseMaFlows }: Props) {
   const pathname = usePathname();
   const isActive = (href: string) =>
     href === "/agency" ? pathname === "/agency" : pathname.startsWith(href);
 
   // role に応じて項目フィルタ(admin のみ「メンバー管理」)
-  const availableItems = [...BASE_ITEMS, ...(memberRole === "admin" ? ADMIN_ITEMS : [])];
+  // + プラン tier に応じて MA (marketing) 項目 を フィルタ (Solo 系 は 非表示)。
+  const rawItems = [...BASE_ITEMS, ...(memberRole === "admin" ? ADMIN_ITEMS : [])];
+  const availableItems = rawItems.filter((item) => {
+    if (item.id === "marketing" && !canUseMaFlows) return false;
+    return true;
+  });
 
   return (
     <CustomizableSidebar

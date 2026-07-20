@@ -14,6 +14,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
+import { getCurrentOrganizationPlan } from "@/lib/billing/agency";
+import { getPlanEntitlements } from "@/lib/billing/plan-entitlements";
 import { listScenarioViews } from "@/lib/ma/queries";
 
 export async function GET() {
@@ -29,6 +31,18 @@ export async function GET() {
   const role = await getUserRole(user.id);
   if (role.accountType !== "organization_member" || !role.organization) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // MA 機能 は Team 系 プラン 限定 (Solo 系 は 402)。
+  const plan = await getCurrentOrganizationPlan(supabase);
+  if (!getPlanEntitlements(plan?.tier ?? "standard").canUseMaFlows) {
+    return NextResponse.json(
+      {
+        error: "feature_not_available",
+        message: "マーケティングオートメーション機能はTeamプラン以上でご利用いただけます。",
+      },
+      { status: 402 },
+    );
   }
 
   try {

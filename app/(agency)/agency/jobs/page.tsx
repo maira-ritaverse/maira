@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { canExport } from "@/lib/permissions/server";
+import { getCurrentOrganizationPlan } from "@/lib/billing/agency";
+import { getPlanEntitlements } from "@/lib/billing/plan-entitlements";
 import { listJobPostings } from "@/lib/jobs/queries";
 import { countLabourFieldsFilled, LABOUR_FIELDS_TOTAL } from "@/lib/jobs/types";
 import { Button } from "@/components/ui/button";
@@ -52,7 +54,11 @@ export default async function JobsPage({
   const incompleteCount = allJobs.filter(
     (j) => countLabourFieldsFilled(j) < LABOUR_FIELDS_TOTAL,
   ).length;
-  const showExport = canExport(role);
+  // プラン tier に よる CSV 使用可否 (Solo は import / export 両方 不可)。
+  const plan = await getCurrentOrganizationPlan(supabase);
+  const entitlements = getPlanEntitlements(plan?.tier ?? "standard");
+  const showExport = canExport(role) && entitlements.canUseCsvExport;
+  const showCsvImport = entitlements.canUseCsvImport;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -78,7 +84,7 @@ export default async function JobsPage({
             </Button>
           )}
           {showExport && <ExportButton href="/api/agency/export/jobs" label="CSV エクスポート" />}
-          <JobsCsvImportDialog />
+          {showCsvImport && <JobsCsvImportDialog />}
           <Button render={<Link href="/agency/jobs/new" />}>+ 求人登録</Button>
         </div>
       </div>
