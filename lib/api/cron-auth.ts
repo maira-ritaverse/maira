@@ -1,3 +1,5 @@
+import { timingSafeEqual } from "node:crypto";
+
 /**
  * Vercel Cron からの呼び出しを認証する共通ヘルパー。
  *
@@ -35,15 +37,25 @@ export function checkCronAuth(request: Request): CronAuthResult {
   // Authorization: Bearer <token>
   if (auth && auth.toLowerCase().startsWith("bearer ")) {
     const token = auth.slice(7).trim();
-    if (vercelSecret && token === vercelSecret) return { ok: true };
-    if (intakeSecret && token === intakeSecret) return { ok: true };
+    if (vercelSecret && safeEqual(token, vercelSecret)) return { ok: true };
+    if (intakeSecret && safeEqual(token, intakeSecret)) return { ok: true };
   }
 
   // X-Cron-Secret: <token>(手動 trigger 用の互換ヘッダ)
   if (xCron) {
-    if (intakeSecret && xCron === intakeSecret) return { ok: true };
-    if (vercelSecret && xCron === vercelSecret) return { ok: true };
+    if (intakeSecret && safeEqual(xCron, intakeSecret)) return { ok: true };
+    if (vercelSecret && safeEqual(xCron, vercelSecret)) return { ok: true };
   }
 
   return { ok: false, reason: "unauthorized" };
+}
+
+/**
+ * 定数時間 の 文字列 比較。 `===` は 先頭 から の 一致 で 早期 return する ため、
+ * 極端 な リモート 環境 で は タイミング attack で 秘密 を 復元 できる。
+ * timingSafeEqual は 長さ が 異なる と throw する ので、 長さ 事前 チェック が 必須。
+ */
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }

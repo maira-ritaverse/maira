@@ -30,7 +30,7 @@ export const changePasswordRequestSchema = z
     current_password: z.string().min(1, "現在のパスワードを入力してください"),
     new_password: z
       .string()
-      .min(8, "新パスワードは8文字以上で入力してください")
+      .min(12, "新パスワードは12文字以上で入力してください")
       .max(72, "新パスワードは72文字以内で入力してください"),
     confirm_password: z.string(),
   })

@@ -4,6 +4,7 @@ import { isMairaAdmin } from "@/lib/announcements/platform-queries";
 import { requireUser } from "@/lib/api/auth-guards";
 import { recordAuditLog } from "@/lib/audit/audit-log";
 import { decryptField } from "@/lib/crypto/field-encryption";
+import { consumeRateLimit } from "@/lib/rate-limit/rate-limit";
 import { createServiceClient } from "@/lib/supabase/service";
 
 /**
@@ -38,6 +39,27 @@ export async function POST(request: Request, { params }: RouteParams) {
   }
 
   const { id } = await params;
+
+  // ── admin 権限 の 侵害 / 悪用 に 備えた 二重 防御。
+  //     侵入 された admin セッション が 全 client_records を 総当たり で 復号 →
+  //     一括 dump する 攻撃 を 阻止 する。 20 件/分 = 通常 の トラブル 対応 (数件/日)
+  //     に は 十分、 tight loop に は 明確 に 制限。 audit ログ は 事後 分析 で
+  //     並行 して 効かせる。
+  const rl = await consumeRateLimit({
+    namespace: "admin:reveal-notes",
+    identifier: actor.id,
+    windowSeconds: 60,
+    maxCount: 20,
+  });
+  if (rl.limited) {
+    return NextResponse.json(
+      {
+        error: "rate_limited",
+        message: "復号操作の回数上限を超えました。1 分ほど待ってから再度お試しください。",
+      },
+      { status: 429 },
+    );
+  }
 
   // reason は 任意。 空 でも OK。
   let reason: string | null = null;

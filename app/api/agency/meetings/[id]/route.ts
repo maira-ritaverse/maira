@@ -35,7 +35,7 @@ export async function GET(_request: Request, context: RouteContext) {
   const { id } = await context.params;
 
   try {
-    const meeting = await getMeetingScheduleById(supabase, id);
+    const meeting = await getMeetingScheduleById(supabase, id, guard.organization.id);
     if (!meeting) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json({ meeting });
   } catch (err) {
@@ -53,7 +53,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
   const { id } = await context.params;
 
   // schedule の view と external_meeting_id を同時に取る
-  const meeting = await getMeetingScheduleById(supabase, id);
+  const meeting = await getMeetingScheduleById(supabase, id, guard.organization.id);
   if (!meeting) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   // host_user_id は view に 含まれ ない の で 直接 引く
@@ -203,7 +203,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const input = parsed.data;
 
   // 既存予約を取得
-  const meeting = await getMeetingScheduleById(supabase, id);
+  const meeting = await getMeetingScheduleById(supabase, id, guard.organization.id);
   if (!meeting) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   // host_user_id は view に 含まれ ない の で 直接 引く

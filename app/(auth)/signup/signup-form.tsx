@@ -204,7 +204,7 @@ export function SignupForm({ invitation, clientInvitation }: Props) {
               <Label htmlFor="password">パスワード</Label>
               <PasswordInput
                 id="password"
-                placeholder="8文字以上"
+                placeholder="12文字以上"
                 autoComplete="new-password"
                 {...register("password")}
                 disabled={isPending}

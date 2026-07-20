@@ -91,15 +91,25 @@ export async function insertMeetingSchedule(
   return rowToView(data as MeetingScheduleRow);
 }
 
-/** 1 件取得 */
+/**
+ * 1 件取得。 呼出 側 の 組織 ID を 必ず 渡す (defense-in-depth)。
+ *
+ * RLS で meeting_schedules は 自 org 分 のみ SELECT できる が、 将来 の RLS
+ * regression / service_role client が 誤って 渡された 場合 に 他社 の 予定 を
+ * 返さ ない よう に、 アプリ 側 でも organization_id フィルタ を 効かせる。
+ * 他 の agency 系 PATCH / DELETE が すべて この pattern に なって おり、
+ * それに 揃える (セキュリティ 監査 A6)。
+ */
 export async function getMeetingScheduleById(
   client: SupabaseClient,
   id: string,
+  organizationId: string,
 ): Promise<MeetingScheduleView | null> {
   const { data, error } = await client
     .from("meeting_schedules")
     .select("*")
     .eq("id", id)
+    .eq("organization_id", organizationId)
     .maybeSingle();
   if (error) throw new Error(`meeting_schedules get failed: ${error.message}`);
   if (!data) return null;

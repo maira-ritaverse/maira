@@ -28,6 +28,25 @@ const WRITE_ALLOWED_WHEN_READONLY = [
 ] as const;
 
 const WRITE_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
+
+/**
+ * Origin ヘッダ ベース の CSRF 防御 で 除外 する パス。
+ *
+ * ・外部 サービス からの POST (webhook / cron / OAuth callback) は Origin が
+ *   自分 の ドメイン と 一致 しない or 付か ない ため、 origin check を 通すと
+ *   全 弾き に なる。 これら は 各 route の 側 で 個別 に 署名 検証 / 秘密 検証
+ *   を 行って いる (Stripe / LINE / Zoom webhook の HMAC、 cron 共有 秘密、
+ *   OAuth state) の で、 二重 に origin まで 求める 必要 は ない。
+ */
+const CSRF_EXEMPT_PREFIXES = [
+  "/api/webhooks/",
+  "/api/internal/",
+  "/api/public/",
+  "/api/integrations/", // OAuth callback (Stripe / Zoom)
+  "/api/liff/", // LINE LIFF (別 Origin から の 呼出)
+  "/api/self-serve/", // 未 認証 / 別 経路 から の POST を 許容
+  "/auth/callback",
+];
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -60,6 +79,36 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
+
+  // ── CSRF: 書込 メソッド の Origin を 自 ドメイン と 一致 検証 (セキュリティ 監査 H3)。
+  //     SameSite=Lax の Supabase セッション cookie は top-level GET には 付与 される
+  //     が、 POST/PATCH/PUT/DELETE の cross-site 送信 (form submit / fetch) には
+  //     付与 されない。 それでも 同一 eTLD+1 (maira.pro ↔ app.maira.pro) や
+  //     Vercel preview URL への XSS で セッション riding される 可能性 が 残る ため、
+  //     Origin ヘッダ が 自身 の origin と 一致 しない 書込 は 403 で 弾く。
+  //     Webhook / cron / OAuth callback は 外部 origin から 来る の で 除外。
+  if (WRITE_METHODS.has(request.method)) {
+    const exempt = CSRF_EXEMPT_PREFIXES.some((p) => pathname.startsWith(p));
+    if (!exempt) {
+      const origin = request.headers.get("origin");
+      // Origin が 無い ケース: same-origin fetch (SPA 内) は 通常 Origin を 付与
+      // する ため、 純粋 に 無い の は 攻撃 者 の 手作り リクエスト の 可能性 が 高い。
+      // ただし 一部 の Server Action / navigation は Origin を 付けない ため、
+      // Sec-Fetch-Site の 有無 も 見て 判定 する (same-origin / same-site なら OK)。
+      const secFetchSite = request.headers.get("sec-fetch-site");
+      const originOk = origin === request.nextUrl.origin;
+      const fetchSiteOk = secFetchSite === "same-origin" || secFetchSite === "same-site";
+      if (!originOk && !fetchSiteOk) {
+        return NextResponse.json(
+          {
+            error: "csrf_origin_mismatch",
+            message: "リクエストの Origin が許可されていません。",
+          },
+          { status: 403 },
+        );
+      }
+    }
+  }
 
   // /invite/[token] は公開ルート:ログイン有無どちらでも素通し。
   // - 未ログイン:着地ページで「ログイン/登録して下さい」を表示するため

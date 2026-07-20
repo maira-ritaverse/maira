@@ -115,7 +115,7 @@ export function ResetPasswordForm() {
               {errors.new_password && (
                 <p className="text-sm text-red-600">{errors.new_password.message}</p>
               )}
-              <p className="text-muted-foreground text-xs">8文字以上で入力してください</p>
+              <p className="text-muted-foreground text-xs">12文字以上で入力してください</p>
             </div>
 
             <div className="space-y-2">

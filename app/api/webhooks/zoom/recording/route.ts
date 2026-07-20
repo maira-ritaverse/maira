@@ -74,9 +74,24 @@ export async function POST(request: Request) {
   }
 
   // ── 1) URL Validation Challenge ──────────────────────────────────
+  //     Zoom は 「plainToken を HMAC-SHA256(secret) で 署名 して 返せ」 と 要求 する。
+  //     ここで plainToken の 形状 を 制限 しない と、 攻撃者 が plainToken を
+  //     「v0:{ts}:{偽装 payload}」 の 形 で 投げ、 我々 の endpoint に 「本物 の
+  //     x-zm-signature 相当」 の HMAC 値 を 計算 させる signing oracle に なる。
+  //     Zoom 公式 の plainToken は 「10〜64 文字 の 英数 + `-`/`_`」 (URL-safe
+  //     base64 相当)。 これ 以外 は 弾く。 マッチ しない plainToken は 過去 に
+  //     Zoom 側 から 発行 された 記録 なし → 現実 の challenge は 影響 なし。
   if (body.event === "endpoint.url_validation") {
     const challenge = body as ZoomChallenge;
     const plainToken = challenge.payload.plainToken;
+    if (
+      typeof plainToken !== "string" ||
+      plainToken.length < 10 ||
+      plainToken.length > 64 ||
+      !/^[A-Za-z0-9_-]+$/.test(plainToken)
+    ) {
+      return NextResponse.json({ error: "invalid_plain_token" }, { status: 400 });
+    }
     const encryptedToken = createHmac("sha256", secret).update(plainToken).digest("hex");
     return NextResponse.json({
       plainToken,

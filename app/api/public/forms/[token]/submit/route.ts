@@ -14,6 +14,7 @@ import { NextResponse } from "next/server";
 import { encryptField } from "@/lib/crypto/field-encryption";
 import { SubmitFormRequestSchema } from "@/lib/forms/types";
 import { dispatchFlowTrigger } from "@/lib/ma/flow-enroller";
+import { consumeRateLimit, extractClientIp } from "@/lib/rate-limit/rate-limit";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,26 @@ export async function POST(request: Request, context: RouteContext) {
   const { token } = await context.params;
   if (!token || token.length > 80) {
     return NextResponse.json({ error: "invalid_token" }, { status: 400 });
+  }
+
+  // ── 未認証 公開 endpoint の フラッド 対策。 攻撃者 が 有効 な token を 掴んで
+  //     大量 に submit した 場合、 form_submissions の INSERT + LINE flow 起動 が
+  //     連鎖 して LINE quota / メール送信 / DB row cost を 圧迫 する。 IP 単位 で
+  //     60 秒 に 5 回 (通常 の 人 の 送信 頻度 は 数分 に 1 回)。
+  const rlSubmit = await consumeRateLimit({
+    namespace: "public_forms:submit:ip",
+    identifier: extractClientIp(request),
+    windowSeconds: 60,
+    maxCount: 5,
+  });
+  if (rlSubmit.limited) {
+    return NextResponse.json(
+      {
+        error: "rate_limited",
+        message: "送信回数が多すぎます。しばらく待ってから再度お試しください。",
+      },
+      { status: 429 },
+    );
   }
 
   const json = (await request.json().catch(() => null)) as unknown;

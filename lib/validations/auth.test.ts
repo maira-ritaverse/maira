@@ -32,9 +32,9 @@ describe("signupSchema", () => {
     expect(signupSchema.safeParse({ ...valid, email: "not-email" }).success).toBe(false);
   });
 
-  it("password は 8 文字未満 / 73 文字超で失敗、8〜72 で通る", () => {
-    expect(signupSchema.safeParse({ ...valid, password: "a".repeat(7) }).success).toBe(false);
-    expect(signupSchema.safeParse({ ...valid, password: "a".repeat(8) }).success).toBe(true);
+  it("password は 12 文字未満 / 73 文字超で失敗、12〜72 で通る", () => {
+    expect(signupSchema.safeParse({ ...valid, password: "a".repeat(11) }).success).toBe(false);
+    expect(signupSchema.safeParse({ ...valid, password: "a".repeat(12) }).success).toBe(true);
     expect(signupSchema.safeParse({ ...valid, password: "a".repeat(72) }).success).toBe(true);
     expect(signupSchema.safeParse({ ...valid, password: "a".repeat(73) }).success).toBe(false);
   });
@@ -103,17 +103,17 @@ describe("requestPasswordResetSchema", () => {
 });
 
 describe("resetPasswordSchema — 基本", () => {
-  const valid = { new_password: "newPass1234", confirm_password: "newPass1234" };
+  const valid = { new_password: "newPass123456", confirm_password: "newPass123456" };
 
   it("正常入力で通る", () => {
     expect(resetPasswordSchema.safeParse(valid).success).toBe(true);
   });
 
-  it("8 文字未満 / 72 文字境界", () => {
+  it("12 文字未満 / 72 文字境界", () => {
     expect(
       resetPasswordSchema.safeParse({
-        new_password: "a".repeat(7),
-        confirm_password: "a".repeat(7),
+        new_password: "a".repeat(11),
+        confirm_password: "a".repeat(11),
       }).success,
     ).toBe(false);
     const p72 = "a".repeat(72);
@@ -130,7 +130,7 @@ describe("resetPasswordSchema — 基本", () => {
 describe("resetPasswordSchema — refine(現パスワード差分は要求しない設計)", () => {
   it("確認用が不一致で失敗、エラーパスは confirm_password", () => {
     const r = resetPasswordSchema.safeParse({
-      new_password: "newPass1234",
+      new_password: "newPass123456",
       confirm_password: "differentPass",
     });
     expect(r.success).toBe(false);

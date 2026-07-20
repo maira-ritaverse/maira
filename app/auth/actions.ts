@@ -15,6 +15,15 @@ import { sendPasswordResetEmail } from "@/lib/email/password-reset";
 import { consumeRateLimit } from "@/lib/rate-limit/rate-limit";
 
 /**
+ * x-forwarded-for は 「client, proxy1, proxy2」 の 順 で 並ぶ 慣例。 先頭 = 直接 の
+ * client IP。 extractClientIp は Request オブジェクト を 引数 に 取る ので、
+ * server action の string ヘッダ に は 別 の 抽出 関数 を 用意。
+ */
+function extractLoginIp(xForwardedFor: string): string {
+  return xForwardedFor.split(",")[0]?.trim() || "unknown";
+}
+
+/**
  * 新規登録 Server Action
  *
  * Supabase Authでアカウントを作成し、確認メールを送信する。
@@ -82,6 +91,43 @@ export async function login(input: LoginInput, next?: string | null) {
   const hdrs = await headers();
   const ip = hdrs.get("x-forwarded-for");
   const ua = hdrs.get("user-agent");
+
+  // ── credential stuffing 対策: IP と email の 2 段 で rate limit。
+  //     ・IP: 60 秒 に 10 回 (誤入力 の 現実 的 上限 と 攻撃 の 差 を つける)
+  //     ・email: 15 分 に 20 回 (辞書 攻撃 で 特定 アカウント を 狙い撃つ 経路)
+  //     どちら か が 超過 したら 429 相当 を 返す。 監査ログ は 「rate_limited」 で 記録。
+  const rlIp = ip ? extractLoginIp(ip) : "unknown";
+  const [ipLimit, emailLimit] = await Promise.all([
+    consumeRateLimit({
+      namespace: "auth:login:ip",
+      identifier: rlIp,
+      windowSeconds: 60,
+      maxCount: 10,
+    }),
+    consumeRateLimit({
+      namespace: "auth:login:email",
+      identifier: input.email,
+      windowSeconds: 15 * 60,
+      maxCount: 20,
+      hashIdentifier: true,
+    }),
+  ]);
+  if (ipLimit.limited || emailLimit.limited) {
+    await recordAuditLog({
+      userId: null,
+      action: "login",
+      metadata: {
+        result: "rate_limited",
+        email: input.email,
+        by: ipLimit.limited && emailLimit.limited ? "ip+email" : ipLimit.limited ? "ip" : "email",
+      },
+      ipAddress: ip,
+      userAgent: ua,
+    });
+    return {
+      error: "ログイン試行が多すぎます。しばらく時間をおいてから再度お試しください。",
+    };
+  }
 
   const { error } = await supabase.auth.signInWithPassword({
     email: input.email,

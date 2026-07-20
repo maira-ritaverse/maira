@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { encryptField } from "@/lib/crypto/field-encryption";
 import { notifyAgencyOfLineMessage } from "@/lib/line/notifications";
+import { consumeRateLimit } from "@/lib/rate-limit/rate-limit";
 import { createServiceClient } from "@/lib/supabase/service";
 
 /**
@@ -78,6 +79,28 @@ export async function POST(request: Request) {
       { error: "verify_failed", message: err instanceof Error ? err.message : "unknown" },
       { status: 500 },
     );
+  }
+
+  // ── LIFF ID Token を 手 に した 攻撃者 が LOOP で 応募 spam を 送り 通知 fan-out
+  //     (Slack + メール + push) を 荒らす の を 阻止。 lineUserId ベース (LIFF ID Token
+  //     で 検証 済) で 60 秒 に 3 件 まで。 通常 の 応募 は 1 求人 に 1 回。
+  {
+    const rlLiff = await consumeRateLimit({
+      namespace: "liff:apply:line_user",
+      identifier: lineUserId,
+      windowSeconds: 60,
+      maxCount: 3,
+      hashIdentifier: true,
+    });
+    if (rlLiff.limited) {
+      return NextResponse.json(
+        {
+          error: "rate_limited",
+          message: "応募回数が多すぎます。しばらく待ってから再度お試しください。",
+        },
+        { status: 429 },
+      );
+    }
   }
 
   // H2 修正: lineChannelId が body 由来 で 攻撃者 が 別 の 自 Channel 経由 で

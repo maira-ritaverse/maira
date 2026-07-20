@@ -38,29 +38,25 @@ export async function GET(request: Request) {
   }
 
   // state は Maira 内から /connect を 起点 に した 場合 に 発行 される CSRF トークン。
-  // Zoom Marketplace の install / Beta Test ボタン 経由 で OAuth が 開始 された 場合 は
-  // state が 付与 され ない (Zoom 側 仕様)。 その 場合 は state 無し でも 受け入れる が、
-  // ログイン 中 の ユーザー の セッション を CSRF 防御 として 信頼 する。
-  //   ・既 に ログイン 済 (requireUser で 保証) = 攻撃 者 の セッション で 強制 連携 不可
-  //   ・連携 先 user_id は 現在 の ログイン ユーザー で 確定
   //
-  // H1 修正 (2026-07-08): SameSite=Lax の Supabase セッション cookie は top-level
-  // GET でも 付与 される ため、 攻撃 者 が 自 分 の Zoom アカウント の 認可 code を
-  // Marketplace 経由 で 取得 → 被害 者 に URL クリック さ せる → 被害 者 の
-  // zoom_connections が upsert (onConflict: user_id) で 攻撃 者 の refresh_token に
-  // 上書き さ れる 経路 が 残って いた。 state 無し 経路 では 追加 で 「既存 の
-  // zoom_user_id が 別人 か どう か」 を 検証 し、 異なる 場合 は 400 で 拒否 する。
-  const stateVerified = Boolean(state);
-  if (state) {
-    const verified = verifyOAuthState(state);
-    if (!verified.ok) {
-      return NextResponse.json({ error: "bad_state", reason: verified.reason }, { status: 400 });
-    }
-    if (verified.payload.uid !== user.id || verified.payload.provider !== "zoom") {
-      return NextResponse.json({ error: "state_user_mismatch" }, { status: 400 });
-    }
-  } else {
-    console.warn("[zoom-callback] state-less install accepted", { user_id: user.id });
+  // 【方針 変更 (セキュリティ 監査 W3)】
+  //   従来 は Zoom Marketplace 由来 の state-less install も 受け入れて いた が、
+  //   「初回 連携 の 被害者 に クリック さ せて 攻撃者 の Zoom アカウント を 紐付ける」
+  //   経路 が 塞げ ない (既存 zoom_connections 行 が 無い ため mismatch 判定 が
+  //   効か ない)。 state を 必須 化 し、 Marketplace 経由 install で state が
+  //   落ちて いる 場合 は Maira 側 の 設定 ページ に 誘導 → 明示的 に Connect ボタン
+  //   から state 付き で 開始 させる。 UX 上 の 迂回 コスト は 1 クリック 増加 のみ。
+  if (!state) {
+    return NextResponse.redirect(
+      new URL("/agency/settings/integrations?error=zoom_state_required", request.url),
+    );
+  }
+  const verified = verifyOAuthState(state);
+  if (!verified.ok) {
+    return NextResponse.json({ error: "bad_state", reason: verified.reason }, { status: 400 });
+  }
+  if (verified.payload.uid !== user.id || verified.payload.provider !== "zoom") {
+    return NextResponse.json({ error: "state_user_mismatch" }, { status: 400 });
   }
 
   const config = getZoomConfig();
@@ -84,28 +80,10 @@ export async function GET(request: Request) {
     // 取れ なくて も 接続 自体 は 成立 させる
   }
 
-  // H1 修正: state 無し 経路 では 既存 の zoom_user_id と 一致 を 検証。
-  // 一度 でも 連携 した ユーザー の Zoom アカウント が 別 の アカウント に
-  // 差し 替わる 経路 を 塞ぐ。 state 検証 済 の 場合 は 通常 の /connect 経由 な の で
-  // 差し替え は 意図 と 見な す (ユーザー 自身 が 別 Zoom アカウント へ の 切り替え
-  // を 要求 した ケース)。
-  if (!stateVerified && me?.id) {
-    const { data: existing } = await supabase
-      .from("zoom_connections")
-      .select("zoom_user_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (existing?.zoom_user_id && existing.zoom_user_id !== me.id) {
-      console.warn("[zoom-callback] zoom_user_id mismatch on state-less install", {
-        user_id: user.id,
-        existing_zoom_user_id: existing.zoom_user_id,
-        incoming_zoom_user_id: me.id,
-      });
-      return NextResponse.redirect(
-        new URL("/agency/settings/integrations?error=zoom_account_mismatch", request.url),
-      );
-    }
-  }
+  // 注: state を 必須 化 した (上 の early redirect) の で、 state-less install で
+  //     zoom_user_id を 差し 替える 攻撃 経路 は そもそも 到達 しない。 従来 の
+  //     「state 無し + 既存 zoom_user_id 不一致 で reject」 の 二重 ガード は
+  //     不要 に なった の で 削除。
 
   const encryptedAccess = await encryptField(tokens.access_token);
   const encryptedRefresh = await encryptField(tokens.refresh_token);

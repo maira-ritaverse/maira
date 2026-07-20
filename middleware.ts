@@ -13,7 +13,9 @@ export const config = {
      * - _next/image (画像最適化)
      * - favicon.ico
      * - 公開アセット(.svg, .png 等)
+     * - monitoring (Sentry tunnel。 全 Sentry beacon で JWT 検証 + cookie churn を
+     *   起こさない ため 除外。 セキュリティ 監査 H2)
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|monitoring|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

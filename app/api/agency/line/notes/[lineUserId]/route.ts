@@ -93,12 +93,30 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
 
+  // ── 呼出 org と lineUserId の 帰属 を 検証。
+  //     service_role で insert する 都合、 RLS が 効か ない。 line_user_links に
+  //     (organization_id, line_user_id) の pair が 無い LINE user に対して メモ を
+  //     insert して しまう と、 他 org 由来 の LINE user_id に メモ を 紛れ 込ま せる
+  //     データ 汚染 攻撃 が 可能。 事前 SELECT で 所属 を 確認 する。
+  const admin = createServiceClient();
+  const { data: link, error: linkErr } = await admin
+    .from("line_user_links")
+    .select("id")
+    .eq("organization_id", guard.organization.id)
+    .eq("line_user_id", lineUserId)
+    .maybeSingle();
+  if (linkErr) {
+    return NextResponse.json({ error: "lookup_failed", message: linkErr.message }, { status: 500 });
+  }
+  if (!link) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
   const encrypted = await encryptField(parsed.data.content);
   if (!encrypted) {
     return NextResponse.json({ error: "encrypt_failed" }, { status: 500 });
   }
 
-  const admin = createServiceClient();
   const { data, error } = await admin
     .from("line_conversation_notes")
     .insert({
