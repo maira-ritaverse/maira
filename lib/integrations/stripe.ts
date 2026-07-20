@@ -150,6 +150,16 @@ export type OrgStripeConfig = {
     extraSeatYearly: string;
     aiBoostMonthly: string;
     aiBoostYearly: string;
+    /**
+     * Solo 系 の Price ID (Phase 2 で 追加)。
+     * env が 未設定 の 環境 (Solo プラン 未 ローンチ の テナント) で は 空文字 に なり、
+     * Solo checkout を 叩く と 500 で 分かり やすく 落ちる 想定。
+     * getOrgStripeConfig() で null に は しない (Team 系 の 機能 は 動く よう に する ため)。
+     */
+    soloMonthly: string;
+    soloYearly: string;
+    soloProMonthly: string;
+    soloProYearly: string;
   };
 };
 
@@ -176,6 +186,9 @@ export function getOrgStripeConfig(): OrgStripeConfig | null {
     return null;
   }
 
+  // Solo 系 は 段階 リリース な の で、 env が 未設定 で も Team 系 は 動く よう に
+  // config 自体 は null に せず 空文字 で 埋める。 Solo checkout が 呼ばれた とき に
+  // 明示 的 に エラー を 返す (createSoloCheckoutSession 側)。
   return {
     secretKey,
     siteUrl: siteUrl.replace(/\/$/, ""),
@@ -186,8 +199,25 @@ export function getOrgStripeConfig(): OrgStripeConfig | null {
       extraSeatYearly,
       aiBoostMonthly,
       aiBoostYearly,
+      soloMonthly: process.env.STRIPE_PRICE_SOLO_MONTHLY ?? "",
+      soloYearly: process.env.STRIPE_PRICE_SOLO_YEARLY ?? "",
+      soloProMonthly: process.env.STRIPE_PRICE_SOLO_PRO_MONTHLY ?? "",
+      soloProYearly: process.env.STRIPE_PRICE_SOLO_PRO_YEARLY ?? "",
     },
   };
+}
+
+/**
+ * Solo 系 の Price ID が env に 全て 設定 されて いるか。 Solo checkout を 呼ぶ
+ * 手前 で ガード する 用途。
+ */
+export function isSoloStripeConfigured(config: OrgStripeConfig): boolean {
+  return Boolean(
+    config.prices.soloMonthly &&
+    config.prices.soloYearly &&
+    config.prices.soloProMonthly &&
+    config.prices.soloProYearly,
+  );
 }
 
 // -------------------------------------------------------------------
@@ -303,8 +333,14 @@ export type StripeSubscription = {
   metadata: Record<string, string> | null;
 };
 
-export type OrgTier = "standard" | "standard_pro";
+export type OrgTier = "standard" | "standard_pro" | "solo" | "solo_pro";
 export type BillingCycle = "monthly" | "yearly";
+
+/** Solo 系 (1 席 固定、 base + seat の 構造 ではなく 単一 Price) の tier */
+export type SoloTier = "solo" | "solo_pro";
+export function isSoloTierValue(tier: OrgTier): tier is SoloTier {
+  return tier === "solo" || tier === "solo_pro";
+}
 export type ProrationBehavior = "create_prorations" | "none" | "always_invoice";
 
 // -------------------------------------------------------------------
@@ -313,7 +349,7 @@ export type ProrationBehavior = "create_prorations" | "none" | "always_invoice";
 
 export type CreateOrgCheckoutParams = {
   organizationId: string;
-  tier: OrgTier;
+  tier: Exclude<OrgTier, SoloTier>;
   cycle: BillingCycle;
   seatCount: number; // 管理 者 含む 総 席 数 (最低 3)
   adminEmail: string;
@@ -386,6 +422,86 @@ export function createOrgCheckoutSession(
   }
 
   // トライアル ありでも カード 事前 登録 を 必須 に する
+  body.set("payment_method_collection", "always");
+
+  const headers: Record<string, string> = {};
+  if (params.idempotencyKey) {
+    headers["Idempotency-Key"] = params.idempotencyKey;
+  }
+
+  return stripePostWithHeaders<StripeCheckoutSession>(
+    config.secretKey,
+    "/checkout/sessions",
+    body,
+    headers,
+  );
+}
+
+// -------------------------------------------------------------------
+// Solo プラン Checkout Session 作成 (1 席 固定、 14 日 トライアル、 セルフサーブ)
+// -------------------------------------------------------------------
+
+export type CreateSoloCheckoutParams = {
+  organizationId: string;
+  tier: SoloTier;
+  cycle: BillingCycle;
+  adminEmail: string;
+  existingCustomerId?: string | null;
+  idempotencyKey?: string;
+};
+
+/**
+ * Solo / Solo Pro プラン の Checkout Session を 作る。
+ *
+ * Team 系 (createOrgCheckoutSession) と の 違い:
+ *   - line_items は Solo Base のみ (1 個、 quantity=1)
+ *   - トライアル 14 日 (Team 系 は 30 日)。 個人 は 即決 想定 な ので 短め
+ *   - success_url は /agency (Solo 用 の LP や onboarding は Phase 3 で 追加)
+ */
+export function createSoloCheckoutSession(
+  config: OrgStripeConfig,
+  params: CreateSoloCheckoutParams,
+): Promise<StripeCheckoutSession> {
+  const body = new URLSearchParams();
+
+  body.set("mode", "subscription");
+  body.set("allow_promotion_codes", "true");
+  body.set(
+    "success_url",
+    `${config.siteUrl}/agency/settings/billing?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+  );
+  body.set("cancel_url", `${config.siteUrl}/agency/settings/billing?checkout=canceled`);
+
+  // Solo line_items (buildSoloLineItems 内 で Price ID 未設定 なら throw)
+  const items = buildSoloLineItems(config, {
+    tier: params.tier,
+    cycle: params.cycle,
+  });
+  items.forEach((item, idx) => {
+    body.set(`line_items[${idx}][price]`, item.price);
+    body.set(`line_items[${idx}][quantity]`, String(item.quantity));
+  });
+
+  // 14 日 トライアル + subscription 側 metadata
+  body.set("subscription_data[trial_period_days]", "14");
+  body.set("subscription_data[metadata][organization_id]", params.organizationId);
+  body.set("subscription_data[metadata][tier]", params.tier);
+  body.set("subscription_data[metadata][cycle]", params.cycle);
+  body.set("subscription_data[metadata][scope]", "organization");
+
+  body.set("metadata[organization_id]", params.organizationId);
+  body.set("metadata[tier]", params.tier);
+  body.set("metadata[cycle]", params.cycle);
+  body.set("metadata[scope]", "organization");
+
+  if (params.existingCustomerId) {
+    body.set("customer", params.existingCustomerId);
+    body.set("customer_update[address]", "auto");
+    body.set("customer_update[name]", "auto");
+  } else {
+    body.set("customer_email", params.adminEmail);
+  }
+
   body.set("payment_method_collection", "always");
 
   const headers: Record<string, string> = {};
@@ -582,18 +698,25 @@ export type BuildOrgLineItemsParams = {
 };
 
 /**
- * tier / cycle / seatCount から line_items 配列 を 作る。
+ * tier / cycle / seatCount から line_items 配列 を 作る (Team 系 専用)。
  *
  * ルール:
  *   1. seatCount は 最低 3 (Base に 3 席 込み)
  *   2. Extra Seat は max(seatCount - 3, 0) 個 (0 の とき は 積ま ない)
  *   3. AI Boost は tier=standard_pro の とき のみ 1 個
  *   4. cycle が monthly / yearly で Price ID を 切り替え
+ *
+ * Solo 系 (solo / solo_pro) を 渡すと エラー。 Solo は buildSoloLineItems 経由。
  */
 export function buildOrgLineItems(
   config: OrgStripeConfig,
   params: BuildOrgLineItemsParams,
 ): OrgLineItem[] {
+  if (isSoloTierValue(params.tier)) {
+    throw new Error(
+      `buildOrgLineItems は Team 系 tier 専用。 Solo (${params.tier}) は buildSoloLineItems を 使う こと`,
+    );
+  }
   if (params.seatCount < 3) {
     throw new Error(`seatCount は 最低 3 で ある 必要 が あります (指定: ${params.seatCount})`);
   }
@@ -626,4 +749,42 @@ export function buildOrgLineItems(
   }
 
   return items;
+}
+
+// -------------------------------------------------------------------
+// Solo 系 line_items 構築 (1 席 固定、 base のみ、 seat / boost なし)
+// -------------------------------------------------------------------
+
+export type BuildSoloLineItemsParams = {
+  tier: SoloTier;
+  cycle: BillingCycle;
+};
+
+/**
+ * Solo / Solo Pro の line_items を 作る。
+ *
+ * Team 系 と 違い base + seat + boost の 組合せ で なく、 単一 Price で 決済 する。
+ * quantity は 常に 1 (1 席 固定)。
+ */
+export function buildSoloLineItems(
+  config: OrgStripeConfig,
+  params: BuildSoloLineItemsParams,
+): OrgLineItem[] {
+  const p = config.prices;
+  const isYearly = params.cycle === "yearly";
+
+  let price: string;
+  if (params.tier === "solo") {
+    price = isYearly ? p.soloYearly : p.soloMonthly;
+  } else {
+    price = isYearly ? p.soloProYearly : p.soloProMonthly;
+  }
+
+  if (!price) {
+    throw new Error(
+      `Solo 系 Price ID が env に 設定 されて いません (tier=${params.tier}, cycle=${params.cycle})。 STRIPE_PRICE_SOLO_* / STRIPE_PRICE_SOLO_PRO_* を 設定 して ください`,
+    );
+  }
+
+  return [{ price, quantity: 1 }];
 }

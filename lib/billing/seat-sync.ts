@@ -72,7 +72,7 @@ export async function countActiveMembers(
 }
 
 export type SyncSeatCountResult =
-  | { ok: true; skipped: "no_subscription" | "billing_exempt" | "no_change" }
+  | { ok: true; skipped: "no_subscription" | "billing_exempt" | "no_change" | "solo_tier" }
   | { ok: true; updated: { extraSeatQuantity: number; itemId: string | null } }
   | { ok: false; error: string };
 
@@ -117,7 +117,7 @@ async function syncOrganizationSeatCountInner(args: {
   const { data: plan, error: planErr } = await admin
     .from("organization_plans")
     .select(
-      "stripe_subscription_id, stripe_subscription_item_id_extra_seat, cycle, is_billing_exempt, seat_count",
+      "tier, stripe_subscription_id, stripe_subscription_item_id_extra_seat, cycle, is_billing_exempt, seat_count",
     )
     .eq("organization_id", args.organizationId)
     .maybeSingle();
@@ -126,6 +126,13 @@ async function syncOrganizationSeatCountInner(args: {
   if (!plan) return { ok: true, skipped: "no_subscription" };
   if (plan.is_billing_exempt) return { ok: true, skipped: "billing_exempt" };
   if (!plan.stripe_subscription_id) return { ok: true, skipped: "no_subscription" };
+
+  // Solo 系 (1 席 固定) は Extra Seat 概念 が 無い の で seat-sync は 対象外。
+  // 招待 受諾 API (Phase 5 seat-cap ガード) で 席 追加 自体 が 弾かれる ので、
+  // ここ に 到達 する ケース は cron_reconciliation で の 全 組織 scan だけ。
+  if (plan.tier === "solo" || plan.tier === "solo_pro") {
+    return { ok: true, skipped: "solo_tier" };
+  }
 
   // 2. Stripe config
   const config = getOrgStripeConfig();

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildOrgLineItems, type OrgStripeConfig } from "./stripe";
+import {
+  buildOrgLineItems,
+  buildSoloLineItems,
+  isSoloStripeConfigured,
+  type OrgStripeConfig,
+} from "./stripe";
 
 const CONFIG: OrgStripeConfig = {
   secretKey: "sk_test_dummy",
@@ -12,6 +17,22 @@ const CONFIG: OrgStripeConfig = {
     extraSeatYearly: "price_seat_y",
     aiBoostMonthly: "price_boost_m",
     aiBoostYearly: "price_boost_y",
+    // Solo 系 (Phase 2 で 追加、 env 未設定 環境 は 空文字)
+    soloMonthly: "price_solo_m",
+    soloYearly: "price_solo_y",
+    soloProMonthly: "price_solo_pro_m",
+    soloProYearly: "price_solo_pro_y",
+  },
+};
+
+const CONFIG_WITHOUT_SOLO: OrgStripeConfig = {
+  ...CONFIG,
+  prices: {
+    ...CONFIG.prices,
+    soloMonthly: "",
+    soloYearly: "",
+    soloProMonthly: "",
+    soloProYearly: "",
   },
 };
 
@@ -95,5 +116,56 @@ describe("buildOrgLineItems", () => {
         seatCount: 2,
       }),
     ).toThrow(/最低 3/);
+  });
+
+  it("Solo tier は throw (buildSoloLineItems を 使う べき)", () => {
+    expect(() =>
+      buildOrgLineItems(CONFIG, {
+        tier: "solo",
+        cycle: "monthly",
+        seatCount: 1,
+      }),
+    ).toThrow(/Solo/);
+  });
+});
+
+describe("buildSoloLineItems (Phase 2)", () => {
+  it("Solo 月次 = solo Monthly Price 1 個", () => {
+    const items = buildSoloLineItems(CONFIG, { tier: "solo", cycle: "monthly" });
+    expect(items).toEqual([{ price: "price_solo_m", quantity: 1 }]);
+  });
+
+  it("Solo 年払い = solo Yearly Price 1 個", () => {
+    const items = buildSoloLineItems(CONFIG, { tier: "solo", cycle: "yearly" });
+    expect(items).toEqual([{ price: "price_solo_y", quantity: 1 }]);
+  });
+
+  it("Solo Pro 月次 = solo pro Monthly Price 1 個", () => {
+    const items = buildSoloLineItems(CONFIG, { tier: "solo_pro", cycle: "monthly" });
+    expect(items).toEqual([{ price: "price_solo_pro_m", quantity: 1 }]);
+  });
+
+  it("Solo Pro 年払い = solo pro Yearly Price 1 個", () => {
+    const items = buildSoloLineItems(CONFIG, { tier: "solo_pro", cycle: "yearly" });
+    expect(items).toEqual([{ price: "price_solo_pro_y", quantity: 1 }]);
+  });
+
+  it("Solo Price ID が env 未設定 (config で 空文字) だと throw", () => {
+    expect(() =>
+      buildSoloLineItems(CONFIG_WITHOUT_SOLO, { tier: "solo", cycle: "monthly" }),
+    ).toThrow(/Solo 系 Price ID が env に 設定 されて いません/);
+  });
+});
+
+describe("isSoloStripeConfigured (Phase 2)", () => {
+  it("4 種 の Solo Price ID が 全 て 設定 されて いれば true", () => {
+    expect(isSoloStripeConfigured(CONFIG)).toBe(true);
+  });
+
+  it("1 つ でも 未設定 なら false (segment リリース の 判定)", () => {
+    expect(isSoloStripeConfigured(CONFIG_WITHOUT_SOLO)).toBe(false);
+
+    const partial = { ...CONFIG, prices: { ...CONFIG.prices, soloProYearly: "" } };
+    expect(isSoloStripeConfigured(partial)).toBe(false);
   });
 });

@@ -22,7 +22,25 @@ export const STRIPE_INCLUDED_SEATS = 3 as const;
 export const STRIPE_YEARLY_MONTHS = 10 as const;
 export const STRIPE_CYCLE_MONTHS = 12 as const;
 
-export type StripeTier = "standard" | "standard_pro";
+/**
+ * Solo プラン (1 席 固定、 個人事業主 / フリー 向け) の 月額。
+ * Team 系 と 違い base + seat + boost の 組合せ で なく、 単一 Price で 決済。
+ */
+export const STRIPE_SOLO_MONTHLY_JPY = 5_980 as const;
+
+/**
+ * Solo Pro プラン (1 席 固定、 Solo + 付加機能) の 月額。
+ * Solo との 差別化 は AI 200 回 / CSV / 詳細レポート / 録音 5 回 / 24h サポート。
+ */
+export const STRIPE_SOLO_PRO_MONTHLY_JPY = 9_800 as const;
+
+/**
+ * Solo 系 も 年払い は 10 ヶ月 分 (Team 系 と 同じ 割引率)。
+ * ・Solo yearly ≒ ¥59,800 (実質 ¥4,983 / 月)
+ * ・Solo Pro yearly ≒ ¥98,000 (実質 ¥8,166 / 月)
+ */
+
+export type StripeTier = "standard" | "standard_pro" | "solo" | "solo_pro";
 export type StripeCycle = "monthly" | "yearly";
 
 export type StripePriceBreakdown = {
@@ -40,12 +58,33 @@ export type StripePriceBreakdown = {
 /**
  * 席 数 と tier / cycle から 価格 を 計算 する 純関数。
  * cycle=yearly の 場合 も 「単月 相当 の 内訳」 と 「年間 合計」 の 両方 を 返す。
+ *
+ * Solo 系 (solo / solo_pro) は base + seat の 構造 ではなく 単一 Price 決済 な ので、
+ * base に Solo 単価 を セット、 extraSeat = 0、 aiBoost = 0 で 返す
+ * (呼出 側 の UI 表示 が 破綻 しない よう に 一貫 した shape で 返す)。
  */
 export function computeStripePrice(args: {
   tier: StripeTier;
   seatCount: number;
   cycle: StripeCycle;
 }): StripePriceBreakdown {
+  // ── Solo 系 は 1 席固定 の 単一 Price
+  if (args.tier === "solo" || args.tier === "solo_pro") {
+    const base = args.tier === "solo_pro" ? STRIPE_SOLO_PRO_MONTHLY_JPY : STRIPE_SOLO_MONTHLY_JPY;
+    const monthlyTotal = base;
+    const yearlyTotal = monthlyTotal * STRIPE_YEARLY_MONTHS;
+    const yearlyMonthlyEquivalent = Math.round(yearlyTotal / STRIPE_CYCLE_MONTHS);
+    return {
+      base,
+      extraSeat: 0,
+      aiBoost: 0,
+      monthlyTotal,
+      yearlyTotal,
+      yearlyMonthlyEquivalent,
+    };
+  }
+
+  // ── Team 系 (Standard / Standard Pro): base + extra seat (+ ai boost)
   const safeSeat = Math.max(STRIPE_INCLUDED_SEATS, Math.floor(args.seatCount));
   const extraSeats = safeSeat - STRIPE_INCLUDED_SEATS;
 
@@ -54,7 +93,6 @@ export function computeStripePrice(args: {
   const aiBoost = args.tier === "standard_pro" ? STRIPE_AI_BOOST_MONTHLY_JPY : 0;
 
   const monthlyTotal = base + extraSeat + aiBoost;
-  // 年払い = 単月 × 10 (Stripe 側 の Price も 10 ヶ月 分 単価 で 登録 済)
   const yearlyTotal = monthlyTotal * STRIPE_YEARLY_MONTHS;
   const yearlyMonthlyEquivalent = Math.round(yearlyTotal / STRIPE_CYCLE_MONTHS);
 

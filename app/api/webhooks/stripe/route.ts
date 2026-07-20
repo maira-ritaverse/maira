@@ -100,6 +100,11 @@ type OrgPriceMap = {
   extraSeatYearly: string;
   aiBoostMonthly: string;
   aiBoostYearly: string;
+  // Solo 系 (Phase 2 で 追加、 env が 未設定 の 環境 で は 空文字 で fallback)
+  soloMonthly: string;
+  soloYearly: string;
+  soloProMonthly: string;
+  soloProYearly: string;
 };
 
 type WebhookConfig = {
@@ -108,7 +113,7 @@ type WebhookConfig = {
   orgPrices: OrgPriceMap;
 };
 
-type PlanTier = "standard" | "standard_pro";
+type PlanTier = "standard" | "standard_pro" | "solo" | "solo_pro";
 type PlanCycle = "monthly" | "yearly";
 
 type ParsedOrgSubscription = {
@@ -179,11 +184,25 @@ function loadConfig(): WebhookConfig | { error: string } {
     extraSeatYearly: process.env.STRIPE_PRICE_EXTRA_SEAT_YEARLY ?? "",
     aiBoostMonthly: process.env.STRIPE_PRICE_AI_BOOST_MONTHLY ?? "",
     aiBoostYearly: process.env.STRIPE_PRICE_AI_BOOST_YEARLY ?? "",
+    // Solo 系 は 段階 リリース な の で env 未設定 で も 起動 に は 支障 なし
+    // (空文字 の 場合 は parseOrgSubscription で unknown_price_ids と して 検出 される)
+    soloMonthly: process.env.STRIPE_PRICE_SOLO_MONTHLY ?? "",
+    soloYearly: process.env.STRIPE_PRICE_SOLO_YEARLY ?? "",
+    soloProMonthly: process.env.STRIPE_PRICE_SOLO_PRO_MONTHLY ?? "",
+    soloProYearly: process.env.STRIPE_PRICE_SOLO_PRO_YEARLY ?? "",
   };
   if (!secret || !addonPriceId) return { error: "core_not_configured" };
-  const missingOrg = Object.entries(orgPrices)
-    .filter(([, v]) => !v)
-    .map(([k]) => k);
+  // Team 系 の 6 個 は 必須 (現行 の 全 テナント が Team プラン)。 Solo 4 個 は 段階
+  // リリース な ので 未設定 OK。 keys() を Team 系 に 限定 して チェック。
+  const teamOrgKeys: (keyof OrgPriceMap)[] = [
+    "standardBaseMonthly",
+    "standardBaseYearly",
+    "extraSeatMonthly",
+    "extraSeatYearly",
+    "aiBoostMonthly",
+    "aiBoostYearly",
+  ];
+  const missingOrg = teamOrgKeys.filter((k) => !orgPrices[k]);
   if (missingOrg.length > 0) {
     return { error: `org_prices_missing:${missingOrg.join(",")}` };
   }
@@ -206,6 +225,8 @@ function parseOrgSubscription(
   let cycle: PlanCycle = "monthly";
   let seatCount = 0;
   let aiBoostEnabled = false;
+  // Solo tier 判定 (単一 Price で 完結 する 場合 に 使う)
+  let soloTier: "solo" | "solo_pro" | null = null;
   let baseItemId: string | null = null;
   let extraSeatItemId: string | null = null;
   let aiBoostItemId: string | null = null;
@@ -229,12 +250,43 @@ function parseOrgSubscription(
     } else if (priceId === prices.aiBoostMonthly || priceId === prices.aiBoostYearly) {
       aiBoostEnabled = true;
       aiBoostItemId = item.id;
+    } else if (prices.soloMonthly && priceId === prices.soloMonthly) {
+      // Solo 系 は 単一 Price で 完結。 base 扱い で cycle と itemId を セット。
+      hasBase = true;
+      cycle = "monthly";
+      soloTier = "solo";
+      baseItemId = item.id;
+    } else if (prices.soloYearly && priceId === prices.soloYearly) {
+      hasBase = true;
+      cycle = "yearly";
+      soloTier = "solo";
+      baseItemId = item.id;
+    } else if (prices.soloProMonthly && priceId === prices.soloProMonthly) {
+      hasBase = true;
+      cycle = "monthly";
+      soloTier = "solo_pro";
+      baseItemId = item.id;
+    } else if (prices.soloProYearly && priceId === prices.soloProYearly) {
+      hasBase = true;
+      cycle = "yearly";
+      soloTier = "solo_pro";
+      baseItemId = item.id;
     } else {
       unknownPriceIds.push(priceId);
     }
   }
 
   if (!hasBase) return { ok: false, reason: "no_base_line_item" };
+
+  // Solo 系 は 1 席 固定 + boost 概念 なし。 万一 subscription に extra_seat や
+  // ai_boost が 混じって いたら Team 系 と Solo 系 を 誤って 混合 して いる
+  // (料金 バグ) な ので 検出 して 500 で 弾く。
+  if (soloTier && (seatCount > 0 || aiBoostEnabled)) {
+    console.error(
+      `[stripe-webhook] parseOrgSubscription: Solo tier subscription ${sub.id} が Team 系 line_item (extra_seat / ai_boost) を 含んで います。 料金構成 の 混同 の 可能性 が あります。`,
+    );
+    return { ok: false, reason: "solo_with_team_items" };
+  }
 
   // 未知 price_id が 混ざって いる 場合 は env の 更新 忘れ (テスト → 本番 切替 で
   // Price ID が 変わった 等) の 可能性 が 高い。 silent-skip する と Stripe と DB
@@ -247,10 +299,16 @@ function parseOrgSubscription(
     return { ok: false, reason: `unknown_price_ids:${unknownPriceIds.join(",")}` };
   }
 
+  // tier の 決定 順:
+  //   1. Solo Price が あった → 'solo' or 'solo_pro' (最優先)
+  //   2. AI Boost あり → 'standard_pro'
+  //   3. それ 以外 → 'standard'
+  const tier: PlanTier = soloTier ?? (aiBoostEnabled ? "standard_pro" : "standard");
+
   return {
     ok: true,
     parsed: {
-      tier: aiBoostEnabled ? "standard_pro" : "standard",
+      tier,
       cycle,
       seatCount,
       aiBoostEnabled,
