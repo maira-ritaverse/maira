@@ -5,6 +5,7 @@ import {
   GraduationCap,
   Lock,
   type LucideIcon,
+  ShieldCheck,
   Sparkles,
   User,
 } from "lucide-react";
@@ -57,6 +58,12 @@ export default async function SettingsPage() {
       Icon: Lock,
       title: "パスワード",
       description: "ログイン パスワード の 変更",
+    },
+    {
+      href: "/app/settings/security",
+      Icon: ShieldCheck,
+      title: "セキュリティ (二段階認証)",
+      description: "認証アプリで6桁コードを追加し、アカウントを保護",
     },
     {
       href: "/app/settings/onboarding",

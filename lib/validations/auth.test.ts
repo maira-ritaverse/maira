@@ -32,9 +32,9 @@ describe("signupSchema", () => {
     expect(signupSchema.safeParse({ ...valid, email: "not-email" }).success).toBe(false);
   });
 
-  it("password は 12 文字未満 / 73 文字超で失敗、12〜72 で通る", () => {
-    expect(signupSchema.safeParse({ ...valid, password: "a".repeat(11) }).success).toBe(false);
-    expect(signupSchema.safeParse({ ...valid, password: "a".repeat(12) }).success).toBe(true);
+  it("password は 8 文字未満 / 73 文字超で失敗、8〜72 で通る", () => {
+    expect(signupSchema.safeParse({ ...valid, password: "a".repeat(7) }).success).toBe(false);
+    expect(signupSchema.safeParse({ ...valid, password: "a".repeat(8) }).success).toBe(true);
     expect(signupSchema.safeParse({ ...valid, password: "a".repeat(72) }).success).toBe(true);
     expect(signupSchema.safeParse({ ...valid, password: "a".repeat(73) }).success).toBe(false);
   });
@@ -109,11 +109,11 @@ describe("resetPasswordSchema — 基本", () => {
     expect(resetPasswordSchema.safeParse(valid).success).toBe(true);
   });
 
-  it("12 文字未満 / 72 文字境界", () => {
+  it("8 文字未満 / 72 文字境界", () => {
     expect(
       resetPasswordSchema.safeParse({
-        new_password: "a".repeat(11),
-        confirm_password: "a".repeat(11),
+        new_password: "a".repeat(7),
+        confirm_password: "a".repeat(7),
       }).success,
     ).toBe(false);
     const p72 = "a".repeat(72);

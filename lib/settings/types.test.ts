@@ -60,11 +60,11 @@ describe("changePasswordRequestSchema — 基本", () => {
     );
   });
 
-  it("new_password が 12 文字未満なら失敗", () => {
+  it("new_password が 8 文字未満なら失敗", () => {
     const r = changePasswordRequestSchema.safeParse({
       current_password: "old",
-      new_password: "short12345",
-      confirm_password: "short12345",
+      new_password: "short",
+      confirm_password: "short",
     });
     expect(r.success).toBe(false);
   });

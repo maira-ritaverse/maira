@@ -102,6 +102,22 @@ export default async function SettingsPage() {
             </Link>
           </Card>
 
+          {/* セキュリティ (二段階認証) */}
+          <Card className="p-4">
+            <Link
+              href="/agency/settings/security"
+              className="hover:bg-accent -m-4 flex items-center gap-3 rounded-md p-4 transition-colors"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">セキュリティ(二段階認証)</p>
+                <p className="text-muted-foreground text-xs">
+                  認証アプリで 6 桁コードを追加し、アカウントを保護
+                </p>
+              </div>
+              <span className="text-muted-foreground text-sm">→</span>
+            </Link>
+          </Card>
+
           {/* 外部連携(全メンバー) */}
           <Card className="p-4">
             <Link

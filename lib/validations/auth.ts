@@ -10,7 +10,7 @@ export const signupSchema = z.object({
     .email("有効なメールアドレスを入力してください"),
   password: z
     .string()
-    .min(12, "パスワードは12文字以上で入力してください")
+    .min(8, "パスワードは8文字以上で入力してください")
     .max(72, "パスワードは72文字以内で入力してください"),
   displayName: z
     .string()
@@ -87,7 +87,7 @@ export const resetPasswordSchema = z
   .object({
     new_password: z
       .string()
-      .min(12, "新パスワードは12文字以上で入力してください")
+      .min(8, "新パスワードは8文字以上で入力してください")
       .max(72, "新パスワードは72文字以内で入力してください"),
     confirm_password: z.string(),
   })

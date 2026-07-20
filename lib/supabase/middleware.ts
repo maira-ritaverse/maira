@@ -80,6 +80,36 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
+  // ── MFA 有効化 済 ユーザー の AAL2 昇格 を 強制。
+  //     verified TOTP factor を 持って いる ユーザー が パスワード ログイン 直後
+  //     (session.aal='aal1') に アプリ を 触ろう と したら /login/mfa に redirect。
+  //     セキュリティ 監査 A2 の 対応 (opt-in MFA が 実際 に 効く 経路)。
+  //
+  //     除外 パス:
+  //       ・/login/mfa 自身 (ここ に 誘導 する) — 無限 ループ 防止
+  //       ・/auth/* — signOut / callback は 素通し
+  //       ・/api/* — サーバ 側 で 個別 に 判定 (SPA fetch を 途中 で 弾く と 混乱)
+  //     Server Action は /_next/ で 転送 される ので 素通し。
+  if (
+    user &&
+    !pathname.startsWith("/login") &&
+    !pathname.startsWith("/auth/") &&
+    !pathname.startsWith("/api/") &&
+    !pathname.startsWith("/_next/")
+  ) {
+    const aalRes = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    const nextLevel = aalRes.data?.nextLevel;
+    const currentLevel = aalRes.data?.currentLevel;
+    // nextLevel=aal2 は 「登録 済 factor が あって 昇格 が 必要」 の 意味。
+    // currentLevel=aal1 な ら まだ 昇格 して いない。
+    if (nextLevel === "aal2" && currentLevel !== "aal2") {
+      const target = new URL("/login/mfa", request.nextUrl.origin);
+      // 元 の 遷移 先 を next に (完了 後 に 戻す)
+      target.searchParams.set("next", pathname + request.nextUrl.search);
+      return NextResponse.redirect(target);
+    }
+  }
+
   // ── CSRF: 書込 メソッド の Origin を 自 ドメイン と 一致 検証 (セキュリティ 監査 H3)。
   //     SameSite=Lax の Supabase セッション cookie は top-level GET には 付与 される
   //     が、 POST/PATCH/PUT/DELETE の cross-site 送信 (form submit / fetch) には

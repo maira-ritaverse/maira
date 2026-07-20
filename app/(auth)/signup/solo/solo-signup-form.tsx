@@ -71,8 +71,8 @@ export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
     e.preventDefault();
     setError(null);
 
-    if (password.length < 12) {
-      setError("パスワードは12文字以上で入力してください");
+    if (password.length < 8) {
+      setError("パスワードは8文字以上で入力してください");
       return;
     }
 
@@ -251,7 +251,7 @@ export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
               onChange={(e) => setPassword(e.target.value)}
               disabled={isSubmitting}
             />
-            <p className="text-muted-foreground text-xs">12 文字以上で入力してください</p>
+            <p className="text-muted-foreground text-xs">8 文字以上で入力してください</p>
           </div>
 
           {/* Organization Name (optional) */}
