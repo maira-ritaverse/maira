@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -7,6 +8,8 @@ import {
   PHOTO_ENHANCE_FREE_MONTHLY,
   checkAiUsageLimit,
   countAiUsageThisMonth,
+  getAiKindWeight,
+  recordAiUsage,
 } from "./ai-usage";
 
 type MakeArgs = {
@@ -298,5 +301,116 @@ describe("checkAiUsageLimit: agency_org scope", () => {
     });
     const r = await checkAiUsageLimit(s, "u", "job_recommendation_agency", now);
     expect(r.allowed).toBe(true);
+  });
+});
+
+// ────────────────────────────────────────────
+// getAiKindWeight + recordAiUsage の 重み付け 挙動 (Solo プラン Phase 6)
+// ────────────────────────────────────────────
+
+// (import は ファイル 冒頭 に 集約 済み: getAiKindWeight / recordAiUsage を 追加)
+
+describe("getAiKindWeight", () => {
+  it("軽量 kind は 1 (photo_enhance)", () => {
+    expect(getAiKindWeight("photo_enhance")).toBe(1);
+  });
+
+  it("軽量 kind は 1 (job_recommendation_agency)", () => {
+    expect(getAiKindWeight("job_recommendation_agency")).toBe(1);
+  });
+
+  it("軽量 kind は 1 (agency_client_summary)", () => {
+    expect(getAiKindWeight("agency_client_summary")).toBe(1);
+  });
+
+  it("Vision kind は 2 (job_extract_from_document)", () => {
+    expect(getAiKindWeight("job_extract_from_document")).toBe(2);
+  });
+
+  it("Vision kind は 2 (agency_client_document_extract)", () => {
+    expect(getAiKindWeight("agency_client_document_extract")).toBe(2);
+  });
+
+  it("長文生成 kind は 2 (recommendation_letter_draft)", () => {
+    expect(getAiKindWeight("recommendation_letter_draft")).toBe(2);
+  });
+
+  it("MA 生成 kind は 2 (agency_ma_flow_generation)", () => {
+    expect(getAiKindWeight("agency_ma_flow_generation")).toBe(2);
+  });
+
+  it("録音 kind は 1 (別 個 別ロジック で 90 分 超過時 に 2 件 換算)", () => {
+    expect(getAiKindWeight("agency_recording_processed")).toBe(1);
+  });
+});
+
+describe("recordAiUsage: 重み付け", () => {
+  function makeMockClient() {
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    const from = vi.fn().mockReturnValue({ insert });
+    return { supabase: { from } as unknown as SupabaseClient, insert, from };
+  }
+
+  it("weight=1 kind は 単一 行 で INSERT (従来 挙動 と 同じ、 metadata に unit_index を 足さない)", async () => {
+    const { supabase, insert, from } = makeMockClient();
+    await recordAiUsage(supabase, "user-1", "photo_enhance", { resumeId: "r1" });
+    expect(from).toHaveBeenCalledWith("ai_usage_events");
+    expect(insert).toHaveBeenCalledWith([
+      { user_id: "user-1", kind: "photo_enhance", metadata: { resumeId: "r1" } },
+    ]);
+  });
+
+  it("weight=1 で metadata 未指定 の 場合 は metadata=null で INSERT", async () => {
+    const { supabase, insert } = makeMockClient();
+    await recordAiUsage(supabase, "user-1", "job_recommendation_agency");
+    expect(insert).toHaveBeenCalledWith([
+      { user_id: "user-1", kind: "job_recommendation_agency", metadata: null },
+    ]);
+  });
+
+  it("weight=2 kind は 2 行 で INSERT (metadata に weight_unit_index/total を 添える)", async () => {
+    const { supabase, insert } = makeMockClient();
+    await recordAiUsage(supabase, "user-1", "job_extract_from_document", { docId: "d1" });
+    expect(insert).toHaveBeenCalledWith([
+      {
+        user_id: "user-1",
+        kind: "job_extract_from_document",
+        metadata: { docId: "d1", weight_unit_index: 1, weight_unit_total: 2 },
+      },
+      {
+        user_id: "user-1",
+        kind: "job_extract_from_document",
+        metadata: { docId: "d1", weight_unit_index: 2, weight_unit_total: 2 },
+      },
+    ]);
+  });
+
+  it("weight=2 で metadata 未指定 でも weight_unit_index/total は 記録 される", async () => {
+    const { supabase, insert } = makeMockClient();
+    await recordAiUsage(supabase, "user-1", "recommendation_letter_draft");
+    expect(insert).toHaveBeenCalledWith([
+      {
+        user_id: "user-1",
+        kind: "recommendation_letter_draft",
+        metadata: { weight_unit_index: 1, weight_unit_total: 2 },
+      },
+      {
+        user_id: "user-1",
+        kind: "recommendation_letter_draft",
+        metadata: { weight_unit_index: 2, weight_unit_total: 2 },
+      },
+    ]);
+  });
+
+  it("INSERT が エラー を 返して も throw しない (warn ログ のみ)", async () => {
+    const insert = vi.fn().mockResolvedValue({ error: { message: "db down" } });
+    const from = vi.fn().mockReturnValue({ insert });
+    const supabase = { from } as unknown as SupabaseClient;
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(
+      recordAiUsage(supabase, "user-1", "job_extract_from_document"),
+    ).resolves.not.toThrow();
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });

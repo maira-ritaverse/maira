@@ -601,8 +601,65 @@ export async function checkAiUsageLimit(
 }
 
 /**
- * 利用ログを 1 行 INSERT する。
+ * kind ごと の 「1 呼出 = N カウント」の 重み。
+ *
+ * 経済 保護 の 観点 で、 単価 の 高い / 重い 処理 は 2 カウント 消費 させる。
+ * Solo プラン (総量 100) で 全部 vision 系 で 使い切る 悪ケース (原価 ¥2000+
+ * = プラン 価格 の 1/3 が 消える) の 発生 確率 を 下げる 意図。
+ *
+ * 「重い」 の 定義:
+ *   ・Anthropic の Vision (PDF / 画像 入力) を 使う 処理 = job_extract /
+ *     agency_client_document_extract (単価 約 ¥20 / 回)
+ *   ・長文 生成 = recommendation_letter_draft (5k input + 2k output、
+ *     単価 約 ¥12 / 回)
+ *   ・構造化 出力 の 大規模 なもの = agency_ma_flow_generation /
+ *     agency_ma_segment_generation / agency_ma_flow_improvement
+ *     (単価 約 ¥5-10 / 回、 Team プラン のみ だが 経済 保護 の 一貫性 で 2)
+ *
+ * agency_recording_processed は 別ルート (recordAgencyRecordingUsage) で
+ * 90 分 超過 = 2 件 換算 の 個別 ロジック を 持つ ため、 ここ で は 1 に して
+ * おく (二重 換算 を 避ける)。
+ *
+ * 未定義 (or 1) の kind は 1 カウント。 呼出 側 は 変更 不要。
+ */
+const AI_KIND_WEIGHT: Record<AiUsageKind, number> = {
+  photo_enhance: 1,
+  job_recommendation_seeker: 1,
+  job_recommendation_agency: 1,
+  recommendation_letter_draft: 2,
+  agency_cv_draft: 1,
+  agency_resume_draft: 1,
+  job_extract_from_document: 2,
+  csv_column_mapping: 1,
+  agency_client_document_extract: 2,
+  seeker_resume_create: 1,
+  seeker_cv_create: 1,
+  seeker_resume_ai_draft: 1,
+  seeker_cv_ai_draft: 1,
+  agency_recording_processed: 1, // 個別 90 分 ロジック で 別途 加算
+  agency_client_summary: 1,
+  agency_line_reply_suggest: 1,
+  agency_line_client_extract: 1,
+  agency_ma_flow_generation: 2,
+  agency_ma_segment_generation: 2,
+  agency_ma_flow_improvement: 2,
+};
+
+/**
+ * kind の 重み を 取得 する ヘルパー (テスト / UI 表示 用 に export)。
+ */
+export function getAiKindWeight(kind: AiUsageKind): number {
+  return AI_KIND_WEIGHT[kind] ?? 1;
+}
+
+/**
+ * 利用ログを INSERT する。
  * 失敗時はログのみ(本処理は止めない)。
+ *
+ * kind の 重み (AI_KIND_WEIGHT) に 従い、 1 呼出 で 1〜N 行 を INSERT する。
+ * 「重い kind = 2 行」 に する こと で 月次 集計 (countOrgAiUsageThisMonth /
+ * countOrgTotalAiUsageThisMonth) が 自動 的 に 「重み 込み」 の 消費量 を 返す。
+ * 呼出 側 コード は 一切 変更 不要 (recordAiUsage は 従来 と 同じ シグネチャ)。
  *
  * Supabase は INSERT 失敗 を throw せず `{ error }` で 返す ため、 try/catch だけ
  * では 「黙って 失敗」 が 起きる。 error を 必ず 拾って 警告 ログ を 出す ことで
@@ -614,15 +671,33 @@ export async function recordAiUsage(
   kind: AiUsageKind,
   metadata?: Record<string, unknown>,
 ): Promise<void> {
+  const weight = getAiKindWeight(kind);
+  // weight=1 の 場合 は 従来 と 完全 に 同じ 挙動 (metadata に unit_index 等 を 足さない)
+  const rows =
+    weight === 1
+      ? [{ user_id: userId, kind, metadata: metadata ?? null }]
+      : Array.from({ length: weight }, (_, index) => ({
+          user_id: userId,
+          kind,
+          metadata: {
+            ...(metadata ?? {}),
+            weight_unit_index: index + 1,
+            weight_unit_total: weight,
+          },
+        }));
+
   try {
-    const { error } = await supabase
-      .from("ai_usage_events")
-      .insert({ user_id: userId, kind, metadata: metadata ?? null });
+    const { error } = await supabase.from("ai_usage_events").insert(rows);
     if (error) {
-      console.warn("[ai-usage] insert failed", { kind, userId, message: error.message });
+      console.warn("[ai-usage] insert failed", {
+        kind,
+        userId,
+        weight,
+        message: error.message,
+      });
     }
   } catch (err) {
-    console.warn("[ai-usage] insert threw", { kind, userId, err });
+    console.warn("[ai-usage] insert threw", { kind, userId, weight, err });
   }
 }
 
