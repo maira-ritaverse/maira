@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { RefreshButton } from "@/components/features/admin/refresh-button";
 import { apiFetch, getErrorMessage } from "@/lib/api/client-fetch";
+import { formatJpy } from "@/lib/features/ai-pricing";
 
 type Member = {
   id: string;
@@ -14,6 +15,19 @@ type Member = {
   clientCount: number;
   linkedClientCount: number;
   recentClientsAdded30d: number;
+  // 稼働 状況 (直近 30 日)
+  lastSignInAt: string | null;
+  activity30d: {
+    clients: number;
+    jobs: number;
+    referrals: number;
+    tasks: number;
+  };
+  aiUsage30d: {
+    total: number;
+    byKind: Record<string, number>;
+    estimatedCostJpy: number;
+  };
 };
 
 type DetailResponse = {
@@ -63,6 +77,10 @@ export function OrganizationDetail({ organizationId }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>("overview");
+  // fetch 完了時 の Date.now() を state に置くこと で、 レンダー中の
+  // Date.now() 呼び出し (react-hooks/purity 違反) を回避 しつつ、
+  // 再フェッチ時 に 「◯日前」 の表示 が最新化 されるように する。
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
 
   const fetchDetail = useCallback(async () => {
     setLoading(true);
@@ -70,6 +88,7 @@ export function OrganizationDetail({ organizationId }: Props) {
     try {
       const res = await apiFetch<DetailResponse>(`/api/admin/organizations/${organizationId}`);
       setData(res ?? null);
+      setNowMs(Date.now());
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -181,44 +200,31 @@ export function OrganizationDetail({ organizationId }: Props) {
               メンバーが登録されていません(admin 不在の組織)。
             </p>
           ) : (
-            <div className="overflow-x-auto rounded border">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-muted/50 text-muted-foreground sticky top-0 z-10 text-xs">
-                  <tr>
-                    <th className="px-3 py-2.5">role</th>
-                    <th className="px-3 py-2.5">メアド</th>
-                    <th className="px-3 py-2.5 text-right">担当 client</th>
-                    <th className="px-3 py-2.5 text-right">うち連携済</th>
-                    <th className="px-3 py-2.5 text-right">30 日新規</th>
-                    <th className="px-3 py-2.5">加入日</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {members.map((m) => (
-                    <tr
-                      key={m.id}
-                      className="hover:bg-accent/40 odd:bg-muted/10 border-t transition-colors"
-                    >
-                      <td className="px-3 py-2.5">
-                        <RoleBadge role={m.role} />
-                      </td>
-                      <td className="px-3 py-2.5 text-xs">
-                        {m.email ?? <span className="text-muted-foreground">—</span>}
-                        <div className="text-muted-foreground text-[10px]">{m.userId}</div>
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-xs font-semibold">
-                        {m.clientCount}
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-xs">{m.linkedClientCount}</td>
-                      <td className="px-3 py-2.5 text-right text-xs">{m.recentClientsAdded30d}</td>
-                      <td className="px-3 py-2.5 text-xs">
-                        {new Date(m.createdAt).toLocaleDateString("ja-JP")}
-                      </td>
+            <>
+              <p className="text-muted-foreground text-[11px]">
+                稼働数は 2026-07-19 以降の起票分のみを集計します(actor 追跡カラム追加のため)。 LINE
+                / メール送信数は per-user の送信元が未追跡のため出せません(組織合計は概要タブ参照)。
+              </p>
+              <div className="overflow-x-auto rounded border">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-muted/50 text-muted-foreground sticky top-0 z-10 text-xs">
+                    <tr>
+                      <th className="px-3 py-2.5">role</th>
+                      <th className="px-3 py-2.5">メアド</th>
+                      <th className="px-3 py-2.5 text-right">担当 client</th>
+                      <th className="px-3 py-2.5 text-right">うち連携済</th>
+                      <th className="px-3 py-2.5">最終ログイン</th>
+                      <th className="px-3 py-2.5">加入日</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {members.map((m) => (
+                      <MemberRow key={m.id} member={m} nowMs={nowMs} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}
@@ -260,6 +266,99 @@ export function OrganizationDetail({ organizationId }: Props) {
 // ============================================================================
 // 内部コンポーネント
 // ============================================================================
+
+function MemberRow({ member: m, nowMs }: { member: Member; nowMs: number }) {
+  const activitySum =
+    m.activity30d.clients + m.activity30d.jobs + m.activity30d.referrals + m.activity30d.tasks;
+  const isDormant = activitySum === 0 && m.aiUsage30d.total === 0;
+  return (
+    <>
+      <tr className="hover:bg-accent/40 odd:bg-muted/10 border-t transition-colors">
+        <td className="px-3 py-2.5">
+          <RoleBadge role={m.role} />
+        </td>
+        <td className="px-3 py-2.5 text-xs">
+          {m.email ?? <span className="text-muted-foreground">—</span>}
+          <div className="text-muted-foreground text-[10px]">{m.userId}</div>
+        </td>
+        <td className="px-3 py-2.5 text-right text-xs font-semibold">{m.clientCount}</td>
+        <td className="px-3 py-2.5 text-right text-xs">{m.linkedClientCount}</td>
+        <td className="px-3 py-2.5 text-xs">
+          <LastSignInCell iso={m.lastSignInAt} nowMs={nowMs} />
+        </td>
+        <td className="px-3 py-2.5 text-xs">{new Date(m.createdAt).toLocaleDateString("ja-JP")}</td>
+      </tr>
+      {/* サブ 行: 直近 30 日 の 稼働 状況 (業務 起票 + AI 使用) */}
+      <tr className="odd:bg-muted/10">
+        <td colSpan={6} className="text-muted-foreground border-t px-3 pt-1 pb-2.5 text-[11px]">
+          {isDormant ? (
+            <span className="text-amber-700 dark:text-amber-500">
+              30日間の稼働なし(起票 / AI 使用ともに 0)
+            </span>
+          ) : (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="font-semibold text-slate-700 dark:text-slate-300">30日稼働:</span>
+              <MetricChip label="求職者" value={m.activity30d.clients} />
+              <MetricChip label="求人" value={m.activity30d.jobs} />
+              <MetricChip label="応募" value={m.activity30d.referrals} />
+              <MetricChip label="タスク" value={m.activity30d.tasks} />
+              <span className="text-muted-foreground/60">|</span>
+              <MetricChip label="AI" value={m.aiUsage30d.total} />
+              {m.aiUsage30d.estimatedCostJpy > 0 && (
+                <span className="text-muted-foreground">
+                  (推定 {formatJpy(m.aiUsage30d.estimatedCostJpy)})
+                </span>
+              )}
+            </div>
+          )}
+        </td>
+      </tr>
+    </>
+  );
+}
+
+function LastSignInCell({ iso, nowMs }: { iso: string | null; nowMs: number }) {
+  if (!iso) return <span className="text-muted-foreground">未ログイン</span>;
+  const d = new Date(iso);
+  const diffMs = nowMs - d.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const label =
+    diffDays < 1
+      ? "本日"
+      : diffDays < 7
+        ? `${diffDays}日前`
+        : diffDays < 30
+          ? `${Math.floor(diffDays / 7)}週前`
+          : `${Math.floor(diffDays / 30)}ヶ月前`;
+  const tone =
+    diffDays < 7
+      ? "text-emerald-700 dark:text-emerald-400"
+      : diffDays < 30
+        ? "text-slate-700 dark:text-slate-300"
+        : "text-amber-700 dark:text-amber-500";
+  return (
+    <span className={tone}>
+      {label}
+      <span className="text-muted-foreground ml-1 text-[10px]">
+        ({d.toLocaleDateString("ja-JP")})
+      </span>
+    </span>
+  );
+}
+
+function MetricChip({ label, value }: { label: string; value: number }) {
+  const isZero = value === 0;
+  return (
+    <span className={isZero ? "text-muted-foreground/60" : "text-slate-700 dark:text-slate-300"}>
+      {label}
+      <span
+        className={`ml-0.5 font-semibold ${isZero ? "" : "text-emerald-700 dark:text-emerald-400"}`}
+      >
+        {value}
+      </span>
+    </span>
+  );
+}
 
 function StatCard({ label, value, sub }: { label: string; value: number; sub?: string }) {
   return (

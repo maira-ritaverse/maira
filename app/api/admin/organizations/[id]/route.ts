@@ -4,6 +4,7 @@ import { z } from "zod";
 import { isMairaAdmin } from "@/lib/announcements/platform-queries";
 import { readJsonBody, requireUser } from "@/lib/api/auth-guards";
 import { recordAuditLog } from "@/lib/audit/audit-log";
+import { sumEstimatedCost } from "@/lib/features/ai-pricing";
 import { createServiceClient } from "@/lib/supabase/service";
 
 /**
@@ -68,15 +69,18 @@ export async function GET(_request: Request, { params }: RouteParams) {
     .order("created_at", { ascending: true });
   const members = (membersData ?? []) as MemberRow[];
 
-  // メンバーのメアド(auth.users)を解決(memberCount 規模なので個別取得で十分)
+  // メンバーのメアド + 最終ログイン日 (auth.users) を解決。
+  // memberCount 規模 (数〜数十) な ので getUserById を 並列 で 発火。
   const emailByUserId = new Map<string, string>();
+  const lastSignInByUserId = new Map<string, string | null>();
   await Promise.all(
     members.map(async (m) => {
       try {
         const { data } = await admin.auth.admin.getUserById(m.user_id);
         if (data?.user?.email) emailByUserId.set(m.user_id, data.user.email);
+        lastSignInByUserId.set(m.user_id, data?.user?.last_sign_in_at ?? null);
       } catch {
-        // メアド取得失敗時は空のまま。UI 側でフォールバック表示。
+        // メアド / 最終ログイン取得失敗時は空のまま。UI 側でフォールバック表示。
       }
     }),
   );
@@ -104,7 +108,87 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
   // 30 日前カットオフ
   const cutoff30d = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const cutoff30dIso = new Date(cutoff30d).toISOString();
   const isRecent = (iso: string) => new Date(iso).getTime() >= cutoff30d;
+
+  // ── メンバー 別 稼働 集計 (直近 30 日)
+  //    ・業務 アクション (clients / jobs / referrals / tasks の 新規 起票 数):
+  //       全 テーブル に created_by_member_id が 追加 済 (20260719000001)。
+  //       過去 データ は null な ので 実質 「昨日 以降 の 起票 分」 が 対象。
+  //    ・LINE / メール 送信 は sent_by_* 列 が 未 実装 な ので per-user 集計 不可。
+  //       この API で は 返さ ない (UI 側 で 注記)。
+  //    ・AI 使用: ai_usage_events.user_id を 集計 (member.user_id に マッピング)。
+  const memberIds = members.map((m) => m.id);
+  const memberUserIds = members.map((m) => m.user_id);
+  const memberIdList = memberIds.length > 0 ? memberIds : ["00000000-0000-0000-0000-000000000000"];
+  const memberUserIdList =
+    memberUserIds.length > 0 ? memberUserIds : ["00000000-0000-0000-0000-000000000000"];
+
+  // 業務 アクション: 4 テーブル 並列 で 「member 別 起票 数」 を 集計。
+  const [clientsCreated, jobsCreated, referralsCreated, tasksCreated, aiUsageRows] =
+    await Promise.all([
+      admin
+        .from("client_records")
+        .select("created_by_member_id")
+        .eq("organization_id", id)
+        .in("created_by_member_id", memberIdList)
+        .gte("created_at", cutoff30dIso),
+      admin
+        .from("job_postings")
+        .select("created_by_member_id")
+        .eq("organization_id", id)
+        .in("created_by_member_id", memberIdList)
+        .gte("created_at", cutoff30dIso),
+      admin
+        .from("referrals")
+        .select("created_by_member_id")
+        .eq("organization_id", id)
+        .in("created_by_member_id", memberIdList)
+        .gte("created_at", cutoff30dIso),
+      admin
+        .from("agency_tasks")
+        .select("created_by_member_id")
+        .eq("organization_id", id)
+        .in("created_by_member_id", memberIdList)
+        .gte("created_at", cutoff30dIso),
+      admin
+        .from("ai_usage_events")
+        .select("user_id, kind")
+        .in("user_id", memberUserIdList)
+        .gte("created_at", cutoff30dIso),
+    ]);
+
+  const countByMember = (
+    rows: { created_by_member_id: string | null }[] | null | undefined,
+  ): Map<string, number> => {
+    const m = new Map<string, number>();
+    for (const r of rows ?? []) {
+      const mid = r.created_by_member_id;
+      if (!mid) continue;
+      m.set(mid, (m.get(mid) ?? 0) + 1);
+    }
+    return m;
+  };
+  const clientsCreatedByMember = countByMember(
+    clientsCreated.data as { created_by_member_id: string | null }[] | null,
+  );
+  const jobsCreatedByMember = countByMember(
+    jobsCreated.data as { created_by_member_id: string | null }[] | null,
+  );
+  const referralsCreatedByMember = countByMember(
+    referralsCreated.data as { created_by_member_id: string | null }[] | null,
+  );
+  const tasksCreatedByMember = countByMember(
+    tasksCreated.data as { created_by_member_id: string | null }[] | null,
+  );
+
+  // AI 使用: user_id 別 に kind 別 カウント。 コスト は sumEstimatedCost で 算出。
+  const aiByUser = new Map<string, Record<string, number>>();
+  for (const r of (aiUsageRows.data ?? []) as { user_id: string; kind: string }[]) {
+    const byKind = aiByUser.get(r.user_id) ?? {};
+    byKind[r.kind] = (byKind[r.kind] ?? 0) + 1;
+    aiByUser.set(r.user_id, byKind);
+  }
 
   // 担当 client 数(member.id でグルーピング)+ 各 member の直近 30 日新規 client
   const clientsByMember = new Map<string, { total: number; linked: number; recent30d: number }>();
@@ -155,6 +239,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
     recent30d,
     members: members.map((m) => {
       const cs = clientsByMember.get(m.id) ?? { total: 0, linked: 0, recent30d: 0 };
+      const aiByKind = aiByUser.get(m.user_id) ?? {};
+      const aiTotal = Object.values(aiByKind).reduce((s, n) => s + n, 0);
       return {
         id: m.id,
         userId: m.user_id,
@@ -164,6 +250,20 @@ export async function GET(_request: Request, { params }: RouteParams) {
         clientCount: cs.total,
         linkedClientCount: cs.linked,
         recentClientsAdded30d: cs.recent30d,
+        // 稼働 状況 (直近 30 日、 2026-07-19 に created_by_member_id 追加 済 の
+        // ため 過去 分 は 集計 対象 外。 「新しい 起票 分」 の みが 見える 想定)
+        lastSignInAt: lastSignInByUserId.get(m.user_id) ?? null,
+        activity30d: {
+          clients: clientsCreatedByMember.get(m.id) ?? 0,
+          jobs: jobsCreatedByMember.get(m.id) ?? 0,
+          referrals: referralsCreatedByMember.get(m.id) ?? 0,
+          tasks: tasksCreatedByMember.get(m.id) ?? 0,
+        },
+        aiUsage30d: {
+          total: aiTotal,
+          byKind: aiByKind,
+          estimatedCostJpy: sumEstimatedCost(aiByKind),
+        },
       };
     }),
     unassigned: {
