@@ -14,6 +14,11 @@
  *   ブラウザには平文を渡さない(呼び出しはサーバの API ルートに限る)。
  */
 
+import {
+  CLIENT_EXTRACTION_FIELD_KEYS,
+  CLIENT_EXTRACTION_KEY_TO_CAMEL,
+  type ClientExtractionResult,
+} from "@/lib/ai/prompts/client-extract-from-document";
 import type { ClientRecordWithDecrypted } from "@/lib/clients/types";
 
 import type { CvBody, EducationItem, LicenseItem, ResumePii } from "./types";
@@ -133,4 +138,46 @@ export function clientRecordToCvBody(client: ClientRecordWithDecrypted): CvBody 
     summary: summaryParts.join(" / ").slice(0, 2000),
     body: blocks.join("\n\n").slice(0, 20000),
   };
+}
+
+// ────────────────────────────────────────────────────────────────
+// 書類(PDF/画像)の Vision 抽出結果からの生成
+//
+// extractClientFromDocument の ClientExtractionResult は client_records と同形の
+// snake_case。上の client_record→書類マッパーへ流すため camelCase に詰め替える
+// (抽出キーは client_records カラムと 1:1 で、CLIENT_EXTRACTION_KEY_TO_CAMEL が対応表)。
+// これにより「書類→履歴書/CV」を新規ロジックほぼ無しで実現する。
+// ────────────────────────────────────────────────────────────────
+function clientExtractionToClientLike(
+  extraction: ClientExtractionResult,
+): ClientRecordWithDecrypted {
+  const obj: Record<string, unknown> = {};
+  for (const key of CLIENT_EXTRACTION_FIELD_KEYS) {
+    obj[CLIENT_EXTRACTION_KEY_TO_CAMEL[key]] = extraction[key];
+  }
+  // マッパーが読む未抽出フィールド(recommendationComment 等)は undefined のままで
+  // 良い(いずれも `?? ""` / falsy 判定でスキップされる)。
+  return obj as unknown as ClientRecordWithDecrypted;
+}
+
+/** 書類抽出結果 → 履歴書 PII */
+export function clientExtractionToResumePii(extraction: ClientExtractionResult): ResumePii {
+  return clientRecordToResumePii(clientExtractionToClientLike(extraction));
+}
+
+/** 書類抽出結果 → 履歴書の学歴・職歴(年月自動抽出) */
+export function clientExtractionToEducationHistory(
+  extraction: ClientExtractionResult,
+): EducationItem[] {
+  return clientRecordToEducationHistory(clientExtractionToClientLike(extraction));
+}
+
+/** 書類抽出結果 → 履歴書の免許・資格 */
+export function clientExtractionToLicenses(extraction: ClientExtractionResult): LicenseItem[] {
+  return clientRecordToLicenses(clientExtractionToClientLike(extraction));
+}
+
+/** 書類抽出結果 → 職務経歴書(CV)本文 */
+export function clientExtractionToCvBody(extraction: ClientExtractionResult): CvBody {
+  return clientRecordToCvBody(clientExtractionToClientLike(extraction));
 }

@@ -74,6 +74,8 @@ export function SourceDocumentsSection({ clientRecordId }: Props) {
   const [deleting, setDeleting] = useState(false);
   // AI 抽出 プレビュー モーダル の 対象 ドキュメント (null = 閉じ 状態)
   const [extractingDoc, setExtractingDoc] = useState<SourceDocument | null>(null);
+  // 「書類から作成」実行中のドキュメント + 種別 (null = なし)
+  const [creating, setCreating] = useState<{ id: string; kind: "resume" | "cv" } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -160,6 +162,38 @@ export function SourceDocumentsSection({ clientRecordId }: Props) {
     }
   }
 
+  // 元書類を AI 抽出して、その内容を反映した新しい履歴書 / 職務経歴書を作成し、
+  // 作成済みのエディタへ遷移する(そこで編集して変種に仕上げる)。
+  async function handleCreateFrom(doc: SourceDocument, kind: "resume" | "cv") {
+    setCreating({ id: doc.id, kind });
+    try {
+      const endpoint = kind === "resume" ? "client-resumes" : "client-cvs";
+      const res = await fetch(`/api/agency/${endpoint}/from-document`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_record_id: clientRecordId, source_document_id: doc.id }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        item?: { id: string };
+        error?: string;
+        message?: string;
+      };
+      if (!res.ok || !body.item) {
+        throw new Error(body.message ?? body.error ?? `作成に失敗しました (HTTP ${res.status})`);
+      }
+      showToast(
+        "success",
+        kind === "resume" ? "書類から履歴書を作成しました" : "書類から職務経歴書を作成しました",
+      );
+      const path = kind === "resume" ? "agency-resumes" : "agency-cvs";
+      router.push(`/agency/clients/${clientRecordId}/${path}/${body.item.id}`);
+    } catch (err) {
+      showToast("error", errorToJapanese(err));
+    } finally {
+      setCreating(null);
+    }
+  }
+
   async function handleDelete() {
     if (!confirmDeleteDoc) return;
     setDeleting(true);
@@ -188,7 +222,9 @@ export function SourceDocumentsSection({ clientRecordId }: Props) {
         <h2 className="text-lg font-semibold">元書類(アップロード)</h2>
         <p className="text-muted-foreground text-xs">
           求職者から受け取った既存の履歴書 / 職務経歴書(PDF / JPG / PNG、20MB
-          まで)を保存できます。後でそのままダウンロードして求人企業への提出等に使えます。
+          まで)を保存できます。後でそのままダウンロードして求人企業への提出等に使えるほか、
+          「履歴書を作成 / 職務経歴書を作成」から中の情報を AI で抽出して、Maira の履歴書 /
+          職務経歴書を新規作成(変種づくりの下敷き)できます。
         </p>
       </div>
 
@@ -277,6 +313,32 @@ export function SourceDocumentsSection({ clientRecordId }: Props) {
                 title="AI でプロフィールに反映"
               >
                 <Sparkles className="size-4" aria-hidden />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={creating !== null}
+                onClick={() => handleCreateFrom(d, "resume")}
+                title="この書類から履歴書を作成"
+              >
+                {creating?.id === d.id && creating.kind === "resume" ? (
+                  <Loader2 className="size-3 animate-spin" aria-hidden />
+                ) : (
+                  "履歴書を作成"
+                )}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={creating !== null}
+                onClick={() => handleCreateFrom(d, "cv")}
+                title="この書類から職務経歴書を作成"
+              >
+                {creating?.id === d.id && creating.kind === "cv" ? (
+                  <Loader2 className="size-3 animate-spin" aria-hidden />
+                ) : (
+                  "職務経歴書を作成"
+                )}
               </Button>
               <Button
                 size="sm"

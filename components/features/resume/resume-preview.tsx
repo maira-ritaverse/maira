@@ -313,7 +313,7 @@ function HistoryTable({ rows, showHeader }: { rows: (HistoryRow | null)[]; showH
             <Td center small>
               {row?.month ?? ""}
             </Td>
-            <Td>{row?.description ?? ""}</Td>
+            <Td center>{row?.description ?? ""}</Td>
           </tr>
         ))}
       </tbody>

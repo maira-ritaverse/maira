@@ -311,6 +311,10 @@ export function buildResumeHtml(resume: Resume, options: BuildResumeHtmlOptions)
     text-align: center;
     font-size: 11px;
   }
+  /* 学歴・職歴の内容欄を中央表示 */
+  table.history-table td.cell-hist-desc {
+    text-align: center;
+  }
   th.col-year { width: 48px; }
   th.col-month { width: 40px; }
 
@@ -497,7 +501,7 @@ function renderHistoryTable(rows: (EducationItem | null)[], showHeader: boolean)
       (row) => `<tr>
         <td class="cell-ym">${row?.year ?? ""}</td>
         <td class="cell-ym">${row?.month ?? ""}</td>
-        <td>${escapeHtml(row?.description ?? "")}</td>
+        <td class="cell-hist-desc">${escapeHtml(row?.description ?? "")}</td>
       </tr>`,
     )
     .join("");
