@@ -34,6 +34,20 @@ type Props = {
   isAdmin: boolean;
 };
 
+// 年月は "YYYY/MM"(月なしは "YYYY")の文字列1本で保持する(agency-resume-mapper の
+// parseYearMonth と対応)。入力欄は年・月に分け、表示/保存でこの2関数で相互変換する。
+function splitYearMonth(raw: string): { year: string; month: string } {
+  if (!raw) return { year: "", month: "" };
+  const [year, month] = raw.split("/");
+  return { year: year ?? "", month: month ?? "" };
+}
+function joinYearMonth(year: string, month: string): string {
+  const y = year.trim();
+  const m = month.trim();
+  if (!y && !m) return "";
+  return m ? `${y}/${m}` : y;
+}
+
 export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -250,14 +264,33 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
         ) : (
           <ul className="space-y-2">
             {education.map((it, idx) => (
-              <li key={idx} className="grid grid-cols-1 gap-2 sm:grid-cols-[8rem_1fr_auto]">
-                <Input
-                  placeholder="YYYY/MM"
-                  value={it.year}
-                  onChange={(e) => updateEducation(idx, { year: e.target.value })}
-                  maxLength={7}
-                  disabled={pending}
-                />
+              <li key={idx} className="grid grid-cols-1 gap-2 sm:grid-cols-[11rem_1fr_auto]">
+                <div className="grid grid-cols-2 gap-1">
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="年"
+                    value={splitYearMonth(it.year).year}
+                    onChange={(e) =>
+                      updateEducation(idx, {
+                        year: joinYearMonth(e.target.value, splitYearMonth(it.year).month),
+                      })
+                    }
+                    disabled={pending}
+                  />
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="月"
+                    value={splitYearMonth(it.year).month}
+                    onChange={(e) =>
+                      updateEducation(idx, {
+                        year: joinYearMonth(splitYearMonth(it.year).year, e.target.value),
+                      })
+                    }
+                    disabled={pending}
+                  />
+                </div>
                 <Textarea
                   placeholder="例:○○大学 経済学部 卒業 / 一身上の都合により退職 など"
                   value={it.description}
@@ -293,14 +326,33 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
         ) : (
           <ul className="space-y-2">
             {licenses.map((it, idx) => (
-              <li key={idx} className="grid grid-cols-1 gap-2 sm:grid-cols-[8rem_1fr_auto]">
-                <Input
-                  placeholder="YYYY/MM"
-                  value={it.year}
-                  onChange={(e) => updateLicense(idx, { year: e.target.value })}
-                  maxLength={7}
-                  disabled={pending}
-                />
+              <li key={idx} className="grid grid-cols-1 gap-2 sm:grid-cols-[11rem_1fr_auto]">
+                <div className="grid grid-cols-2 gap-1">
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="年"
+                    value={splitYearMonth(it.year).year}
+                    onChange={(e) =>
+                      updateLicense(idx, {
+                        year: joinYearMonth(e.target.value, splitYearMonth(it.year).month),
+                      })
+                    }
+                    disabled={pending}
+                  />
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="月"
+                    value={splitYearMonth(it.year).month}
+                    onChange={(e) =>
+                      updateLicense(idx, {
+                        year: joinYearMonth(splitYearMonth(it.year).year, e.target.value),
+                      })
+                    }
+                    disabled={pending}
+                  />
+                </div>
                 <Input
                   placeholder="例:普通自動車第一種運転免許"
                   value={it.description}

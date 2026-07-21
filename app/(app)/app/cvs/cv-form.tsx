@@ -101,14 +101,7 @@ function isFieldDrafting(current: DraftingField, target: Exclude<DraftingField, 
   return false;
 }
 
-// 年・月選択(履歴書と同じ範囲)
-const YEAR_OPTIONS = (() => {
-  const now = new Date().getFullYear();
-  const years: number[] = [];
-  for (let y = now + 5; y >= 1960; y--) years.push(y);
-  return years;
-})();
-const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
+// 年月は数値入力欄で直接入力する(旧: 年月 select 用の YEAR_OPTIONS/MONTH_OPTIONS は廃止)
 
 export function CvForm(props: Props) {
   const { mode, resumeOptions, hasCareerProfile } = props;
@@ -1016,34 +1009,26 @@ function PeriodInput({
 
   return (
     <div className="grid grid-cols-[1fr_5rem] gap-1">
-      <select
+      <input
+        type="number"
+        inputMode="numeric"
         value={yearStr}
         onChange={(e) => emit(e.target.value, monthStr)}
         disabled={disabled}
         className="border-input bg-background w-full rounded-md border px-2 py-2 text-sm"
         aria-label="年"
-      >
-        <option value="">年 —</option>
-        {YEAR_OPTIONS.map((y) => (
-          <option key={y} value={y}>
-            {y}
-          </option>
-        ))}
-      </select>
-      <select
+        placeholder="年 (例 2019)"
+      />
+      <input
+        type="number"
+        inputMode="numeric"
         value={monthStr}
         onChange={(e) => emit(yearStr, e.target.value)}
         disabled={disabled}
         className="border-input bg-background w-full rounded-md border px-2 py-2 text-sm"
         aria-label="月"
-      >
-        <option value="">月</option>
-        {MONTH_OPTIONS.map((m) => (
-          <option key={m} value={m}>
-            {m}
-          </option>
-        ))}
-      </select>
+        placeholder="月"
+      />
     </div>
   );
 }

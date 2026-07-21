@@ -56,15 +56,7 @@ type Props = (
   hasCareerProfile: boolean;
 };
 
-// 学歴・職歴/免許資格の年・月セレクタ用
-const YEAR_OPTIONS = (() => {
-  const now = new Date().getFullYear();
-  const years: number[] = [];
-  // 1960 〜 現在+5年 まで。狭すぎても広すぎてもストレスなので。
-  for (let y = now + 5; y >= 1960; y--) years.push(y);
-  return years;
-})();
-const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
+// 年月は数値入力欄で直接入力する(旧: 年月 select 用の YEAR_OPTIONS/MONTH_OPTIONS は廃止)
 
 const GENDER_OPTIONS: { value: Gender; label: string }[] = [
   { value: "male", label: genderLabels.male },
@@ -422,39 +414,31 @@ export function ResumeForm(props: Props) {
             <div key={field.id} className="grid grid-cols-[5rem_4rem_1fr_auto] items-start gap-2">
               <div className="space-y-1">
                 {index === 0 && <Label className="text-xs">年</Label>}
-                <select
+                <input
+                  type="number"
+                  inputMode="numeric"
                   {...register(`education_history.${index}.year`, {
                     setValueAs: nullableNumber,
                   })}
                   disabled={isPending}
                   className="border-input bg-background w-full rounded-md border px-2 py-2 text-sm"
                   defaultValue={field.year ?? ""}
-                >
-                  <option value="">—</option>
-                  {YEAR_OPTIONS.map((y) => (
-                    <option key={y} value={y}>
-                      {y}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="2019"
+                />
               </div>
               <div className="space-y-1">
                 {index === 0 && <Label className="text-xs">月</Label>}
-                <select
+                <input
+                  type="number"
+                  inputMode="numeric"
                   {...register(`education_history.${index}.month`, {
                     setValueAs: nullableNumber,
                   })}
                   disabled={isPending}
                   className="border-input bg-background w-full rounded-md border px-2 py-2 text-sm"
                   defaultValue={field.month ?? ""}
-                >
-                  <option value="">—</option>
-                  {MONTH_OPTIONS.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="3"
+                />
               </div>
               <div className="space-y-1">
                 {index === 0 && <Label className="text-xs">内容</Label>}
@@ -513,39 +497,31 @@ export function ResumeForm(props: Props) {
             <div key={field.id} className="grid grid-cols-[5rem_4rem_1fr_auto] items-start gap-2">
               <div className="space-y-1">
                 {index === 0 && <Label className="text-xs">年</Label>}
-                <select
+                <input
+                  type="number"
+                  inputMode="numeric"
                   {...register(`licenses.${index}.year`, {
                     setValueAs: nullableNumber,
                   })}
                   disabled={isPending}
                   className="border-input bg-background w-full rounded-md border px-2 py-2 text-sm"
                   defaultValue={field.year ?? ""}
-                >
-                  <option value="">—</option>
-                  {YEAR_OPTIONS.map((y) => (
-                    <option key={y} value={y}>
-                      {y}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="2019"
+                />
               </div>
               <div className="space-y-1">
                 {index === 0 && <Label className="text-xs">月</Label>}
-                <select
+                <input
+                  type="number"
+                  inputMode="numeric"
                   {...register(`licenses.${index}.month`, {
                     setValueAs: nullableNumber,
                   })}
                   disabled={isPending}
                   className="border-input bg-background w-full rounded-md border px-2 py-2 text-sm"
                   defaultValue={field.month ?? ""}
-                >
-                  <option value="">—</option>
-                  {MONTH_OPTIONS.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="3"
+                />
               </div>
               <div className="space-y-1">
                 {index === 0 && <Label className="text-xs">資格名</Label>}
