@@ -190,13 +190,22 @@ export function clientExtractionToLicenses(extraction: ClientExtractionResult): 
   return clientRecordToLicenses(clientExtractionToClientLike(extraction));
 }
 
-/** 書類抽出結果 → 職務経歴書(CV)本文(書類の自己PRを追記) */
+/**
+ * 書類抽出結果 → 職務経歴書(CV)本文。
+ * アップロードした職務経歴書の「職務経歴」本体の書き起こし(work_history_text)を最優先で
+ * 本文に据える。これが無いと、経験タグ等からの薄いプロフィール要約になり「文字起こしが
+ * 入っていない」状態になってしまう(from-document を from-recording / 原本と同等に引き上げる要)。
+ */
 export function clientExtractionToCvBody(extraction: ClientExtractionResult): CvBody {
   const cv = clientRecordToCvBody(clientExtractionToClientLike(extraction));
-  if (!extraction.self_pr) return cv;
-  const body = `${cv.body}${cv.body ? "\n\n" : ""}【自己PR】\n${extraction.self_pr}`.slice(
-    0,
-    20000,
-  );
-  return { ...cv, body };
+  const blocks: string[] = [];
+  const workHistory = extraction.work_history_text.trim();
+  if (workHistory) blocks.push(`【職務経歴】\n${workHistory}`);
+  // client_record 由来の本文(経験タグ / スキル / 学歴 / 希望条件 / 担当者所感)を補助として続ける。
+  if (cv.body) blocks.push(cv.body);
+  // 自己PR は末尾に置く。
+  const selfPr = extraction.self_pr.trim();
+  if (selfPr) blocks.push(`【自己PR】\n${selfPr}`);
+  const body = blocks.join("\n\n").slice(0, 20000);
+  return { summary: cv.summary, body };
 }

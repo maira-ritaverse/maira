@@ -218,6 +218,13 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
           <Field label="電話番号" value={pii.phone} onChange={(v) => updatePii({ phone: v })} />
         </div>
         <Field label="住所" value={pii.address} onChange={(v) => updatePii({ address: v })} />
+        {/* 現住所フリガナ。書類取り込み(Vision 抽出)/ プロフィール作成(AI 生成)で
+            自動補完されるが、担当者が確認・修正できるよう入力欄を必ず出す(氏名カナと対称)。 */}
+        <Field
+          label="現住所(フリガナ)"
+          value={pii.address_kana ?? ""}
+          onChange={(v) => updatePii({ address_kana: v })}
+        />
         <Field label="メールアドレス" value={pii.email} onChange={(v) => updatePii({ email: v })} />
         <TextareaWithAi
           label="志望動機"
