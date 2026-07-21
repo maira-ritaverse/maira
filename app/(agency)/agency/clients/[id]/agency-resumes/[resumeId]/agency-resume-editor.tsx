@@ -242,6 +242,9 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
             + 行を追加
           </Button>
         </div>
+        <p className="text-muted-foreground text-xs">
+          退職理由・自己PR などの自由記述も内容欄に書けます(年月は空欄でも可)
+        </p>
         {education.length === 0 ? (
           <p className="text-muted-foreground text-xs">未入力</p>
         ) : (
@@ -255,11 +258,12 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
                   maxLength={7}
                   disabled={pending}
                 />
-                <Input
-                  placeholder="例:○○大学 経済学部 卒業"
+                <Textarea
+                  placeholder="例:○○大学 経済学部 卒業 / 一身上の都合により退職 など"
                   value={it.description}
                   onChange={(e) => updateEducation(idx, { description: e.target.value })}
-                  maxLength={200}
+                  maxLength={500}
+                  rows={2}
                   disabled={pending}
                 />
                 <Button

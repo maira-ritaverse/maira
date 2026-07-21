@@ -6,11 +6,11 @@ describe("parseLineHistoryCsv", () => {
   it("基本 ヘッダ + 2 行 を パース", () => {
     const csv = [
       "日時,送信者,内容",
-      "2026-06-20 15:44:00,Mairaテスト,はじめまして",
+      "2026-06-20 15:44:00,Myairaテスト,はじめまして",
       "2026-06-20 15:47:00,Shunichi,始めました",
     ].join("\n");
 
-    const result = parseLineHistoryCsv(csv, ["Mairaテスト"]);
+    const result = parseLineHistoryCsv(csv, ["Myairaテスト"]);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 

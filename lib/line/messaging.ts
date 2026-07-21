@@ -39,7 +39,7 @@ export type SendMessageResult =
 /**
  * Outbound 送信完了時 に 「対応済」マーク を 付ける。
  *
- * 自動 マーク は 「Maira UI から 送信 した 主体的 な 返信」 を 想定。
+ * 自動 マーク は 「Myaira UI から 送信 した 主体的 な 返信」 を 想定。
  * handled_by_user_id は 「ユーザー が 誰か」分かる 場合 に セット (省略可)。
  */
 export async function markConversationHandled(

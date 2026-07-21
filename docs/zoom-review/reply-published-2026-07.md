@@ -24,76 +24,96 @@ credentials で 案内 して いた `www.maira.pro/*` URL が LP に 変わっ�
 
 ## 返信 本文 (英語、 コピペ 用)
 
+Zoom Marketplace の 返信 フォーム は Unicode 罫線 (━) や 長文 で 400 Bad
+Request を 返す こと が ある ため、 ASCII のみ + 簡潔 な 形 に した バージョン
+を 掲載。
+
 ```
 Hello,
 
 Thank you for the Beta review feedback dated July 16.
 
-At this time we would like to opt out of Beta and proceed with Published
-(public marketplace listing) status instead, as noted in your reply
-("your app can still qualify for publication in our Marketplace without
-supporting evidence"). We understand the feature set is identical for
-Published apps and will pursue the additional Beta evidence (SAST/DAST,
-pentest, etc.) later.
+We would like to opt out of Beta and proceed with Published (public
+marketplace listing) status instead, as your reply notes that our app
+can still qualify for publication without the additional evidence. The
+feature set is identical for Published apps. We plan to pursue the
+Beta evidence (SAST/DAST, pentest, etc.) at a later date.
 
-While preparing this response we also completed a domain restructure on
-our side: the marketing site now lives at maira.pro (WordPress), and the
-application itself has been moved to a dedicated subdomain,
-https://app.maira.pro. Please use the URLs below for all further
-testing. The credentials and reviewer content are unchanged; only the
-host has moved.
+While preparing this response we completed a domain restructure. The
+marketing site now lives at maira.pro (WordPress), and the application
+itself has moved to a dedicated subdomain: https://app.maira.pro.
+Please use the URLs below for all further testing. Credentials and the
+reviewer content are unchanged; only the host has moved.
 
-━━━ Updated Reviewer Credentials ━━━
-    Login URL:    https://app.maira.pro/login
-    Email:        maira-zoom-reviewer@maira.pro
-    Password:     ti5CINOq1bH66q13STXK
-    Reviewer guide (EN/JP): https://app.maira.pro/zoom-review
+Updated Reviewer Credentials
+- Login URL: https://app.maira.pro/login
+- Email: maira-zoom-reviewer@maira.pro
+- Password: same as previously provided in this thread
+- Reviewer guide (EN/JP): https://app.maira.pro/zoom-review
 
-━━━ Updated Marketplace URLs ━━━
-    OAuth Redirect URL:
-      https://app.maira.pro/api/integrations/zoom/callback
-    Event Notification Endpoint URL:
-      https://app.maira.pro/api/webhooks/zoom/recording
+Updated Marketplace URLs
+- OAuth Redirect URL: https://app.maira.pro/api/integrations/zoom/callback
+- Event Notification URL: https://app.maira.pro/api/webhooks/zoom/recording
 
-Both URLs are already configured on the Marketplace listing on our
-side. The endpoint responds to Zoom's URL validation challenge
-correctly (returns plainToken / encryptedToken as specified in the
-Zoom docs) and rejects unsigned requests with 401 bad_signature.
+Both URLs are configured on the Marketplace listing on our side. The
+endpoint responds to Zoom's URL validation challenge correctly and
+rejects unsigned requests with 401.
 
-━━━ Test Flow (unchanged) ━━━
-    1. Sign in at https://app.maira.pro/login with the credentials
-       above.
-    2. Go to Settings → Integrations
-       (https://app.maira.pro/agency/settings/integrations)
-    3. Click "Zoom アカウントを連携する" (Connect Zoom Account) and
-       complete OAuth.
-    4. Go to https://app.maira.pro/agency/clients and click any
-       pre-seeded client row (Test Taro / Sample Hanako / Demo Ichiro)
-       to open the client detail page.
-    5. On the detail page, click the top-right "面談を予約" (Schedule
-       Meeting) button, choose "Zoom" as location, fill title and
-       date/time, click Save. Maira calls POST /users/me/meetings and
-       stores the meeting URL in the client's meeting history.
+Test Flow (unchanged)
+1. Sign in at https://app.maira.pro/login with the credentials above.
+2. Go to Settings then Integrations
+   (https://app.maira.pro/agency/settings/integrations).
+3. Click Connect Zoom Account and complete OAuth.
+4. Go to https://app.maira.pro/agency/clients and click any pre-seeded
+   client row (Test Taro, Sample Hanako, or Demo Ichiro).
+5. On the client detail page, click the Schedule Meeting button in the
+   top-right toolbar, choose Zoom as location, fill title and date
+   time, and Save. Myaira calls POST /users/me/meetings and stores the
+   meeting URL in the client's meeting history.
 
 The reviewer organization is pre-seeded with 3 clients, 2 jobs, 3 Zoom
 meeting schedules, 2 referrals, and 1 interview log.
 
-━━━ Regarding the earlier "no 'Schedule Meeting' visible" comment ━━━
-The button lives on the client DETAIL page (step 4/5 above), not on
-the client list or calendar page. This is intentional because every
-Zoom meeting created via Maira is linked to a specific candidate for
-later transcript ingestion. The public reviewer guide at
+Regarding the earlier "no Schedule Meeting visible" comment: the
+button lives on the client DETAIL page (steps 4 and 5), not on the
+client list or calendar page. This is intentional because every Zoom
+meeting created via Myaira is linked to a specific candidate for later
+transcript ingestion. The public reviewer guide at
 https://app.maira.pro/zoom-review documents this explicitly.
 
-TLS 1.2+ is enforced for all app.maira.pro traffic (via Vercel).
+TLS 1.2 or higher is enforced for all app.maira.pro traffic via
+Vercel.
 
 Please retry the OAuth and meeting-creation flow with the updated URL.
-Any issue, contact us at support@maira.pro (24-hour response, JST
-business days).
+For any issue, contact us at support@maira.pro.
 
 Best regards,
-Maira Team (Revorise Inc.)
+Myaira Team (Revorise Inc.)
 ```
+
+## それでも Bad Request になる 場合 の 切り分け
+
+1. **より 短い テスト 返信** を まず 投げて、 フォーム 自体 が 動く か 確認:
+
+   ```
+   Hello, opting out of Beta and proceeding with Published status.
+   Domain moved from www.maira.pro to app.maira.pro. Full details in a
+   follow-up reply. Thanks.
+   ```
+
+   → これ が 通れ ば「本文 の 何か」 が 原因。 通ら なけ れば Zoom フォーム 側
+   の 問題 (Cookie / セッション 期限切れ / ブラウザ 拡張 で リクエスト が
+   壊れて いる 等)。
+
+2. **URL を 減らす**: Zoom の spam filter が URL 数 で 弾く こと が ある。 上記
+   本文 に は URL が 8 本 ある。 半分 に 減らして リトライ。
+
+3. **改行 コード**: エディタ から 貼る と CRLF が 混ざり 400 に なる こと が
+   ある。 プレーン テキスト エディタ (VS Code, TextEdit プレーン モード) で
+   一旦 貼り 直し して から Zoom に 貼る。
+
+4. **ブラウザ を 変える** (Chrome → Safari or Firefox)。 Cookie / セッション
+   衝突 の 切り分け。
 
 ---
 

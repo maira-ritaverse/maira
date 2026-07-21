@@ -116,7 +116,7 @@ export function SignupForm({ invitation, clientInvitation }: Props) {
   const headerSubtitle = invitation
     ? `${invitation.organizationName} に ${roleLabel[invitation.role]} として参加します`
     : clientInvitation
-      ? `${clientInvitation.organizationName} からの招待を受けて Maira を始めます`
+      ? `${clientInvitation.organizationName} からの招待を受けて Myaira を始めます`
       : "あなただけのAI転職エージェント";
 
   return (

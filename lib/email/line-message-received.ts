@@ -7,7 +7,7 @@
  *
  * UX 注意:
  *   ・本文 プレビュー は 短縮済 (40 字程度) を 渡す
- *   ・機密 内容 ベタ書き は 避ける (リンクで Maira 内 で 確認 する 動線)
+ *   ・機密 内容 ベタ書き は 避ける (リンクで Myaira 内 で 確認 する 動線)
  */
 import { sendResendEmail } from "@/lib/email/resend-client";
 
@@ -34,7 +34,7 @@ export async function sendLineMessageEmail(
   const from = process.env.EMAIL_FROM;
   if (!from) return { sent: false, reason: "not_configured" };
 
-  const subject = `【Maira / LINE】${args.senderLabel} さん から 新着`;
+  const subject = `【Myaira / LINE】${args.senderLabel} さん から 新着`;
 
   const text = [
     `${args.organizationName} 様`,
@@ -46,7 +46,7 @@ export async function sendLineMessageEmail(
     `下記 リンク から 返信 できます (30 秒以内 の Reply は 無料)。`,
     args.conversationUrl,
     ``,
-    `Maira 運営チーム`,
+    `Myaira 運営チーム`,
   ].join("\n");
 
   const body = `
@@ -59,7 +59,7 @@ export async function sendLineMessageEmail(
 ${infoCard(infoRow("差出人", args.senderLabel) + infoRow("プレビュー", args.preview))}
 
 <div style="margin:20px 0 8px;text-align:center;">
-  ${primaryButton(args.conversationUrl, "Maira で 返信 する")}
+  ${primaryButton(args.conversationUrl, "Myaira で 返信 する")}
 </div>
 
 <p style="margin:24px 0 0;font-size:12px;color:#888;line-height:1.6;">

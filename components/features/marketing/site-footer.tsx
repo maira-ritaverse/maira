@@ -96,7 +96,7 @@ export function SiteFooter() {
         </div>
       </div>
       <div className="mx-auto mt-8 max-w-6xl border-t border-slate-200 px-5 pt-6 text-center text-xs text-slate-500 lg:px-8">
-        &copy; {year} Maira. All rights reserved.
+        &copy; {year} Myaira. All rights reserved.
       </div>
     </footer>
   );

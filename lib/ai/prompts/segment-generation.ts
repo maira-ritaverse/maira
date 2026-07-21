@@ -52,7 +52,7 @@ export const AISegmentProposalSchema = z.object({
 export type AISegmentProposal = z.infer<typeof AISegmentProposalSchema>;
 
 export const SEGMENT_GENERATION_SYSTEM_PROMPT = `あなた は 転職 エージェント 会社 の 業務 を 支援 する AI アシスタント。
-Maira の 「Segment ビルダー」 (LINE 友だち を 動的 条件 で 絞り 込む 定義) を 設計 する。
+Myaira の 「Segment ビルダー」 (LINE 友だち を 動的 条件 で 絞り 込む 定義) を 設計 する。
 
 admin から 「こういう 求職者 を 絞り 込みたい」 という 自然文 の 意図 を 受け取り、
 SegmentCondition の JSON ツリー を 返す。

@@ -147,13 +147,13 @@ export function PopupChatWindow() {
     <div
       role="dialog"
       aria-modal="false"
-      aria-label="Mairaチャット"
+      aria-label="Myairaチャット"
       className={`bg-background fixed z-50 flex flex-col rounded-t-lg border shadow-2xl sm:rounded-lg ${sizeClasses}`}
     >
       <div className="flex items-center justify-between border-b px-4 py-2">
         <div className="flex items-center gap-2">
           <MessageSquare className="h-4 w-4" />
-          <span className="font-medium">Mairaに相談</span>
+          <span className="font-medium">Myairaに相談</span>
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -177,7 +177,7 @@ export function PopupChatWindow() {
 
       {sessionStatus === "loading" && (
         <div className="flex flex-1 items-center justify-center">
-          <p className="text-muted-foreground text-sm">Mairaを呼び出しています...</p>
+          <p className="text-muted-foreground text-sm">Myairaを呼び出しています...</p>
         </div>
       )}
 
@@ -201,7 +201,7 @@ export function PopupChatWindow() {
 }
 
 /**
- * 新規セッションで Maira から最初の挨拶を引き出すためのダミー入力。
+ * 新規セッションで Myaira から最初の挨拶を引き出すためのダミー入力。
  * API 側でこの内容は DB 保存されない。独立画面 advisor の値と合わせる。
  */
 const SESSION_OPENER = "(セッション開始)";
@@ -257,7 +257,7 @@ function PopupChatActive({
     });
   }, [messages]);
 
-  // 新規セッションのときだけ、Maira から最初の挨拶を引き出す。
+  // 新規セッションのときだけ、Myaira から最初の挨拶を引き出す。
   // openerSentRef で Strict Mode の二重マウントによる重複送信を防ぐ。
   useEffect(() => {
     if (

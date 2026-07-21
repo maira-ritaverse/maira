@@ -8,7 +8,7 @@ import { ClientsTable } from "./clients-table";
  * 運営者用: 各 CA 企業 が 自社 CRM に 登録 した 求職者 (client_records) を
  * 全社 横断 で 一覧。
  *
- * 「/admin/seekers」 は 「Maira に 直接 登録 した 求職者 本人」 の 一覧、
+ * 「/admin/seekers」 は 「Myaira に 直接 登録 した 求職者 本人」 の 一覧、
  * こちら は 「CA が 案件 管理 の 為 に 登録 して いる 求職者」 の 一覧 で、
  * 別 の 業務目的。 リンク 済 (link_status='linked') の レコード は 両方 に 出る。
  *

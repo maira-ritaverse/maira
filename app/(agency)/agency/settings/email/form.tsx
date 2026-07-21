@@ -72,7 +72,7 @@ export function OrgEmailSettingsForm({ initialEmailFrom, initialHasKey }: Props)
   async function clearAll() {
     if (
       !window.confirm(
-        "メール送信設定をクリアします。メール Flow は Maira の共通環境変数にフォールバックします。よろしいですか?",
+        "メール送信設定をクリアします。メール Flow は Myaira の共通環境変数にフォールバックします。よろしいですか?",
       )
     ) {
       return;

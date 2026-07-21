@@ -3,7 +3,7 @@
  *
  * 公式: https://developers.line.biz/ja/reference/liff/
  *
- * 全 LIFF 仕様 を 型化 する のは 重い ので、 Maira で 使う 関数 だけ を 定義。
+ * 全 LIFF 仕様 を 型化 する のは 重い ので、 Myaira で 使う 関数 だけ を 定義。
  * window.liff グローバル を 複数 コンポーネント で 共有する ため、
  * 型 宣言 を 1 箇所 に 集約 (重複 declare global 警告 を 防ぐ)。
  */

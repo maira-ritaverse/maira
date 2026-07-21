@@ -34,8 +34,8 @@
 `/agency/line/settings` で:
 
 1. LINE Developers Console で Messaging API チャネルを作成
-2. Channel ID / Channel Secret / Channel Access Token を Maira に保存
-3. Maira が生成した Webhook URL を LINE Developers に登録
+2. Channel ID / Channel Secret / Channel Access Token を Myaira に保存
+3. Myaira が生成した Webhook URL を LINE Developers に登録
 4. Webhook 検証(「Verify」ボタン)で疎通確認
 5. 友達追加時の自動メッセージ・Rich Menu 等を設定
 
@@ -232,7 +232,7 @@ admin のみアクセス可能。
 ### Daily ダイジェストが来ない
 
 1. 個人設定 → 通知設定 で email_enabled + daily_digest が ON か確認
-2. メール受信フォルダで「【Maira 朝のダイジェスト】」を検索
+2. メール受信フォルダで「【Myaira 朝のダイジェスト】」を検索
 3. 集計が全件 0 の日は「平和な朝」として配信されません(仕様)
 
 ## 運用 Tips

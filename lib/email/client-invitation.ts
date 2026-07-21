@@ -49,14 +49,14 @@ export async function sendClientInvitationEmail(
     ? `${args.organizationName}(担当:${args.advisorName})`
     : args.organizationName;
 
-  const subject = `【Maira】${args.organizationName} からの招待が届いています`;
+  const subject = `【Myaira】${args.organizationName} からの招待が届いています`;
 
   const text = [
     `${seekerLabel} 様`,
     ``,
-    `${fromLabel} より、転職活動の伴走サービス Maira への招待が届いています。`,
+    `${fromLabel} より、転職活動の伴走サービス Myaira への招待が届いています。`,
     ``,
-    `Maira は、応募管理 / 履歴書作成 / 面接練習 / キャリア棚卸し を AI が支援する`,
+    `Myaira は、応募管理 / 履歴書作成 / 面接練習 / キャリア棚卸し を AI が支援する`,
     `転職活動者向けの Web アプリです。担当エージェントと書類や進捗を安全に共有できます。`,
     ``,
     `下記のリンクから アカウント作成(パスワード設定)を行ってください。`,
@@ -72,11 +72,11 @@ export async function sendClientInvitationEmail(
 <h2 style="margin:0 0 12px;font-size:20px;line-height:1.4;">${escapeHtml(fromLabel)} からの招待</h2>
 <p style="margin:0 0 16px;color:#555;line-height:1.6;font-size:14px;">
   ${escapeHtml(seekerLabel)} 様<br>
-  転職活動の伴走サービス <strong>Maira</strong> への招待が届いています。
+  転職活動の伴走サービス <strong>Myaira</strong> への招待が届いています。
 </p>
 
 <p style="margin:0 0 16px;color:#555;line-height:1.6;font-size:13px;">
-  Maira は、応募管理 / 履歴書作成 / 面接練習 / キャリア棚卸し を AI が支援する
+  Myaira は、応募管理 / 履歴書作成 / 面接練習 / キャリア棚卸し を AI が支援する
   Web アプリです。担当エージェントと書類や進捗を安全に共有できます。
 </p>
 
@@ -89,9 +89,9 @@ ${infoCard(
 <div style="margin:20px 0 8px;padding:16px;background:#f6f7f9;border-radius:8px;">
   <p style="margin:0 0 6px;font-weight:600;font-size:14px;">アカウントを作成する</p>
   <p style="margin:0 0 12px;font-size:13px;color:#555;line-height:1.6;">
-    下記のボタンから パスワードを設定して Maira のアカウントを作成してください。
+    下記のボタンから パスワードを設定して Myaira のアカウントを作成してください。
   </p>
-  ${primaryButton(args.inviteUrl, "Maira のアカウントを作成する")}
+  ${primaryButton(args.inviteUrl, "Myaira のアカウントを作成する")}
 </div>
 
 <p style="margin:20px 0 0;font-size:12px;color:#888;line-height:1.6;">

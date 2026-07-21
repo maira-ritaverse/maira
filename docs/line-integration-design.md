@@ -3,8 +3,8 @@
 ステータス:**仕様 確定、 実装着手 待ち**
 最終更新:2026-06-20
 
-エージェント 企業 の LINE 公式アカウント と Maira を 連携 し、
-求職者 ↔ エージェント の LINE やり取り を Maira UI で 完結 + 求人共有 / Zoom 案内 を LINE で 行う。
+エージェント 企業 の LINE 公式アカウント と Myaira を 連携 し、
+求職者 ↔ エージェント の LINE やり取り を Myaira UI で 完結 + 求人共有 / Zoom 案内 を LINE で 行う。
 
 ---
 
@@ -17,7 +17,7 @@
 | **求人紹介**             | **LIFF で LINE 内 完結**(求人詳細 / 応募ボタン)                                                                            |
 | **LINE OA**              | 既存運用前提(設定取込 のみ サポート、 新規開設 ガイド は 後回し)                                                           |
 | **暗号化**               | LINE メッセージ も `encrypted_content` (AES-256-GCM v2 形式)で 保存。 添付バイナリ は Supabase Storage + メタデータ 暗号化 |
-| **通知**                 | メール + Maira アプリ内通知 + Slack Webhook の **3 つ すべて 切替 可**                                                     |
+| **通知**                 | メール + Myaira アプリ内通知 + Slack Webhook の **3 つ すべて 切替 可**                                                    |
 | **Channel Access Token** | 既存 Zoom / Google 連携 と 同じ 暗号化 レベル(field-encryption)                                                            |
 
 ---
@@ -34,12 +34,12 @@
 ┌────────────┴──────────────────────────────────────────┐
 │ LINE Platform                                          │
 │   ・Channel = エージェント企業の 公式アカウント            │
-│   ・Channel Access Token (長期) を Maira が 預かる       │
+│   ・Channel Access Token (長期) を Myaira が 預かる       │
 │   ・Webhook URL = https://app.maira.pro/api/webhooks/line/X │
 └────────────┬──────────────────────────────────────────┘
              ↕ Webhook (受信) + REST API (送信)
 ┌────────────┴──────────────────────────────────────────┐
-│ Maira (Next.js + Supabase)                             │
+│ Myaira (Next.js + Supabase)                             │
 │   ・line_channels (org ごとの 設定)                       │
 │   ・line_user_links (LINE userId ↔ client_record)        │
 │   ・line_messages (encrypted_content)                    │
@@ -48,7 +48,7 @@
 └────────────┬──────────────────────────────────────────┘
              ↕ UI
 ┌────────────┴──────────────────────────────────────────┐
-│ エージェント (ブラウザ / Maira UI)                       │
+│ エージェント (ブラウザ / Myaira UI)                       │
 │   ・LINE風 チャット (/agency/line)                       │
 │   ・求人 / 日程 を Flex で 送信                            │
 │   ・一斉配信 / タグ 管理                                  │
@@ -72,7 +72,7 @@ create table public.line_channels (
   line_channel_access_token_encrypted text not null,  -- (機密) 長期トークン
   line_bot_user_id text,                        -- @xxxxx LINE Bot の userId
 
-  -- Webhook 設定 (LINE 側 が Maira に 向ける URL)
+  -- Webhook 設定 (LINE 側 が Myaira に 向ける URL)
   webhook_token text not null unique,           -- URL 含み トークン (推測困難)
 
   -- LIFF (Phase 4)
@@ -230,7 +230,7 @@ POST /api/webhooks/line/[webhookToken]
   - `postback`:ボタンタップ → Flex の data 解釈 → 日程確定 / 応募 等
   - `accountLink`:LINE Login 連携 (Phase 4)
 
-### 4-2. エージェント 側 (Maira UI 経由)
+### 4-2. エージェント 側 (Myaira UI 経由)
 
 | エンドポイント                                             | 役割                                       |
 | ---------------------------------------------------------- | ------------------------------------------ |
@@ -299,7 +299,7 @@ POST https://api.line.me/v2/bot/message/multicast
 { to: [lineUserId, ...], messages: [...] }
 ```
 
-- Maira は `replyToken_expires_at` を 見て、 30 秒以内 なら Reply、 過ぎていたら Push に 自動切替
+- Myaira は `replyToken_expires_at` を 見て、 30 秒以内 なら Reply、 過ぎていたら Push に 自動切替
 - UI で 「Reply 中 / Push 切替済」を 表示 (コスト 見える化)
 
 ### 6-2. Flex Message (求人 紹介 例)
@@ -384,7 +384,7 @@ POST https://api.line.me/v2/bot/message/multicast
 
 ### 6-4. Rich Menu 動的 切替
 
-- 「未連携 求職者」用 メニュー:[Maira と 連携する]
+- 「未連携 求職者」用 メニュー:[Myaira と 連携する]
 - 「連携済」用 メニュー:[求人 を見る] [面談予約] [問い合わせ]
 - LINE API: `POST /v2/bot/user/{userId}/richmenu/{richMenuId}`
 
@@ -418,8 +418,8 @@ function verifyLineSignature(body: string, signature: string, channelSecret: str
 
 ### 7-3. プライバシー ポリシー 改定
 
-- 「LINE 公式アカウント 連携 機能 を 利用 した 場合、 やり取り を Maira サーバ上 で 暗号化保存 する」を 明記
-- 求職者 が LINE で 初回 メッセージ 送信時 に LIFF で 「Maira での 保管 同意」を 取る (Phase 4)
+- 「LINE 公式アカウント 連携 機能 を 利用 した 場合、 やり取り を Myaira サーバ上 で 暗号化保存 する」を 明記
+- 求職者 が LINE で 初回 メッセージ 送信時 に LIFF で 「Myaira での 保管 同意」を 取る (Phase 4)
 
 ---
 
@@ -427,7 +427,7 @@ function verifyLineSignature(body: string, signature: string, channelSecret: str
 
 LINE は 「30 秒以内 Reply は 無料、 それ以後 Push は 課金」。
 
-### Maira UI 工夫:
+### Myaira UI 工夫:
 
 - 受信 メッセージ に **「Reply 残 25 秒」**バナー
 - エージェント が ブラウザ で 開いた 時 サウンド通知 + バッジ
@@ -442,8 +442,8 @@ LINE は 「30 秒以内 Reply は 無料、 それ以後 Push は 課金」。
 
 新規 LINE メッセージ 受信時、 org の 通知設定 に 応じて:
 
-1. **メール**:Resend で 送信 (本文 抜粋 + Maira リンク)
-2. **Maira アプリ内通知**:既存 `fireSeekerNotification` 同等 を agency 側 にも 用意
+1. **メール**:Resend で 送信 (本文 抜粋 + Myaira リンク)
+2. **Myaira アプリ内通知**:既存 `fireSeekerNotification` 同等 を agency 側 にも 用意
 3. **Slack Webhook**:既存 org.slack_webhook_url 流用
 
 各 メンバー の `organization_members.notification_prefs` で 個別 on/off 可。
@@ -507,7 +507,7 @@ LINE は 「30 秒以内 Reply は 無料、 それ以後 Push は 課金」。
 
 ## 12. 未決 / 後日 確認
 
-1. LIFF アプリ の 「Maira 提供」 vs 「各エージェント が 自分で 作る」 → 後者 だと 設定 重い、 前者 だと 信頼性高い
+1. LIFF アプリ の 「Myaira 提供」 vs 「各エージェント が 自分で 作る」 → 後者 だと 設定 重い、 前者 だと 信頼性高い
 2. LINE 公式アカウント の 「認証済アカウント」 でない と 一斉配信 数 制限 が 厳しい
-3. 求職者 が 複数 エージェント の LINE と 友達 の 場合 の Maira 側 表示 (現状 各 org で 独立)
+3. 求職者 が 複数 エージェント の LINE と 友達 の 場合 の Myaira 側 表示 (現状 各 org で 独立)
 4. 規約 / 同意取得 の UI フロー (プライバシーポリシー 改定 と 連動)

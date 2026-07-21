@@ -4,7 +4,7 @@ import type { NextConfig } from "next";
 /**
  * セキュリティ ヘッダ (セキュリティ 監査 H1)。 全 レスポンス に 付与。
  *
- * ・X-Frame-Options: DENY — clickjacking 対策。 Maira は iframe 埋込 を 想定 しない
+ * ・X-Frame-Options: DENY — clickjacking 対策。 Myaira は iframe 埋込 を 想定 しない
  * ・X-Content-Type-Options: nosniff — MIME sniffing 対策 (アップロード PDF/画像 の
  *   悪意 の あるコンテンツ が 実行 されない よう に)
  * ・Referrer-Policy: strict-origin-when-cross-origin — 外部 遷移 時 に URL パス

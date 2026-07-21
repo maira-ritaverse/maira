@@ -31,7 +31,7 @@ describe("buildIcsFeed", () => {
     const ics = buildIcsFeed({ meetings: [], tasks: [] }, now);
     expect(ics).toContain("BEGIN:VCALENDAR");
     expect(ics).toContain("END:VCALENDAR");
-    expect(ics).toContain("X-WR-CALNAME:Maira");
+    expect(ics).toContain("X-WR-CALNAME:Myaira");
     expect(ics).not.toContain("BEGIN:VEVENT");
   });
 
@@ -66,8 +66,8 @@ describe("buildIcsFeed", () => {
     expect(ics).toContain("METHOD:PUBLISH");
   });
 
-  it("ヘッダに X-WR-CALNAME:Maira を含み、Google で「Maira」名で表示される", () => {
+  it("ヘッダに X-WR-CALNAME:Myaira を含み、Google で「Myaira」名で表示される", () => {
     const ics = buildIcsFeed({ meetings: [], tasks: [] }, now);
-    expect(ics).toContain("X-WR-CALNAME:Maira");
+    expect(ics).toContain("X-WR-CALNAME:Myaira");
   });
 });

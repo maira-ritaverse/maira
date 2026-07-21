@@ -72,19 +72,19 @@ describe("educationItemSchema", () => {
     );
   });
 
-  it("description は 200 文字までは OK / 201 で失敗", () => {
+  it("description は 500 文字までは OK / 501 で失敗(退職理由等の自由記述を許容)", () => {
     expect(
       educationItemSchema.safeParse({
         year: null,
         month: null,
-        description: "a".repeat(200),
+        description: "a".repeat(500),
       }).success,
     ).toBe(true);
     expect(
       educationItemSchema.safeParse({
         year: null,
         month: null,
-        description: "a".repeat(201),
+        description: "a".repeat(501),
       }).success,
     ).toBe(false);
   });

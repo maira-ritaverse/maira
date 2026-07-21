@@ -28,7 +28,7 @@ export default function AdminSeekersPage() {
       <div>
         <h1 className="text-3xl font-bold">求職者一覧</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Maira に登録している求職者 (account_type='seeker') の稼働状況。履歴書 / 応募 /
+          Myaira に登録している求職者 (account_type='seeker') の稼働状況。履歴書 / 応募 /
           AI会話数と、連携している CA 社数から一目で稼働レベルが分かるように並べます。
         </p>
       </div>

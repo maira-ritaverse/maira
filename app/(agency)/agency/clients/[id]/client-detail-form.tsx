@@ -238,7 +238,7 @@ export function ClientDetailForm({ client, seekerPhoto }: Props) {
           <Input id="email" type="email" {...register("email")} disabled={isPending} />
           {errors.email && <p className="text-sm text-red-600">{errors.email.message}</p>}
           <p className="text-muted-foreground text-xs">
-            任意入力。登録しておくと招待メール送信や、求職者が同じメールで Maira に
+            任意入力。登録しておくと招待メール送信や、求職者が同じメールで Myaira に
             登録した際の自動連携に使えます。未入力にしたい場合は空欄で保存してください。
           </p>
         </div>
@@ -332,7 +332,7 @@ export function ClientDetailForm({ client, seekerPhoto }: Props) {
           <p className="text-muted-foreground text-xs">
             推薦コメント・他社利用状況・連絡方法希望は AES-256-GCM で暗号化されて保存されます。
             <br />
-            DB 直接閲覧では復号できず、Maira の管理画面からのみ可読です。
+            DB 直接閲覧では復号できず、Myaira の管理画面からのみ可読です。
           </p>
 
           <div className="space-y-2">

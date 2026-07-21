@@ -39,12 +39,12 @@ export async function sendTrialEndingEmail(
       ? "明日 で 無料期間 が 終了 します"
       : `あと ${args.daysRemaining} 日 で 無料期間 が 終了 します`;
 
-  const subject = `【Maira】${args.organizationName} 様 — ${headline}`;
+  const subject = `【Myaira】${args.organizationName} 様 — ${headline}`;
 
   const text = [
     `${args.organizationName} 様`,
     ``,
-    `Maira を ご利用 いただき ありがとう ございます。`,
+    `Myaira を ご利用 いただき ありがとう ございます。`,
     ``,
     `${headline} (終了日:${args.trialEndsOn})。`,
     ``,
@@ -60,14 +60,14 @@ export async function sendTrialEndingEmail(
     `※ クレジットカード 登録 済みの 場合、 翌日 から 自動 課金 開始 されます。`,
     `  解約 を ご希望 の 場合 は 上記 ページ から 期末解約 を ご選択 ください。`,
     ``,
-    `Maira 運営チーム`,
+    `Myaira 運営チーム`,
   ].join("\n");
 
   const body = `
 <h2 style="margin:0 0 12px;font-size:20px;line-height:1.4;">${escapeHtml(headline)}</h2>
 <p style="margin:0 0 16px;color:#555;line-height:1.6;font-size:14px;">
   ${escapeHtml(args.organizationName)} 様<br><br>
-  Maira を ご利用 いただき ありがとう ございます。<br>
+  Myaira を ご利用 いただき ありがとう ございます。<br>
   ${escapeHtml(headline)}。 トライアル 期間中 は すべての 機能 (録音 / Pro / Premium) を お試し いただけます。
 </p>
 

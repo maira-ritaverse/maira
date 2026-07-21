@@ -22,7 +22,7 @@ export default function NewOrganizationPage() {
         </Link>
         <h1 className="mt-2 text-2xl font-bold">エージェント企業を新規発行</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          会社名と管理者のメールアドレスを入力すると、Maira から招待メールが送られます。
+          会社名と管理者のメールアドレスを入力すると、Myaira から招待メールが送られます。
           受信者はメール内のリンクから自分でパスワードを設定し、初回ログインを完了します。
         </p>
       </div>

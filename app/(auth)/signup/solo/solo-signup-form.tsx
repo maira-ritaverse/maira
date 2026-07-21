@@ -155,14 +155,14 @@ export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
         <div className="flex flex-col items-center gap-3 text-center">
           <Image
             src="/icon-192.png"
-            alt="Maira"
+            alt="Myaira"
             width={64}
             height={64}
             priority
             className="size-16"
           />
           <div>
-            <h1 className="text-2xl font-bold">Maira Solo プランに登録</h1>
+            <h1 className="text-2xl font-bold">Myaira Solo プランに登録</h1>
             <p className="text-muted-foreground mt-1 text-xs">
               14 日間無料でお試しいただけます (期間中の解約で課金なし)
             </p>

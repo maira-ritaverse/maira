@@ -11,7 +11,7 @@
  * 設計 上 の 注意:
  *   ・以前 は Supabase Auth の linkIdentity を 呼んで いた が、 Supabase の
  *     enable_manual_linking が false の ため 「Manual linking is disabled」 で
- *     失敗 して いた。 そもそも Maira ログイン と Google identity を 紐づける
+ *     失敗 して いた。 そもそも Myaira ログイン と Google identity を 紐づける
  *     必然性 は なく、 業務 用 OAuth トークン だけ あれば 連携 機能 は 動く ため、
  *     サーバ側 connect → callback フロー に 一本化 した。
  *   ・「Google でも ログイン できる」 機能 は この ボタン から は 提供 しない

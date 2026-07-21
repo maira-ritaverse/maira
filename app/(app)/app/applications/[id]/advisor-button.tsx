@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 
 /**
- * 「Mairaに相談」ボタン
+ * 「Myairaに相談」ボタン
  *
  * Phase 3 以降:押下でポップアップチャットを開く。
  * セッションの取得・作成・履歴ロードは PopupChatWindow 側が担う(ボタンは起動するだけ)。
@@ -43,7 +43,7 @@ export function AdvisorButton({ applicationId, hasProfile }: Props) {
       )}
       <Button onClick={handleStart} disabled={!hasProfile} className="w-full">
         <MessageSquare className="mr-2 h-4 w-4" />
-        Mairaに相談する
+        Myairaに相談する
       </Button>
     </div>
   );

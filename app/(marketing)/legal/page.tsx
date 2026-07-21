@@ -4,7 +4,7 @@ import Link from "next/link";
  * 特定商取引法 に基づく 表記
  *
  * 電気通信利用役務 (SaaS / アプリ内課金) 提供者として 必要 な 表示項目。
- * 経産省 ガイドライン に 沿った 標準項目 + Maira 個別事項を 掲載。
+ * 経産省 ガイドライン に 沿った 標準項目 + Myaira 個別事項を 掲載。
  *
  * 法改正 / 屋号変更時は 本ページ を 更新する だけで 反映 される。
  *
@@ -12,16 +12,16 @@ import Link from "next/link";
  *   https://www.no-trouble.caa.go.jp/what/mailorder/
  */
 export const metadata = {
-  title: "特定商取引法に基づく表記 | Maira",
+  title: "特定商取引法に基づく表記 | Myaira",
   description:
-    "Maira(マイラ)を 運営する 株式会社Revorise の 特定商取引法 に基づく表記。販売事業者名、所在地、連絡先、販売価格、支払方法、引渡時期、返品・解約条件を 明示します。",
+    "Myaira(マイラ)を 運営する 株式会社Revorise の 特定商取引法 に基づく表記。販売事業者名、所在地、連絡先、販売価格、支払方法、引渡時期、返品・解約条件を 明示します。",
 };
 
 const COMPANY = "株式会社Revorise";
 const REPRESENTATIVE = "久保 椋矢";
 const ADDRESS = "大阪府大阪市北区豊崎 1-8-1";
 const CONTACT_EMAIL = "maira-info@revorise.jp";
-const SERVICE_NAME = "Maira(マイラ)";
+const SERVICE_NAME = "Myaira(マイラ)";
 
 export default function LegalPage() {
   return (

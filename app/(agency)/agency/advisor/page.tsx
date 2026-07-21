@@ -58,7 +58,7 @@ export default async function AgencyAdvisorIndexPage() {
         </Link>
       </div>
       <p className="text-muted-foreground text-sm">
-        Maira アプリ 内 の 求職者 と の DM 一覧。 LINE 連携 が なく ても やり取り できます。
+        Myaira アプリ 内 の 求職者 と の DM 一覧。 LINE 連携 が なく ても やり取り できます。
       </p>
 
       {threads.length === 0 ? (

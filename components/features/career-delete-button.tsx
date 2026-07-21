@@ -14,7 +14,7 @@ import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
  * 影響:
  * - 削除すると同じ行内の diagnosis(キャリア診断結果)も同時に消える。
  * - 履歴書・職務経歴書・作成済み書類は独立テーブルのため残るが、AI 下書きや
- *   「Mairaに相談」は棚卸しが無いと使えなくなる。
+ *   「Myairaに相談」は棚卸しが無いと使えなくなる。
  *
  * 設計:
  * - DELETE /api/career/profile を呼ぶ。認可はサーバ側 + RLS で本人限定。
@@ -39,7 +39,7 @@ export function CareerDeleteButton() {
         <>
           削除すると、棚卸し結果に加えてキャリア診断の結果も同時に消えます。
           履歴書・職務経歴書・作成済みの書類は残りますが、AI
-          による下書き生成と「Mairaに相談」は、棚卸しをやり直すまで使えなくなります。
+          による下書き生成と「Myairaに相談」は、棚卸しをやり直すまで使えなくなります。
           この操作は元に戻せません。
         </>
       }

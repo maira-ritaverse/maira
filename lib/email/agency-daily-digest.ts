@@ -46,14 +46,14 @@ export async function sendDailyDigestEmail(
   if (summary.stalledReferralCount > 0)
     subjectParts.push(`停止 ${summary.stalledReferralCount} 件`);
   const headline = subjectParts.length > 0 ? subjectParts.join(" / ") : "本日 の 注意 事項";
-  const subject = `【Maira 朝の ダイジェスト】${headline}`;
+  const subject = `【Myaira 朝の ダイジェスト】${headline}`;
 
   const greeting = memberDisplayName ? `${memberDisplayName} 様` : `${organizationName} 様`;
 
   const text = [
     `${greeting}`,
     ``,
-    `${todayLabel} の Maira ダイジェスト です。`,
+    `${todayLabel} の Myaira ダイジェスト です。`,
     ``,
     `■ 自分 宛 の タスク`,
     `  今日 期限: ${summary.todayTaskCount} 件`,
@@ -67,9 +67,9 @@ export async function sendDailyDigestEmail(
     args.dashboardUrl,
     ``,
     `※ 件数 が 全て 0 の 朝 は 本 メール は 配信 されません。`,
-    `※ 配信 停止 は Maira → 個人 設定 → 通知設定 で 切替 でき ます。`,
+    `※ 配信 停止 は Myaira → 個人 設定 → 通知設定 で 切替 でき ます。`,
     ``,
-    `Maira 運営チーム`,
+    `Myaira 運営チーム`,
   ].join("\n");
 
   const body = `
@@ -97,7 +97,7 @@ ${infoCard(
 
 <p style="margin:24px 0 0;font-size:12px;color:#888;line-height:1.6;">
   ※ 件数 が 全て 0 の 朝 は 本 メール は 配信 されません。<br>
-  ※ 配信 停止 は Maira → 個人 設定 → 通知設定 で 切替 でき ます。
+  ※ 配信 停止 は Myaira → 個人 設定 → 通知設定 で 切替 でき ます。
 </p>
 `.trim();
 

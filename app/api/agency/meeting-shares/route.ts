@@ -9,7 +9,7 @@
  *
  * 要件:
  *   ・recording は host_user_id 一致(自分が予約した面談の録画のみ)
- *   ・meeting_schedule に seeker_user_id があること(Maira 未登録の求職者には共有不可)
+ *   ・meeting_schedule に seeker_user_id があること(Myaira 未登録の求職者には共有不可)
  *   ・recording.status === 'extracted'(抽出済の行のみ)
  *   ・recording に 1 件しか share は作れない(unique 制約)
  *
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: "seeker_not_registered",
-        message: "求職者が Maira アカウントを持っていないため共有できません",
+        message: "求職者が Myaira アカウントを持っていないため共有できません",
       },
       { status: 409 },
     );
@@ -140,7 +140,7 @@ export async function POST(request: Request) {
       meetingTitle: ms.title,
       startsAtIso: new Date().toISOString(),
       joinUrl: "",
-      organizationName: "Maira",
+      organizationName: "Myaira",
     },
   });
 

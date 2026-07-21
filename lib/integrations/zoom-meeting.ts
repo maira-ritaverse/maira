@@ -4,9 +4,9 @@
  * 個人 OAuth トークンを使って、認可ユーザ本人の Zoom アカウントに対し
  * 会議を作成 / 取得 / 更新 / 削除するための薄いラッパ。
  *
- * Maira 側の運用ルール:
+ * Myaira 側の運用ルール:
  *   - settings.host_video = true / participant_video = true で開始時カメラ ON
- *   - settings.waiting_room = true(求職者に Maira ブランドの待機室を見せる)
+ *   - settings.waiting_room = true(求職者に Myaira ブランドの待機室を見せる)
  *   - settings.auto_recording = "cloud"(録画を自動で開始、Webhook で取込)
  *   - settings.mute_upon_entry = true(入室時ミュート、エチケット)
  *   - timezone = "Asia/Tokyo" を既定
@@ -71,7 +71,7 @@ export function buildCreateMeetingBody(input: CreateZoomMeetingInput): Record<st
       participant_video: true,
       waiting_room: true,
       mute_upon_entry: true,
-      // クラウド録画を自動開始 → Webhook で Maira に取込
+      // クラウド録画を自動開始 → Webhook で Myaira に取込
       auto_recording: "cloud",
       // 招待を受け取った Zoom ユーザがホストの認可なしで入室できる(求職者は Zoom 未登録のことも多い)
       join_before_host: false,
@@ -144,7 +144,7 @@ export function getZoomMeeting(
 
 /**
  * 会議の日時 / 議題を更新する。
- * Zoom 側は変更可能フィールドが多いが、Maira では topic / start_time / duration / agenda のみ
+ * Zoom 側は変更可能フィールドが多いが、Myaira では topic / start_time / duration / agenda のみ
  * 露出させる(他は UI から触らせない)。
  */
 export async function updateZoomMeeting(

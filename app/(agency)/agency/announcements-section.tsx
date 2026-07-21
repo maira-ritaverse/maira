@@ -12,7 +12,7 @@ import {
 import { apiFetch, getErrorMessage } from "@/lib/api/client-fetch";
 
 /**
- * エージェントダッシュボード用「Maira からのお知らせ」セクション。
+ * エージェントダッシュボード用「Myaira からのお知らせ」セクション。
  *
  * - マウント時に GET /api/announcements で一覧取得
  * - pinned が先頭、その後 publishedAt 降順

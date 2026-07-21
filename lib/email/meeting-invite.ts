@@ -160,7 +160,7 @@ function buildBody(args: SendMeetingInviteArgs): string {
   lines.push(`${args.organizationName}`);
   lines.push("");
   lines.push("──────────────");
-  lines.push("このメールは Maira から自動送信されています。");
+  lines.push("このメールは Myaira から自動送信されています。");
 
   return lines.join("\n");
 }

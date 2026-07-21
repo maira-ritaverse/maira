@@ -14,7 +14,7 @@ type Props = {
   initialMessages: MessageForChat[];
 };
 
-/** 新規セッションで Maira の挨拶を引き出すためのダミー入力(API側でもDB保存しない) */
+/** 新規セッションで Myaira の挨拶を引き出すためのダミー入力(API側でもDB保存しない) */
 const SESSION_OPENER = "(セッション開始)";
 
 /**
@@ -65,7 +65,7 @@ export function CareerChatForm({ conversationId, initialMessages }: Props) {
     });
   }, [messages]);
 
-  // 新規セッション時、初期メッセージがなければ Maira から話しかけるよう促す
+  // 新規セッション時、初期メッセージがなければ Myaira から話しかけるよう促す
   // openerSentRef で二重送信を防止(React Strict Mode の二重マウント対策)
   useEffect(() => {
     if (
@@ -127,7 +127,7 @@ export function CareerChatForm({ conversationId, initialMessages }: Props) {
               }`}
             >
               <p className="mb-1 text-xs opacity-70">
-                {message.role === "user" ? "あなた" : "Maira"}
+                {message.role === "user" ? "あなた" : "Myaira"}
               </p>
               {message.parts.map((part, index) => {
                 if (part.type === "text") {

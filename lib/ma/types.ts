@@ -154,7 +154,7 @@ export type RevokeConsentRequest = z.infer<typeof revokeConsentSchema>;
  * テンプレート内で利用可能な変数定義
  *
  * EMPRO の観測結果(candidate_* / agent_* / organization_name)に、
- * Maira の業務文脈で必須となる紹介先企業・求人・面談日の変数を追加。
+ * Myaira の業務文脈で必須となる紹介先企業・求人・面談日の変数を追加。
  * cron 側の送信処理(Phase C-2 Step 3)で同じキーを使って実値展開する。
  *
  * UI(右パネル)では category でグルーピングして表示。
@@ -278,7 +278,7 @@ export type UpsertTemplateRequest = z.infer<typeof upsertTemplateSchema>;
 /**
  * 「Edge Function 側で判定ロジックが実装済み」のシナリオキー
  *
- * 現状の Maira の DB スキーマ(client_records / client_interactions のみ)で
+ * 現状の Myaira の DB スキーマ(client_records / client_interactions のみ)で
  * 動作するシナリオに限定する。残りは将来テーブル追加(interviews / job_wants
  * / candidate_birthdays)後に有効化する。
  *

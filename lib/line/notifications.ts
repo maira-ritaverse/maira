@@ -89,7 +89,7 @@ async function fireSlackSafe(
     // 相談 内容 冒頭 が 外部 SaaS に 蓄積 する 恐れ が あった。 ADR 0006 の 「本人
     // 同意 済 の 範囲」 外 で 個人 情報 保護 法 上 の リスク に なる ため、 Slack
     // 側 には 本文 抜粋 を 一切 含めず 「新着 メッセージ が 届きました」 のみ を 送信 する。
-    // メッセージ 本文 は Maira 内 の UI で 復号 して 確認 して もらう 前提。
+    // メッセージ 本文 は Myaira 内 の UI で 復号 して 確認 して もらう 前提。
     const text = `:speech_balloon: *${senderLabel}* さん から LINE 新着 メッセージ が 届きました (${args.messageType})\n${buildAbsoluteUrl(`/agency/line/${encodeURIComponent(args.lineUserId)}`)}`;
     const result = await sendSlackMessage({ webhookUrl: slackUrl, text });
     if (!result.sent && result.reason === "failed") {

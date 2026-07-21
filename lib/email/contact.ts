@@ -34,12 +34,12 @@ export async function sendContactNotificationEmail(
     return { sent: false, reason: "not_configured" };
   }
 
-  const subject = `【Maira】お問い合わせ:${args.company} ${args.name}`;
+  const subject = `【Myaira】お問い合わせ:${args.company} ${args.name}`;
 
   // プレーンテキスト本文。ユーザー入力 は そのまま 埋め込んで OK
   // (HTML と して 解釈 されない ので XSS の リスク なし)。
   const text =
-    `Maira LP の問い合わせフォームから新しい問い合わせが届きました。\n` +
+    `Myaira LP の問い合わせフォームから新しい問い合わせが届きました。\n` +
     `\n` +
     `---\n` +
     `会社名:${args.company}\n` +

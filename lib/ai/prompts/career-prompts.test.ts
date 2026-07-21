@@ -16,9 +16,9 @@ describe("CAREER_INVENTORY_SYSTEM_PROMPT(対話プロンプト)", () => {
     expect(CAREER_INVENTORY_SYSTEM_PROMPT.length).toBeGreaterThan(0);
   });
 
-  it("「Maira」または「マイラ」を名乗る指示が含まれる", () => {
+  it("「Myaira」または「マイラ」を名乗る指示が含まれる", () => {
     expect(
-      CAREER_INVENTORY_SYSTEM_PROMPT.includes("Maira") ||
+      CAREER_INVENTORY_SYSTEM_PROMPT.includes("Myaira") ||
         CAREER_INVENTORY_SYSTEM_PROMPT.includes("マイラ"),
     ).toBe(true);
   });

@@ -722,7 +722,7 @@ Phase 0 は「新体系を導入するが稼働はさせない」ので、旧 cr
 
 ```
 1. supabase projects list → maira-dev がリンク中か確認
-2. cd /Users/arakaki/Maira
+2. cd /Users/arakaki/Myaira
 3. supabase db push  # migration 2 本を適用
 4. types/db.ts の再生成(必要なら supabase gen types typescript)
 5. pnpm test  # 既存テストが通ることを確認

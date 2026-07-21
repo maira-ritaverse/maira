@@ -31,10 +31,10 @@ export async function sendPasswordResetEmail(
   const from = process.env.EMAIL_FROM;
   if (!from) return { sent: false, reason: "not_configured" };
 
-  const subject = "【Maira】パスワードの再設定リンクをお送りします";
+  const subject = "【Myaira】パスワードの再設定リンクをお送りします";
 
   const text = [
-    `Maira のパスワード再設定リクエストを受け付けました。`,
+    `Myaira のパスワード再設定リクエストを受け付けました。`,
     ``,
     `下記のリンクから新しいパスワードを設定してください。`,
     args.actionLink,
@@ -46,7 +46,7 @@ export async function sendPasswordResetEmail(
   const body = `
 <h2 style="margin:0 0 12px;font-size:20px;line-height:1.4;">パスワードの再設定</h2>
 <p style="margin:0 0 16px;color:#555;line-height:1.6;font-size:14px;">
-  Maira のパスワード再設定リクエストを受け付けました。<br>
+  Myaira のパスワード再設定リクエストを受け付けました。<br>
   下記のボタンから新しいパスワードを設定してください。
 </p>
 

@@ -10,7 +10,7 @@ import { LineUsersClient } from "./line-users-client";
 /**
  * /agency/line/users
  *
- * LINE 公式アカウント の 友達一覧 + Maira client_records への 紐付け 管理。
+ * LINE 公式アカウント の 友達一覧 + Myaira client_records への 紐付け 管理。
  *
  * 状態 別 タブ:
  *   ・未紐付け (友達 だが client_record に 紐付け されていない)
@@ -70,7 +70,7 @@ export default async function LineUsersPage() {
         <div>
           <h1 className="text-2xl font-bold">LINE 友達 / 紐付け</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            公式LINE の 友達 と Maira の クライアント (求職者) を 紐付けます。 紐付け 済みの 求職者
+            公式LINE の 友達 と Myaira の クライアント (求職者) を 紐付けます。 紐付け 済みの 求職者
             と は LINE で やり取り が 可能 に なります。
           </p>
         </div>

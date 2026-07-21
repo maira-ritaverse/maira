@@ -76,8 +76,8 @@ Month 3: 副担当 / 組織マネジメント機能を活用
 
 1. LINE Developers Console で Messaging API チャネルを作成
 2. Channel ID / Channel Secret / Channel Access Token を取得
-3. Maira `/agency/line/settings` で保存
-4. Maira が生成した Webhook URL を LINE Developers に登録
+3. Myaira `/agency/line/settings` で保存
+4. Myaira が生成した Webhook URL を LINE Developers に登録
 5. Webhook 検証(「Verify」ボタン)で疎通確認
 6. 友達追加時の自動メッセージ / Rich Menu 等を設定
 
@@ -211,7 +211,7 @@ Month 3: 副担当 / 組織マネジメント機能を活用
 ### Daily ダイジェストが来ない
 
 1. 個人設定 → 通知設定 で email_enabled + daily_digest が ON か確認
-2. メール受信フォルダで「【Maira 朝のダイジェスト】」を検索
+2. メール受信フォルダで「【Myaira 朝のダイジェスト】」を検索
 3. 集計が全件0の日は「平和な朝」として配信されません(仕様)
 
 ---
@@ -237,8 +237,8 @@ Month 3: 副担当 / 組織マネジメント機能を活用
 
 ## 他 SaaS との並行運用
 
-- 移行期間中は Maira と既存ツールの並行運用が可能
-- 段階的移行(まずは新規顧客のみ Maira、既存は徐々に移行)も推奨パターン
+- 移行期間中は Myaira と既存ツールの並行運用が可能
+- 段階的移行(まずは新規顧客のみ Myaira、既存は徐々に移行)も推奨パターン
 - 並行期間の長さに上限なし
 
 ---

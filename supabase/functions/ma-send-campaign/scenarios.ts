@@ -18,7 +18,7 @@
  *     → 判定クエリで弾く(declined / completed のステータスは送らない)
  */
 
-// 型は Edge Function 内で完結させる(Web 側の型を import すると Maira 全体のビルドが必要になる)
+// 型は Edge Function 内で完結させる(Web 側の型を import すると Myaira 全体のビルドが必要になる)
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /**

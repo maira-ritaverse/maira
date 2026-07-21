@@ -14,9 +14,9 @@ import { AlertTriangle, CheckCircle2, ExternalLink, Info, ShieldCheck } from "lu
 import { getSiteUrl } from "@/lib/config/site-url";
 
 export const metadata = {
-  title: "Zoom App Review Test Guide - Maira",
+  title: "Zoom App Review Test Guide - Myaira",
   description:
-    "Step-by-step guide for Zoom Marketplace reviewers to test Maira's Zoom integration.",
+    "Step-by-step guide for Zoom Marketplace reviewers to test Myaira's Zoom integration.",
 };
 
 export const dynamic = "force-static";
@@ -45,14 +45,14 @@ export default function ZoomReviewGuidePage() {
           Product summary / 製品概要
         </div>
         <p>
-          <strong>Maira</strong> is a SaaS platform for Japanese recruitment agencies. Agents host
-          Zoom meetings with job seekers; Maira automatically ingests the Cloud Recording via
+          <strong>Myaira</strong> is a SaaS platform for Japanese recruitment agencies. Agents host
+          Zoom meetings with job seekers; Myaira automatically ingests the Cloud Recording via
           Zoom&rsquo;s webhook, transcribes it, and drafts a summary. This helps agents spend less
           time on note-taking and more time counseling.
         </p>
       </div>
 
-      <Section number={1} title="Login to Maira / Maira にログイン">
+      <Section number={1} title="Login to Myaira / Myaira にログイン">
         <ol className="list-decimal space-y-1 pl-5 text-sm">
           <li>
             Open{" "}
@@ -95,7 +95,7 @@ export default function ZoomReviewGuidePage() {
           </li>
           <li>Approve the requested scopes (listed below).</li>
           <li>
-            You will be redirected back to Maira&rsquo;s Integrations page with a green &ldquo;Zoom
+            You will be redirected back to Myaira&rsquo;s Integrations page with a green &ldquo;Zoom
             に接続しました&rdquo; (Connected to Zoom) banner.
           </li>
         </ol>
@@ -122,14 +122,15 @@ export default function ZoomReviewGuidePage() {
           <li>
             After Zoom finishes processing the cloud recording (usually 1-5 minutes), Zoom will POST
             a <code className="rounded bg-slate-100 px-1">recording.completed</code> webhook event
-            to Maira at:
+            to Myaira at:
             <div className="mt-1 rounded bg-white p-2 font-mono text-[11px]">
               {base}/api/webhooks/zoom/recording
             </div>
           </li>
           <li>
-            Return to Maira. Under the <strong>&ldquo;キャリア棚卸し&rdquo; (Career Intake)</strong>{" "}
-            section, a new entry with status{" "}
+            Return to Myaira. Under the{" "}
+            <strong>&ldquo;キャリア棚卸し&rdquo; (Career Intake)</strong> section, a new entry with
+            status{" "}
             <em>
               &ldquo;external_pending&rdquo; → &ldquo;uploaded&rdquo; → &ldquo;transcribed&rdquo;
             </em>{" "}
@@ -138,7 +139,7 @@ export default function ZoomReviewGuidePage() {
         </ol>
       </Section>
 
-      <Section number={5} title="Create a Zoom meeting from Maira / Maira から Zoom 会議を作成">
+      <Section number={5} title="Create a Zoom meeting from Myaira / Myaira から Zoom 会議を作成">
         <div className="mb-3 rounded border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
           <div className="mb-1 flex items-center gap-1 font-semibold">
             <AlertTriangle className="size-4" aria-hidden />
@@ -185,7 +186,7 @@ export default function ZoomReviewGuidePage() {
             Click <strong>&ldquo;保存&rdquo; (Save)</strong>.
           </li>
           <li>
-            Maira calls Zoom&rsquo;s{" "}
+            Myaira calls Zoom&rsquo;s{" "}
             <code className="rounded bg-slate-100 px-1">POST /users/me/meetings</code> using your
             OAuth token, and the meeting URL is saved to the client&rsquo;s meeting history (visible
             on the same detail page under &ldquo;面談履歴 / Meeting history&rdquo;).
@@ -211,7 +212,7 @@ export default function ZoomReviewGuidePage() {
           <li>
             Click <strong>&ldquo;切断&rdquo; (Disconnect)</strong> on the Zoom card.
           </li>
-          <li>Maira revokes and deletes the stored OAuth tokens.</li>
+          <li>Myaira revokes and deletes the stored OAuth tokens.</li>
         </ol>
       </Section>
 

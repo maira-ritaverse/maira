@@ -5,7 +5,7 @@
  * が extracted まで進んだら、求職者本人にレビュー依頼を送る。
  *
  *   1. recording.client_record_id から client_records 経由で linked_user_id を取得
- *   2. linked_user_id が無ければ何もしない(本人 Maira アカウントが無い)
+ *   2. linked_user_id が無ければ何もしない(本人 Myaira アカウントが無い)
  *   3. meeting_interview_shares を upsert(recording_id ユニーク制約に依存)
  *   4. 求職者本人に in-app 通知を 1 件発火
  *
@@ -83,7 +83,7 @@ export async function notifyShareFromAgencyIntake(args: {
         meetingTitle: "AI ヒアリング結果のレビュー",
         startsAtIso: new Date().toISOString(),
         joinUrl: "",
-        organizationName: "Maira",
+        organizationName: "Myaira",
       },
     });
   } catch {

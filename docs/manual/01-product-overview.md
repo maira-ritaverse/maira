@@ -1,8 +1,8 @@
-# Maira プロダクト概要
+# Myaira プロダクト概要
 
-## Mairaとは
+## Myairaとは
 
-Maira(マイラ)は、転職エージェント企業向けの業務効率化SaaSです。クライアント(求職者)管理、公式LINE連携、面談スケジュール、AI による書類作成、進捗管理までを1つの画面で完結させます。
+Myaira(マイラ)は、転職エージェント企業向けの業務効率化SaaSです。クライアント(求職者)管理、公式LINE連携、面談スケジュール、AI による書類作成、進捗管理までを1つの画面で完結させます。
 
 - 公式 LP: https://maira.pro(Xserver 上 の WordPress)
 - アプリ本体: https://app.maira.pro(Next.js。 /login /signup /roi /contact /privacy 等)

@@ -57,7 +57,7 @@ export async function POST(request: Request) {
   const conversationText = messages
     .filter((m) => !(m.role === "user" && m.content === "(セッション開始)"))
     .map((m) => {
-      const speaker = m.role === "user" ? "ユーザー" : "Maira";
+      const speaker = m.role === "user" ? "ユーザー" : "Myaira";
       return `${speaker}: ${m.content}`;
     })
     .join("\n\n");
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
       model: getModel(MODELS.CONVERSATION),
       schema: careerProfileSchema,
       system: CAREER_PROFILE_GENERATOR_SYSTEM_PROMPT,
-      prompt: `以下はユーザーとMairaの会話履歴です。この会話から、ユーザーのキャリア棚卸し結果を構造化されたデータとして抽出してください。
+      prompt: `以下はユーザーとMyairaの会話履歴です。この会話から、ユーザーのキャリア棚卸し結果を構造化されたデータとして抽出してください。
 
 【会話履歴】
 ${conversationText}`,

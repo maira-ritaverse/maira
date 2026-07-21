@@ -75,7 +75,7 @@ export function classifyLineError(status: number, body: string): LineErrorClass 
     return {
       kind: "user_blocked",
       message: "求職者 が ブロック / 友達 解除 して います",
-      hint: "Maira 側 でも 該当 友達 を 解除 済 に マーク します。 連携 が 必要 です。",
+      hint: "Myaira 側 でも 該当 友達 を 解除 済 に マーク します。 連携 が 必要 です。",
       retryable: false,
     };
   }

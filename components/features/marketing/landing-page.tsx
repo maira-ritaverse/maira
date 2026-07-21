@@ -1,5 +1,5 @@
 /**
- * Maira ランディング ページ (新 構成、 SVG モック 内蔵)
+ * Myaira ランディング ページ (新 構成、 SVG モック 内蔵)
  *
  * 目標: 「実 画面 で 何 が できる か」 を 一目 で 伝え、 資料 請求 を 獲得 する。
  *
@@ -138,7 +138,7 @@ function Hero() {
         <ScreenshotFrame
           caption="ダッシュボード:今日期限のタスクと沈黙顧客を一目で"
           src="/marketing/dashboard.png"
-          alt="Maira ダッシュボード"
+          alt="Myaira ダッシュボード"
         >
           <DashboardMock />
         </ScreenshotFrame>
@@ -317,7 +317,7 @@ function OverviewSection() {
       <div className="mx-auto max-w-6xl px-5 lg:px-8">
         <div className="text-center">
           <p className="text-xs font-semibold tracking-[0.2em] text-emerald-600 uppercase">
-            Mairaの全体像
+            Myairaの全体像
           </p>
           <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
             求職者とエージェントを、1つのハブでつなぐ
@@ -417,7 +417,7 @@ function FeatureLine() {
     <FeatureSection
       badge="公式LINE連携"
       title="LINEで100名を一人でさばく"
-      description="公式LINEとMairaを直接接続。トーク・担当者割り当て・一斉配信・シナリオ自動化までMaira内で完結します。"
+      description="公式LINEとMyairaを直接接続。トーク・担当者割り当て・一斉配信・シナリオ自動化までMyaira内で完結します。"
       bullets={[
         "1友達単位でメモ・タグ・担当者割当+編集履歴",
         "会話上で面談候補日提案 → タップで会議URL発行まで一気通貫",
@@ -426,7 +426,7 @@ function FeatureLine() {
       ]}
       mock={<LineConversationMock />}
       screenshotSrc="/marketing/line-conversation.png"
-      screenshotAlt="Maira LINE会話画面"
+      screenshotAlt="Myaira LINE会話画面"
       reverse
     />
   );
@@ -446,7 +446,7 @@ function FeatureLineMa() {
       ]}
       mock={<LineConversationMock />}
       screenshotSrc="/marketing/line-ma.png"
-      screenshotAlt="Maira LINE MA画面"
+      screenshotAlt="Myaira LINE MA画面"
     />
   );
 }
@@ -465,7 +465,7 @@ function FeatureCalendar() {
       ]}
       mock={<CalendarMock />}
       screenshotSrc="/marketing/calendar.png"
-      screenshotAlt="Mairaカレンダー月ビュー"
+      screenshotAlt="Myairaカレンダー月ビュー"
     />
   );
 }
@@ -484,7 +484,7 @@ function FeatureReport() {
       ]}
       mock={<DashboardMock />}
       screenshotSrc="/marketing/report.png"
-      screenshotAlt="Mairaレポート画面"
+      screenshotAlt="Myairaレポート画面"
       reverse
     />
   );
@@ -517,7 +517,7 @@ function FeatureDigest() {
       bullets={[
         "個人設定でメール全体ON/OFF + 種類別ON/OFF",
         "アプリ内通知も連動(LINE受信・興味表明・応募)",
-        "「何をいつまでにやるか」をMairaが教えてくれる",
+        "「何をいつまでにやるか」をMyairaが教えてくれる",
       ]}
       mock={<DigestMailMock />}
     />
@@ -640,11 +640,11 @@ function FaqSection() {
     },
     {
       q: "LINE連携はどの規模まで対応できますか?",
-      a: "LINE Messaging APIのLight(5,000通/月)からProまで全プランに対応。配信数の残量はMaira内で可視化されます。",
+      a: "LINE Messaging APIのLight(5,000通/月)からProまで全プランに対応。配信数の残量はMyaira内で可視化されます。",
     },
     {
       q: "Google Meet/Zoom連携でカレンダーの既存予定は見えますか?",
-      a: "scopeは最小限(calendar.events)で、Mairaから作成した予定のみ編集/削除します。既存予定は読み取りません。",
+      a: "scopeは最小限(calendar.events)で、Myairaから作成した予定のみ編集/削除します。既存予定は読み取りません。",
     },
     {
       q: "AI利用量に上限はありますか?",
@@ -742,7 +742,7 @@ function DashboardMock() {
       <rect width="800" height="500" fill="#f8fafc" />
       <rect x="0" y="0" width="200" height="500" fill="#0f172a" />
       <text x="20" y="40" fontFamily="sans-serif" fontSize="14" fontWeight="700" fill="white">
-        Maira
+        Myaira
       </text>
       {[
         { y: 80, label: "ダッシュボード", active: true },
@@ -1264,16 +1264,16 @@ function DigestMailMock() {
       <rect x="100" y="40" width="600" height="420" rx="12" fill="white" stroke="#cbd5e1" />
       <rect x="100" y="40" width="600" height="60" rx="12" fill="#0f172a" />
       <text x="120" y="65" fontFamily="sans-serif" fontSize="11" fill="#94a3b8">
-        From: Maira 運営 チーム - To: あなた
+        From: Myaira 運営 チーム - To: あなた
       </text>
       <text x="120" y="88" fontFamily="sans-serif" fontSize="14" fontWeight="700" fill="white">
-        【Maira 朝の ダイジェスト】今日 3 件 / 超過 1 件 / 沈黙 12 件
+        【Myaira 朝の ダイジェスト】今日 3 件 / 超過 1 件 / 沈黙 12 件
       </text>
       <text x="130" y="130" fontFamily="sans-serif" fontSize="11" fill="#334155">
         山田 様
       </text>
       <text x="130" y="150" fontFamily="sans-serif" fontSize="10" fill="#64748b">
-        2026/06/21 (日) の Maira ダイジェスト です。
+        2026/06/21 (日) の Myaira ダイジェスト です。
       </text>
       <text x="130" y="185" fontFamily="sans-serif" fontSize="12" fontWeight="700" fill="#0f172a">
         ◆ 自分 宛 の タスク
@@ -1346,12 +1346,12 @@ function OverviewDiagram() {
 
       <FlowArrow label="メッセージ / 応募" />
 
-      {/* Maira ハブ (中央) */}
+      {/* Myaira ハブ (中央) */}
       <div className="rounded-2xl bg-slate-900 p-6 text-center text-white shadow-xl">
         <p className="text-[10px] font-semibold tracking-[0.2em] text-emerald-300 uppercase">
           all-in-one hub
         </p>
-        <h3 className="mt-1 text-2xl font-bold">Maira</h3>
+        <h3 className="mt-1 text-2xl font-bold">Myaira</h3>
         <div className="mt-4 grid grid-cols-2 gap-2 border-t border-white/10 pt-4">
           {hubFeatures.map((f) => (
             <div

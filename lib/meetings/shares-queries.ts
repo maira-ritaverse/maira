@@ -43,7 +43,7 @@ async function rowToView(client: SupabaseClient, row: ShareRow): Promise<Intervi
     : "";
   // host / organization の表示名を取得
   let hostDisplayName = "担当アドバイザー";
-  let organizationName = "Maira";
+  let organizationName = "Myaira";
   // 表示名解決の優先順:meeting_schedules → recording.user_id → デフォルト
   const hostUserId = row.meeting?.host_user_id ?? row.recording?.user_id ?? null;
   if (hostUserId) {

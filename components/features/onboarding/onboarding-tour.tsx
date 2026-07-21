@@ -22,7 +22,7 @@ type Props = {
 };
 
 /**
- * Maira オンボーディングツアー(10ステップ)
+ * Myaira オンボーディングツアー(10ステップ)
  *
  * 初回ログイン時または「ツアーを再表示」から起動する。
  * 各ステップは画面上の特定要素を target にして強調表示する。
@@ -49,10 +49,10 @@ export function OnboardingTour({ autoStart, forceStart = false, onClose }: Props
     {
       target: "body",
       placement: "center",
-      title: "Mairaへようこそ",
+      title: "Myairaへようこそ",
       content: (
         <div className="space-y-2">
-          <p>Mairaは、あなたの転職活動を24時間伴走するAI採用エージェントです。</p>
+          <p>Myairaは、あなたの転職活動を24時間伴走するAI採用エージェントです。</p>
           <p className="text-muted-foreground text-sm">これから主な機能をご案内します(2-3分)</p>
         </div>
       ),
@@ -71,7 +71,7 @@ export function OnboardingTour({ autoStart, forceStart = false, onClose }: Props
         <div className="space-y-2">
           <p>ログインすると、まずこの画面が表示されます。</p>
           <p>
-            あなたの現在の状況に応じて、Mairaからの提案や、進行中の応募・タスクが一目で分かります。
+            あなたの現在の状況に応じて、Myairaからの提案や、進行中の応募・タスクが一目で分かります。
           </p>
         </div>
       ),
@@ -111,7 +111,7 @@ export function OnboardingTour({ autoStart, forceStart = false, onClose }: Props
       content: (
         <div className="space-y-2">
           <p>
-            Mairaと5-10分話すだけで、あなたの強み・価値観・希望が整理されます。診断結果も踏まえて深掘りし、ここで作った情報は書類作成や応募相談に自動で活用されます。
+            Myairaと5-10分話すだけで、あなたの強み・価値観・希望が整理されます。診断結果も踏まえて深掘りし、ここで作った情報は書類作成や応募相談に自動で活用されます。
           </p>
         </div>
       ),

@@ -28,7 +28,7 @@ export type RoiInput = {
 // 計算 前提。 LP の マーケ メッセージ と 整合 する 形 で 設定。
 const ASSUMPTIONS = {
   docsPerClient: 0.5, // 求職者 1 名 あたり 平均 0.5 件 の 履歴 書 / 職経 を 作成
-  docMinutesAfterMaira: 5, // Maira AI 生成 で 1 件 5 分 に
+  docMinutesAfterMaira: 5, // Myaira AI 生成 で 1 件 5 分 に
   outreachLostReductionRate: 0.8, // Daily ダイジェスト + 沈黙 アラート で 連絡 漏れ 80% 削減
   dealUpliftRate: 0.05, // 面談 リマインダー で 成約 率 5% UP
   lineCapacityMultiplier: 2, // 公式 LINE 効率 化 で 1 人 あたり 対応 数 2 倍 (= 50 → 100 名)。
@@ -109,7 +109,7 @@ export function calculateRoi(input: RoiInput): RoiResult {
 
 export const ROI_ASSUMPTIONS_DESCRIPTION = [
   "求職者1名あたり平均0.5件の履歴書/職経を作成する前提",
-  "MairaのAI自動生成で書類作成時間が1件5分に短縮",
+  "MyairaのAI自動生成で書類作成時間が1件5分に短縮",
   "Dailyダイジェスト+沈黙アラートで連絡漏れを80%削減",
   "面談リマインダーで成約率が5% UP",
   "公式LINE効率化で1人あたり対応数が2倍(= 50→100名想定)",

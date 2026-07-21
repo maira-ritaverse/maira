@@ -9,9 +9,9 @@ import Link from "next/link";
  * URL: https://app.maira.pro/docs/zoom
  */
 export const metadata = {
-  title: "Zoom 連携の使い方 | Maira",
+  title: "Zoom 連携の使い方 | Myaira",
   description:
-    "Maira(マイラ)と Zoom の連携方法、Cloud Recording の自動取り込み、面談予約 / 再スケジュール / キャンセル、連携解除までの 操作手順をまとめたドキュメントです。",
+    "Myaira(マイラ)と Zoom の連携方法、Cloud Recording の自動取り込み、面談予約 / 再スケジュール / キャンセル、連携解除までの 操作手順をまとめたドキュメントです。",
 };
 
 export default function ZoomDocsPage() {
@@ -21,7 +21,7 @@ export default function ZoomDocsPage() {
         <header>
           <h1 className="text-3xl font-bold">Zoom 連携の使い方</h1>
           <p className="text-muted-foreground mt-2 text-sm">
-            Maira と Zoom を連携すると、エージェント担当者は 1on1 キャリア面談の予約・録画取り込み
+            Myaira と Zoom を連携すると、エージェント担当者は 1on1 キャリア面談の予約・録画取り込み
             (文字起こし → 履歴書 AI ドラフト)を 1 つの画面で 完結できます。 本ページでは 接続から
             解除までの 操作手順を 順番に 説明します。
           </p>
@@ -29,16 +29,17 @@ export default function ZoomDocsPage() {
 
         {/* ───────────────────────────────────────────────────────── */}
         <section className="space-y-3">
-          <h2 className="text-xl font-bold">概要 — Maira × Zoom で できること</h2>
+          <h2 className="text-xl font-bold">概要 — Myaira × Zoom で できること</h2>
           <ul className="ml-6 list-disc space-y-1">
             <li>
-              Maira から クライアント(求職者)と の 1on1 面談を Zoom 会議として 1 クリックで予約
+              Myaira から クライアント(求職者)と の 1on1 面談を Zoom 会議として 1 クリックで予約
             </li>
             <li>会議終了後、Cloud Recording の 自動取り込み + 文字起こし</li>
             <li>文字起こしから AI(Anthropic Claude)が 履歴書 / 職務経歴書の 下書きを 自動生成</li>
             <li>クライアントの ダッシュボードに 「会議に参加」ボタンが 常時表示</li>
             <li>
-              再スケジュール / キャンセルも Maira から実行 → Zoom と 自動同期、クライアントにも 通知
+              再スケジュール / キャンセルも Myaira から実行 → Zoom と 自動同期、クライアントにも
+              通知
             </li>
           </ul>
           <p className="text-muted-foreground text-xs">
@@ -50,9 +51,9 @@ export default function ZoomDocsPage() {
 
         {/* ───────────────────────────────────────────────────────── */}
         <section className="space-y-3">
-          <h2 className="text-xl font-bold">Step 1 — Zoom を Maira に接続する</h2>
+          <h2 className="text-xl font-bold">Step 1 — Zoom を Myaira に接続する</h2>
           <ol className="ml-6 list-decimal space-y-2">
-            <li>Maira にエージェント担当者として ログインします。</li>
+            <li>Myaira にエージェント担当者として ログインします。</li>
             <li>
               画面右上のメニュー →{" "}
               <code className="bg-muted rounded px-1">設定 → 連携・アドオン</code> を 開きます。
@@ -66,12 +67,12 @@ export default function ZoomDocsPage() {
               <strong>Allow</strong>」を 押します。
             </li>
             <li>
-              自動的に Maira の <code>設定 → 連携・アドオン</code> ページに 戻り、
+              自動的に Myaira の <code>設定 → 連携・アドオン</code> ページに 戻り、
               「接続中」バッジが 表示されれば 完了です。
             </li>
           </ol>
           <p className="text-muted-foreground text-xs">
-            ※ Maira 側に 保存される Zoom OAuth アクセス / リフレッシュトークンは AES-256-GCM 方式で
+            ※ Myaira 側に 保存される Zoom OAuth アクセス / リフレッシュトークンは AES-256-GCM 方式で
             暗号化されます。詳細は{" "}
             <Link href="/privacy" className="underline">
               プライバシーポリシー 第 7-1 条
@@ -82,7 +83,7 @@ export default function ZoomDocsPage() {
 
         {/* ───────────────────────────────────────────────────────── */}
         <section className="space-y-3">
-          <h2 className="text-xl font-bold">Step 2 — Maira から Zoom 面談を 予約する</h2>
+          <h2 className="text-xl font-bold">Step 2 — Myaira から Zoom 面談を 予約する</h2>
           <ol className="ml-6 list-decimal space-y-2">
             <li>
               <code className="bg-muted rounded px-1">クライアント詳細画面</code> を 開きます。
@@ -100,7 +101,7 @@ export default function ZoomDocsPage() {
             </li>
           </ol>
           <p className="text-muted-foreground text-xs">
-            予約と同時に、求職者には メール + Maira 内通知が 送信され、求職者の ダッシュボードに
+            予約と同時に、求職者には メール + Myaira 内通知が 送信され、求職者の ダッシュボードに
             「会議に参加」ボタンが 表示されます。
           </p>
         </section>
@@ -114,12 +115,12 @@ export default function ZoomDocsPage() {
               Zoom 会議に 入ります。
             </li>
             <li>
-              Maira から 作成した 会議は デフォルトで{" "}
+              Myaira から 作成した 会議は デフォルトで{" "}
               <strong>Cloud Recording(クラウド録画)が ON</strong> になっています。
             </li>
             <li>会議終了後、Zoom 側で 録画処理が 完了するまで 数分〜数十分 かかります。</li>
             <li>
-              処理完了後、Maira が Webhook 通知を 受け取って 録画ファイルを 自動取り込み → OpenAI
+              処理完了後、Myaira が Webhook 通知を 受け取って 録画ファイルを 自動取り込み → OpenAI
               Whisper で 文字起こし → Anthropic Claude で 構造化 → 履歴書 / 職務経歴書の ドラフトを
               生成します。
             </li>
@@ -154,14 +155,14 @@ export default function ZoomDocsPage() {
           <h2 className="text-xl font-bold">Step 5 — Zoom 連携を 解除する</h2>
           <ol className="ml-6 list-decimal space-y-2">
             <li>
-              Maira → <code className="bg-muted rounded px-1">設定 → 連携・アドオン</code> ページを
+              Myaira → <code className="bg-muted rounded px-1">設定 → 連携・アドオン</code> ページを
               開きます。
             </li>
             <li>
               「Zoom 連携」カードの 「<strong>Zoom 連携を解除</strong>」 を 押します。
             </li>
             <li>
-              Maira 側に 保管されている アクセストークン / リフレッシュトークンが
+              Myaira 側に 保管されている アクセストークン / リフレッシュトークンが
               <strong>即座に 破棄</strong> されます。
             </li>
             <li>
@@ -174,7 +175,7 @@ export default function ZoomDocsPage() {
               >
                 Zoom Marketplace の Installed Apps ページ
               </a>{" "}
-              で 「Maira」を Remove してください。
+              で 「Myaira」を Remove してください。
             </li>
           </ol>
         </section>
@@ -192,7 +193,7 @@ export default function ZoomDocsPage() {
             <tbody>
               <tr>
                 <td className="border p-2 font-mono">user:read:user</td>
-                <td className="border p-2">接続ユーザの Zoom アカウントを Maira と 紐づける</td>
+                <td className="border p-2">接続ユーザの Zoom アカウントを Myaira と 紐づける</td>
               </tr>
               <tr>
                 <td className="border p-2 font-mono">meeting:read:meeting</td>
@@ -204,7 +205,7 @@ export default function ZoomDocsPage() {
               </tr>
               <tr>
                 <td className="border p-2 font-mono">meeting:write:meeting</td>
-                <td className="border p-2">Maira から 1on1 面談を 新規予約</td>
+                <td className="border p-2">Myaira から 1on1 面談を 新規予約</td>
               </tr>
               <tr>
                 <td className="border p-2 font-mono">meeting:update:meeting</td>
@@ -246,7 +247,7 @@ export default function ZoomDocsPage() {
                 <p>多くは 以下のいずれかが 原因です:</p>
                 <ul className="ml-4 list-disc">
                   <li>Zoom にログインしていない / 別アカウントに ログイン中</li>
-                  <li>Zoom 側で アプリ「Maira」の 認可を 取り消している</li>
+                  <li>Zoom 側で アプリ「Myaira」の 認可を 取り消している</li>
                   <li>ブラウザの拡張機能(広告ブロッカー等)が OAuth フローを 妨害している</li>
                 </ul>
                 <p>
@@ -282,7 +283,7 @@ export default function ZoomDocsPage() {
               </summary>
               <div className="text-muted-foreground mt-3 space-y-2 text-xs">
                 <p>
-                  求職者が 招待を 受諾して Maira アカウントを 作成し終わっているか
+                  求職者が 招待を 受諾して Myaira アカウントを 作成し終わっているか
                   確認してください。 招待状態(invited)では まだ 表示されません(linked 状態に
                   なる必要が あります)。
                 </p>
@@ -296,11 +297,11 @@ export default function ZoomDocsPage() {
               <div className="text-muted-foreground mt-3 space-y-2 text-xs">
                 <ul className="ml-4 list-disc">
                   <li>
-                    <strong>4700 / Invalid Redirect:</strong> Maira 側設定の問題。 画面の URL と
+                    <strong>4700 / Invalid Redirect:</strong> Myaira 側設定の問題。 画面の URL と
                     エラー内容を 添えて サポートまでご連絡ください。
                   </li>
                   <li>
-                    <strong>4702 / Invalid Client ID:</strong> Maira 側設定の問題。同上。
+                    <strong>4702 / Invalid Client ID:</strong> Myaira 側設定の問題。同上。
                   </li>
                 </ul>
               </div>

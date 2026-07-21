@@ -24,9 +24,9 @@ type MakeArgs = {
   seekerQuota?: number | null;
   /** 組織の カスタム quota(organization_ai_quotas.monthly_limit) */
   orgQuota?: number | null;
-  /** Maira admin の 強制 quota(get_platform_ai_quota_for_caller RPC の返値) */
+  /** Myaira admin の 強制 quota(get_platform_ai_quota_for_caller RPC の返値) */
   platformQuota?: number | null;
-  /** Maira admin の 月次 総量上限 (get_platform_ai_total_quota_for_caller) */
+  /** Myaira admin の 月次 総量上限 (get_platform_ai_total_quota_for_caller) */
   platformTotalQuota?: number | null;
   /** 当月 の 組織 agency_org 総使用回数 (count_org_ai_usage_total_this_month) */
   orgTotalUsage?: number;
@@ -247,7 +247,7 @@ describe("checkAiUsageLimit: agency_org scope", () => {
     expect(r.allowed).toBe(false);
   });
 
-  it("Maira admin の 強制上限 (platformQuota) が org / 既定値 より 優先 される", async () => {
+  it("Myaira admin の 強制上限 (platformQuota) が org / 既定値 より 優先 される", async () => {
     // platform=3, org=50, 既定=100 でも platform 3 が 採用される
     const s = makeSupabase({
       addons: [],
@@ -262,7 +262,7 @@ describe("checkAiUsageLimit: agency_org scope", () => {
     expect(r.allowed).toBe(true);
   });
 
-  it("Maira admin の 強制上限 が 0 (完全停止) なら allowed=false", async () => {
+  it("Myaira admin の 強制上限 が 0 (完全停止) なら allowed=false", async () => {
     const s = makeSupabase({
       addons: [],
       usageCount: 0,

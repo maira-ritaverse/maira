@@ -24,7 +24,7 @@ export type GoogleConnectionStatus = {
 export type ZoomConnectionStatus = {
   connected: boolean;
   accountId: string | null;
-  /** Maira から Zoom 会議の作成・編集が可能 */
+  /** Myaira から Zoom 会議の作成・編集が可能 */
   meetingWriteEnabled: boolean;
   needsReauth: boolean;
 };

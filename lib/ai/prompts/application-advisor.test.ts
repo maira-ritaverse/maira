@@ -7,7 +7,7 @@ import type { CareerProfile } from "@/lib/career/profile-schema";
 /**
  * 応募アドバイザープロンプトのテスト。
  *
- * buildAdvisorContext は Maira が応募について「何を知っているか」を構築する境界。
+ * buildAdvisorContext は Myaira が応募について「何を知っているか」を構築する境界。
  * ここに渡らない情報は AI が「無い」と扱うはずなので、profile から渡す範囲・
  * tasks の有無での出力分岐・null/空文字でセクション自体を省略する契約を担保する。
  *

@@ -22,12 +22,14 @@ export const genderLabels: Record<Gender, string> = {
 // 学歴・職歴の1行
 //
 // year/month は数値で持つ。null も許容(月だけ未確定など下書きを許すため)。
-// description には「学歴」「職歴」の見出し行や、入学/卒業/入社/退社などを書く。
+// description には「学歴」「職歴」の見出し行や、入学/卒業/入社/退社に加え、
+// 退職理由・自己PR 等の自由記述も書く運用が実態のため max を広めに取る。
+// year/month は null 許容なので、年月のない自由記述だけの行も作れる。
 // ============================================
 export const educationItemSchema = z.object({
   year: z.number().int().min(1950).max(2100).nullable(),
   month: z.number().int().min(1).max(12).nullable(),
-  description: z.string().max(200),
+  description: z.string().max(500),
 });
 export type EducationItem = z.infer<typeof educationItemSchema>;
 

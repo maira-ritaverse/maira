@@ -41,7 +41,8 @@ const toSeekerEducation = (it: AgencyEducationItem): SeekerEducationItem => {
   return {
     year: year ?? null,
     month: month ?? null,
-    description: (it.description ?? "").slice(0, 200),
+    // 学歴・職歴の内容欄は退職理由等の自由記述も入るため 500 まで許容(schema と揃える)
+    description: (it.description ?? "").slice(0, 500),
   };
 };
 

@@ -131,7 +131,7 @@ export default async function AgencyLineConversationPage({ params }: RouteContex
   }
 
   // 既読化:
-  //   1) Maira DB の line_messages.read_at を 更新 (内部 未読 集計 用)
+  //   1) Myaira DB の line_messages.read_at を 更新 (内部 未読 集計 用)
   //   2) LINE 側 にも 既読 信号 を 送る (求職者 の 1:1 トーク で 「既読」 表示)
   //      manual モード の Bot のみ 動作。 auto モード は 400 で 失敗 する が 既読 は 既に 自動。
   try {

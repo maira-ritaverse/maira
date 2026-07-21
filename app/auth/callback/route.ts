@@ -17,7 +17,7 @@ import { createClient } from "@/lib/supabase/server";
  *   ・Google OAuth の場合は session.provider_token / provider_refresh_token が
  *     1 回だけ取れるので、その場で google_connections に暗号化して保存する
  *     (※ Supabase Auth は provider_refresh_token を保存しないため、
- *       Maira 側で AES-256-GCM 暗号化して自前保管する)
+ *       Myaira 側で AES-256-GCM 暗号化して自前保管する)
  *   ・next の用途:
  *       招待経由のサインアップでは signup() / startGoogleAuth() が
  *       next=/invite/[token] を組んでくる。ここで読み戻して着地ページに戻す。

@@ -1,7 +1,7 @@
 /**
  * lib/csv/parse.ts のテスト
  *
- * RFC 4180 + Maira ローカルルール(BOM 剥離・末尾改行無視・空行スキップ)を
+ * RFC 4180 + Myaira ローカルルール(BOM 剥離・末尾改行無視・空行スキップ)を
  * 網羅する。エンコーディング検証は行わない(File API 経由で UTF-8 入力を前提)。
  */
 import { describe, it, expect } from "vitest";

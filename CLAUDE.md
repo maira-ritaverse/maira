@@ -1,10 +1,10 @@
-# Maira - Project Guidelines for Claude Code
+# Myaira - Project Guidelines for Claude Code
 
 このファイルはClaude Codeへの指示書です。すべての作業で必ず守ってください。
 
 ## プロジェクト概要
 
-Maira(マイラ)は、20-30代の転職活動者向けのAI採用エージェントです。
+Myaira(マイラ)は、20-30代の転職活動者向けのAI採用エージェントです。
 4つのモジュール(キャリア棚卸し、書類作成、応募管理、音声面接)を提供する
 Webアプリ(PWA)です。
 
@@ -168,7 +168,7 @@ supabase/ # マイグレーション・Edge Functions
 
 ### ファイルパス・命名
 
-- プロジェクトルートは /Users/arakaki/Maira(macOSのcase-insensitive)
+- プロジェクトルートは /Users/arakaki/Myaira(macOSのcase-insensitive)
 - importパスは必ず小文字で書く(例:@/lib/utils であり @/Lib/Utils ではない)
 - ファイル名は kebab-case を厳守
 

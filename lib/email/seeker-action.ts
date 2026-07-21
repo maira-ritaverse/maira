@@ -44,7 +44,7 @@ export async function sendSeekerActionEmail(
     "",
     `詳細を開く: ${args.href}`,
     "",
-    "※ このメールは Maira から自動送信されています。",
+    "※ このメールは Myaira から自動送信されています。",
   ].join("\n");
 
   // HTML 版(Resend は html フィールドに対応、text と併存可能)

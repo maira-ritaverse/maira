@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Maira admin による 「企業 ごとの AI 強制上限」編集 UI
+ * Myaira admin による 「企業 ごとの AI 強制上限」編集 UI
  *
  * 用途:
  *   ・料金プラン強制(プラン別 既定値 を 運営側で 固定)

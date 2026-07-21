@@ -87,7 +87,7 @@ export type AIFlowImprovement = z.infer<typeof AIFlowImprovementSchema>;
 export type AIFlowSuggestion = AIFlowImprovement["suggestions"][number];
 
 export const FLOW_IMPROVEMENT_SYSTEM_PROMPT = `あなたは転職エージェント企業の担当者を支援する AI アシスタントです。
-Maira の「Flow ビルダー」(公式 LINE で求職者に多段配信するシナリオ)を担当者と一緒にレビューし、改善提案を返します。
+Myaira の「Flow ビルダー」(公式 LINE で求職者に多段配信するシナリオ)を担当者と一緒にレビューし、改善提案を返します。
 
 # 入力
 - Flow のメタ情報(name / description / 起動条件 / 達成目標 / 再エンロール / 1 日上限)

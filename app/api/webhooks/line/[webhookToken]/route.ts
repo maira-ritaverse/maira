@@ -47,7 +47,7 @@ export async function POST(request: Request, context: RouteContext) {
 
   if (lookup.kind !== "found") {
     // C1-2 修正: 従来 は inactive と 未 存在 を 同じ 401 で 返し ログ も 出て い
-    // なかった ため、 「LINE 側 で 送信 して いる のに Maira 側 で 通知 が 来ない」
+    // なかった ため、 「LINE 側 で 送信 して いる のに Myaira 側 で 通知 が 来ない」
     // 事象 の 一次 切り 分け が でき なかった。 状態 別 に 分岐 して 詳細 ログ を 残す。
     if (lookup.kind === "inactive") {
       console.warn("[line/webhook] rejected: channel_inactive", {

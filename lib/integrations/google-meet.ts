@@ -66,7 +66,7 @@ export function buildCreateEventBody(input: CreateGoogleMeetInput): Record<strin
         conferenceSolutionKey: { type: "hangoutsMeet" },
       },
     },
-    // 招待者には Google からメール通知を送らない(Maira の独自メールと二重になるため)
+    // 招待者には Google からメール通知を送らない(Myaira の独自メールと二重になるため)
     // ※ Phase 2 のメール送信で同じ求職者にメールを送るので、ここを true にすると二重通知
     // ※ true にしたいときは Calendar UI に従う運用にする
     guestsCanInviteOthers: false,
@@ -104,7 +104,7 @@ async function gcalFetch<T>(
  * Primary カレンダーに Meet 同梱イベントを作成して、Meet URL を抽出して返す。
  *
  * sendUpdates=none は「Google から招待者にメールを送らない」モード。
- * Maira 側でメールを送るので二重通知を防ぐ。
+ * Myaira 側でメールを送るので二重通知を防ぐ。
  */
 export async function createGoogleMeetEvent(
   accessToken: string,

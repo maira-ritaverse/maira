@@ -37,7 +37,7 @@ export function ZoomConnectCard({ status, zoomConfigured, hasMeetingAddon }: Pro
           <div>
             <h3 className="text-base font-semibold">Zoom 連携</h3>
             <p className="text-muted-foreground mt-0.5 text-xs">
-              Maira から Zoom 会議を予約し、Cloud Recording を自動取り込みします。
+              Myaira から Zoom 会議を予約し、Cloud Recording を自動取り込みします。
             </p>
             {status.connected && status.accountId && (
               <p className="text-muted-foreground mt-1 text-[11px]">
@@ -70,7 +70,7 @@ export function ZoomConnectCard({ status, zoomConfigured, hasMeetingAddon }: Pro
       <ul className="space-y-2 text-sm">
         <FeatureRow
           enabled={status.meetingWriteEnabled}
-          title="Maira からの会議作成・編集"
+          title="Myaira からの会議作成・編集"
           body="クライアント詳細やカレンダーから 1 クリックで Zoom 会議を発行できます。待機室と自動録画が初期設定です。"
         />
         <FeatureRow

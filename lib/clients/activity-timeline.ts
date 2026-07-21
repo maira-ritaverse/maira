@@ -174,7 +174,7 @@ export function buildActivityTimeline(input: BuildActivityTimelineInput): Activi
       kind: "client_linked",
       occurredAt: input.client.linkedAt,
       actorName: null,
-      title: "Maira アカウントと連携開始",
+      title: "Myaira アカウントと連携開始",
       detail: null,
       badgeLabel: "連携",
       color: "green",

@@ -126,7 +126,7 @@ export function AppSidebar({ invitedCount = 0 }: Props) {
       badges={badges}
       asideDataTour="sidebar"
       header={
-        <Link href="/app" className="flex items-center gap-2" aria-label="Maira">
+        <Link href="/app" className="flex items-center gap-2" aria-label="Myaira">
           <Image
             src="/icon-192.png"
             alt=""

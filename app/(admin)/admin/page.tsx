@@ -29,7 +29,7 @@ export default async function AdminHomePage() {
       <div>
         <h1 className="text-3xl font-bold">運営ダッシュボード</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Maira 運営者のホーム。対応が必要な項目を優先表示します。
+          Myaira 運営者のホーム。対応が必要な項目を優先表示します。
         </p>
       </div>
 

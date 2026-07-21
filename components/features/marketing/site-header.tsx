@@ -18,7 +18,7 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 lg:px-8">
-        <Link href="/" className="flex items-center gap-2" aria-label="Maira トップ">
+        <Link href="/" className="flex items-center gap-2" aria-label="Myaira トップ">
           <Image src="/icon-192.png" alt="" width={32} height={32} priority className="size-8" />
           <BrandMark className="text-lg font-bold tracking-tight" />
           <span className="text-muted-foreground ml-1 text-[10px] tracking-[0.2em] uppercase">

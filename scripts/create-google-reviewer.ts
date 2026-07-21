@@ -202,7 +202,7 @@ async function main() {
   console.log("  2. 設定 → 連携・アドオン に移動");
   console.log("  3. 「Google Calendar / Meet を接続」をクリック");
   console.log("  4. 自分の Google アカウントで OAuth 認可 (Consent Screen 表示)");
-  console.log("  5. Maira に戻り「求職者管理」→ シード済みクライアントを選択");
+  console.log("  5. Myaira に戻り「求職者管理」→ シード済みクライアントを選択");
   console.log("  6. 「面談を予約」→ Provider = Google Meet を選択 → 日時入力 → 保存");
   console.log("  7. Google Meet URL が自動発行され、 レビュアーの Google Calendar に反映");
   console.log("════════════════════════════════════════════════");

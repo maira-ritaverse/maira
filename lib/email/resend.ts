@@ -18,7 +18,7 @@ export type ResendSendResult =
 /**
  * Resend でメールを送る。
  *
- * apiKey / from はどちらもオプション。未指定なら Maira の env に fallback する
+ * apiKey / from はどちらもオプション。未指定なら Myaira の env に fallback する
  * (BYO 案 B:各組織が自分の Resend アカウントを持ち込むケースでは、
  *  呼び出し側で組織の DB 設定を復号して渡す)。
  */

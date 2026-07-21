@@ -111,7 +111,7 @@ export function ClientForm() {
           />
           {errors.email && <p className="text-sm text-red-600">{errors.email.message}</p>}
           <p className="text-muted-foreground text-xs">
-            任意入力。登録しておくと招待メール送信や、求職者が同じメールで Maira に
+            任意入力。登録しておくと招待メール送信や、求職者が同じメールで Myaira に
             登録した際の自動連携に使えます。LINE 経由の顧客等で未取得なら空欄で OK。
           </p>
         </div>

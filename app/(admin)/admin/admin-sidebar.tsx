@@ -89,7 +89,7 @@ export function AdminSidebar({
     <aside className="flex w-60 shrink-0 flex-col border-r bg-amber-50/40 dark:bg-amber-950/20">
       <div className="border-b border-amber-200/60 p-4 dark:border-amber-900/60">
         <Link href="/admin" className="block text-sm font-bold text-amber-900 dark:text-amber-100">
-          🛡 Maira 運営管理
+          🛡 Myaira 運営管理
         </Link>
         <p className="mt-0.5 text-[10px] text-amber-700/70 dark:text-amber-300/70">
           Operations Console

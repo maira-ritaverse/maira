@@ -5,7 +5,7 @@ import { _internal } from "./meeting-invite";
 const baseArgs = {
   toEmail: "seeker@example.com",
   toName: "山田 太郎",
-  organizationName: "Maira エージェント",
+  organizationName: "Myaira エージェント",
   advisorName: "鈴木 一郎",
   title: "○○求人について",
   startsAt: new Date("2026-07-01T01:00:00Z"),
@@ -37,7 +37,7 @@ describe("buildBody", () => {
   it("通常の招待本文には開催情報・URL・パスコードが入る", () => {
     const body = _internal.buildBody({ ...baseArgs, variant: "invite" });
     expect(body).toContain("山田 太郎 様");
-    expect(body).toContain("Maira エージェント");
+    expect(body).toContain("Myaira エージェント");
     expect(body).toContain("鈴木 一郎");
     expect(body).toContain("○○求人について");
     expect(body).toContain("https://zoom.us/j/123456789");

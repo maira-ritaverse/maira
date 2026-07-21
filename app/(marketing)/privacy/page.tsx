@@ -8,8 +8,8 @@ import Link from "next/link";
  * 登録時の明示同意(signup-form の checkbox)で本ページの内容に合意したことになる。
  */
 export const metadata = {
-  title: "プライバシーポリシー | Maira",
-  description: "Maira のプライバシーポリシー。データの保管・AI 処理・運営者アクセスの範囲を明記。",
+  title: "プライバシーポリシー | Myaira",
+  description: "Myaira のプライバシーポリシー。データの保管・AI 処理・運営者アクセスの範囲を明記。",
 };
 
 export default function PrivacyPolicyPage() {
@@ -24,7 +24,7 @@ export default function PrivacyPolicyPage() {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">第 1 条(本ポリシーの目的)</h2>
           <p>
-            株式会社Revorise(以下「当社」)は、AI 採用エージェント「Maira」(以下「本サービス」)
+            株式会社Revorise(以下「当社」)は、AI 採用エージェント「Myaira」(以下「本サービス」)
             の提供にあたり、利用者の個人情報および利用データを以下の方針で取り扱います。
             本サービスをご利用いただくにあたっては、本ポリシーへの同意を必須としています。
           </p>
@@ -166,7 +166,7 @@ export default function PrivacyPolicyPage() {
               Google Calendar への面談予定作成(Google Meet URL 付き)を行うため、本人が明示的に
               承認した以下のスコープのみ使用します。 Restricted スコープは一切使用しません (2026 年
               6 月 19 日に <code className="text-xs">drive.readonly</code> スコープを撤去、 Google
-              Meet 録画は Maira への手動アップロード運用に切替済み)。
+              Meet 録画は Myaira への手動アップロード運用に切替済み)。
             </p>
 
             <div className="space-y-1">
@@ -178,7 +178,7 @@ export default function PrivacyPolicyPage() {
                 </li>
                 <li>
                   <code className="text-xs">https://www.googleapis.com/auth/calendar.events</code>
-                  :Maira 内で作成した面談予定を Google Calendar のイベントとして作成 (Google Meet
+                  :Myaira 内で作成した面談予定を Google Calendar のイベントとして作成 (Google Meet
                   URL 自動発行)、および同イベントの更新・削除のため
                 </li>
               </ul>
@@ -210,10 +210,10 @@ export default function PrivacyPolicyPage() {
               <p>取得した Google データは以下の目的にのみ使用します。</p>
               <ul className="ml-6 list-disc space-y-1">
                 <li>
-                  ユーザー本人が Maira 内で作成した面談予定を、本人の Google Calendar に Meet URL
+                  ユーザー本人が Myaira 内で作成した面談予定を、本人の Google Calendar に Meet URL
                   付きイベントとして反映するため
                 </li>
-                <li>反映後の Meet URL を Maira 上に表示し、参加者に共有するため</li>
+                <li>反映後の Meet URL を Myaira 上に表示し、参加者に共有するため</li>
                 <li>予定の再スケジュール・キャンセルを Google Calendar 側にも反映するため</li>
                 <li>
                   接続状態の維持と接続本人の識別 (Google
@@ -239,7 +239,7 @@ export default function PrivacyPolicyPage() {
                 <li>本サービスと無関係な第三者一般</li>
               </ul>
               <p>
-                Maira のインフラベンダー(Vercel、Supabase)は、
+                Myaira のインフラベンダー(Vercel、Supabase)は、
                 本サービス提供に必要なホスティング・データベース処理のためにのみ Google データを
                 取り扱い、独自の分析・目的外利用は行いません(それぞれの Data Processing Agreement
                 に基づく)。
@@ -271,16 +271,16 @@ export default function PrivacyPolicyPage() {
               </p>
               <ul className="ml-6 list-disc space-y-1">
                 <li>
-                  Google OAuth トークン:本人が「Google 連携解除」を実行した時点で Maira
+                  Google OAuth トークン:本人が「Google 連携解除」を実行した時点で Myaira
                   側から即時削除、および Google 側のトークン失効 API を呼び出して破棄
                 </li>
                 <li>
-                  Maira 内の面談予定情報:元となった Maira の面談予定が削除された時点で 対応する
-                  Google Calendar イベントも削除。 Maira アカウントを退会した場合は 30
+                  Myaira 内の面談予定情報:元となった Myaira の面談予定が削除された時点で 対応する
+                  Google Calendar イベントも削除。 Myaira アカウントを退会した場合は 30
                   日以内に関連する全データを削除
                 </li>
                 <li>
-                  ユーザーからの明示的な削除要求は Maira サポート窓口 (
+                  ユーザーからの明示的な削除要求は Myaira サポート窓口 (
                   <a href="mailto:support@maira.pro" className="text-primary underline">
                     support@maira.pro
                   </a>
@@ -329,7 +329,7 @@ export default function PrivacyPolicyPage() {
               </ul>
               <p className="mt-1 rounded bg-slate-50 p-2 text-xs italic dark:bg-slate-900">
                 Compliance statement (English): The use of raw or derived user data received from
-                Google Workspace APIs by Maira will adhere to the Google API Services User Data
+                Google Workspace APIs by Myaira will adhere to the Google API Services User Data
                 Policy, including the Limited Use requirements.
               </p>
             </div>

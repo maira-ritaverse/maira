@@ -143,7 +143,7 @@ export const SEEKER_CV_AI_DRAFT_HARD_MONTHLY = 20;
  *
  * platform_ai_total_quotas に レコードが ない 場合 の フォールバック。
  * agency_org scope kinds の 合計 で この 値 を 超えたら 全 AI を 停止 する。
- * Maira admin が /admin/organizations/[id] で 上書き 可能。
+ * Myaira admin が /admin/organizations/[id] で 上書き 可能。
  */
 // tier-limits.ts の 定数 を 単一 source of truth に する。 既存 の 名前 (PLATFORM_AI_TOTAL_FREE_MONTHLY)
 // は 呼び出し 側 で 参照 されて いる ため 残し、 値 だけ tier-limits.ts に 委譲。
@@ -280,7 +280,7 @@ async function countOrgAiUsageThisMonth(
  * 組織の カスタム上限を 1 件取得(レコードが無ければ null)。
  *
  * 優先順位:
- *   1) platform_ai_quotas (Maira 運営 が 強制設定 / 料金プラン強制)
+ *   1) platform_ai_quotas (Myaira 運営 が 強制設定 / 料金プラン強制)
  *   2) organization_ai_quotas (エージェント admin の 自主設定)
  *   3) null (呼び出し側で defaultLimitFor に フォールバック)
  *
@@ -315,7 +315,7 @@ async function getOrgQuotaForKind(
  * 呼出元 組織 の 月次 「総量」上限 を 取得。
  *
  * 優先順位:
- *   1) platform_ai_total_quotas (Maira admin 強制設定) → そのまま 採用
+ *   1) platform_ai_total_quotas (Myaira admin 強制設定) → そのまま 採用
  *      (tier ボーナス と 重ねず、 admin 設定値 が 絶対)
  *   2) 既定値 PLATFORM_AI_TOTAL_FREE_MONTHLY (500) + tier ボーナス
  *      ・standard / standard_rec → +0

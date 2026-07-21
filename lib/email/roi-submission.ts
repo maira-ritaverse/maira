@@ -53,10 +53,10 @@ export async function sendRoiSubmissionNotificationToOperator(
     return { sent: false, reason: "not_configured" };
   }
 
-  const subject = `【Maira ROI 試算】${payload.companyName} / 年間 ${yen(payload.yearlyTotalYen)}`;
+  const subject = `【Myaira ROI 試算】${payload.companyName} / 年間 ${yen(payload.yearlyTotalYen)}`;
 
   const text = [
-    `Maira の ROI 試算 が 届きました。`,
+    `Myaira の ROI 試算 が 届きました。`,
     ``,
     `■ 会社 情報`,
     `会社 名: ${payload.companyName}`,
@@ -101,12 +101,12 @@ export async function sendRoiSubmissionAutoReply(
     return { sent: false, reason: "not_configured" };
   }
 
-  const subject = `【Maira】${payload.companyName} 様 の ROI 試算 結果`;
+  const subject = `【Myaira】${payload.companyName} 様 の ROI 試算 結果`;
 
   const text = [
     `${payload.contactName} 様`,
     ``,
-    `Maira の ROI 試算 を ご利用 いただき ありがとう ござい ます。`,
+    `Myaira の ROI 試算 を ご利用 いただき ありがとう ござい ます。`,
     `${payload.companyName} 様 の 試算 結果 を お送り します。`,
     ``,
     `━━━━━━━━━━━━━━━━━━━━━━━`,
@@ -122,7 +122,7 @@ export async function sendRoiSubmissionAutoReply(
     ``,
     `ご質問 等 が ござい ましたら support@maira.pro まで お気軽 に ご連絡 ください。`,
     ``,
-    `― Maira 運営 (株式会社Revorise)`,
+    `― Myaira 運営 (株式会社Revorise)`,
     `https://www.maira.pro`,
   ].join("\n");
 

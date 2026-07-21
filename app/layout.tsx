@@ -21,19 +21,19 @@ const siteUrl = getSiteUrl();
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Maira - AI 採用エージェント",
-    template: "%s | Maira",
+    default: "Myaira - AI 採用エージェント",
+    template: "%s | Myaira",
   },
   description:
     "20-30 代の転職活動者向けの AI 採用エージェント。キャリア棚卸し、診断、書類作成、応募管理、AI 求人推薦、面接練習までを一括で。録音 → 履歴書自動生成、Zoom / Google Meet 連携にも対応。",
-  applicationName: "Maira",
+  applicationName: "Myaira",
   authors: [{ name: "株式会社Revorise", url: siteUrl }],
   creator: "株式会社Revorise",
   publisher: "株式会社Revorise",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "Maira",
+    title: "Myaira",
     statusBarStyle: "default",
   },
   formatDetection: {
@@ -50,13 +50,13 @@ export const metadata: Metadata = {
     type: "website",
     locale: "ja_JP",
     url: siteUrl,
-    siteName: "Maira",
-    title: "Maira - AI 採用エージェント",
+    siteName: "Myaira",
+    title: "Myaira - AI 採用エージェント",
     description: "キャリア棚卸し、診断、書類作成、応募管理、AI 求人推薦、面接練習までを一括で。",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Maira - AI 採用エージェント",
+    title: "Myaira - AI 採用エージェント",
     description: "キャリア棚卸し、診断、書類作成、応募管理、AI 求人推薦、面接練習までを一括で。",
   },
   robots: {

@@ -11,7 +11,7 @@ export type CalendarEventKind =
   | "intake" // 受付 日 (client_records.intake_date) — 過去 に なりがち だが 集計 用 に
   | "task_due" // agency_tasks.due_at (未完了 タスク の 期限)
   | "interaction" // client_interactions.occurred_at (対応 履歴)
-  | "meeting" // meeting_schedules.starts_at (Maira 内 で 予約 した Zoom/Meet 面談)
+  | "meeting" // meeting_schedules.starts_at (Myaira 内 で 予約 した Zoom/Meet 面談)
   | "meeting_tentative" // line_meeting_proposals.candidates (LINE で 提案 中 の 未 確定 スロット)
   | "company_interview" // referrals.scheduled_interview_at (企業 と の 面接 予定、 直近 1 件 デノーマライズ)
   | "interview_round" // interviews.scheduled_at (1 応募 × N 回 の 個別 面接 ラウンド)

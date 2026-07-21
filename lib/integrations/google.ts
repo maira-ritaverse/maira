@@ -6,11 +6,11 @@
  * 2026-06-19 変更:
  *   ・drive.readonly スコープを 撤去。Google の Restricted scope(CASA 監査 必須)を
  *     回避するため、Meet 録画の Drive 自動取込は 廃止。
- *   ・Meet 録画は ユーザーが Maira に 手動で アップロード する 運用に 切替え。
+ *   ・Meet 録画は ユーザーが Myaira に 手動で アップロード する 運用に 切替え。
  *
  * 必要 scope:
  *   - openid email             : 本人特定(google_sub / google_email)
- *   - calendar.events          : Maira からカレンダーイベント(= Meet URL 付き)の作成 / 編集 / 削除
+ *   - calendar.events          : Myaira からカレンダーイベント(= Meet URL 付き)の作成 / 編集 / 削除
  */
 
 const AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -19,7 +19,7 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
  * 認可で要求するスコープ。
  *
  * - openid email             : 本人特定(google_sub / google_email)
- * - calendar.events          : Maira からカレンダーイベント(= Meet URL 付き)の作成 / 編集 / 削除
+ * - calendar.events          : Myaira からカレンダーイベント(= Meet URL 付き)の作成 / 編集 / 削除
  *
  * Sensitive scope(calendar.events)のみで構成し、Restricted scope は使わない。
  * Tier 2 OAuth verification(CASA 不要)で 公開可能。

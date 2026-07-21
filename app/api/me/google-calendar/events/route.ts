@@ -3,18 +3,18 @@
  * POST /api/me/google-calendar/events
  *
  * GET:本人接続中の Google Primary カレンダーの予定を期間で取得して、
- *      Maira カレンダー画面に重畳表示するための簡易ビューを返す。
+ *      Myaira カレンダー画面に重畳表示するための簡易ビューを返す。
  *
- * POST:Maira カレンダー画面から「Google に予定を作成」する。
+ * POST:Myaira カレンダー画面から「Google に予定を作成」する。
  *
  * 認可:
  *   ・ログイン済みの user 本人
  *   ・google_connections の calendar.events スコープが必須
  *
  * 設計判断:
- *   ・サーバーで Google API を呼んで、レスポンスを Maira 用の薄い形に整形して返す
+ *   ・サーバーで Google API を呼んで、レスポンスを Myaira 用の薄い形に整形して返す
  *     → ブラウザに access_token を渡さない(セキュリティ)
- *   ・取得結果は Maira DB に保存しない(プライバシー懸念回避、毎回 fetch)
+ *   ・取得結果は Myaira DB に保存しない(プライバシー懸念回避、毎回 fetch)
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";

@@ -111,7 +111,7 @@ Day 30 : 無料期間終了 → 自動 課金 開始
 - 既存 500 回 / 月 制限 を そのまま 適用(`PLATFORM_AI_TOTAL_FREE_MONTHLY = 500`)
 - Pro / Premium 契約中 は +500 = 1,000 回
 - 上限 は organization_plans / subscription_addons から 動的計算
-- 既存 `platform_ai_total_quotas` テーブル は Maira admin の 上書き用 として 維持
+- 既存 `platform_ai_total_quotas` テーブル は Myaira admin の 上書き用 として 維持
 
 ### 4-4. 4 人目以降 課金
 
@@ -178,7 +178,7 @@ CREATE TABLE organization_plans (
                                 // 90 分 超過時は 2 件 INSERT する
 ```
 
-### 5-3. Maira admin の 強制 上書き
+### 5-3. Myaira admin の 強制 上書き
 
 既存 `platform_ai_total_quotas` を 維持 → 運営者が 個別 org の 上限 を 上書き 可能。
 
@@ -349,7 +349,7 @@ quantity を 月初 cron で 更新(`organization_members` 件数 反映)。
 ## 10. マーケ メッセージ(参考、 LP / 募集メール 用)
 
 ```
-Maira for Agency
+Myaira for Agency
 
 [Standard]  ¥25,000 / 月
   3 人 まで、4 人目以降 +¥3,980 / 月

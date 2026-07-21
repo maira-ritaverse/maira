@@ -265,10 +265,6 @@ export function buildResumeHtml(resume: Resume, options: BuildResumeHtmlOptions)
     font-size: 9px;
     color: #555;
   }
-  .address-body .mail {
-    margin-top: 4px;
-    font-size: 11px;
-  }
   .phone-block {
     width: 140px;
     flex-shrink: 0;
@@ -361,7 +357,7 @@ export function buildResumeHtml(resume: Resume, options: BuildResumeHtmlOptions)
           <p class="today">${escapeHtml(today)} 現在</p>
         </div>
         <div class="row-furigana">
-          <div class="label-cell-narrow">ふりがな</div>
+          <div class="label-cell-narrow">フリガナ</div>
           <div class="furigana-value">${escapeHtml(resume.nameKana ?? "")}</div>
         </div>
         <div class="name-row">
@@ -465,7 +461,7 @@ function renderAddressBlock(args: {
   const { addressKana, postalCode, address, phone, email, label, note } = args;
   return `<div class="address-block">
     <div class="row-furigana">
-      <div class="label-cell-narrow">ふりがな</div>
+      <div class="label-cell-narrow">フリガナ</div>
       <div class="furigana-value">${escapeHtml(addressKana ?? "")}</div>
     </div>
     <div class="address-row">
@@ -474,11 +470,15 @@ function renderAddressBlock(args: {
         <div class="postal"><span>〒</span><span>${escapeHtml(postalCode ?? "")}</span></div>
         <div class="addr-line">${escapeHtml(address ?? "")}</div>
         ${note ? `<div class="note">${escapeHtml(note)}</div>` : ""}
-        ${email ? `<div class="mail">メール ${escapeHtml(email)}</div>` : ""}
       </div>
       <div class="phone-block">
         <div class="phone-label">電話</div>
         <div class="phone-value">${escapeHtml(phone ?? "")}</div>
+        ${
+          email
+            ? `<div class="phone-label" style="border-top:1px solid #000">メール</div><div class="phone-value" style="font-size:11px; word-break:break-all;">${escapeHtml(email)}</div>`
+            : ""
+        }
       </div>
     </div>
   </div>`;

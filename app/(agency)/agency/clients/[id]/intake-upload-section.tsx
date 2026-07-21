@@ -112,7 +112,7 @@ export async function IntakeUploadSection({ clientRecordId, clientLinked, client
       <Card className="space-y-2 p-5">
         <h2 className="text-base font-semibold">AI ヒアリング</h2>
         <p className="text-muted-foreground text-sm">
-          {clientName} さんは Maira アカウントを連携していません。
+          {clientName} さんは Myaira アカウントを連携していません。
           先に招待してから、ヒアリング録音をアップロードしてください。
         </p>
       </Card>

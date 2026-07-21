@@ -33,7 +33,7 @@ const TOKEN_URL = "https://zoom.us/oauth/token";
  *   - meeting:delete:meeting                    : ミーティング削除(キャンセル)
  *
  * 既存接続済みユーザは meeting:write:meeting が含まれない可能性があるので、
- * 設定画面で「Maira から会議を作成」機能を使うとき再認可を促す。
+ * 設定画面で「Myaira から会議を作成」機能を使うとき再認可を促す。
  */
 export const ZOOM_SCOPES = [
   "cloud_recording:read:list_user_recordings",

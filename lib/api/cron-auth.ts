@@ -8,7 +8,7 @@ import { timingSafeEqual } from "node:crypto";
  *     `Authorization: Bearer <CRON_SECRET>` を自動付与する
  *   ・未設定の場合は無認証で叩かれる
  *
- * Maira の従来仕様:
+ * Myaira の従来仕様:
  *   ・INTAKE_CRON_SECRET を独自に持ち、外部からの手動 trigger でも
  *     使えるようにしていた(Authorization: Bearer / x-cron-secret)
  *

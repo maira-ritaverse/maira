@@ -37,10 +37,10 @@ export async function sendAgencyAdminInviteEmail(
   const from = process.env.EMAIL_FROM;
   if (!from) return { sent: false, reason: "not_configured" };
 
-  const subject = `【Maira】${args.organizationName} の管理者アカウント発行のご案内`;
+  const subject = `【Myaira】${args.organizationName} の管理者アカウント発行のご案内`;
 
   const text = [
-    `${args.organizationName} の管理者として Maira にご招待いただきました。`,
+    `${args.organizationName} の管理者として Myaira にご招待いただきました。`,
     ``,
     `下記リンクからアカウントを有効化し、パスワードをご設定ください。`,
     args.actionLink,
@@ -55,7 +55,7 @@ export async function sendAgencyAdminInviteEmail(
   const body = `
 <h2 style="margin:0 0 12px;font-size:20px;line-height:1.4;">${escapeHtml(args.organizationName)} 管理者アカウントのご案内</h2>
 <p style="margin:0 0 16px;color:#555;line-height:1.6;font-size:14px;">
-  ${escapeHtml(args.organizationName)} の管理者として Maira にご招待いただきました。<br>
+  ${escapeHtml(args.organizationName)} の管理者として Myaira にご招待いただきました。<br>
   下記のボタンからアカウントを有効化し、パスワードをご設定ください。
 </p>
 

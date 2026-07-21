@@ -55,8 +55,8 @@ export async function notifyAgencyOfSeekerAction(args: NotifyAgencyArgs): Promis
     organizations: { name: string } | { name: string }[] | null;
   };
   const orgName = Array.isArray(job.organizations)
-    ? (job.organizations[0]?.name ?? "Maira")
-    : (job.organizations?.name ?? "Maira");
+    ? (job.organizations[0]?.name ?? "Myaira")
+    : (job.organizations?.name ?? "Myaira");
 
   // 求職者の表示名(client_records.name 優先、無ければ email ローカル部)
   let clientName = "求職者";

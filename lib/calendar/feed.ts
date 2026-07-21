@@ -145,10 +145,10 @@ export function buildIcsFeed(sources: FeedSources, now: Date = new Date()): stri
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Maira//Calendar Feed//JA",
+    "PRODID:-//Myaira//Calendar Feed//JA",
     "METHOD:PUBLISH",
     "CALSCALE:GREGORIAN",
-    "X-WR-CALNAME:Maira",
+    "X-WR-CALNAME:Myaira",
     ...veventChunks,
     "END:VCALENDAR",
   ];

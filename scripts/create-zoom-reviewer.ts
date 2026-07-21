@@ -207,7 +207,7 @@ async function main() {
   const jobs = (insertedJobs ?? []) as Array<{ id: string; company_name: string }>;
 
   // 6. LINE 会話タグ 3 種 + ダミー LINE user + タグ紐付け
-  //   Zoom 連携のテストには LINE は必須ではないが、Maira の UI で「タグが
+  //   Zoom 連携のテストには LINE は必須ではないが、Myaira の UI で「タグが
   //   ついた友だち一覧」など複数の画面が確認できるようにする。
   await seedLineTagsAndAssignments(admin, orgId, clients);
 

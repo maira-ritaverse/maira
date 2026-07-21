@@ -199,7 +199,7 @@ export function CalendarView({
       // (referrals ブロック に アンカー を 置け ば さらに 精度 UP。 現状 は 顧客 詳細 の
       //  トップ に 応募 一覧 が ある ため # 付き で 遷移 は 保留)。
       // meeting_tentative → クライアント の LINE 会話 or 顧客 詳細 へ (承諾 確認 導線)。
-      // Maira クライアント有り → クライアント詳細へ
+      // Myaira クライアント有り → クライアント詳細へ
       if (ev.clientRecordId) {
         router.push(`/agency/clients/${ev.clientRecordId}`);
         return;
@@ -326,7 +326,7 @@ export function CalendarView({
     }
   };
 
-  // #5b: 手動 予定 の 作成 / 編集 後 に Maira 側 の カレンダー イベント を 再 fetch。
+  // #5b: 手動 予定 の 作成 / 編集 後 に Myaira 側 の カレンダー イベント を 再 fetch。
   const refreshMaira = useCallback(async () => {
     try {
       const res = await fetch(`/api/agency/calendar?month=${yearMonth}`);
@@ -426,7 +426,7 @@ export function CalendarView({
         {error && <span className="text-xs text-red-600 dark:text-red-300">{error}</span>}
 
         <div className="ml-auto flex items-center gap-2">
-          {/* #5b: Zoom/Meet 提供者 経由 で は なく Maira 側 で 予定 を 追加 */}
+          {/* #5b: Zoom/Meet 提供者 経由 で は なく Myaira 側 で 予定 を 追加 */}
           <Button
             size="sm"
             variant="outline"
@@ -560,7 +560,7 @@ export function CalendarView({
                       onClick={() => setManualDialog({ open: true, dateKey: cell.dateKey })}
                       className="text-muted-foreground/60 hover:text-foreground text-xs leading-none"
                       aria-label="この日に会議を追加"
-                      title="Maira に 会議 予定 を 追加"
+                      title="Myaira に 会議 予定 を 追加"
                     >
                       +
                     </button>

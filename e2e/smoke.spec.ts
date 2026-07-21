@@ -12,7 +12,7 @@ test.describe("smoke / public pages", () => {
     const res = await page.goto("/");
     expect(res?.status()).toBeLessThan(400);
     // ルート LP はマーケティングページ。文字列の決め打ちは脆いので、HTML が返れば OK。
-    await expect(page).toHaveTitle(/Maira/i);
+    await expect(page).toHaveTitle(/Myaira/i);
   });
 
   test("/login が表示される", async ({ page }) => {

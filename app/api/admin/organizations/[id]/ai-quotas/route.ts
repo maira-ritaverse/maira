@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 /**
  * GET / PUT /api/admin/organizations/[id]/ai-quotas
  *
- * Maira admin が 企業ごとの AI 強制上限を 取得 / 設定 / 解除 する API。
+ * Myaira admin が 企業ごとの AI 強制上限を 取得 / 設定 / 解除 する API。
  *
  * GET:
  *   全 kind の 現在 設定 を 返す ({kind: {monthlyLimit, notes, updatedAt} ...})。

@@ -116,8 +116,8 @@ openGraph: {
   type: "website",
   locale: "ja_JP",
   url: siteUrl,
-  siteName: "Maira",
-  title: "Maira - AI 採用エージェント",
+  siteName: "Myaira",
+  title: "Myaira - AI 採用エージェント",
   description: "キャリア棚卸し、診断、書類作成、...",
 }
 ```
@@ -127,7 +127,7 @@ openGraph: {
 ### 残タスク
 
 - [ ] 1200 × 630 px の OG 画像 を 制作
-  - Maira ロゴ + キャッチコピー「あなただけの AI 採用エージェント」等
+  - Myaira ロゴ + キャッチコピー「あなただけの AI 採用エージェント」等
   - 既存 ブランドカラー(オレンジ / 黄) を 使用
 - [ ] `public/og.png` に 配置
 - [ ] `app/layout.tsx` の `openGraph` に 以下を 追加:
@@ -140,7 +140,7 @@ openGraph: {
       url: "/og.png",
       width: 1200,
       height: 630,
-      alt: "Maira - AI 採用エージェント",
+      alt: "Myaira - AI 採用エージェント",
     },
   ],
 },

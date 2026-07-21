@@ -22,9 +22,9 @@ import { SiteHeader } from "@/components/features/marketing/site-header";
 import { buttonVariants } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "ROI試算 | Maira",
+  title: "ROI試算 | Myaira",
   description:
-    "現状の数字を入力するだけで、Maira導入後の年間効果額をその場で試算。経営会議や社内検討にお役立ていただけます。",
+    "現状の数字を入力するだけで、Myaira導入後の年間効果額をその場で試算。経営会議や社内検討にお役立ていただけます。",
 };
 
 export default function RoiPage() {
@@ -80,7 +80,7 @@ export default function RoiPage() {
                 の3つの機能
               </h2>
               <p className="mt-3 text-sm text-slate-600">
-                試算で計上している効果は、すべてMairaの実機能に紐付いています。
+                試算で計上している効果は、すべてMyairaの実機能に紐付いています。
               </p>
             </div>
 

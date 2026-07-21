@@ -136,7 +136,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
       inviteeName = (cr as { name: string | null } | null)?.name ?? inviteeName;
     }
 
-    let organizationName = "Maira";
+    let organizationName = "Myaira";
     let organizationId = "";
     const { data: roleRow } = await supabase
       .from("organization_members")
@@ -152,8 +152,8 @@ export async function DELETE(_request: Request, context: RouteContext) {
       };
       organizationId = r.organization_id;
       organizationName = Array.isArray(r.organizations)
-        ? (r.organizations[0]?.name ?? "Maira")
-        : (r.organizations?.name ?? "Maira");
+        ? (r.organizations[0]?.name ?? "Myaira")
+        : (r.organizations?.name ?? "Myaira");
     }
 
     await notifyMeetingScheduled({
@@ -313,7 +313,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         .maybeSingle();
       inviteeName = (cr as { name: string | null } | null)?.name ?? inviteeName;
     }
-    let organizationName = "Maira";
+    let organizationName = "Myaira";
     let organizationId = "";
     const { data: roleRow } = await supabase
       .from("organization_members")
@@ -329,8 +329,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       };
       organizationId = r.organization_id;
       organizationName = Array.isArray(r.organizations)
-        ? (r.organizations[0]?.name ?? "Maira")
-        : (r.organizations?.name ?? "Maira");
+        ? (r.organizations[0]?.name ?? "Myaira")
+        : (r.organizations?.name ?? "Myaira");
     }
     await notifyMeetingScheduled({
       meeting: updated,

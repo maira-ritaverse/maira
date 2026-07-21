@@ -247,7 +247,7 @@ export function ScheduleMeetingDialog({ clientId, clientName }: ScheduleMeetingD
                   </div>
                   <p className="text-muted-foreground text-xs">
                     {provider === "zoom"
-                      ? "Zoom クラウド録画(自動開始)で録画され、終了後に Maira に取込まれます。"
+                      ? "Zoom クラウド録画(自動開始)で録画され、終了後に Myaira に取込まれます。"
                       : "Google Calendar に予定が作成されます。録画は Workspace の Meet 録画機能 + Drive 同期で取込まれます。"}
                   </p>
                 </div>
@@ -312,7 +312,7 @@ export function ScheduleMeetingDialog({ clientId, clientName }: ScheduleMeetingD
 
                 <div className="text-muted-foreground space-y-1 text-xs">
                   <div>
-                    録画は終了後に Maira へ自動取込され、面談文字起こし →
+                    録画は終了後に Myaira へ自動取込され、面談文字起こし →
                     履歴書/職務経歴書下書きに活用されます。
                   </div>
                 </div>

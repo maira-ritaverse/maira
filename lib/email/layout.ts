@@ -1,7 +1,7 @@
 /**
  * メール HTML 共通レイアウト
  *
- * Maira ブランドのフッターを統一する。
+ * Myaira ブランドのフッターを統一する。
  * 各メールの本文(中央のカード部分)だけを innerHtml として受け取り、
  * 同じヘッダー/フッターで包む。
  */
@@ -31,9 +31,9 @@ export function renderEmailLayout({ previewTitle, bodyHtml }: EmailLayoutArgs): 
               <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                   <td style="vertical-align:middle;padding-right:10px;">
-                    <img src="https://app.maira.pro/icon-192.png" width="28" height="28" alt="Maira" style="display:block;border:0;">
+                    <img src="https://app.maira.pro/icon-192.png" width="28" height="28" alt="Myaira" style="display:block;border:0;">
                   </td>
-                  <td style="vertical-align:middle;font-size:16px;font-weight:700;letter-spacing:0.05em;color:#111;">Maira</td>
+                  <td style="vertical-align:middle;font-size:16px;font-weight:700;letter-spacing:0.05em;color:#111;">Myaira</td>
                 </tr>
               </table>
             </td>
@@ -47,7 +47,7 @@ export function renderEmailLayout({ previewTitle, bodyHtml }: EmailLayoutArgs): 
             <td style="padding:0 28px 24px;">
               <hr style="border:none;border-top:1px solid #e6e6e6;margin:0 0 12px;">
               <p style="margin:0;font-size:12px;color:#888;line-height:1.6;">
-                Maira(マイラ)— 20-30代の転職活動者のための AI キャリアエージェント<br>
+                Myaira(マイラ)— 20-30代の転職活動者のための AI キャリアエージェント<br>
                 <a href="https://maira.pro" style="color:#666;text-decoration:none;">https://maira.pro</a><br>
                 <span style="color:#aaa;">運営:株式会社Revorise</span>
               </p>

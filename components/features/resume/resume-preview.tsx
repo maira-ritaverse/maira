@@ -133,7 +133,7 @@ function HeaderAndBasicInfo({
           </div>
 
           {/* ふりがな */}
-          <RowLine label="ふりがな" small>
+          <RowLine label="フリガナ" small>
             {resume.nameKana ?? ""}
           </RowLine>
 
@@ -241,10 +241,13 @@ function AddressBlock({
   label: string;
   note?: string;
 }) {
+  // メールが入力されている場合のみ、電話セルの下に「メール」欄を積む
+  // (厚労省 2021 様式では現住所ブロック右側に電話とメールを縦に並べる)
+  const hasEmail = email !== null && email !== undefined && email !== "";
   return (
     <div className="border-x border-b border-black">
       {/* ふりがな */}
-      <RowLine label="ふりがな" small>
+      <RowLine label="フリガナ" small>
         {addressKana ?? ""}
       </RowLine>
 
@@ -258,13 +261,21 @@ function AddressBlock({
           </div>
           <div className="mt-1 min-h-[1.2em]">{address ?? ""}</div>
           {note && <div className="mt-1 text-[9px] text-neutral-600">{note}</div>}
-          {email !== null && email !== undefined && email !== "" && (
-            <div className="mt-1 text-[11px]">メール {email}</div>
-          )}
         </div>
+        {/* 電話 + メール を右セルに縦積み。メール未入力時は電話欄がセルを占める */}
         <div className="flex w-[140px] shrink-0 flex-col border-l border-black">
           <div className="border-b border-black px-2 py-1 text-[10px]">電話</div>
-          <div className="flex flex-1 items-center px-2 text-[12px]">{phone ?? ""}</div>
+          <div className={`flex items-center px-2 py-1 text-[12px] ${hasEmail ? "" : "flex-1"}`}>
+            {phone ?? ""}
+          </div>
+          {hasEmail && (
+            <>
+              <div className="border-t border-black px-2 py-1 text-[10px]">メール</div>
+              <div className="flex flex-1 items-center px-2 py-1 text-[11px] break-all">
+                {email}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

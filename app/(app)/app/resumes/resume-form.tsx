@@ -337,7 +337,7 @@ export function ResumeForm(props: Props) {
           />
           {/* 厚労省様式では番地・建物名にはフリガナを振らない慣習なので明示。 */}
           <p className="text-muted-foreground text-xs">
-            町名までのふりがなで構いません(番地・建物名は不要)
+            町名までのフリガナで構いません(番地・建物名は不要)
           </p>
         </div>
 
@@ -384,7 +384,7 @@ export function ResumeForm(props: Props) {
             placeholder="任意"
           />
           <p className="text-muted-foreground text-xs">
-            町名までのふりがなで構いません(番地・建物名は不要)
+            町名までのフリガナで構いません(番地・建物名は不要)
           </p>
         </div>
 
@@ -408,7 +408,8 @@ export function ResumeForm(props: Props) {
         <div>
           <h2 className="text-lg font-semibold">学歴・職歴</h2>
           <p className="text-muted-foreground mt-1 text-xs">
-            時系列で入力してください。「学歴」「職歴」の見出し行も内容欄に書けます
+            時系列で入力してください。「学歴」「職歴」の見出し行や、退職理由・自己PR
+            などの自由記述も内容欄に書けます(年月は空欄でも可)
           </p>
         </div>
 
@@ -418,7 +419,7 @@ export function ResumeForm(props: Props) {
           )}
 
           {educationFieldArray.fields.map((field, index) => (
-            <div key={field.id} className="grid grid-cols-[5rem_4rem_1fr_auto] items-end gap-2">
+            <div key={field.id} className="grid grid-cols-[5rem_4rem_1fr_auto] items-start gap-2">
               <div className="space-y-1">
                 {index === 0 && <Label className="text-xs">年</Label>}
                 <select
@@ -457,10 +458,11 @@ export function ResumeForm(props: Props) {
               </div>
               <div className="space-y-1">
                 {index === 0 && <Label className="text-xs">内容</Label>}
-                <Input
+                <Textarea
                   {...register(`education_history.${index}.description`)}
                   disabled={isPending}
-                  placeholder="例:○○大学 ○○学部 入学"
+                  rows={2}
+                  placeholder="例:○○大学 ○○学部 入学 / 一身上の都合により退職 など"
                 />
               </div>
               <Button
@@ -508,7 +510,7 @@ export function ResumeForm(props: Props) {
           )}
 
           {licenseFieldArray.fields.map((field, index) => (
-            <div key={field.id} className="grid grid-cols-[5rem_4rem_1fr_auto] items-end gap-2">
+            <div key={field.id} className="grid grid-cols-[5rem_4rem_1fr_auto] items-start gap-2">
               <div className="space-y-1">
                 {index === 0 && <Label className="text-xs">年</Label>}
                 <select

@@ -13,8 +13,8 @@ import { LandingPagePreview } from "@/components/features/marketing/landing-page
  * - サイト全体のクロールに乗らないよう、noindex を付ける。
  */
 export const metadata: Metadata = {
-  title: "Maira — Preview Edition (Agencies)",
-  description: "Maira エージェント向け LP の改作プレビュー。比較用。",
+  title: "Myaira — Preview Edition (Agencies)",
+  description: "Myaira エージェント向け LP の改作プレビュー。比較用。",
   robots: {
     index: false,
     follow: false,

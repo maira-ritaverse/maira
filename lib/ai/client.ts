@@ -1,7 +1,7 @@
 import { anthropic } from "@ai-sdk/anthropic";
 
 /**
- * Mairaで使用するClaudeモデルの定義
+ * Myairaで使用するClaudeモデルの定義
  *
  * 用途別にモデルを分けることで、コスト最適化が可能。
  * 例:複雑な推論 → Sonnet、軽い分類 → Haiku

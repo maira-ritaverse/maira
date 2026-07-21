@@ -9,7 +9,7 @@ type Props = {
 };
 
 /**
- * 「Mairaからの提案」セクション。
+ * 「Myairaからの提案」セクション。
  *
  * generateSuggestions が返した配列を、優先度順に上位数件表示する。
  * 配列が空のときは何も描画しない(セクション見出しも出ない)。
@@ -21,7 +21,7 @@ export function DashboardSuggestions({ suggestions, maxDisplay = 3 }: Props) {
 
   return (
     <div>
-      <h2 className="mb-3 text-lg font-bold">Mairaからの提案</h2>
+      <h2 className="mb-3 text-lg font-bold">Myairaからの提案</h2>
       <div className="space-y-2">
         {displayed.map((suggestion) => (
           <SuggestionCard key={suggestion.id} suggestion={suggestion} />

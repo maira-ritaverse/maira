@@ -3,9 +3,9 @@
  *
  * 1 度の同意で以下を一括取得する:
  *   - openid / email / profile       … ログイン認証
- *   - calendar.events                … Maira からカレンダーイベント(Meet URL 付)の作成・編集・削除
+ *   - calendar.events                … Myaira からカレンダーイベント(Meet URL 付)の作成・編集・削除
  *
- * Maira の方針:
+ * Myaira の方針:
  *   ・「Google でログイン」と「Google を連携」を 1 回の同意で完結させる(分けない)
  *   ・refresh_token を確実にもらうため access_type=offline + prompt=consent を強制
  *     ※ Google の仕様で、prompt=consent を付けないと 2 回目以降 refresh_token が来ない
@@ -14,7 +14,7 @@
  *
  * 2026-06-19 変更:
  *   ・drive.readonly スコープを 撤去(Google の Restricted scope = CASA 必須 を 回避)。
- *   ・Meet 録画は ユーザーが Maira に 手動アップロード する 運用に 切替え。
+ *   ・Meet 録画は ユーザーが Myaira に 手動アップロード する 運用に 切替え。
  *   ・Tier 2 OAuth verification(Sensitive scope のみ)で 公開可能に なる。
  *
  * 戻り値:

@@ -4,7 +4,7 @@
  * 純粋 関数 の 集まり (Supabase を 呼ばない)。 実際 の 集計 (日次 送信数 の 取得 等) は
  * flow-executor.ts 側 で 行う。
  *
- * Phase 1 は tz='Asia/Tokyo' 固定 前提 で 実装 する (Maira は 日本 向け 単一 tz)。
+ * Phase 1 は tz='Asia/Tokyo' 固定 前提 で 実装 する (Myaira は 日本 向け 単一 tz)。
  * 拡張 する 場合 は Intl API か date-fns-tz 導入 を 検討。
  */
 import { z } from "zod";

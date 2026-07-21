@@ -382,7 +382,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
  *   ・本 実装 は 削除 対象 org の member だった user について、 以下 3 条件 を
  *     全 て 満たす 場合 のみ auth.users も 削除 する:
  *       (a) 他 organization_members に 所属 が 残って いない
- *       (b) profiles.is_maira_admin = false (Maira 運営 admin は 保護)
+ *       (b) profiles.is_maira_admin = false (Myaira 運営 admin は 保護)
  *       (c) profiles.account_type = 'organization_member'
  *           (seeker アカウント は 別 系統 なので 触ら ない)
  *   ・profiles は auth.users への FK cascade で 連鎖 削除 される (追加 SQL 不要)。

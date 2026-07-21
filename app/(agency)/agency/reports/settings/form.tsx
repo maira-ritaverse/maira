@@ -256,7 +256,7 @@ function CostsTab({
         <div className="text-sm font-medium">{selected} のコスト</div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <NumRow label="マーケティング(広告費 等)" value={mk} onChange={setMk} step={10000} />
-          <NumRow label="ツール(Maira / Zoom 等)" value={tl} onChange={setTl} step={1000} />
+          <NumRow label="ツール(Myaira / Zoom 等)" value={tl} onChange={setTl} step={1000} />
           <NumRow label="人件費" value={ps} onChange={setPs} step={10000} />
           <NumRow label="その他" value={ot} onChange={setOt} step={1000} />
         </div>

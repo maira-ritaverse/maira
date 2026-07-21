@@ -15,7 +15,7 @@ import { getSiteUrl } from "@/lib/config/site-url";
  *
  * フロー:
  *   1. LINE Developers コンソール で LIFF アプリ を 作成
- *   2. Endpoint URL に Maira が 表示 する URL を 設定
+ *   2. Endpoint URL に Myaira が 表示 する URL を 設定
  *   3. LIFF ID を コピー → この フォーム に 入力
  *
  * 設定 後 は 求人共有 Flex Message の リンク が LIFF URL に なり、
@@ -133,7 +133,7 @@ export function LiffForm({ organizationId }: Props) {
           <li>
             設定 値:
             <ul className="mt-0.5 ml-4 list-disc">
-              <li>LIFF アプリ 名:任意 (例: Maira 求人 詳細)</li>
+              <li>LIFF アプリ 名:任意 (例: Myaira 求人 詳細)</li>
               <li>サイズ:Full</li>
               <li>エンドポイント URL:下記 を コピー し 貼り付け</li>
               <li>Scope:profile, openid を チェック</li>

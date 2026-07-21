@@ -1,6 +1,6 @@
 # Google OAuth Verification — Reply Draft
 
-Purpose: Reply to Google's compliance checklist email for Maira's OAuth verification of
+Purpose: Reply to Google's compliance checklist email for Myaira's OAuth verification of
 Cloud Project `maira-prod` (Project Number: 765106046848).
 
 **Before sending, fill in the placeholders marked `[FILL_IN: ...]`.**
@@ -49,10 +49,10 @@ criterion for the maira-prod project (Project Number: 765106046848).
     * openid + email: We identify the connected Google account so that (a) we can
       detect if a user accidentally connects a different Google account than intended,
       (b) we can associate created events with the correct source account, and
-      (c) we display which Google account is connected in the Maira settings UI.
+      (c) we display which Google account is connected in the Myaira settings UI.
     * calendar.events: The core feature is scheduling recruitment interviews as
-      Google Meet meetings. The recruiter (agent) creates an interview in Maira,
-      Maira creates a corresponding Google Calendar event with a Meet URL attached,
+      Google Meet meetings. The recruiter (agent) creates an interview in Myaira,
+      Myaira creates a corresponding Google Calendar event with a Meet URL attached,
       and the URL is shared with the candidate. Narrower scopes are not viable
       because we need to create, update (reschedule), and delete (cancel) events
       programmatically. We do NOT need or request calendar.readonly, calendar,
@@ -127,13 +127,13 @@ plus the Limited Use compliance statement.
 
 - Data Access (7-2-1): We access ONLY (a) the connecting user's Google account
   identifier (sub) and primary email address, and (b) metadata of Google Calendar
-  events created by Maira on the user's behalf (title, start/end time, attendees,
+  events created by Myaira on the user's behalf (title, start/end time, attendees,
   Meet URL, event ID). We do NOT access other calendar events, other calendars,
   Google Drive files, Gmail content, contacts, or Chat messages.
 
 - Data Use (7-2-2): Google user data is used ONLY to (a) reflect interviews
-  created in Maira as Google Calendar events with Meet URLs, (b) display the
-  Meet URL inside Maira for sharing with the candidate, (c) synchronize
+  created in Myaira as Google Calendar events with Meet URLs, (b) display the
+  Meet URL inside Myaira for sharing with the candidate, (c) synchronize
   reschedules and cancellations to Google Calendar, and (d) maintain the
   connection and detect if a different Google account is subsequently connected.
   We do NOT use Google data for advertising, behavioral profiling, credit
@@ -153,7 +153,7 @@ plus the Limited Use compliance statement.
 
 - Data Retention & Deletion (7-2-5): OAuth tokens are deleted immediately on
   user-initiated disconnect (and Google's token revocation endpoint is called).
-  Calendar event data on our side is deleted when the corresponding Maira
+  Calendar event data on our side is deleted when the corresponding Myaira
   meeting record is deleted. Full account deletion removes all associated data
   within 30 days. Users may request expedited deletion via support@maira.pro
   (7 business days SLA).
@@ -180,23 +180,23 @@ models — neither ours nor any third party's — beyond the specific end user's
 in-session personalized output.
 
 Prohibited Transfer to Third-Party AI/ML Services: We do use Anthropic Claude
-for other Maira features (career intake dialogue, resume drafting, job matching),
+for other Myaira features (career intake dialogue, resume drafting, job matching),
 but Google Calendar data received via this integration is NEVER sent to any
 LLM. Our contract with Anthropic includes zero data retention and no training
-use of Maira's API traffic.
+use of Myaira's API traffic.
 
 Limited Use Compliance Statement (also published at
 https://app.maira.pro/privacy section 7-2-6):
 
 "The use of raw or derived user data received from Google Workspace APIs by
-Maira will adhere to the Google API Services User Data Policy, including the
+Myaira will adhere to the Google API Services User Data Policy, including the
 Limited Use requirements."
 
 ---
 7. PROHIBITED USE CASES
 ---
 
-Maira's use of the calendar.events scope aligns with allowed use cases and does
+Myaira's use of the calendar.events scope aligns with allowed use cases and does
 NOT involve any prohibited use cases:
 - Not used for cold-email or unsolicited commercial email
 - Not used as a CDN
@@ -206,7 +206,7 @@ NOT involve any prohibited use cases:
 8. DATA PORTABILITY APIs
 ---
 
-Not applicable. Maira does not request Data Portability API scopes.
+Not applicable. Myaira does not request Data Portability API scopes.
 
 ---
 9. CLOUD APPLICATION SECURITY ASSESSMENT (CASA)
@@ -224,7 +224,7 @@ provide code excerpts, DPAs with subprocessors, or additional demo footage on
 request.
 
 Best regards,
-Maira Team (Revorise Inc.)
+Myaira Team (Revorise Inc.)
 [FILL_IN: your name / title]
 support@maira.pro
 ```

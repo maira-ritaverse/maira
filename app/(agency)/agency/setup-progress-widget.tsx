@@ -40,7 +40,7 @@ export function SetupProgressWidget({ steps }: Props) {
         <div>
           <p className="text-base font-semibold">セットアップの進捗</p>
           <p className="text-muted-foreground text-xs">
-            以下のステップを完了すると Maira を最大限に活用できます。
+            以下のステップを完了すると Myaira を最大限に活用できます。
           </p>
         </div>
         <div className="text-muted-foreground shrink-0 text-xs tabular-nums">

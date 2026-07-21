@@ -69,7 +69,7 @@ export async function POST(request: Request) {
   const input = parsed.data;
 
   // 対象クライアントが自分の組織のものか確認(RLS で .single() が落ちる)
-  // linked_user_id = Maira 登録済求職者がある場合の auth.users 紐づけ
+  // linked_user_id = Myaira 登録済求職者がある場合の auth.users 紐づけ
   const { data: clientRow, error: clientErr } = await supabase
     .from("client_records")
     .select("id, name, email, linked_user_id")
@@ -166,7 +166,7 @@ export async function POST(request: Request) {
     }
 
     // Zoom 予約後、Google Calendar が接続されていればイベントを自動作成して
-    // ホスト本人の Google カレンダーにも残す(Maira / Zoom / Google の三重ブッキング防止)
+    // ホスト本人の Google カレンダーにも残す(Myaira / Zoom / Google の三重ブッキング防止)
     try {
       const { data: gconn } = await supabase
         .from("google_connections")
@@ -251,7 +251,7 @@ export async function POST(request: Request) {
         endsAt: endsAt.toISOString(),
         timezone: "Asia/Tokyo",
         // 求職者メールがあれば attendee として含めるが、Google からの招待メールは
-        // sendUpdates=none で抑止しているため Maira 側のメールが主たる招待となる
+        // sendUpdates=none で抑止しているため Myaira 側のメールが主たる招待となる
         attendees: client.email ? [{ email: client.email, name: client.name }] : undefined,
       });
       externalMeetingId = event.id;

@@ -299,7 +299,7 @@ export default async function AgencyDashboardPage() {
           "quick-actions",
         ]}
         titles={{
-          "platform-announcements": "Maira からのお知らせ",
+          "platform-announcements": "Myaira からのお知らせ",
           kpi: "活動概要(KPI)",
           "monthly-activity": `今月 の 活動 (${monthlyKpi.periodLabel})`,
           "my-tasks": "自分のタスク",

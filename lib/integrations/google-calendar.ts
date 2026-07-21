@@ -1,7 +1,7 @@
 /**
  * Google Calendar Events API の汎用ラッパ
  *
- * 用途:Maira カレンダー画面で「個人 Google カレンダーをそのまま編集する」UI。
+ * 用途:Myaira カレンダー画面で「個人 Google カレンダーをそのまま編集する」UI。
  * google-meet.ts は「Meet 同梱イベント作成」に特化しているため別ファイル。
  *
  * 認証:
@@ -175,7 +175,7 @@ export function deleteGoogleCalendarEvent(accessToken: string, eventId: string):
 }
 
 /**
- * Maira カレンダーの CalendarEvent 形に変換する純関数。
+ * Myaira カレンダーの CalendarEvent 形に変換する純関数。
  * 表示用のため最小限のフィールドだけ取り出す。
  */
 export function toCalendarEvent(ev: GoogleCalendarEvent): {

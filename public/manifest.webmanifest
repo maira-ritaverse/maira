@@ -1,6 +1,6 @@
 {
-  "name": "Maira - AI 採用エージェント",
-  "short_name": "Maira",
+  "name": "Myaira - AI 採用エージェント",
+  "short_name": "Myaira",
   "description": "20-30 代の転職活動者向け AI 採用エージェント。キャリア棚卸し、診断、書類作成、応募管理、AI 求人推薦、面接練習を一括で。",
   "start_url": "/app",
   "scope": "/",

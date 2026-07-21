@@ -11,9 +11,9 @@ import Link from "next/link";
  * URL: https://app.maira.pro/support
  */
 export const metadata = {
-  title: "サポート | Maira",
+  title: "サポート | Myaira",
   description:
-    "Maira(マイラ)のサポート / お問い合わせ窓口。連絡先、よくある質問、外部連携(Zoom / Google)のヘルプへのリンクをまとめています。",
+    "Myaira(マイラ)のサポート / お問い合わせ窓口。連絡先、よくある質問、外部連携(Zoom / Google)のヘルプへのリンクをまとめています。",
 };
 
 export default function SupportPage() {
@@ -23,7 +23,7 @@ export default function SupportPage() {
         <header>
           <h1 className="text-3xl font-bold">サポート</h1>
           <p className="text-muted-foreground mt-2 text-sm">
-            Maira(マイラ)のご利用にあたって ご不明な点・不具合のご報告・外部サービス連携の
+            Myaira(マイラ)のご利用にあたって ご不明な点・不具合のご報告・外部サービス連携の
             セットアップなど、こちらの窓口で対応いたします。
           </p>
         </header>
@@ -81,7 +81,7 @@ export default function SupportPage() {
 
             <details className="border-foreground/10 rounded-lg border p-4">
               <summary className="cursor-pointer font-medium">
-                会議録音が Maira に取り込まれません
+                会議録音が Myaira に取り込まれません
               </summary>
               <div className="text-muted-foreground mt-3 space-y-2 text-xs">
                 <p>以下を ご確認ください:</p>
@@ -92,7 +92,7 @@ export default function SupportPage() {
                   </li>
                   <li>Zoom が録画処理を完了しているか(終了直後は数分〜数十分かかります)</li>
                   <li>
-                    Maira 側で 「会議録音 自動連携」 アドオン契約が 有効になっているか (連携 /
+                    Myaira 側で 「会議録音 自動連携」 アドオン契約が 有効になっているか (連携 /
                     アドオンページで 確認可)
                   </li>
                   <li>
@@ -108,9 +108,9 @@ export default function SupportPage() {
               </summary>
               <div className="text-muted-foreground mt-3 space-y-2 text-xs">
                 <p>
-                  Maira にログイン →{" "}
+                  Myaira にログイン →{" "}
                   <code className="bg-muted rounded px-1">設定 → 連携・アドオン</code>{" "}
-                  ページで、各サービスの「連携を解除」ボタンを 押してください。 解除と同時に、Maira
+                  ページで、各サービスの「連携を解除」ボタンを 押してください。 解除と同時に、Myaira
                   側に 保管されている アクセストークンは 即座に 破棄されます。
                 </p>
                 <p>
@@ -123,7 +123,7 @@ export default function SupportPage() {
                   >
                     Zoom Marketplace の Installed Apps ページ
                   </a>{" "}
-                  で 「Maira」 を 探して Remove を 押してください。
+                  で 「Myaira」 を 探して Remove を 押してください。
                 </p>
               </div>
             </details>
@@ -134,7 +134,7 @@ export default function SupportPage() {
               </summary>
               <div className="text-muted-foreground mt-3 space-y-2 text-xs">
                 <p>
-                  Maira にログイン →{" "}
+                  Myaira にログイン →{" "}
                   <code className="bg-muted rounded px-1">設定 → アカウント</code> ページで{" "}
                   「アカウントを削除」を 押してください。 退会と同時に 履歴書本文 / 会議録音 /
                   文字起こし /連携トークン 等 すべてのデータが 削除されます。
@@ -155,7 +155,7 @@ export default function SupportPage() {
                   <Link href="/privacy" className="text-foreground underline">
                     プライバシーポリシー 第 8 条
                   </Link>{" "}
-                  に 規定された 権利(閲覧 / 修正 / 削除 / 退会 / 改定通知の受領)は、Maira
+                  に 規定された 権利(閲覧 / 修正 / 削除 / 退会 / 改定通知の受領)は、Myaira
                   画面内の各機能から 行使できます。 画面操作で 完結しない 個別ご要望は{" "}
                   <code>support@maira.pro</code> までご連絡ください。
                 </p>
@@ -167,7 +167,7 @@ export default function SupportPage() {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">障害情報・サービス停止のお知らせ</h2>
           <p className="text-muted-foreground text-xs">
-            計画停止・大規模障害が 発生した場合は、Maira 内の通知 および 上記メールへ 個別連絡
+            計画停止・大規模障害が 発生した場合は、Myaira 内の通知 および 上記メールへ 個別連絡
             いたします。 緊急時の問い合わせも 同じ窓口( <code>support@maira.pro</code>{" "}
             )宛にお願いいたします。
           </p>

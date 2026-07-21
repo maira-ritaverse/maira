@@ -76,7 +76,7 @@ export default async function OrgEmailSettingsPage() {
           </li>
         </ol>
         <p className="text-muted-foreground mt-2 text-xs">
-          未設定の場合、メール Flow は Maira の共通環境変数(RESEND_API_KEY /
+          未設定の場合、メール Flow は Myaira の共通環境変数(RESEND_API_KEY /
           EMAIL_FROM)にフォールバックします。
         </p>
       </div>

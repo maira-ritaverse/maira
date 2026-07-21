@@ -6,7 +6,7 @@
  * 流れ:
  *   1) ファイル受領 (multipart/form-data の "file")
  *   2) RLS で対象 client_record を取得して linked_user_id を確認
- *      (linked = 求職者本人が登録済の Maira アカウントを持っている状態)
+ *      (linked = 求職者本人が登録済の Myaira アカウントを持っている状態)
  *   3) Storage に保存(career-intake-audio バケット)
  *      ※ 既存 Storage RLS は「先頭セグメント = 自分の user_id」なので、
  *         エージェント本人(user.id)ベースのパスにする
@@ -84,7 +84,7 @@ export async function POST(request: Request, context: RouteContext) {
       {
         error: "client_not_linked",
         message:
-          "この求職者は Maira アカウントを連携していないため、本人に確認依頼を送れません。先に招待してください。",
+          "この求職者は Myaira アカウントを連携していないため、本人に確認依頼を送れません。先に招待してください。",
       },
       { status: 409 },
     );

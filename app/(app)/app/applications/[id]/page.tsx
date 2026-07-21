@@ -20,7 +20,7 @@ import { TaskList } from "./task-list";
  * 応募詳細・編集ページ
  *
  * Server Component で application 本体・タスク・career_profile の有無を並列取得し、
- * - AdvisorButton: 「Mairaに相談」セッション開始
+ * - AdvisorButton: 「Myairaに相談」セッション開始
  * - TaskList: 「次にやること」セクション
  * - ApplicationForm: 編集フォーム
  * - DeleteButton: 削除ボタン
@@ -81,15 +81,15 @@ export default async function ApplicationDetailPage({
       <div className="grid items-start gap-6 lg:grid-cols-2">
         {/* === 左カラム:主アクション === */}
         <div className="space-y-6">
-          {/* Mairaに相談:キャリア棚卸し未完の場合は誘導文を出してボタンを非活性に */}
+          {/* Myairaに相談:キャリア棚卸し未完の場合は誘導文を出してボタンを非活性に */}
           <Card className="border-primary/40 bg-primary/5 p-6">
             {hasProfile ? (
               <p className="mb-3 text-sm">
-                この応募について、Mairaに相談できます。面接対策、次のアクション、不安なことなど、何でも聞いてください。
+                この応募について、Myairaに相談できます。面接対策、次のアクション、不安なことなど、何でも聞いてください。
               </p>
             ) : (
               <p className="mb-3 text-sm">
-                Mairaに相談するには、先に
+                Myairaに相談するには、先に
                 <Link href="/app/career" className="font-medium underline">
                   キャリア棚卸し
                 </Link>

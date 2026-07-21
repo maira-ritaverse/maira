@@ -56,7 +56,8 @@ export type ResumePii = z.infer<typeof resumePiiSchema>;
 
 export const educationItemSchema = z.object({
   year: z.string().max(7).default(""), // YYYY or YYYY/MM
-  description: z.string().max(200).default(""),
+  // 退職理由・自己PR 等の自由記述も書けるよう広めに(seeker 側 lib/resumes と揃える)
+  description: z.string().max(500).default(""),
 });
 export const licenseItemSchema = z.object({
   year: z.string().max(7).default(""),

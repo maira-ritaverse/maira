@@ -115,7 +115,7 @@ async function getHostAndOrgMeta(
   return {
     displayName:
       (profile as { display_name: string | null } | null)?.display_name ?? "担当アドバイザー",
-    organizationName: (org as { name: string } | null)?.name ?? "Maira",
+    organizationName: (org as { name: string } | null)?.name ?? "Myaira",
   };
 }
 

@@ -21,7 +21,7 @@ import { saveMessage, verifyConversationOwner } from "@/lib/career/conversations
  * 未完のため。Node.js ランタイムで動かす)。
  */
 
-/** 新規セッションで Maira の挨拶を引き出すためのダミー入力 */
+/** 新規セッションで Myaira の挨拶を引き出すためのダミー入力 */
 const SESSION_OPENER = "(セッション開始)";
 
 export async function POST(request: Request) {

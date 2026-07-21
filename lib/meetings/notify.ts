@@ -35,7 +35,7 @@ export type MeetingNotifyContext = {
   inviteeName: string;
   /** 求職者のメール(client_records.email)*/
   inviteeEmail: string | null;
-  /** Maira 登録済求職者の場合 user_id を渡すと in-app 通知も発火 */
+  /** Myaira 登録済求職者の場合 user_id を渡すと in-app 通知も発火 */
   seekerUserId: string | null;
   /** "invite" or "reminder_24h" / "reminder_1h" / "cancel" */
   variant: "invite" | "reminder_24h" | "reminder_1h" | "cancel";

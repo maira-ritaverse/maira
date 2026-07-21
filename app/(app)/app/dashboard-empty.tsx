@@ -33,7 +33,7 @@ export function DashboardEmpty({ upcomingMeetings }: Props) {
       <Card className="border-primary/40 bg-primary/5 p-6">
         <h2 className="text-lg font-bold">まずはキャリア棚卸しから始めましょう</h2>
         <p className="mt-2 text-sm">
-          Mairaと雑談感覚で5-10分話すだけで、あなたの強みや希望が綺麗に整理されます。
+          Myairaと雑談感覚で5-10分話すだけで、あなたの強みや希望が綺麗に整理されます。
           整理結果は、書類作成や応募相談に自動的に活用されます。
         </p>
         <Button render={<Link href="/app/career/new" />} className="mt-4">
@@ -43,7 +43,7 @@ export function DashboardEmpty({ upcomingMeetings }: Props) {
 
       {/* 主要機能の概要(現状カードは 3 枚。 音声面接シミュレーターは β 版でまだ導入していないため出さない)*/}
       <div>
-        <h2 className="mb-3 text-lg font-bold">Mairaができること</h2>
+        <h2 className="mb-3 text-lg font-bold">Myairaができること</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Card className="p-5">
             <p className="font-medium">キャリア棚卸し</p>
@@ -58,9 +58,9 @@ export function DashboardEmpty({ upcomingMeetings }: Props) {
             </p>
           </Card>
           <Card className="p-5">
-            <p className="font-medium">応募管理 + Maira相談</p>
+            <p className="font-medium">応募管理 + Myaira相談</p>
             <p className="text-muted-foreground mt-2 text-sm">
-              応募の進捗管理 + ポップアップでいつでもMairaに相談できる
+              応募の進捗管理 + ポップアップでいつでもMyairaに相談できる
             </p>
           </Card>
         </div>

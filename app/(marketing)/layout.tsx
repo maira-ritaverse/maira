@@ -38,7 +38,7 @@ const notoSansJp = Noto_Sans_JP({
 });
 
 export const metadata: Metadata = {
-  title: "Maira - 候補者とつながる、AIネイティブな採用CRM",
+  title: "Myaira - 候補者とつながる、AIネイティブな採用CRM",
   description:
     "中小転職エージェントのための採用管理。AIが対応履歴を要約し、候補者の動きをリアルタイムで届ける。候補者本人がデータを持つから、安心して預けられる。",
 };

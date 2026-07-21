@@ -5,7 +5,7 @@
 
 ## 文脈
 
-Maira は既に `ma_scenarios` を中心とした Marketing Automation(MA)基盤を持ち、7 つのプリセット(`line_welcome_after_friend` / `line_dormant_outreach` / `line_register_meeting_promotion` / `line_meeting_reminder` / `line_job_introduction` / `line_after_interview_followup` / `line_birthday_greeting`)で LINE 配信を実現している。しかしこの基盤は「求職者への効果的なマーケティング」を実現する上で構造的な制約を抱えている:
+Myaira は既に `ma_scenarios` を中心とした Marketing Automation(MA)基盤を持ち、7 つのプリセット(`line_welcome_after_friend` / `line_dormant_outreach` / `line_register_meeting_promotion` / `line_meeting_reminder` / `line_job_introduction` / `line_after_interview_followup` / `line_birthday_greeting`)で LINE 配信を実現している。しかしこの基盤は「求職者への効果的なマーケティング」を実現する上で構造的な制約を抱えている:
 
 - **単発トリガー = 1 通の設計**(N ステップ配信・条件分岐・目標達成による中断が不可)
 - **プリセットハードコード**(UI から動的に新規シナリオを作れない、コード変更 + migration が必要)

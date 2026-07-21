@@ -23,7 +23,7 @@ import { listTasksByApplication } from "@/lib/tasks/queries";
  * 5. onFinish で AI 応答をDB保存
  */
 
-/** 新規セッションで Maira の最初の挨拶を引き出すためのダミー入力(DB 保存しない) */
+/** 新規セッションで Myaira の最初の挨拶を引き出すためのダミー入力(DB 保存しない) */
 const SESSION_OPENER = "(セッション開始)";
 
 type RouteParams = {

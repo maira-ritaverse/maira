@@ -128,7 +128,7 @@ export function AgencySidebar({ organizationName, memberRole, canUseMaFlows }: P
       isActive={isActive}
       header={
         <div>
-          <Link href="/agency" className="flex items-center gap-2" aria-label="Maira エージェント">
+          <Link href="/agency" className="flex items-center gap-2" aria-label="Myaira エージェント">
             <Image
               src="/icon-192.png"
               alt=""

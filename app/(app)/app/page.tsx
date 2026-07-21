@@ -61,8 +61,8 @@ export default async function DashboardPage({
       <div>
         <h1 className="text-2xl font-bold">おかえりなさい、{data.profile.displayName}さん</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          {data.status === "empty" && "Mairaへようこそ。まずはキャリア棚卸しから始めましょう"}
-          {data.status === "starter" && "今日もMairaがあなたの転職活動を伴走します"}
+          {data.status === "empty" && "Myairaへようこそ。まずはキャリア棚卸しから始めましょう"}
+          {data.status === "starter" && "今日もMyairaがあなたの転職活動を伴走します"}
           {data.status === "active" && "進行中の応募とタスクを確認しましょう"}
         </p>
       </div>

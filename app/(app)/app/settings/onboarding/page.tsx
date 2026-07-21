@@ -31,7 +31,7 @@ export default async function OnboardingSettingsPage() {
       <div>
         <h1 className="text-2xl font-bold">オンボーディングツアー</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Mairaの使い方ツアーをいつでも再表示できます
+          Myairaの使い方ツアーをいつでも再表示できます
         </p>
       </div>
 
@@ -40,7 +40,7 @@ export default async function OnboardingSettingsPage() {
           <div>
             <p className="font-medium">使い方ツアー</p>
             <p className="text-muted-foreground mt-1 text-sm">
-              Mairaの主な機能と、最初に何をすべきかを案内する10ステップのツアーです。
+              Myairaの主な機能と、最初に何をすべきかを案内する10ステップのツアーです。
               いつでも再表示できます。
             </p>
             <p className="text-muted-foreground mt-2 text-xs">

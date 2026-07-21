@@ -36,7 +36,7 @@ export async function POST() {
 
   const result = await sendSlackMessage({
     webhookUrl: url,
-    text: `:white_check_mark: ${role.organization.name} の Maira 通知連携テストです。この投稿が見えていれば設定 OK です。`,
+    text: `:white_check_mark: ${role.organization.name} の Myaira 通知連携テストです。この投稿が見えていれば設定 OK です。`,
   });
 
   if (!result.sent) {

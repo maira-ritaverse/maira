@@ -90,7 +90,7 @@ export type JobExtractionResult = z.infer<typeof jobExtractionSchema>;
  * うち、対応カラムが 無い ものは description / extraction_notes に 適切に 集約する。
  * 詳細な マッピング ルールは 「集約方針」セクション 参照。
  */
-export const JOB_EXTRACTION_SYSTEM_PROMPT = `あなたは 日本の 人材紹介エージェントの ベテラン事務担当です。求人票(PDF / 画像)を 読み取り、構造化された 求人情報を 返す のが 仕事です。Maira の 18 カラム 固定 スキーマに 寄せる 必要が あります。
+export const JOB_EXTRACTION_SYSTEM_PROMPT = `あなたは 日本の 人材紹介エージェントの ベテラン事務担当です。求人票(PDF / 画像)を 読み取り、構造化された 求人情報を 返す のが 仕事です。Myaira の 18 カラム 固定 スキーマに 寄せる 必要が あります。
 
 # 絶対に 守る ルール
 

@@ -75,7 +75,7 @@ export async function POST() {
     result.webhook.active = endpointInfo.data.active;
   }
 
-  // 3) Webhook 疎通テスト (LINE → Maira)
+  // 3) Webhook 疎通テスト (LINE → Myaira)
   const testResult = await testWebhookEndpoint(channel.channelAccessToken);
   if (testResult.ok) {
     result.webhookTest = {

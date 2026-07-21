@@ -18,7 +18,7 @@ import { ContactForm } from "@/components/features/marketing/contact-form";
  * - 共通トークン (--lp-*) は (marketing)/layout.tsx から継承。配色・フォントは同根。
  * - 差別点:
  *   1. 各節の左端に「背骨(スパイン)」と漢数字インデックス(一・二・三…)。
- *   2. ヒーロー右のグラフィックは弧→「ストラタ(層)」へ。水平の層を Maira の縦軸が貫く。
+ *   2. ヒーロー右のグラフィックは弧→「ストラタ(層)」へ。水平の層を Myaira の縦軸が貫く。
  *   3. ソリューションはカード3枚ではなく、罫線で区切る「台帳」型。
  *   4. 機能は2×2グリッドではなく、表組み的な「目次(タビュラ)」型の縦リスト。
  *   5. ヘッダーCTAは丸ピル→「ヘアラインCTA」(下線+矢印)へ。
@@ -272,7 +272,7 @@ function Header() {
           className="flex items-baseline gap-3 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--lp-fuji)]"
         >
           <span className="lp-serif-en text-[1.55rem] font-medium tracking-[-0.01em] text-[color:var(--lp-ink)] sm:text-[1.7rem]">
-            Maira
+            Myaira
           </span>
           <span className="lp-serif-en hidden text-[0.72rem] tracking-[0.22em] text-[color:var(--lp-ink-faint)] italic sm:inline">
             — for agencies
@@ -379,8 +379,8 @@ function Hero() {
  *
  * 設計意図:
  * - 本番LPの「中央ハブ+左右の弧」が "情報が行き交う" を描いたのに対し、
- *   こちらは "情報の層をMairaが縦に貫く" 静的な構造で表現する。
- * - 上から:候補者の更新 → AIの要約 → Maira軸 → エージェントの行動 → 暗号化された記憶。
+ *   こちらは "情報の層をMyairaが縦に貫く" 静的な構造で表現する。
+ * - 上から:候補者の更新 → AIの要約 → Myaira軸 → エージェントの行動 → 暗号化された記憶。
  * - 各層は細罫+小さなドット群。中央の縦軸は破線が下方向に流れる(prefers-reduced-motion で停止)。
  */
 function StrataSignature() {
@@ -398,7 +398,7 @@ function StrataSignature() {
     <svg
       viewBox="0 0 420 420"
       role="img"
-      aria-label="情報の層をMairaの縦軸が貫く構造図"
+      aria-label="情報の層をMyairaの縦軸が貫く構造図"
       className="h-auto w-full max-w-[460px]"
     >
       <defs>
@@ -468,7 +468,7 @@ function StrataSignature() {
         </g>
       ))}
 
-      {/* 中央のMaira層(他の層より太い罫で強調) */}
+      {/* 中央のMyaira層(他の層より太い罫で強調) */}
       <line
         x1="20"
         y1={CENTER_Y}
@@ -479,7 +479,7 @@ function StrataSignature() {
         strokeWidth="1.1"
       />
 
-      {/* Maira軸:縦の破線(下方向にゆっくり流れる) */}
+      {/* Myaira軸:縦の破線(下方向にゆっくり流れる) */}
       <line
         x1="210"
         y1="36"
@@ -490,7 +490,7 @@ function StrataSignature() {
         className="lp-pv-axis"
       />
 
-      {/* 中央ノード(Maira) */}
+      {/* 中央ノード(Myaira) */}
       <circle
         cx="210"
         cy={CENTER_Y}
@@ -515,7 +515,7 @@ function StrataSignature() {
         letterSpacing="0.32em"
         fill="oklch(0.36 0.028 262)"
       >
-        MAIRA · AXIS
+        MYAIRA · AXIS
       </text>
     </svg>
   );
@@ -614,7 +614,7 @@ const SOLUTION_ENTRIES: SolutionEntry[] = [
   {
     number: "ii.",
     title: "求職者の動きが、自動で届く",
-    body: "候補者がMaira上で職務経歴を更新したり、希望を見直したとき、エージェントの画面には静かに「更新あり」が灯ります。聞きに行かなくても、最新の候補者像が、いつもそこにある。",
+    body: "候補者がMyaira上で職務経歴を更新したり、希望を見直したとき、エージェントの画面には静かに「更新あり」が灯ります。聞きに行かなくても、最新の候補者像が、いつもそこにある。",
   },
   {
     number: "iii.",
@@ -636,7 +636,7 @@ function Solution() {
                 Resolve — 解決の輪郭
               </span>
               <h2 className="lp-serif-ja mt-8 text-[1.85rem] leading-[1.55] font-medium text-[color:var(--lp-ink)] sm:text-[2.3rem]">
-                Mairaが、
+                Myairaが、
                 <br />
                 その時間を返す。
               </h2>
@@ -802,7 +802,7 @@ function Trust() {
             </h2>
             <div className="mx-auto mt-12 max-w-2xl space-y-7 text-left text-[0.97rem] text-[color:var(--lp-ink-soft)] sm:text-center">
               <p>
-                Mairaは、候補者本人が自分のデータを持つ前提で設計されています。
+                Myairaは、候補者本人が自分のデータを持つ前提で設計されています。
                 エージェントに届くのは、本人が同意した範囲の情報だけ。内面や悩みは、構造的にエージェントの画面には表示されません。
               </p>
               <p>
@@ -815,7 +815,7 @@ function Trust() {
             <div className="mx-auto mt-12 flex max-w-xs items-center justify-center gap-4">
               <span className="h-px flex-1 bg-[color:var(--lp-line)]" />
               <span className="lp-serif-en text-[0.65rem] tracking-[0.3em] text-[color:var(--lp-ink-faint)] uppercase">
-                Maira · 二〇二六
+                Myaira · 二〇二六
               </span>
               <span className="h-px flex-1 bg-[color:var(--lp-line)]" />
             </div>
@@ -886,7 +886,7 @@ function Footer() {
             href="/"
             className="lp-serif-en text-[1.7rem] font-medium tracking-[-0.01em] text-[color:var(--lp-ink)]"
           >
-            Maira
+            Myaira
           </Link>
           <p className="mt-6 max-w-sm text-[0.85rem] leading-relaxed text-[color:var(--lp-ink-soft)]">
             候補者とつながる、AIネイティブな採用CRM。

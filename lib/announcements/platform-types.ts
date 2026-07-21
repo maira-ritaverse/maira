@@ -1,5 +1,5 @@
 /**
- * Maira 運営 → エージェンシーへの「お知らせ」型定義
+ * Myaira 運営 → エージェンシーへの「お知らせ」型定義
  *
  * 既存 lib/notifications(in-app 通知)とは別レイヤー:
  *   - notifications:アクション派生(referral 状態変化など)

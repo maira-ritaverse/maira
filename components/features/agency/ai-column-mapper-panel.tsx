@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 
 /**
- * CSV ヘッダー → Maira 標準カラム の AI マッピング パネル
+ * CSV ヘッダー → Myaira 標準カラム の AI マッピング パネル
  *
  * 役割:
  *   ・CSV パース後の ヘッダー / サンプル を /api/agency/import/ai-map に 投げ、

@@ -5,7 +5,7 @@
 - 関連:[全体設計](./line-lstep-ma-design.md) / [ADR 0007](./adr/0007-line-lstep-ma-flow.md) / [Phase 0 計画](./line-lstep-ma-phase0-plan.md)
 - 前提:Phase 0(`ma_flows` / `ma_flow_steps` / `ma_flow_subscriptions` + 旧凍結)完了済
 
-Phase 1 は **Lstep-Core**、Maira を「1 通配信の MA」から「多段ステップ配信のマーケティングオートメーション」に変える中核実装フェーズ。
+Phase 1 は **Lstep-Core**、Myaira を「1 通配信の MA」から「多段ステップ配信のマーケティングオートメーション」に変える中核実装フェーズ。
 
 ---
 

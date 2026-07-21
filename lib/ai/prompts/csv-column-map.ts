@@ -1,9 +1,9 @@
 /**
- * CSV ヘッダ → Maira 標準カラムへの マッピング 提案 プロンプト + zod schema
+ * CSV ヘッダ → Myaira 標準カラムへの マッピング 提案 プロンプト + zod schema
  *
  * 役割:
  *   ・任意フォーマットの CSV(ヘッダー名が 媒体ごとに 違う、英語 / 日本語 混在 など)を
- *     Maira 内部の 標準カラム(snake_case)に 対応付ける ための AI 推論。
+ *     Myaira 内部の 標準カラム(snake_case)に 対応付ける ための AI 推論。
  *   ・確実性が 高い alias は 既存の HEADER_ALIASES(import API 側)で 同期取得 する 仕様。
  *     AI は 「alias に 載っていない / 表記揺れ している」ヘッダー専用と 考えれば 良い が、
  *     UX としては 「とりあえず 全部の ヘッダーを 投げて 全部 マッピングしてもらう」方が
@@ -29,7 +29,7 @@ import { z } from "zod";
 export type CsvMapTarget = "clients" | "jobs";
 
 /**
- * Maira 内部の 標準カラム一覧。
+ * Myaira 内部の 標準カラム一覧。
  * import API の HEADER_ALIASES の canonical key と 完全に 一致させる:
  *   ・clients:/api/agency/import/clients/route.ts(8 カラム)
  *   ・jobs:/api/agency/import/jobs/route.ts(18 カラム)
@@ -140,7 +140,7 @@ export function buildCsvMapPrompt(input: {
 
   const system = `あなたは 日本の 人材紹介エージェントの 事務担当 兼 データ整理 専門家です。
 利用者が CSV ファイルを 取り込もうとして いますが、ヘッダー名が 媒体 / 自社 入力で バラバラです。
-あなたの 仕事は、CSV ヘッダーを Maira 内部の 「標準カラム」に 1 対 0 / 1 で 対応付ける ことです。
+あなたの 仕事は、CSV ヘッダーを Myaira 内部の 「標準カラム」に 1 対 0 / 1 で 対応付ける ことです。
 
 # 絶対に 守る ルール
 
@@ -184,7 +184,7 @@ export function buildCsvMapPrompt(input: {
   const prompt = `# 取り込み対象
 ${targetLabel}
 
-# Maira の 標準カラム
+# Myaira の 標準カラム
 ${colsBlock}
 
 # 検出された CSV ヘッダー(順序保持)

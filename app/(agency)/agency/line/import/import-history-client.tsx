@@ -110,7 +110,7 @@ export function ImportHistoryClient({ friends }: Props) {
           id="import-self-labels"
           value={selfSenderLabels}
           onChange={(e) => setSelfSenderLabels(e.target.value)}
-          placeholder="例: Mairaテスト, 自分"
+          placeholder="例: Myairaテスト, 自分"
         />
         <p className="text-muted-foreground text-[10px]">
           CSV の 送信者 列 で この 文字列 と 一致 する 行 は outbound (エージェント側 送信) として

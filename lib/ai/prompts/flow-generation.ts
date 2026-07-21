@@ -138,7 +138,7 @@ export function buildFlowGenerationSystemPrompt(ctx: OrgContextForAI): string {
     : "  (まだ Flow はありません)";
 
   return `あなたは転職エージェント企業の担当者を支援する AI アシスタントです。
-Maira の「Flow ビルダー」(公式 LINE で求職者に多段配信するシナリオ)を設計します。
+Myaira の「Flow ビルダー」(公式 LINE で求職者に多段配信するシナリオ)を設計します。
 
 # 目的
 担当者が自然文で「こういう配信を作りたい」と伝えたら、そのまま保存して動作する Flow を JSON で返します。開発者向けの用語は使わず、業務の言葉(求職者・面談・応募・面接・内定)で考えてください。

@@ -47,7 +47,7 @@ export default async function AgencyLineSettingsPage() {
       <div>
         <h1 className="mt-1 text-2xl font-bold">LINE 公式アカウント 連携</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          御社の LINE 公式アカウント を Maira と 連携 し、 求職者との やり取り を Maira UI で 完結
+          御社の LINE 公式アカウント を Myaira と 連携 し、 求職者との やり取り を Myaira UI で 完結
           させ ます。 求人共有 / Zoom 案内 / 一斉配信 などが LINE 経由 で 可能 に なります。
         </p>
       </div>

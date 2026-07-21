@@ -41,7 +41,7 @@ export default async function MessagesIndexPage() {
         </p>
         <h1 className="mt-1 text-2xl font-bold">エージェント と の メッセージ</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          連携 して いる エージェント 担当者 と Maira 上 で 直接 やり取り できます。
+          連携 して いる エージェント 担当者 と Myaira 上 で 直接 やり取り できます。
         </p>
       </div>
 

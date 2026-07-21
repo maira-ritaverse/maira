@@ -104,7 +104,7 @@ export type IcsEventInput = {
   method?: "PUBLISH" | "CANCEL";
   /** SEQUENCE(再送 / 更新時に +1) */
   sequence?: number;
-  /** PRODID 識別子(既定 -//Maira//Calendar//JA) */
+  /** PRODID 識別子(既定 -//Myaira//Calendar//JA) */
   prodId?: string;
 };
 
@@ -121,7 +121,7 @@ export function buildIcsEvent(event: IcsEventInput): string {
   const lines: string[] = [];
   lines.push("BEGIN:VCALENDAR");
   lines.push("VERSION:2.0");
-  lines.push(`PRODID:${event.prodId ?? "-//Maira//Calendar//JA"}`);
+  lines.push(`PRODID:${event.prodId ?? "-//Myaira//Calendar//JA"}`);
   lines.push(`METHOD:${method}`);
   lines.push("CALSCALE:GREGORIAN");
   lines.push("BEGIN:VEVENT");

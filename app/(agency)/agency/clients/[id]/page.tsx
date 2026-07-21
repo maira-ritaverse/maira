@@ -279,7 +279,7 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
       {client.linkStatus === "unlinked" && (
         <Card className="border-muted-foreground/20 bg-muted/30 space-y-3 p-4">
           <p className="text-sm">
-            このクライアントはまだ Maira アカウントと連携していません。「連携を招待する」を押すと{" "}
+            このクライアントはまだ Myaira アカウントと連携していません。「連携を招待する」を押すと{" "}
             <span className="font-medium">{client.email}</span>{" "}
             に招待メールを送信します。求職者がメールから登録 + メール認証を完了すると
             自動的に連携状態になり、共有書類を閲覧できるようになります。
@@ -305,7 +305,7 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
       {client.linkStatus === "linked" && (
         <Card className="border-green-200 bg-green-50/50 p-4 dark:border-green-900 dark:bg-green-950/30">
           <p className="text-sm">
-            このクライアントはMairaアカウントと連携済みです。下の「共有された書類」セクションから
+            このクライアントはMyairaアカウントと連携済みです。下の「共有された書類」セクションから
             履歴書・職務経歴書を閲覧できます。
           </p>
         </Card>
@@ -518,7 +518,7 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
                 />
               ) : (
                 <Card className="text-muted-foreground p-6 text-sm">
-                  求職者がまだ Maira と連携していないため、本人提出の書類は表示できません。
+                  求職者がまだ Myaira と連携していないため、本人提出の書類は表示できません。
                 </Card>
               ),
           }}
@@ -579,7 +579,7 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
                 <DisclosableProfileSection clientRecordId={client.id} />
               ) : (
                 <Card className="text-muted-foreground p-6 text-sm">
-                  求職者本人がまだ Maira と連携していないため、求職者プロフィールは閲覧できません。
+                  求職者本人がまだ Myaira と連携していないため、求職者プロフィールは閲覧できません。
                 </Card>
               ),
           }}

@@ -102,7 +102,7 @@ export function InterviewReport({ session, messages }: Props) {
         </section>
 
         <footer className="text-muted-foreground border-t pt-3 text-xs print:block">
-          Maira 面接シミュレーター / このレポートは練習用です
+          Myaira 面接シミュレーター / このレポートは練習用です
         </footer>
       </Card>
     </div>

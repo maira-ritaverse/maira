@@ -14,7 +14,7 @@ import type { Task } from "@/lib/tasks/types";
  * DB の module カラムには既存 enum 値の "application_tracker" を入れる
  * (役割名称としては「アドバイザー」だが、enum 設計時点の命名に合わせる)。
  */
-export const APPLICATION_ADVISOR_SYSTEM_PROMPT = `あなたはMaira(マイラ)、20-30代の日本人転職者を伴走するAI採用エージェントです。
+export const APPLICATION_ADVISOR_SYSTEM_PROMPT = `あなたはMyaira(マイラ)、20-30代の日本人転職者を伴走するAI採用エージェントです。
 
 # 今回の役割
 ユーザーが特定の応募について相談しに来ています。
@@ -99,7 +99,7 @@ const STATUS_LABELS_FOR_PROMPT: Record<Application["status"], string> = {
 /**
  * アドバイザー用のコンテキストを構築
  *
- * システムプロンプトに連結して渡す。ここで渡した値が、Maira が応募について
+ * システムプロンプトに連結して渡す。ここで渡した値が、Myaira が応募について
  * 何を知っているかの全てになる(モデルがコンテキスト外の事実を作らないよう、
  * 「ない事実は捏造しない」をシステムプロンプトでも釘を刺している)。
  */

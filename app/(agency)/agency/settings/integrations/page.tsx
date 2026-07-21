@@ -153,7 +153,7 @@ export default async function AgencyIntegrationsPage({
           <h2 className="text-base font-semibold">LINE 公式アカウント 連携</h2>
         </div>
         <p className="text-muted-foreground text-sm">
-          御社 の 公式LINE と Maira を 連携 し、 求職者 と の やり取り を Maira UI で 完結 +
+          御社 の 公式LINE と Myaira を 連携 し、 求職者 と の やり取り を Myaira UI で 完結 +
           求人共有 / Zoom 案内 を LINE 経由 で 可能 に します。
         </p>
         <div className="pt-1">

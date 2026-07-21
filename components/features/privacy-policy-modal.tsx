@@ -56,7 +56,7 @@ export function PrivacyPolicyModal({ hasPrior }: Props) {
           {hasPrior ? "プライバシーポリシーが更新されました" : "プライバシーポリシーへの同意"}
         </h2>
         <p className="text-muted-foreground mt-2 text-sm">
-          Maira を引き続きご利用いただくために、最新のプライバシーポリシーを
+          Myaira を引き続きご利用いただくために、最新のプライバシーポリシーを
           ご確認のうえ同意してください。
         </p>
 
@@ -68,7 +68,7 @@ export function PrivacyPolicyModal({ hasPrior }: Props) {
               サーバーサイド暗号化されます。
             </li>
             <li>
-              運営者(Maira)はサポートや本人同意済の AI 処理、法令対応に必要な範囲で
+              運営者(Myaira)はサポートや本人同意済の AI 処理、法令対応に必要な範囲で
               暗号データの復号を行うことがあります。
             </li>
             <li>

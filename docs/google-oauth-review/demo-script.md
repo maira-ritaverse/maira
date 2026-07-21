@@ -1,6 +1,6 @@
 # Google OAuth Verification — Demo Video Script
 
-Purpose: Demonstrate every requested scope in Maira's Google OAuth flow to Google's OAuth
+Purpose: Demonstrate every requested scope in Myaira's Google OAuth flow to Google's OAuth
 Verification team, in a single 3–5 minute YouTube video (unlisted).
 
 ## Video meta
@@ -24,19 +24,19 @@ Verification team, in a single 3–5 minute YouTube video (unlisted).
 
 ### Scene 1: Introduction (0:00 – 0:20)
 
-**Screen**: Maira app top (`https://app.maira.pro`)
+**Screen**: Myaira app top (`https://app.maira.pro`)
 
 **Narration (EN)**:
 
-> "This is a demonstration video for Google OAuth verification of Maira,
-> a recruitment agency SaaS. Maira is developed by Revorise Inc. and hosted at maira.pro
+> "This is a demonstration video for Google OAuth verification of Myaira,
+> a recruitment agency SaaS. Myaira is developed by Revorise Inc. and hosted at maira.pro
 > (the app itself is served from app.maira.pro).
 > The Google Cloud project is `maira-prod`. I will demonstrate all three requested OAuth
 > scopes: `openid`, `email`, and `calendar.events`."
 
 **Screen actions**:
 
-- Show the Maira app top page briefly (2 sec)
+- Show the Myaira app top page briefly (2 sec)
 - Cursor moves to the Login button
 
 ### Scene 2: Sign in with the reviewer account (0:20 – 0:40)
@@ -95,11 +95,11 @@ before recording that the reviewer sees your Cloud Console app name and logo.)_
 
 ### Scene 5: Grant consent (1:50 – 2:15)
 
-**Screen**: Google consent screen → back to Maira
+**Screen**: Google consent screen → back to Myaira
 
 **Narration (EN)**:
 
-> "I select my Google account and grant consent. Google redirects back to Maira,
+> "I select my Google account and grant consent. Google redirects back to Myaira,
 > where I see a green banner confirming 'Google に接続しました' — Google connected."
 
 **Screen actions**:
@@ -152,17 +152,17 @@ before recording that the reviewer sees your Cloud Console app name and logo.)_
 
 ### Scene 8: Demonstrate UPDATE (3:30 – 4:00)
 
-**Screen**: Back to Maira → change meeting time → Google Calendar refreshes
+**Screen**: Back to Myaira → change meeting time → Google Calendar refreshes
 
 **Narration (EN)**:
 
-> "Next, I demonstrate an update. I return to Maira, change the meeting time by
+> "Next, I demonstrate an update. I return to Myaira, change the meeting time by
 > 30 minutes, and save. Refreshing Google Calendar shows the event has moved to the
 > new time — the update is fully synchronized."
 
 **Screen actions**:
 
-- Return to Maira meeting view
+- Return to Myaira meeting view
 - Click "編集" or drag the time slot
 - Change to 10:30 (or a new value)
 - Save
@@ -171,17 +171,17 @@ before recording that the reviewer sees your Cloud Console app name and logo.)_
 
 ### Scene 9: Demonstrate DELETE (4:00 – 4:30)
 
-**Screen**: Maira → delete meeting → Google Calendar refreshes (empty)
+**Screen**: Myaira → delete meeting → Google Calendar refreshes (empty)
 
 **Narration (EN)**:
 
-> "Finally, I demonstrate deletion. From Maira I delete the meeting. Google Calendar,
+> "Finally, I demonstrate deletion. From Myaira I delete the meeting. Google Calendar,
 > when refreshed, no longer shows the event, satisfying Google's Source Account
 > Impact criterion for delete operations."
 
 **Screen actions**:
 
-- Click the meeting row in Maira
+- Click the meeting row in Myaira
 - Click "削除" (Delete)
 - Confirm the ConfirmDialog
 - Return to Google Calendar tab, refresh
@@ -251,11 +251,11 @@ Avoid these by re-recording if any of them applies:
 
 1. Login → Settings → Integrations → Google 接続 ボタン
 2. Google OAuth 同意画面(scope 3 つ を 「Show all services」で 全表示 させる)
-3. 承認 → Maira に戻る → 「接続済」表示
+3. 承認 → Myaira に戻る → 「接続済」表示
 4. クライアント詳細 → 面談を予約 → Google Meet 選択 → 保存
 5. `calendar.google.com` で イベント作成を確認 (create)
-6. Maira で時刻編集 → Google Calendar で反映確認 (update)
-7. Maira で削除 → Google Calendar で消滅確認 (delete)
+6. Myaira で時刻編集 → Google Calendar で反映確認 (update)
+7. Myaira で削除 → Google Calendar で消滅確認 (delete)
 8. 切断ボタン → OAuth トークン破棄 (revoke)
 
 **Google が REJECT する典型パターン**:
@@ -269,8 +269,8 @@ Avoid these by re-recording if any of them applies:
 ## English section header (paste in YouTube description)
 
 ```
-Maira Google OAuth Verification Demo
-- App: Maira (recruitment agency SaaS by Revorise Inc.)
+Myaira Google OAuth Verification Demo
+- App: Myaira (recruitment agency SaaS by Revorise Inc.)
 - Project: maira-prod (Project Number: 765106046848)
 - Scopes demonstrated: openid, email, https://www.googleapis.com/auth/calendar.events
 - Feature: Creating Google Calendar events with Google Meet URLs for candidate interviews

@@ -4,7 +4,7 @@
  * カレンダー購読 URL 発行 / 失効 UI
  *
  * 用途:
- *   ・Maira の予定(面談・タスク期限)を Google Calendar 等で「他のカレンダーを追加 → URL」
+ *   ・Myaira の予定(面談・タスク期限)を Google Calendar 等で「他のカレンダーを追加 → URL」
  *     で購読してもらう
  *
  * 設計判断:
@@ -70,7 +70,7 @@ export function CalendarFeedSection() {
   };
 
   const revoke = async () => {
-    if (!confirm("購読 URL を失効しますか?(購読中のカレンダーから Maira の予定が消えます)")) {
+    if (!confirm("購読 URL を失効しますか?(購読中のカレンダーから Myaira の予定が消えます)")) {
       return;
     }
     setSubmitting(true);
@@ -103,7 +103,7 @@ export function CalendarFeedSection() {
       <div>
         <h2 className="text-sm font-semibold">カレンダー購読 URL</h2>
         <p className="text-muted-foreground mt-1 text-xs">
-          Maira の面談予定 / タスク期限を、Google Calendar / Apple Calendar / Outlook
+          Myaira の面談予定 / タスク期限を、Google Calendar / Apple Calendar / Outlook
           で購読できます。 発行された URL を「他のカレンダーを追加 → URL
           から追加」に貼り付けてください。
         </p>

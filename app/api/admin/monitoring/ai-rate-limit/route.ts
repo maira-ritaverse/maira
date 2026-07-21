@@ -7,7 +7,7 @@ import { getRecentAnthropic429Count } from "@/lib/ai/rate-limit-monitor";
  * GET /api/admin/monitoring/ai-rate-limit
  *
  * Anthropic API の 429 発生 状況 を 3 段階 の 時間 窓 で 返す。
- * Maira プラットフォーム 管理者 のみ 参照 可 (RLS 経由 は 使わ ず 明示 検査)。
+ * Myaira プラットフォーム 管理者 のみ 参照 可 (RLS 経由 は 使わ ず 明示 検査)。
  *
  * レスポンス:
  *   {

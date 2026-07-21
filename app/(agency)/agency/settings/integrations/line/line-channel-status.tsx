@@ -160,11 +160,11 @@ export function LineChannelStatus({ channel }: Props) {
             <strong>「LINE Official Account 機能」</strong> 内 の{" "}
             <strong>「メッセージ既読モード」</strong> を <strong>「手動 (manual)」</strong> に 変更
           </li>
-          <li>Maira で トーク を 開く たび に 自動で 「既読」 が 求職者 側 に 反映 されます</li>
+          <li>Myaira で トーク を 開く たび に 自動で 「既読」 が 求職者 側 に 反映 されます</li>
         </ol>
         <p className="mt-2 text-[10px] text-amber-800">
           ※ 初期 設定 (auto) の まま でも 求職者 が メッセージ を 送って すぐ 既読 になる ので
-          大きな 差は ありません。 「Maira で 開いた タイミング = 既読」 と したい 場合 だけ 上記
+          大きな 差は ありません。 「Myaira で 開いた タイミング = 既読」 と したい 場合 だけ 上記
           設定 して ください。
         </p>
       </div>

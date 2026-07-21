@@ -31,7 +31,7 @@ describe("buildCreateMeetingBody", () => {
     expect(body.timezone).toBe("America/Los_Angeles");
   });
 
-  it("録画は cloud で自動開始 = Mairaの取込前提条件", () => {
+  it("録画は cloud で自動開始 = Myairaの取込前提条件", () => {
     const body = buildCreateMeetingBody(baseInput);
     const settings = body.settings as Record<string, unknown>;
     expect(settings.auto_recording).toBe("cloud");

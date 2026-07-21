@@ -37,14 +37,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "missing_code" }, { status: 400 });
   }
 
-  // state は Maira 内から /connect を 起点 に した 場合 に 発行 される CSRF トークン。
+  // state は Myaira 内から /connect を 起点 に した 場合 に 発行 される CSRF トークン。
   //
   // 【方針 変更 (セキュリティ 監査 W3)】
   //   従来 は Zoom Marketplace 由来 の state-less install も 受け入れて いた が、
   //   「初回 連携 の 被害者 に クリック さ せて 攻撃者 の Zoom アカウント を 紐付ける」
   //   経路 が 塞げ ない (既存 zoom_connections 行 が 無い ため mismatch 判定 が
   //   効か ない)。 state を 必須 化 し、 Marketplace 経由 install で state が
-  //   落ちて いる 場合 は Maira 側 の 設定 ページ に 誘導 → 明示的 に Connect ボタン
+  //   落ちて いる 場合 は Myaira 側 の 設定 ページ に 誘導 → 明示的 に Connect ボタン
   //   から state 付き で 開始 させる。 UX 上 の 迂回 コスト は 1 クリック 増加 のみ。
   if (!state) {
     return NextResponse.redirect(

@@ -19,9 +19,9 @@ import { SiteHeader } from "@/components/features/marketing/site-header";
 import { buttonVariants } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "料金プラン | Maira",
+  title: "料金プラン | Myaira",
   description:
-    "Maira の料金プラン一覧。個人事業主向け Solo (¥5,980/月) から 5 人までの Team Growth (¥45,000/月) まで、稼働規模に合わせて選べます。",
+    "Myaira の料金プラン一覧。個人事業主向け Solo (¥5,980/月) から 5 人までの Team Growth (¥45,000/月) まで、稼働規模に合わせて選べます。",
 };
 
 type FeatureRow = {
@@ -164,7 +164,7 @@ const FAQ: Faq[] = [
   },
   {
     q: "有料職業紹介事業の許可が必要ですか?",
-    a: "職業安定法上、有料職業紹介事業としての契約 / 手数料の授受には許可が必要です。Maira は業務ツールの提供のみで職業紹介自体は行いません。許可を持たない個人単独での業務は受け入れていません。",
+    a: "職業安定法上、有料職業紹介事業としての契約 / 手数料の授受には許可が必要です。Myaira は業務ツールの提供のみで職業紹介自体は行いません。許可を持たない個人単独での業務は受け入れていません。",
   },
   {
     q: "支払いを月払いから年払いに変更できますか?",

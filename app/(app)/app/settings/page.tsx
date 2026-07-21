@@ -69,7 +69,7 @@ export default async function SettingsPage() {
       href: "/app/settings/onboarding",
       Icon: GraduationCap,
       title: "オンボーディング ツアー",
-      description: "Maira の 使い方 ツアー を 再 表示",
+      description: "Myaira の 使い方 ツアー を 再 表示",
     },
     {
       href: "/app/settings/integrations",

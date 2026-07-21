@@ -84,7 +84,7 @@ export function MfaPanel() {
         }) + `-${Math.floor(Math.random() * 10000).toString(36)}`;
       const { data, error: enrollErr } = await supabase.auth.mfa.enroll({
         factorType: "totp",
-        friendlyName: `Maira (${stamp})`,
+        friendlyName: `Myaira (${stamp})`,
       });
       if (enrollErr || !data) {
         throw new Error(enrollErr?.message ?? "enroll_failed");

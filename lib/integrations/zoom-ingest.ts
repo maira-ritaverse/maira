@@ -107,7 +107,7 @@ export async function enqueueZoomRecording(params: {
   const filename = `${(obj.topic ?? "Zoom Meeting").slice(0, 60)}.${guessExt(file.file_type, file.download_url)}`;
 
   // ─── meeting_schedules への紐づけ判定 ──────────────────────────────
-  // Maira から予約した会議なら、meeting_schedules.external_meeting_id に obj.id が入る。
+  // Myaira から予約した会議なら、meeting_schedules.external_meeting_id に obj.id が入る。
   // ヒットしたら transcript_purpose='agency_interview' + client_record_id をセットして、
   // 「エージェント面談録」として処理されるようにする。
   let meetingScheduleId: string | null = null;

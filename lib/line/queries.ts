@@ -46,7 +46,7 @@ export async function getMyLineChannel(supabase: SupabaseClient): Promise<LineCh
  *
  * C1-2 修正: is_active=false と 「そもそも 存在 しない」 を 呼び出し 側 で 区別
  * できる よう 情報 を 残す。 従来 は 両者 とも null で 帰って いた ため、 「LINE
- * 側 では 送信 して いる のに Maira 側 で 通知 が 来ない」 という 事象 の 一次
+ * 側 では 送信 して いる のに Myaira 側 で 通知 が 来ない」 という 事象 の 一次
  * 切り 分け が でき ず 運用 上 の 盲点 と なって いた。
  */
 export type LineChannelLookupResult =

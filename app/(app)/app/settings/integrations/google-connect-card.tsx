@@ -1,12 +1,12 @@
 /**
  * Google アカウント連携カード(設定画面)
  *
- * 1 クリックで calendar.events スコープを取得し、Maira からの 面談予約
+ * 1 クリックで calendar.events スコープを取得し、Myaira からの 面談予約
  * (Meet URL 付き)が Google カレンダーに 自動登録 される。
  *
  * 2026-06-19 変更:drive.readonly スコープ を 撤去。
  *   Google の Restricted scope(CASA 監査 必須)を 回避するため、Meet 録画は
- *   ユーザーが Maira に 手動 アップロード する 運用に 切替え。
+ *   ユーザーが Myaira に 手動 アップロード する 運用に 切替え。
  *
  * 表示パターン:
  *   ・未接続      → 大きな「Google アカウントを連携」CTA + 解放される機能の説明
@@ -42,7 +42,7 @@ export function GoogleConnectCard({ status, googleConfigured }: Props) {
           <div>
             <h3 className="text-base font-semibold">Google アカウント連携</h3>
             <p className="text-muted-foreground mt-0.5 text-xs">
-              Maira から Google カレンダーに 面談予定(Meet URL 付き)を 直接 登録できます。
+              Myaira から Google カレンダーに 面談予定(Meet URL 付き)を 直接 登録できます。
             </p>
             {status.connected && status.email && (
               <p className="text-muted-foreground mt-1 text-[11px]">
@@ -73,12 +73,12 @@ export function GoogleConnectCard({ status, googleConfigured }: Props) {
         <FeatureRow
           enabled={status.calendarEnabled}
           title="Google カレンダー連携"
-          body="Maira の予定と Google カレンダーを統合し、編集・新規作成ができます。Maira から 面談予約すると Google カレンダー(+ Meet URL)に 自動登録 されます。"
+          body="Myaira の予定と Google カレンダーを統合し、編集・新規作成ができます。Myaira から 面談予約すると Google カレンダー(+ Meet URL)に 自動登録 されます。"
         />
         <FeatureRow
           enabled={false}
           title="Google Meet 録画の自動取込(廃止)"
-          body="2026-06-19 撤去。Google Drive 内の Meet 録画ファイルを Maira に取り込む 場合は、ユーザーが クライアント詳細 画面から 手動アップロード してください。Zoom Cloud Recording の 自動取り込みは 引き続き ご利用いただけます。"
+          body="2026-06-19 撤去。Google Drive 内の Meet 録画ファイルを Myaira に取り込む 場合は、ユーザーが クライアント詳細 画面から 手動アップロード してください。Zoom Cloud Recording の 自動取り込みは 引き続き ご利用いただけます。"
         />
       </ul>
 

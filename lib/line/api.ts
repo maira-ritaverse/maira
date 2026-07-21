@@ -232,7 +232,7 @@ export async function getWebhookEndpoint(
 }
 
 /**
- * Webhook 疎通 テスト (LINE → Maira)。 LINE が テスト event を 投げる。
+ * Webhook 疎通 テスト (LINE → Myaira)。 LINE が テスト event を 投げる。
  * POST /v2/bot/channel/webhook/test
  */
 export type WebhookTestResult = {
@@ -269,7 +269,7 @@ export async function testWebhookEndpoint(accessToken: string): Promise<Result<W
 }
 
 // LIFF アプリ 自動作成 は LINE 2019/11/11 仕様 で Messaging API チャネル 経由 不可。
-// LINE Login チャネル の Access Token が 必要 だが、 Maira では それ を 預からない 設計。
+// LINE Login チャネル の Access Token が 必要 だが、 Myaira では それ を 預からない 設計。
 // → 手動 で LIFF ID を 設定 してもらう (LiffForm)。
 
 /**
