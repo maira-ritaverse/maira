@@ -11,7 +11,13 @@ import {
   clientRecordToResumePii,
 } from "@/lib/agency-client-documents/client-record-to-document";
 import { createAgencyClientResumeRequestSchema } from "@/lib/agency-client-documents/types";
+import { generateAddressKana } from "@/lib/ai/generate-address-kana";
 import { getClientRecordWithDecrypted } from "@/lib/clients/queries";
+import { checkAiUsageLimit, recordAiUsage } from "@/lib/features/ai-usage";
+
+// POST は住所フリガナの AI 生成が同期で走り得るため、Node ランタイム + 余裕ある実行時間を明示。
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 /**
  * GET  /api/agency/client-resumes?client_record_id=...
@@ -40,7 +46,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const guard = await requireOrgMember();
   if (!guard.ok) return guard.response;
-  const { organization, member } = guard;
+  const { organization, member, supabase, user } = guard;
 
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
@@ -61,13 +67,31 @@ export async function POST(request: Request) {
   }
 
   // 明示指定が無い新規作成時は、顧客プロフィール(client_record)から履歴書項目を自動反映する。
+  let pii = parsed.data.pii ?? clientRecordToResumePii(client);
+  // 住所フリガナは client_record に元データが無いので、漢字住所から AI 生成して補完する
+  // (書類取り込み側は Vision 抽出で対応済み。ここはプロフィール側の生成)。
+  // ベストエフォート:クォータ超過や生成失敗時はフリガナ空のまま作成を続行する。
+  if (!parsed.data.pii && !pii.address_kana && pii.address) {
+    const usage = await checkAiUsageLimit(supabase, user.id, "agency_client_document_extract");
+    if (usage.allowed) {
+      const kana = await generateAddressKana(pii.address);
+      if (kana) {
+        pii = { ...pii, address_kana: kana };
+        await recordAiUsage(supabase, user.id, "agency_client_document_extract", {
+          kind: "address_kana_gen",
+          client_record_id: parsed.data.client_record_id,
+        });
+      }
+    }
+  }
+
   const result = await createAgencyClientResume({
     organizationId: organization.id,
     clientRecordId: parsed.data.client_record_id,
     createdByMemberId: member.id,
     title: parsed.data.title,
     documentDate: parsed.data.document_date ?? null,
-    pii: parsed.data.pii ?? clientRecordToResumePii(client),
+    pii,
     educationHistory: parsed.data.education_history ?? clientRecordToEducationHistory(client),
     licenses: parsed.data.licenses ?? clientRecordToLicenses(client),
   });

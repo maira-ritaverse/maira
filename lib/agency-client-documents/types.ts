@@ -45,6 +45,8 @@ export const resumePiiSchema = z.object({
   gender: z.enum(["male", "female", "other", ""]).default(""),
   postal_code: z.string().max(10).default(""),
   address: z.string().max(300).default(""),
+  // 現住所フリガナ(書類取り込み時に抽出/生成して入れる。未設定可)
+  address_kana: z.string().max(200).optional(),
   phone: z.string().max(20).default(""),
   email: z.string().max(254).default(""),
   motivation: z.string().max(2000).default(""),

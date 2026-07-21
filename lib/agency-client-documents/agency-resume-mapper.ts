@@ -78,7 +78,7 @@ export function agencyClientResumeToSeekerResume(resume: AgencyClientResume): Re
     gender: toGender(pii.gender ?? ""),
     postalCode: pii.postal_code || null,
     address: pii.address || null,
-    addressKana: null,
+    addressKana: pii.address_kana || null,
     phone: pii.phone || null,
     email: pii.email || null,
     // 連絡先は履歴書様式の「現住所と異なる連絡先」欄。エージェント側では持たないので null。

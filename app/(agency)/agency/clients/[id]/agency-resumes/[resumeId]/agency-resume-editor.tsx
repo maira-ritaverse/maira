@@ -257,7 +257,8 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
           </Button>
         </div>
         <p className="text-muted-foreground text-xs">
-          退職理由・自己PR などの自由記述も内容欄に書けます(年月は空欄でも可)
+          退職理由・自己PR などの自由記述も内容欄に書けます(年月は空欄でも可)。
+          「学歴」「職歴」だけの行は見出しとして中央寄せ・「学　　歴」表示になります
         </p>
         {education.length === 0 ? (
           <p className="text-muted-foreground text-xs">未入力</p>

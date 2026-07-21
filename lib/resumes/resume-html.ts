@@ -1,5 +1,12 @@
 import { escapeHtml } from "@/lib/html/escape";
-import { genderLabels, type EducationItem, type LicenseItem, type Resume } from "./types";
+import {
+  formatHistoryDivider,
+  genderLabels,
+  historyDividerKind,
+  type EducationItem,
+  type LicenseItem,
+  type Resume,
+} from "./types";
 
 /**
  * 履歴書(厚労省様式)のスタンドアロン HTML 文字列ビルダー
@@ -311,10 +318,6 @@ export function buildResumeHtml(resume: Resume, options: BuildResumeHtmlOptions)
     text-align: center;
     font-size: 11px;
   }
-  /* 学歴・職歴の内容欄を中央表示 */
-  table.history-table td.cell-hist-desc {
-    text-align: center;
-  }
   th.col-year { width: 48px; }
   th.col-month { width: 40px; }
 
@@ -497,13 +500,18 @@ function renderHistoryTable(rows: (EducationItem | null)[], showHeader: boolean)
       </tr></thead>`
     : "";
   const body = rows
-    .map(
-      (row) => `<tr>
+    .map((row) => {
+      // 「学歴」「職歴」だけの行は見出しとして中央寄せ +「学　　歴」表示。他は左揃え。
+      const dividerKind = row ? historyDividerKind(row.description) : null;
+      const descCell = dividerKind
+        ? `<td style="text-align:center">${escapeHtml(formatHistoryDivider(dividerKind))}</td>`
+        : `<td>${escapeHtml(row?.description ?? "")}</td>`;
+      return `<tr>
         <td class="cell-ym">${row?.year ?? ""}</td>
         <td class="cell-ym">${row?.month ?? ""}</td>
-        <td class="cell-hist-desc">${escapeHtml(row?.description ?? "")}</td>
-      </tr>`,
-    )
+        ${descCell}
+      </tr>`;
+    })
     .join("");
   return `<table class="history-table">${head}<tbody>${body}</tbody></table>`;
 }

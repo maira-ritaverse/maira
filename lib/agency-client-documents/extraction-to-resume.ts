@@ -52,6 +52,9 @@ export function mergeExtractionIntoResumePii(
     gender: current.gender, // 抽出からは決定しない
     postal_code: current.postal_code,
     address: current.address,
+    // address_kana は録音抽出では扱わないが、既存値(書類/プロフィール由来のフリガナ)を保持する。
+    // (optional 化に伴い、ここで落とすと保存時に現住所フリガナが消える不具合になるため明示保持)
+    address_kana: current.address_kana,
     phone: current.phone,
     email: current.email,
     motivation: overrideIfEmpty(current.motivation, extraction.motivationNote ?? ""),

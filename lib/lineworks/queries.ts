@@ -52,11 +52,20 @@ function newWebhookToken(): string {
 
 /** 行を復号して LineworksChannel に変換。必須機密が復号できなければ null。 */
 async function decryptChannel(row: LineworksChannelRow): Promise<LineworksChannel | null> {
-  const [clientSecret, privateKey, botSecret] = await Promise.all([
-    decryptField(row.client_secret_encrypted),
-    decryptField(row.private_key_encrypted),
-    decryptField(row.bot_secret_encrypted),
-  ]);
+  let clientSecret: string | null;
+  let privateKey: string | null;
+  let botSecret: string | null | undefined;
+  try {
+    [clientSecret, privateKey, botSecret] = await Promise.all([
+      decryptField(row.client_secret_encrypted),
+      decryptField(row.private_key_encrypted),
+      decryptField(row.bot_secret_encrypted),
+    ]);
+  } catch {
+    // 鍵ローテーション/破損等で decryptField が throw した場合も fail-closed で null。
+    // (呼び出し側は null → decrypt_failed / 未接続扱いにする)
+    return null;
+  }
   // client_secret / private_key はトークン発行に必須。復号失敗は fail-closed。
   if (!clientSecret || !privateKey) return null;
   return {

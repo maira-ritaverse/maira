@@ -160,9 +160,22 @@ function clientExtractionToClientLike(
   return obj as unknown as ClientRecordWithDecrypted;
 }
 
-/** 書類抽出結果 → 履歴書 PII */
+/**
+ * 書類抽出結果 → 履歴書 PII。
+ * client_record 経由では得られない書類固有の項目(現住所フリガナ・本人の自己PR)を上書きする。
+ * これにより from-document は from-profile を上回る(from-profile の self_pr は推薦コメント流用)。
+ */
 export function clientExtractionToResumePii(extraction: ClientExtractionResult): ResumePii {
-  return clientRecordToResumePii(clientExtractionToClientLike(extraction));
+  const pii = clientRecordToResumePii(clientExtractionToClientLike(extraction));
+  // 抽出(Vision 生成含む)の住所フリガナはカタカナのみ採用。漢字・ひらがな・崩れた出力は
+  // フリガナ欄に入れない(from-profile 生成側と同じ検証で挙動を揃える)。
+  const kana = extraction.address_kana.replace(/\s+/g, "");
+  const addressKana = /^[゠-ヿ]+$/.test(kana) ? kana.slice(0, 200) : "";
+  return {
+    ...pii,
+    address_kana: addressKana || pii.address_kana,
+    self_pr: extraction.self_pr || pii.self_pr,
+  };
 }
 
 /** 書類抽出結果 → 履歴書の学歴・職歴(年月自動抽出) */
@@ -177,7 +190,13 @@ export function clientExtractionToLicenses(extraction: ClientExtractionResult): 
   return clientRecordToLicenses(clientExtractionToClientLike(extraction));
 }
 
-/** 書類抽出結果 → 職務経歴書(CV)本文 */
+/** 書類抽出結果 → 職務経歴書(CV)本文(書類の自己PRを追記) */
 export function clientExtractionToCvBody(extraction: ClientExtractionResult): CvBody {
-  return clientRecordToCvBody(clientExtractionToClientLike(extraction));
+  const cv = clientRecordToCvBody(clientExtractionToClientLike(extraction));
+  if (!extraction.self_pr) return cv;
+  const body = `${cv.body}${cv.body ? "\n\n" : ""}【自己PR】\n${extraction.self_pr}`.slice(
+    0,
+    20000,
+  );
+  return { ...cv, body };
 }

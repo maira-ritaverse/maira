@@ -16,6 +16,9 @@
  * 注: refresh_token 更新フローは公式で厳密パラメータが未確定のため、当面は
  * 期限切れ時に JWT 再発行(確認済みで常に成功)する。将来 refresh に置換して最適化可。
  * 秘密鍵は PKCS8(-----BEGIN PRIVATE KEY-----)前提。
+ *
+ * ランタイム: 本モジュールは Buffer と DB アクセスを使うため Node 専用(Edge 不可)。
+ * これを import する route / webhook は runtime='nodejs' にすること。
  */
 import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
 import type { createServiceClient } from "@/lib/supabase/service";
@@ -23,7 +26,11 @@ import type { createServiceClient } from "@/lib/supabase/service";
 type Service = ReturnType<typeof createServiceClient>;
 
 const AUTH_TOKEN_URL = "https://auth.worksmobile.com/oauth2/v2.0/token";
-const JWT_TTL_SECONDS = 3600; // exp は iat + 最大 60 分
+// exp は「iat + 最大 60 分」。境界ちょうど(3600)はホスト時計が LINE WORKS 側より
+// 進んでいると「上限超過」で拒否され得るため、50 分に抑える。さらに iat を 30 秒
+// バックデートして逆方向のスキュー(こちらが遅れている)にも耐える。
+const JWT_TTL_SECONDS = 3000;
+const JWT_IAT_BACKDATE_SECONDS = 30;
 
 export type LineworksAccessContext = {
   organizationId: string;
@@ -50,12 +57,19 @@ async function createServiceAccountJwt(args: {
   serviceAccount: string;
   privateKeyPem: string;
 }): Promise<string> {
+  // LINE WORKS の秘密鍵は PKCS8(-----BEGIN PRIVATE KEY-----)。PKCS1 や暗号化鍵は
+  // importKey("pkcs8") が意味不明な DataError を投げるので、事前に分かりやすく弾く。
+  if (/BEGIN (RSA PRIVATE KEY|ENCRYPTED)/.test(args.privateKeyPem)) {
+    throw new Error(
+      "秘密鍵は PKCS8 形式(-----BEGIN PRIVATE KEY-----)にしてください(PKCS1 / 暗号化鍵は非対応)",
+    );
+  }
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: "RS256", typ: "JWT" };
   const payload = {
     iss: args.clientId,
     sub: args.serviceAccount,
-    iat: now,
+    iat: now - JWT_IAT_BACKDATE_SECONDS,
     exp: now + JWT_TTL_SECONDS,
   };
   const signingInput = `${base64urlJson(header)}.${base64urlJson(payload)}`;
@@ -128,10 +142,16 @@ async function issueOrReuse(args: {
   const row = data as unknown as TokenRow;
   if (!row.is_active) throw new Error("LINE WORKS 連携が無効化されています");
 
-  // キャッシュが有効ならそのまま返す
+  // キャッシュが有効ならそのまま返す。復号失敗(鍵ローテーションで旧バージョンが
+  // 消えている等)は decryptField が throw するため、握り潰して JWT 再発行に倒す
+  // (キャッシュが壊れていても発行はやり直せる)。
   if (!isExpired(row.token_expires_at) && row.access_token_encrypted) {
-    const cached = await decryptField(row.access_token_encrypted);
-    if (cached) return { organizationId, botId: row.bot_id, accessToken: cached };
+    try {
+      const cached = await decryptField(row.access_token_encrypted);
+      if (cached) return { organizationId, botId: row.bot_id, accessToken: cached };
+    } catch {
+      // フォールスルーして再発行
+    }
   }
 
   // 新規発行(JWT → jwt-bearer)

@@ -19,6 +19,23 @@ export const genderLabels: Record<Gender, string> = {
 };
 
 // ============================================
+// 学歴・職歴テーブルの「学歴」「職歴」見出し行
+//
+// 内容が「学歴」または「職歴」だけの行は見出し(区切り)行として扱い、厚労省様式に
+// 倣って中央寄せ + 文字間を全角スペース2つで開いて表示する(例:「学　　歴」)。
+// それ以外の内容行は左揃え。見出し判定は空白(半角・全角)を除いて比較する。
+// ============================================
+export function historyDividerKind(description: string): "学歴" | "職歴" | null {
+  const compact = description.replace(/[\s　]/g, "");
+  return compact === "学歴" ? "学歴" : compact === "職歴" ? "職歴" : null;
+}
+
+/** 見出しを全角スペース2つで開く:「学歴」→「学　　歴」。 */
+export function formatHistoryDivider(kind: "学歴" | "職歴"): string {
+  return `${kind[0]}　　${kind[1]}`;
+}
+
+// ============================================
 // 学歴・職歴の1行
 //
 // year/month は数値で持つ。null も許容(月だけ未確定など下書きを許すため)。

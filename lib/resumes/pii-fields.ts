@@ -124,7 +124,7 @@ function parseLicenses(value: unknown): LicenseItem[] {
  * (UI から壊れた値が来ても暗号化前に正規化しておくため)
  */
 export function pickResumePii(source: Record<string, unknown>): ResumePii {
-  return {
+  const pii: ResumePii = {
     name: nullableString(source.name),
     name_kana: nullableString(source.name_kana),
     birth_date: nullableString(source.birth_date),
@@ -143,6 +143,7 @@ export function pickResumePii(source: Record<string, unknown>): ResumePii {
     motivation_note: nullableString(source.motivation_note),
     personal_requests: nullableString(source.personal_requests),
   };
+  return pii;
 }
 
 /**

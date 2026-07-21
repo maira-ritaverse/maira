@@ -1,4 +1,9 @@
-import { genderLabels, type Resume } from "@/lib/resumes/types";
+import {
+  formatHistoryDivider,
+  genderLabels,
+  historyDividerKind,
+  type Resume,
+} from "@/lib/resumes/types";
 
 /**
  * 履歴書プレビュー(厚生労働省推奨様式 2021〜)
@@ -305,17 +310,25 @@ function HistoryTable({ rows, showHeader }: { rows: (HistoryRow | null)[]; showH
         </thead>
       )}
       <tbody>
-        {rows.map((row, i) => (
-          <tr key={i}>
-            <Td center small>
-              {row?.year ?? ""}
-            </Td>
-            <Td center small>
-              {row?.month ?? ""}
-            </Td>
-            <Td center>{row?.description ?? ""}</Td>
-          </tr>
-        ))}
+        {rows.map((row, i) => {
+          // 「学歴」「職歴」だけの行は見出しとして中央寄せ +「学　　歴」表示。他は左揃え。
+          const dividerKind = row ? historyDividerKind(row.description) : null;
+          return (
+            <tr key={i}>
+              <Td center small>
+                {row?.year ?? ""}
+              </Td>
+              <Td center small>
+                {row?.month ?? ""}
+              </Td>
+              {dividerKind ? (
+                <Td center>{formatHistoryDivider(dividerKind)}</Td>
+              ) : (
+                <Td>{row?.description ?? ""}</Td>
+              )}
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );
