@@ -8,6 +8,7 @@ import {
   clientExtractionToResumePii,
 } from "@/lib/agency-client-documents/client-record-to-document";
 import { createAgencyClientResume } from "@/lib/agency-client-documents/queries";
+import { generateAddressKana } from "@/lib/ai/generate-address-kana";
 import { getSourceDocument } from "@/lib/agency-client-source-documents/queries";
 import { STORAGE_BUCKET } from "@/lib/agency-client-source-documents/types";
 import {
@@ -121,7 +122,14 @@ export async function POST(request: Request) {
   }
 
   // 抽出結果 → 履歴書項目
-  const pii = clientExtractionToResumePii(ai.result);
+  let pii = clientExtractionToResumePii(ai.result);
+  // Vision が現住所フリガナを読めなかった / 出力しなかった場合の保険:漢字住所から補完する。
+  // これで「元々の履歴書を取り込んで保存 → 編集」でも、住所さえあればフリガナが必ず入る
+  // (from-profile 作成と同じ挙動。ベストエフォートで、失敗時は空のまま作成を続行)。
+  if (!pii.address_kana && pii.address) {
+    const kana = await generateAddressKana(pii.address);
+    if (kana) pii = { ...pii, address_kana: kana };
+  }
   const educationHistory = clientExtractionToEducationHistory(ai.result);
   const licenses = clientExtractionToLicenses(ai.result);
 
