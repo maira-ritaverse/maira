@@ -14,8 +14,13 @@ import { Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { apiFetch, getErrorMessage } from "@/lib/api/client-fetch";
+import { createClient } from "@/lib/supabase/client";
 
 import type { AgencyIntakeRow } from "./intake-upload-section";
+
+// バケット file_size_limit / Whisper 単一上限と一致(25 MiB)。事前にクライアントで弾く。
+const MAX_BYTES = 25 * 1024 * 1024;
+const INTAKE_BUCKET = "career-intake-audio";
 
 type Props = {
   clientRecordId: string;
@@ -63,22 +68,70 @@ export function IntakeUploadClient({ clientRecordId, rows }: Props) {
     return () => window.clearInterval(id);
   }, [hasInProgress, router]);
 
+  // アップロードは「(1)sign で事前チェック + 署名発行 → (2)ブラウザから Storage へ直送
+  // → (3)finalize で行作成」の 3 段。ファイル本体をアプリのルートに通さないことで
+  // Vercel の Serverless ボディ制限(約 4.5MB)を回避し、25MiB までの会議音声を扱える。
   const upload = async (file: File) => {
     setUploading(true);
     setError(null);
-    setProgress(`アップロード中: ${file.name}`);
+    if (file.size > MAX_BYTES) {
+      setError(`ファイルが大きすぎます(最大 ${MAX_BYTES / 1024 / 1024} MiB)`);
+      setUploading(false);
+      return;
+    }
     try {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("filename", file.name);
-      const res = await fetch(`/api/agency/clients/${clientRecordId}/intake-recording`, {
+      // (1) 事前チェック + 署名付きアップロード URL を取得
+      setProgress(`アップロード準備中: ${file.name}`);
+      const signRes = await fetch(`/api/agency/clients/${clientRecordId}/intake-recording/sign`, {
         method: "POST",
-        body: form,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          size: file.size,
+          contentType: file.type ?? "",
+        }),
       });
-      const json = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
-      if (!res.ok) {
-        throw new Error(json.message ?? json.error ?? `HTTP ${res.status}`);
+      const signJson = (await signRes.json().catch(() => ({}))) as {
+        recordingId?: string;
+        storagePath?: string;
+        token?: string;
+        error?: string;
+        message?: string;
+      };
+      if (!signRes.ok || !signJson.token || !signJson.storagePath || !signJson.recordingId) {
+        throw new Error(signJson.message ?? signJson.error ?? `HTTP ${signRes.status}`);
       }
+
+      // (2) ブラウザ → Supabase Storage へ直接アップロード(Vercel を経由しない)
+      setProgress(`アップロード中: ${file.name}`);
+      const supabase = createClient();
+      const { error: upErr } = await supabase.storage
+        .from(INTAKE_BUCKET)
+        .uploadToSignedUrl(signJson.storagePath, signJson.token, file, {
+          contentType: file.type || undefined,
+        });
+      if (upErr) throw new Error(upErr.message);
+
+      // (3) メタデータ登録(行作成 → cron が Whisper + Claude を回す)
+      setProgress("登録中…");
+      const finRes = await fetch(`/api/agency/clients/${clientRecordId}/intake-recording`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recordingId: signJson.recordingId,
+          storagePath: signJson.storagePath,
+          filename: file.name,
+          sizeBytes: file.size,
+        }),
+      });
+      const finJson = (await finRes.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+      };
+      if (!finRes.ok) {
+        throw new Error(finJson.message ?? finJson.error ?? `HTTP ${finRes.status}`);
+      }
+
       setProgress("受付完了 — 処理待ちに追加されました");
       router.refresh();
     } catch (err) {
