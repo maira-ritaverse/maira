@@ -56,6 +56,7 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
   // 住所フリガナ生成中フラグ。生成が完了する前に保存すると、生成結果が保存に載らず
   // 「保存しました」だけ出てフリガナが失われるため、生成中は保存/確定ボタンを止める。
   const [kanaGenerating, setKanaGenerating] = useState(false);
+  const [kanaError, setKanaError] = useState<string | null>(null);
   const actionsDisabled = pending || kanaGenerating;
 
   const [title, setTitle] = useState(resume.title);
@@ -65,6 +66,40 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
   const [licenses, setLicenses] = useState<LicenseItem[]>(resume.licenses);
 
   const updatePii = (patch: Partial<ResumePii>) => setPii((prev) => ({ ...prev, ...patch }));
+
+  // 住所フリガナの生成。手動(「住所から生成」ボタン)と自動(住所欄の onBlur)から共用する。
+  // opts.silent=true(自動)のときはエラーを画面に出さない(ベストエフォート。ボタンで再試行可能)。
+  const generateAddressKana = async (address: string, opts?: { silent?: boolean }) => {
+    const addr = address.trim();
+    if (!addr) {
+      if (!opts?.silent) setKanaError("先に住所を入力してください。");
+      return;
+    }
+    setKanaError(null);
+    setKanaGenerating(true);
+    try {
+      const res = await apiFetch<{ kana: string }>(
+        `/api/agency/client-resumes/${resume.id}/address-kana`,
+        { method: "POST", json: { address: addr } },
+      );
+      if (res?.kana) {
+        setPii((prev) => ({ ...prev, address_kana: res.kana }));
+      } else if (!opts?.silent) {
+        setKanaError("フリガナを生成できませんでした。住所を確認してください。");
+      }
+    } catch (err) {
+      if (!opts?.silent) setKanaError(apiErrorMessage(err));
+    } finally {
+      setKanaGenerating(false);
+    }
+  };
+
+  // 住所欄からフォーカスが外れたとき、フリガナが空なら自動生成する(= 自動でフリガナを振る)。
+  const maybeAutoFillKana = () => {
+    if ((pii.address ?? "").trim() && !(pii.address_kana ?? "").trim() && !kanaGenerating) {
+      void generateAddressKana(pii.address ?? "", { silent: true });
+    }
+  };
 
   const handleSave = (nextStatus?: "draft" | "final") => {
     setError(null);
@@ -221,17 +256,21 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
           />
           <Field label="電話番号" value={pii.phone} onChange={(v) => updatePii({ phone: v })} />
         </div>
-        <Field label="住所" value={pii.address} onChange={(v) => updatePii({ address: v })} />
-        {/* 現住所フリガナ。書類取り込み(Vision 抽出)/ プロフィール作成(AI 生成)で
-            自動補完されるほか、「住所から生成」でいつでも現在の住所から生成できる。
-            手入力・住所編集・古い履歴書でも埋められるようにするためのオンデマンド生成。 */}
+        <Field
+          label="住所"
+          value={pii.address}
+          onChange={(v) => updatePii({ address: v })}
+          onBlur={maybeAutoFillKana}
+        />
+        {/* 現住所フリガナ。住所欄からフォーカスが外れると空のとき自動生成(onBlur)。
+            書類取り込み(Vision 抽出)/ プロフィール作成(AI 生成)でも自動補完され、
+            「住所から生成」でいつでも手動で再生成できる。 */}
         <AddressKanaField
-          resumeId={resume.id}
-          address={pii.address}
           value={pii.address_kana ?? ""}
           onChange={(v) => updatePii({ address_kana: v })}
-          pending={pending}
-          onGeneratingChange={setKanaGenerating}
+          onGenerate={() => void generateAddressKana(pii.address ?? "")}
+          busy={kanaGenerating}
+          error={kanaError}
         />
         <Field label="メールアドレス" value={pii.email} onChange={(v) => updatePii({ email: v })} />
         <TextareaWithAi
@@ -441,15 +480,17 @@ function Field({
   label,
   value,
   onChange,
+  onBlur,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  onBlur?: () => void;
 }) {
   return (
     <div className="space-y-1">
       <Label>{label}</Label>
-      <Input value={value} onChange={(e) => onChange(e.target.value)} />
+      <Input value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} />
     </div>
   );
 }
@@ -468,69 +509,34 @@ function apiErrorMessage(err: unknown): string {
 }
 
 /**
- * 現住所フリガナ欄 + 「住所から生成」ボタン。
- * 氏名カナと違い住所の読みは自明でないため、現在の住所からいつでも AI 生成できるようにする。
- * from-profile 作成時の自動生成は一度きりなので、手入力・編集・古い履歴書はここで補える。
+ * 現住所フリガナ欄 + 「住所から生成」ボタン(表示のみ。生成は親が持つ)。
+ * 住所欄を離れると親が自動生成(onBlur)するほか、このボタンでいつでも手動再生成できる。
+ * 氏名カナと違い住所の読みは自明でないため、手入力・編集・古い履歴書でも埋められるようにする。
  */
 function AddressKanaField({
-  resumeId,
-  address,
   value,
   onChange,
-  pending,
-  onGeneratingChange,
+  onGenerate,
+  busy,
+  error,
 }: {
-  resumeId: string;
-  address: string;
   value: string;
   onChange: (v: string) => void;
-  pending: boolean;
-  onGeneratingChange: (busy: boolean) => void;
+  onGenerate: () => void;
+  busy: boolean;
+  error: string | null;
 }) {
-  const [genPending, startGen] = useTransition();
-  const [genError, setGenError] = useState<string | null>(null);
-
-  const handleGenerate = () => {
-    setGenError(null);
-    if (!address.trim()) {
-      setGenError("先に住所を入力してください。");
-      return;
-    }
-    // 生成中は親の保存/確定を止める(完了前に保存するとフリガナが保存に載らないため)。
-    onGeneratingChange(true);
-    startGen(async () => {
-      try {
-        const res = await apiFetch<{ kana: string }>(
-          `/api/agency/client-resumes/${resumeId}/address-kana`,
-          { method: "POST", json: { address } },
-        );
-        if (!res?.kana) throw new Error("response_missing_kana");
-        onChange(res.kana);
-      } catch (err) {
-        setGenError(apiErrorMessage(err));
-      } finally {
-        onGeneratingChange(false);
-      }
-    });
-  };
-
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between gap-2">
         <Label>現住所(フリガナ)</Label>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={handleGenerate}
-          disabled={pending || genPending}
-        >
-          {genPending ? "生成中…" : "住所から生成"}
+        <Button type="button" size="sm" variant="outline" onClick={onGenerate} disabled={busy}>
+          {busy ? "生成中…" : "住所から生成"}
         </Button>
       </div>
       {/* schema 側 max 200。超過保存で PATCH が 400 になるのを防ぐため入力側でも制限。 */}
       <Input value={value} maxLength={200} onChange={(e) => onChange(e.target.value)} />
-      {genError && <p className="text-destructive text-xs">{genError}</p>}
+      {error && <p className="text-destructive text-xs">{error}</p>}
     </div>
   );
 }
