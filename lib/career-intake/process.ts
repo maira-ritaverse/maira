@@ -43,6 +43,34 @@ export type PipelineResult =
 
 export type IntakePurpose = "self_intake" | "agency_interview";
 
+// Whisper は「無音・発話が無い音声」に対して、学習データ由来の定型句を大量に
+// ハルシネーション(幻聴)する。日本語では「ご視聴ありがとうございました」が代表例で、
+// これが並ぶ文字起こしは実質「発話なし」。空の書類を黙って作らずエラーで止めるための検出。
+const WHISPER_NOSPEECH_PHRASES = [
+  "最後までご視聴いただきありがとうございました",
+  "ご視聴いただきありがとうございました",
+  "ご視聴ありがとうございました",
+  "チャンネル登録をお願いします",
+  "チャンネル登録よろしくお願いします",
+  "ありがとうございました",
+  "おやすみなさい",
+  "バイバイ",
+];
+
+/**
+ * 文字起こしが「無発話(無音ハルシネーション or ほぼ空)」かどうかを判定する。
+ * 既知のハルシネーション定型句を除いた「実内容」が極端に少なければ無発話とみなす。
+ */
+export function looksLikeNoSpeech(text: string): boolean {
+  const compact = text.replace(/[\s　、。!?！？]/g, "");
+  if (compact.length < 12) return true; // ほぼ空
+  let stripped = compact;
+  for (const p of WHISPER_NOSPEECH_PHRASES) {
+    stripped = stripped.split(p.replace(/[\s　、。]/g, "")).join("");
+  }
+  return stripped.length < 40 && stripped.length / compact.length < 0.15;
+}
+
 export async function runIntakeProcessing(params: {
   audio: Blob;
   filename: string;
@@ -65,6 +93,18 @@ export async function runIntakeProcessing(params: {
   const encryptedTranscript = await encryptField(t.text);
   if (!encryptedTranscript) {
     return { ok: false, stage: "transcribe", message: "暗号化に失敗しました" };
+  }
+
+  // 無音 / 発話なし(Whisper のハルシネーション)を検出したら、空の書類を作らず
+  // ここで明確に失敗させる。文字起こしは保存しておく(確認ビューで中身が見えるように)。
+  if (looksLikeNoSpeech(t.text)) {
+    return {
+      ok: false,
+      stage: "transcribe",
+      message:
+        "音声から発話を認識できませんでした(無音・極端に小さい音声・発話の入っていない録音の可能性)。マイク / 音量 / 録音形式をご確認のうえ、もう一度お試しください。",
+      encryptedTranscript,
+    };
   }
 
   // 2) Claude 抽出(purpose で system prompt を切り替え)
