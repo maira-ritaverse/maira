@@ -219,11 +219,14 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
         </div>
         <Field label="住所" value={pii.address} onChange={(v) => updatePii({ address: v })} />
         {/* 現住所フリガナ。書類取り込み(Vision 抽出)/ プロフィール作成(AI 生成)で
-            自動補完されるが、担当者が確認・修正できるよう入力欄を必ず出す(氏名カナと対称)。 */}
-        <Field
-          label="現住所(フリガナ)"
+            自動補完されるほか、「住所から生成」でいつでも現在の住所から生成できる。
+            手入力・住所編集・古い履歴書でも埋められるようにするためのオンデマンド生成。 */}
+        <AddressKanaField
+          resumeId={resume.id}
+          address={pii.address}
           value={pii.address_kana ?? ""}
           onChange={(v) => updatePii({ address_kana: v })}
+          pending={pending}
         />
         <Field label="メールアドレス" value={pii.email} onChange={(v) => updatePii({ email: v })} />
         <TextareaWithAi
@@ -438,6 +441,67 @@ function Field({
     <div className="space-y-1">
       <Label>{label}</Label>
       <Input value={value} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+/**
+ * 現住所フリガナ欄 + 「住所から生成」ボタン。
+ * 氏名カナと違い住所の読みは自明でないため、現在の住所からいつでも AI 生成できるようにする。
+ * from-profile 作成時の自動生成は一度きりなので、手入力・編集・古い履歴書はここで補える。
+ */
+function AddressKanaField({
+  resumeId,
+  address,
+  value,
+  onChange,
+  pending,
+}: {
+  resumeId: string;
+  address: string;
+  value: string;
+  onChange: (v: string) => void;
+  pending: boolean;
+}) {
+  const [genPending, startGen] = useTransition();
+  const [genError, setGenError] = useState<string | null>(null);
+
+  const handleGenerate = () => {
+    setGenError(null);
+    if (!address.trim()) {
+      setGenError("先に住所を入力してください。");
+      return;
+    }
+    startGen(async () => {
+      try {
+        const res = await apiFetch<{ kana: string }>(
+          `/api/agency/client-resumes/${resumeId}/address-kana`,
+          { method: "POST", json: { address } },
+        );
+        if (!res?.kana) throw new Error("response_missing_kana");
+        onChange(res.kana);
+      } catch (err) {
+        setGenError(getErrorMessage(err));
+      }
+    });
+  };
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between gap-2">
+        <Label>現住所(フリガナ)</Label>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={handleGenerate}
+          disabled={pending || genPending}
+        >
+          {genPending ? "生成中…" : "住所から生成"}
+        </Button>
+      </div>
+      <Input value={value} onChange={(e) => onChange(e.target.value)} />
+      {genError && <p className="text-destructive text-xs">{genError}</p>}
     </div>
   );
 }
