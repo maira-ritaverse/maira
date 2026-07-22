@@ -11,8 +11,6 @@
 import { Lock } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
-import { getCurrentOrganizationPlan } from "@/lib/billing/agency";
-import { getPlanEntitlements } from "@/lib/billing/plan-entitlements";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 
@@ -53,14 +51,11 @@ export async function IntakeUploadSection({ clientRecordId, clientLinked, client
     recordingUploadEnabled = Boolean(orgRow?.recording_upload_enabled);
   }
 
-  // プラン tier に よる 録音 機能 開放 (Solo=0, Solo Pro=5, standard_rec/premium=50、
-  // それ 以外 は 0)。 recordingLimit === 0 で は そもそも 使えない ので UI を 隠す。
-  // トライアル 中 は API 側 で 50 件 に 引き上げ ら れる が、 UI は プラン に 追従。
-  const plan = await getCurrentOrganizationPlan(supabase);
-  const entitlements = getPlanEntitlements(plan?.tier ?? "standard");
-  const recordingAllowedByPlan = entitlements.recordingLimit > 0;
-
-  if (!recordingUploadEnabled || !recordingAllowedByPlan) {
+  // 【運営オーバーライド】録音アップロードは admin の recording_upload_enabled が
+  // 唯一の開放条件(運営判断の機能)。プラン tier による追加ゲートは課さない
+  // (API 側 intake-recording も同方針。実上限は checkIntakeLimit = 無料 月3件 /
+  //  meeting_recording_auto アドオンで50件)。admin が有効化した組織はプランに関わらず表示。
+  if (!recordingUploadEnabled) {
     return (
       <Card className="space-y-2 p-5">
         <div className="flex items-center gap-2">

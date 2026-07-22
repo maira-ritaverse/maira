@@ -25,7 +25,6 @@
 import { NextResponse } from "next/server";
 
 import { requireOrgMember } from "@/lib/api/auth-guards";
-import { checkAiUsageLimit } from "@/lib/features/ai-usage";
 import { checkIntakeLimit } from "@/lib/features/usage-limits";
 
 const MAX_BYTES = 25 * 1024 * 1024;
@@ -104,24 +103,12 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
 
-  // 録音 機能 の 実 上限 は プラン tier で 決まる (plan-entitlements.recordingLimit を
-  // 参照): Solo=0 / Solo Pro=5 / standard_rec, standard_premium=50、 それ 以外=0。
-  // トライアル 中 は getAgencyRecordingQuota が 50 に 引き上げ。
-  // limit=0 = 「今 の プラン で は 使えない」、 limit>0 かつ current>=limit = 「上限 達」。
-  const recordingLimit = await checkAiUsageLimit(supabase, user.id, "agency_recording_processed");
-  if (!recordingLimit.allowed) {
-    return NextResponse.json(
-      {
-        error: "recording_quota_exceeded",
-        message:
-          recordingLimit.limit === 0
-            ? "録音 機能 は Solo Pro / 録音 / Premium プラン 契約が 必要 です。 /agency/settings/billing から アップグレード して ください。"
-            : `今月の 録音 件数 上限 (${recordingLimit.limit} 件) に 達しました (90 分 超過 = 2 件 換算)。`,
-        usage: recordingLimit,
-      },
-      { status: 402 },
-    );
-  }
+  // 【運営オーバーライド】録音アップロードは admin の recording_upload_enabled で
+  // 組織単位に有効化する運営判断の機能(上の 403 ゲートで担保済み)。実上限は上の
+  // checkIntakeLimit(無料 月3件 / meeting_recording_auto アドオンで50件)に一本化し、
+  // プラン tier(agency_recording_processed の recordingLimit)による追加ゲートは課さない。
+  // → admin が有効化した組織は、プランに関わらず AI ヒアリングを利用できる。
+  // (原価は運営が承知の上。有効化は admin トグルでコスト警告付きで行う)
 
   // multipart/form-data 受領
   let form: FormData;
