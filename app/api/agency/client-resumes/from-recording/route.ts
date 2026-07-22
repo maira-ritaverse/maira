@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { readJsonBody, requireOrgMember } from "@/lib/api/auth-guards";
+import { clientRecordToResumePii } from "@/lib/agency-client-documents/client-record-to-document";
 import {
+  fillIdentityFromProfile,
   mergeExtractionIntoEducation,
   mergeExtractionIntoLicenses,
   mergeExtractionIntoResumePii,
@@ -12,11 +14,23 @@ import {
   getAgencyClientResume,
   updateAgencyClientResume,
 } from "@/lib/agency-client-documents/queries";
-import { resumePiiSchema } from "@/lib/agency-client-documents/types";
+import { resumePiiSchema, type ResumePii } from "@/lib/agency-client-documents/types";
+import { generateAddressKana } from "@/lib/ai/generate-address-kana";
 import { extractionResultSchema } from "@/lib/career-intake/types";
-import { getClientRecord } from "@/lib/clients/queries";
+import { getClientRecordWithDecrypted } from "@/lib/clients/queries";
 import { decryptField } from "@/lib/crypto/field-encryption";
 import { createServiceClient } from "@/lib/supabase/service";
+
+// 住所フリガナの AI 生成が同期で走り得るため、Node ランタイム + 余裕ある実行時間を明示。
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+// 住所があってフリガナが空なら、漢字住所から生成して補う(from-profile / from-document と同方針)。
+async function withAddressKana(pii: ResumePii): Promise<ResumePii> {
+  if (pii.address_kana || !pii.address) return pii;
+  const kana = await generateAddressKana(pii.address);
+  return kana ? { ...pii, address_kana: kana } : pii;
+}
 
 /**
  * POST /api/agency/client-resumes/from-recording
@@ -93,11 +107,13 @@ export async function POST(request: Request) {
     );
   }
 
-  // client_record の organization 一致
-  const client = await getClientRecord(parsed.data.client_record_id);
+  // client_record の organization 一致(住所・連絡先の補完に使うため復号込みで取得)
+  const client = await getClientRecordWithDecrypted(parsed.data.client_record_id);
   if (!client || client.organizationId !== organization.id) {
     return NextResponse.json({ error: "client_org_mismatch" }, { status: 403 });
   }
+  // 面談会話に通常含まれない本人特定・連絡先・住所を補完するためのプロフィール PII。
+  const profilePii = clientRecordToResumePii(client);
 
   // extraction 復号 + parse
   if (!rec.encrypted_extraction) {
@@ -120,7 +136,12 @@ export async function POST(request: Request) {
     if (!existing || existing.clientRecordId !== client.id) {
       return NextResponse.json({ error: "resume_not_found" }, { status: 404 });
     }
-    const mergedPii = mergeExtractionIntoResumePii(existing.pii, extraction, client.name);
+    const mergedPii = await withAddressKana(
+      fillIdentityFromProfile(
+        mergeExtractionIntoResumePii(existing.pii, extraction, client.name),
+        profilePii,
+      ),
+    );
     const mergedEdu = mergeExtractionIntoEducation(existing.educationHistory, extraction);
     const mergedLic = mergeExtractionIntoLicenses(existing.licenses, extraction);
     const result = await updateAgencyClientResume({
@@ -144,7 +165,12 @@ export async function POST(request: Request) {
 
   // 新規作成
   const initialPii = resumePiiSchema.parse({});
-  const pii = mergeExtractionIntoResumePii(initialPii, extraction, client.name);
+  const pii = await withAddressKana(
+    fillIdentityFromProfile(
+      mergeExtractionIntoResumePii(initialPii, extraction, client.name),
+      profilePii,
+    ),
+  );
   const education = mergeExtractionIntoEducation([], extraction);
   const licenses = mergeExtractionIntoLicenses([], extraction);
 

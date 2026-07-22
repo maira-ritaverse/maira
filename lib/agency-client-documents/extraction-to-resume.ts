@@ -70,6 +70,26 @@ export function mergeExtractionIntoResumePii(
   };
 }
 
+/**
+ * 録音由来の履歴書 PII に、顧客プロフィール(client_record)由来の本人特定・連絡先・住所を補完する。
+ * 面談(会話)音声には氏名・住所・電話・メール等が通常含まれず抽出できないため、プロフィールから埋める。
+ * 既に値がある項目(録音から取れた氏名カナ・生年月日等)は温存し、空の項目だけをプロフィールで補う。
+ */
+export function fillIdentityFromProfile(pii: ResumePii, profile: ResumePii): ResumePii {
+  return {
+    ...pii,
+    full_name: pii.full_name || profile.full_name,
+    full_name_kana: pii.full_name_kana || profile.full_name_kana,
+    birth_date: pii.birth_date || profile.birth_date,
+    gender: pii.gender || profile.gender,
+    postal_code: pii.postal_code || profile.postal_code,
+    address: pii.address || profile.address,
+    address_kana: pii.address_kana || profile.address_kana,
+    phone: pii.phone || profile.phone,
+    email: pii.email || profile.email,
+  };
+}
+
 function normalizeBirthDate(raw: string | null | undefined): string {
   if (!raw) return "";
   // 既に YYYY-MM-DD っぽければそのまま
