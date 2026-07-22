@@ -77,11 +77,16 @@ export async function runIntakeProcessing(params: {
   /** 抽出 system prompt の出し分け。既定は本人モード(後方互換) */
   purpose?: IntakePurpose;
 }): Promise<PipelineResult> {
-  // 1) Whisper 文字起こし
+  // 1) 文字起こし。冒頭の無音での定型句ハルシネーションを抑えるため、用途に応じた
+  //    文脈プロンプトを渡す(gpt-4o-transcribe 優先 / whisper-1 fallback は transcribe 側)。
   const t = await transcribeWithWhisper({
     audio: params.audio,
     filename: params.filename,
     language: "ja",
+    prompt:
+      params.purpose === "agency_interview"
+        ? "これはキャリアアドバイザー(エージェント)と求職者による転職相談・キャリア面談の録音です。求職者が自身の職務経歴・スキル・転職理由・希望条件を話します。"
+        : "これは求職者本人によるキャリアの棚卸し・自己紹介の録音です。職務経歴・スキル・希望条件を話します。",
   });
   if (!t.ok) {
     const msg =
