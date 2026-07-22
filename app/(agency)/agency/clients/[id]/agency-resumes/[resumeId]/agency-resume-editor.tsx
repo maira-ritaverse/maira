@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { apiFetch, getErrorMessage } from "@/lib/api/client-fetch";
+import { ApiClientError, apiFetch, getErrorMessage } from "@/lib/api/client-fetch";
 import type {
   AgencyClientResume,
   EducationItem,
@@ -53,6 +53,10 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
+  // 住所フリガナ生成中フラグ。生成が完了する前に保存すると、生成結果が保存に載らず
+  // 「保存しました」だけ出てフリガナが失われるため、生成中は保存/確定ボタンを止める。
+  const [kanaGenerating, setKanaGenerating] = useState(false);
+  const actionsDisabled = pending || kanaGenerating;
 
   const [title, setTitle] = useState(resume.title);
   const [documentDate, setDocumentDate] = useState(resume.documentDate ?? "");
@@ -227,6 +231,7 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
           value={pii.address_kana ?? ""}
           onChange={(v) => updatePii({ address_kana: v })}
           pending={pending}
+          onGeneratingChange={setKanaGenerating}
         />
         <Field label="メールアドレス" value={pii.email} onChange={(v) => updatePii({ email: v })} />
         <TextareaWithAi
@@ -392,31 +397,35 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
         </div>
         <div className="flex flex-wrap gap-2">
           {isAdmin && (
-            <Button variant="destructive" onClick={handleDelete} disabled={pending}>
+            <Button variant="destructive" onClick={handleDelete} disabled={actionsDisabled}>
               削除
             </Button>
           )}
           {resume.status === "draft" ? (
             <>
-              <Button variant="outline" onClick={() => handleSave()} disabled={pending}>
+              <Button variant="outline" onClick={() => handleSave()} disabled={actionsDisabled}>
                 {pending ? "保存中…" : "下書き保存"}
               </Button>
-              <Button onClick={() => handleSave("final")} disabled={pending}>
+              <Button onClick={() => handleSave("final")} disabled={actionsDisabled}>
                 {pending ? "確定中…" : "確定する"}
               </Button>
             </>
           ) : (
             <>
-              <Button variant="outline" onClick={() => handleSave("draft")} disabled={pending}>
+              <Button
+                variant="outline"
+                onClick={() => handleSave("draft")}
+                disabled={actionsDisabled}
+              >
                 編集を再開(下書きに戻す)
               </Button>
-              <Button variant="outline" onClick={() => handleSave()} disabled={pending}>
+              <Button variant="outline" onClick={() => handleSave()} disabled={actionsDisabled}>
                 {pending ? "保存中…" : "保存"}
               </Button>
               {resume.pushedToDraftId ? (
                 <Button disabled>送付済み</Button>
               ) : (
-                <Button onClick={handlePushToSeeker} disabled={pending}>
+                <Button onClick={handlePushToSeeker} disabled={actionsDisabled}>
                   {pending ? "送付中…" : "求職者本人に送付"}
                 </Button>
               )}
@@ -446,6 +455,19 @@ function Field({
 }
 
 /**
+ * API エラー表示:サーバが返す日本語 message(err.body.message)を優先し、
+ * 無ければ getErrorMessage にフォールバックする。getErrorMessage は error コード
+ * (over_quota 等)しか見ないため、これを挟まないと生の英語コードが露出する。
+ */
+function apiErrorMessage(err: unknown): string {
+  if (err instanceof ApiClientError && err.body && typeof err.body === "object") {
+    const m = (err.body as { message?: unknown }).message;
+    if (typeof m === "string" && m.trim()) return m;
+  }
+  return getErrorMessage(err);
+}
+
+/**
  * 現住所フリガナ欄 + 「住所から生成」ボタン。
  * 氏名カナと違い住所の読みは自明でないため、現在の住所からいつでも AI 生成できるようにする。
  * from-profile 作成時の自動生成は一度きりなので、手入力・編集・古い履歴書はここで補える。
@@ -456,12 +478,14 @@ function AddressKanaField({
   value,
   onChange,
   pending,
+  onGeneratingChange,
 }: {
   resumeId: string;
   address: string;
   value: string;
   onChange: (v: string) => void;
   pending: boolean;
+  onGeneratingChange: (busy: boolean) => void;
 }) {
   const [genPending, startGen] = useTransition();
   const [genError, setGenError] = useState<string | null>(null);
@@ -472,6 +496,8 @@ function AddressKanaField({
       setGenError("先に住所を入力してください。");
       return;
     }
+    // 生成中は親の保存/確定を止める(完了前に保存するとフリガナが保存に載らないため)。
+    onGeneratingChange(true);
     startGen(async () => {
       try {
         const res = await apiFetch<{ kana: string }>(
@@ -481,7 +507,9 @@ function AddressKanaField({
         if (!res?.kana) throw new Error("response_missing_kana");
         onChange(res.kana);
       } catch (err) {
-        setGenError(getErrorMessage(err));
+        setGenError(apiErrorMessage(err));
+      } finally {
+        onGeneratingChange(false);
       }
     });
   };
@@ -500,7 +528,8 @@ function AddressKanaField({
           {genPending ? "生成中…" : "住所から生成"}
         </Button>
       </div>
-      <Input value={value} onChange={(e) => onChange(e.target.value)} />
+      {/* schema 側 max 200。超過保存で PATCH が 400 になるのを防ぐため入力側でも制限。 */}
+      <Input value={value} maxLength={200} onChange={(e) => onChange(e.target.value)} />
       {genError && <p className="text-destructive text-xs">{genError}</p>}
     </div>
   );

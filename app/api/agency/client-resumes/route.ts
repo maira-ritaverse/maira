@@ -71,16 +71,14 @@ export async function POST(request: Request) {
   // 住所フリガナは client_record に元データが無いので、漢字住所から AI 生成して補完する
   // (書類取り込み側は Vision 抽出で対応済み。ここはプロフィール側の生成)。
   // ベストエフォート:クォータ超過や生成失敗時はフリガナ空のまま作成を続行する。
+  let addressKanaGenerated = false;
   if (!parsed.data.pii && !pii.address_kana && pii.address) {
     const usage = await checkAiUsageLimit(supabase, user.id, "agency_client_document_extract");
     if (usage.allowed) {
       const kana = await generateAddressKana(pii.address);
       if (kana) {
         pii = { ...pii, address_kana: kana };
-        await recordAiUsage(supabase, user.id, "agency_client_document_extract", {
-          kind: "address_kana_gen",
-          client_record_id: parsed.data.client_record_id,
-        });
+        addressKanaGenerated = true;
       }
     }
   }
@@ -98,6 +96,14 @@ export async function POST(request: Request) {
 
   if ("error" in result) {
     return NextResponse.json({ error: "create_failed", message: result.error }, { status: 500 });
+  }
+
+  // 課金は作成成功後にのみ行う(作成失敗時に課金だけ残るのを避け、from-document と挙動を揃える)。
+  if (addressKanaGenerated) {
+    await recordAiUsage(supabase, user.id, "agency_client_document_extract", {
+      kind: "address_kana_gen",
+      client_record_id: parsed.data.client_record_id,
+    });
   }
   return NextResponse.json({ item: result }, { status: 201 });
 }

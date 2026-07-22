@@ -21,9 +21,15 @@ import type {
   ResumePii,
 } from "./types";
 
-const overrideIfEmpty = (current: string, next: string): string => {
-  if (current.trim().length > 0) return current;
-  return next;
+// current が空なら next を採用し、いずれの場合も max で切り詰める。
+// 切り詰めが必須な理由:抽出側(extractionResultSchema)は selfPr / careerSummary /
+// motivationNote / workExperiences 等が無上限。そのまま保存すると、読込時に
+// resumePiiSchema / cvBodySchema の .max() 検証で parse が失敗し、parseResumePii /
+// parseCvBody が「全体を空」に倒すため、履歴書 / 職務経歴書がまるごと消える
+// (サイレントなデータ損失)。from-document 側と同様に保存前に各項目を上限へ収める。
+const overrideIfEmpty = (current: string, next: string, max: number): string => {
+  const chosen = current.trim().length > 0 ? current : next;
+  return chosen.length > max ? chosen.slice(0, max) : chosen;
 };
 
 const joinList = (items: string[] | undefined): string => (items ?? []).filter(Boolean).join("、");
@@ -45,10 +51,11 @@ export function mergeExtractionIntoResumePii(
   extraction: ExtractionResult,
   fallbackName: string,
 ): ResumePii {
+  // max は resumePiiSchema の各 .max() と揃える(超過保存 → 読込時の全体空化を防ぐ)。
   return {
-    full_name: overrideIfEmpty(current.full_name, fallbackName),
-    full_name_kana: overrideIfEmpty(current.full_name_kana, extraction.nameKana ?? ""),
-    birth_date: overrideIfEmpty(current.birth_date, normalizeBirthDate(extraction.birthDate)),
+    full_name: overrideIfEmpty(current.full_name, fallbackName, 100),
+    full_name_kana: overrideIfEmpty(current.full_name_kana, extraction.nameKana ?? "", 100),
+    birth_date: overrideIfEmpty(current.birth_date, normalizeBirthDate(extraction.birthDate), 10),
     gender: current.gender, // 抽出からは決定しない
     postal_code: current.postal_code,
     address: current.address,
@@ -57,9 +64,9 @@ export function mergeExtractionIntoResumePii(
     address_kana: current.address_kana,
     phone: current.phone,
     email: current.email,
-    motivation: overrideIfEmpty(current.motivation, extraction.motivationNote ?? ""),
-    self_pr: overrideIfEmpty(current.self_pr, extraction.selfPr ?? ""),
-    preferences: overrideIfEmpty(current.preferences, buildPreferences(extraction)),
+    motivation: overrideIfEmpty(current.motivation, extraction.motivationNote ?? "", 2000),
+    self_pr: overrideIfEmpty(current.self_pr, extraction.selfPr ?? "", 2000),
+    preferences: overrideIfEmpty(current.preferences, buildPreferences(extraction), 1000),
   };
 }
 
@@ -146,8 +153,10 @@ function dedupeByDescription<T extends { description: string }>(current: T[], in
  * 既存値は overrideIfEmpty で温存する。
  */
 export function mergeExtractionIntoCvBody(current: CvBody, extraction: ExtractionResult): CvBody {
-  const summary = overrideIfEmpty(current.summary, extraction.careerSummary ?? "");
-  const body = overrideIfEmpty(current.body, buildCvBodyText(extraction));
+  // max は cvBodySchema の各 .max() と揃える(職歴が多い/自己PRが長い録音で本文が
+  // 20000 字を超えると、読込時に cvBodySchema.parse が失敗し CV 本文が丸ごと消えるため)。
+  const summary = overrideIfEmpty(current.summary, extraction.careerSummary ?? "", 2000);
+  const body = overrideIfEmpty(current.body, buildCvBodyText(extraction), 20000);
   return { summary, body };
 }
 
