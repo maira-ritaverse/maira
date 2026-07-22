@@ -223,6 +223,9 @@ export function IntakeUploadClient({ clientRecordId, rows }: Props) {
                     onDone={() => router.refresh()}
                   />
                 )}
+                {r.hasTranscript && (
+                  <TranscriptDiagnostic recordingId={r.id} clientRecordId={clientRecordId} />
+                )}
               </li>
             ))}
           </ul>
@@ -318,6 +321,91 @@ function ExtractedActions({
         {pending ? "反映中…" : "ヒアリングシートに反映"}
       </Button>
       {error && <span className="text-destructive text-[11px]">{error}</span>}
+    </div>
+  );
+}
+
+/**
+ * 「録音したのに書類がスカスカ」の切り分けビュー。
+ * Whisper の文字起こし本文と、AI 抽出で何がどれだけ取れたか(職歴/学歴/資格の件数、
+ * 自己PRの有無 等)を表示する。文字起こしが空 → 音声/形式の問題、文字起こしはあるが
+ * 抽出が 0 件だらけ → 抽出の問題、と一目で分かる。
+ */
+function TranscriptDiagnostic({
+  recordingId,
+  clientRecordId,
+}: {
+  recordingId: string;
+  clientRecordId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<{
+    transcript: string;
+    transcriptLength: number;
+    extractionSummary: Record<string, number | boolean> | null;
+  } | null>(null);
+
+  const toggle = async () => {
+    if (data) {
+      setOpen((v) => !v);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/agency/clients/${clientRecordId}/intake-recording/transcript`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recordingId }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        transcript?: string;
+        transcriptLength?: number;
+        extractionSummary?: Record<string, number | boolean> | null;
+        error?: string;
+        message?: string;
+      };
+      if (!res.ok) throw new Error(json.message ?? json.error ?? `HTTP ${res.status}`);
+      setData({
+        transcript: json.transcript ?? "",
+        transcriptLength: json.transcriptLength ?? 0,
+        extractionSummary: json.extractionSummary ?? null,
+      });
+      setOpen(true);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const s = data?.extractionSummary;
+  return (
+    <div className="pt-1">
+      <Button size="sm" variant="ghost" onClick={toggle} disabled={loading}>
+        {loading ? "読み込み中…" : open ? "文字起こしを隠す" : "文字起こし・抽出を確認"}
+      </Button>
+      {error && <p className="text-destructive text-[11px]">{error}</p>}
+      {open && data && (
+        <div className="mt-2 space-y-2">
+          <div className="text-muted-foreground text-[11px]">
+            文字起こし {data.transcriptLength} 文字
+            {s && (
+              <>
+                {" ・ 抽出: 職歴 "}
+                {s.workExperiences}件 / 学歴 {s.educationHistory}件 / 資格 {s.licenses}件 / 自己PR{" "}
+                {s.hasSelfPr ? "有" : "無"} / 希望条件 {s.desiredConditions}件
+              </>
+            )}
+          </div>
+          <pre className="bg-muted/40 max-h-64 overflow-auto rounded border p-2 text-[11px] whitespace-pre-wrap">
+            {data.transcript ||
+              "(文字起こしが空です。音声が無音・非対応形式・極端に短い可能性があります)"}
+          </pre>
+        </div>
+      )}
     </div>
   );
 }
