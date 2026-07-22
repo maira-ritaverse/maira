@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -67,32 +67,35 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
 
   const updatePii = (patch: Partial<ResumePii>) => setPii((prev) => ({ ...prev, ...patch }));
 
-  // 住所フリガナの生成。手動(「住所から生成」ボタン)と自動(住所欄の onBlur)から共用する。
+  // 住所フリガナの生成。手動(「住所から生成」ボタン)と自動(住所欄の onBlur / 開いた時)から共用する。
   // opts.silent=true(自動)のときはエラーを画面に出さない(ベストエフォート。ボタンで再試行可能)。
-  const generateAddressKana = async (address: string, opts?: { silent?: boolean }) => {
-    const addr = address.trim();
-    if (!addr) {
-      if (!opts?.silent) setKanaError("先に住所を入力してください。");
-      return;
-    }
-    setKanaError(null);
-    setKanaGenerating(true);
-    try {
-      const res = await apiFetch<{ kana: string }>(
-        `/api/agency/client-resumes/${resume.id}/address-kana`,
-        { method: "POST", json: { address: addr } },
-      );
-      if (res?.kana) {
-        setPii((prev) => ({ ...prev, address_kana: res.kana }));
-      } else if (!opts?.silent) {
-        setKanaError("フリガナを生成できませんでした。住所を確認してください。");
+  const generateAddressKana = useCallback(
+    async (address: string, opts?: { silent?: boolean }) => {
+      const addr = address.trim();
+      if (!addr) {
+        if (!opts?.silent) setKanaError("先に住所を入力してください。");
+        return;
       }
-    } catch (err) {
-      if (!opts?.silent) setKanaError(apiErrorMessage(err));
-    } finally {
-      setKanaGenerating(false);
-    }
-  };
+      setKanaError(null);
+      setKanaGenerating(true);
+      try {
+        const res = await apiFetch<{ kana: string }>(
+          `/api/agency/client-resumes/${resume.id}/address-kana`,
+          { method: "POST", json: { address: addr } },
+        );
+        if (res?.kana) {
+          setPii((prev) => ({ ...prev, address_kana: res.kana }));
+        } else if (!opts?.silent) {
+          setKanaError("フリガナを生成できませんでした。住所を確認してください。");
+        }
+      } catch (err) {
+        if (!opts?.silent) setKanaError(apiErrorMessage(err));
+      } finally {
+        setKanaGenerating(false);
+      }
+    },
+    [resume.id],
+  );
 
   // 住所欄からフォーカスが外れたとき、フリガナが空なら自動生成する(= 自動でフリガナを振る)。
   const maybeAutoFillKana = () => {
@@ -100,6 +103,20 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
       void generateAddressKana(pii.address ?? "", { silent: true });
     }
   };
+
+  // 書類から作成した履歴書などで、作成時にフリガナが入らなかった場合の保険。
+  // 編集画面を開いた時点で住所があってフリガナが空なら、一度だけ自動生成する。
+  const autoKanaTriedRef = useRef(false);
+  useEffect(() => {
+    if (autoKanaTriedRef.current) return;
+    autoKanaTriedRef.current = true;
+    if (!(resume.pii.address ?? "").trim() || (resume.pii.address_kana ?? "").trim()) return;
+    // マウント同期中の setState を避けるため次のタスクで実行する(ベストエフォート生成)。
+    const timer = setTimeout(() => {
+      void generateAddressKana(resume.pii.address ?? "", { silent: true });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [generateAddressKana, resume.pii.address, resume.pii.address_kana]);
 
   const handleSave = (nextStatus?: "draft" | "final") => {
     setError(null);
