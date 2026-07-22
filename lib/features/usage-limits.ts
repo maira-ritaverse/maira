@@ -75,6 +75,17 @@ export async function checkIntakeLimit(
   const addon = await hasAddon(supabase, userId, "meeting_recording_auto", now);
   const limit = addon ? INTAKE_ADDON_MONTHLY_LIMIT : INTAKE_FREE_MONTHLY_LIMIT;
   const current = await countIntakesInCurrentMonth(supabase, userId, now);
+  // テスト用の上限バイパス。環境変数 INTAKE_LIMIT_DISABLED=true のときだけ実質無制限にする。
+  // 検証が終わったら env を外せば通常の月次上限に戻る(コード変更不要)。
+  if (process.env.INTAKE_LIMIT_DISABLED === "true") {
+    return {
+      allowed: true,
+      current,
+      limit: Math.max(limit, 100000),
+      addon,
+      resetsAt: utcNextMonthStart(now).toISOString(),
+    };
+  }
   return {
     allowed: current < limit,
     current,
