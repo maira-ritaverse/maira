@@ -67,7 +67,11 @@ export async function POST(request: Request) {
   const parsed = requestSchema.safeParse(body.body);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "validation_failed", details: parsed.error.format() },
+      {
+        error: "validation_failed",
+        message: "CSV の形式が正しくありません(ヘッダー行やデータをご確認ください)。",
+        details: parsed.error.format(),
+      },
       { status: 400 },
     );
   }

@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import type { ZodIssue } from "zod";
+
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/organizations/queries";
 import { getCurrentOrganizationPlan } from "@/lib/billing/agency";
@@ -280,16 +282,103 @@ type ImportResultRow = {
   clientId?: string;
 };
 
+// ── エラー日本語化 ───────────────────────────────────────────────
+// CSV 列(canonical key)→ 画面表示用の日本語ラベル。
+const FIELD_LABEL_JA: Record<string, string> = {
+  name: "氏名",
+  name_kana: "氏名カナ",
+  email: "メール",
+  phone: "電話番号",
+  phone2: "電話番号(副)",
+  email2: "メール(副)",
+  birth_date: "生年月日",
+  gender: "性別",
+  nationality: "国籍",
+  marital_status: "配偶者",
+  postal_code: "郵便番号",
+  prefecture: "都道府県",
+  city: "市区町村",
+  street: "番地",
+  building: "建物名",
+  current_employment_type: "現職雇用形態",
+  current_annual_income: "現年収",
+  final_education: "最終学歴",
+  desired_industries: "希望業種",
+  desired_occupations: "希望職種",
+  desired_locations: "希望勤務地",
+  desired_annual_income: "希望年収",
+  job_change_timing: "転職時期",
+  experience_industries: "経験業種",
+  experience_occupations: "経験職種",
+  intake_date: "受付日",
+  first_meeting_date: "初回面談日",
+  entry_site: "媒体",
+  notes: "備考",
+  crm_tags: "タグ",
+  assignee_email: "担当者メール",
+  status: "ステータス",
+};
+
+const hasJapanese = (s: string): boolean => /[ぁ-んァ-ヶ一-龠]/.test(s);
+
+/** zod のバリデーションエラーを日本語の 1 文にする。カスタム日本語メッセージはそのまま活かす。 */
+function zodIssueToJa(issue: ZodIssue): string {
+  // スキーマ側で日本語メッセージが付いている項目(氏名/メール等)はそのまま使う。
+  if (hasJapanese(issue.message)) return issue.message;
+  const field = String(issue.path[0] ?? "");
+  const label = FIELD_LABEL_JA[field] ?? field;
+  let reason: string;
+  switch (issue.code) {
+    case "too_small":
+      reason = "必須です(または文字数が不足しています)";
+      break;
+    case "too_big":
+      reason = "文字数が上限を超えています";
+      break;
+    case "invalid_string":
+      reason = "形式が正しくありません";
+      break;
+    case "invalid_type":
+      reason = "必須です(値がありません)";
+      break;
+    case "invalid_enum_value":
+      reason = "許可されていない値です";
+      break;
+    default:
+      reason = "入力が正しくありません";
+      break;
+  }
+  return `${label}: ${reason}`;
+}
+
+/** DB(PostgreSQL)エラーメッセージを、原因に応じた日本語に変換する。 */
+function dbErrorToJa(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes("duplicate") || m.includes("unique"))
+    return "既に登録されている値があります(重複)";
+  if (m.includes("null value") || m.includes("not-null") || m.includes("not null"))
+    return "必須の項目が空です";
+  if (m.includes("invalid input syntax for type date") || m.includes("date/time"))
+    return "日付の形式が正しくありません(例: 2026-01-31 または 2026/1/31)";
+  if (m.includes("check constraint") || m.includes("violates check"))
+    return "許可されていない値が含まれています";
+  if (m.includes("value too long")) return "文字数が上限を超えている項目があります";
+  return "データベースへの保存に失敗しました";
+}
+
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
 
   const role = await getUserRole(user.id);
   if (role.accountType !== "organization_member" || !role.organization || !role.member) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json(
+      { error: "この操作を行う権限がありません(組織メンバーのみ利用できます)" },
+      { status: 403 },
+    );
   }
 
   // プラン tier に よる CSV インポート 可否。 Solo は 不可、 Solo Pro / Team 系 は 可。
@@ -319,15 +408,18 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: "リクエストの形式が正しくありません" }, { status: 400 });
   }
 
   if (typeof body !== "object" || body === null) {
-    return NextResponse.json({ error: "Invalid body shape" }, { status: 400 });
+    return NextResponse.json({ error: "リクエストの形式が正しくありません" }, { status: 400 });
   }
   const rows = (body as { rows?: unknown }).rows;
   if (!Array.isArray(rows)) {
-    return NextResponse.json({ error: "'rows' must be an array" }, { status: 400 });
+    return NextResponse.json(
+      { error: "CSV データの形式が正しくありません(行データが配列ではありません)" },
+      { status: 400 },
+    );
   }
   if (rows.length === 0) {
     return NextResponse.json({ created: 0, skippedDuplicate: 0, errors: 0, results: [] });
@@ -410,7 +502,7 @@ export async function POST(request: Request) {
       results.push({
         rowIndex,
         outcome: "error",
-        message: `バリデーション失敗: ${issue.path.join(".")} - ${issue.message}`,
+        message: zodIssueToJa(issue),
       });
       continue;
     }
@@ -501,10 +593,14 @@ export async function POST(request: Request) {
       .single();
 
     if (error || !insertedRow) {
+      // 原文(英語)はサーバーログに残し、画面には日本語の理由を出す。
+      if (error) {
+        console.error("[import/clients] insert error", { rowIndex, message: error.message });
+      }
       results.push({
         rowIndex,
         outcome: "error",
-        message: `DB 書き込み失敗: ${error?.message ?? "Unknown"}`,
+        message: dbErrorToJa(error?.message ?? ""),
       });
       continue;
     }
