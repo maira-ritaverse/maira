@@ -60,10 +60,15 @@ function LoginForm() {
 
     const result = await login(data, nextParam);
 
-    // 成功時はlogin Server Action内でredirectされるため、ここに到達するのはエラー時のみ
-    if (result?.error) {
+    if (result && "error" in result) {
       setServerError(result.error);
       setIsPending(false);
+      return;
+    }
+    // 成功: フルページ遷移で認証 Cookie を確実に載せる(Safari で Cookie が落ちる対策)。
+    // isPending は解除せず「ログイン中...」のまま遷移させる。
+    if (result && "redirectTo" in result) {
+      window.location.assign(result.redirectTo);
     }
   };
 

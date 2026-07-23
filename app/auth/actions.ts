@@ -90,7 +90,8 @@ export async function signup(input: SignupInput) {
 /**
  * ログイン Server Action
  *
- * 成功時はlayoutキャッシュを破棄して next(既定 /app)にリダイレクトする。
+ * 成功時は redirect() せず遷移先(既定 /app)を返す。クライアントが window.location で
+ * フルページ遷移して認証 Cookie を確実に載せる(Safari で Cookie が落ちる対策)。
  * 失敗時はエラーメッセージを返す(クライアント側で表示)。
  *
  * next の用途:
@@ -99,7 +100,9 @@ export async function signup(input: SignupInput) {
  *   外部 URL や scheme-relative は捨てて /app にフォールバックする
  *   (open redirect 対策)。
  */
-export async function login(input: LoginInput, next?: string | null) {
+type LoginActionResult = { error: string } | { ok: true; redirectTo: string };
+
+export async function login(input: LoginInput, next?: string | null): Promise<LoginActionResult> {
   const supabase = await createClient();
   const hdrs = await headers();
   const ip = hdrs.get("x-forwarded-for");
@@ -187,7 +190,11 @@ export async function login(input: LoginInput, next?: string | null) {
   }
 
   revalidatePath("/", "layout");
-  redirect(safeNextOr(next, "/app"));
+  // Safari 対策: Server Action 内で redirect() すると、直前に set した認証 Cookie が
+  // RSC ナビゲーションで確実に反映されず、ログイン成功後に /login へ戻される
+  // (Chrome は反映されるが Safari は Cookie が落ちる)。遷移先を返し、クライアント側で
+  // window.location のフルページ遷移をして Cookie を確実に載せる。
+  return { ok: true as const, redirectTo: safeNextOr(next, "/app") };
 }
 
 /**
