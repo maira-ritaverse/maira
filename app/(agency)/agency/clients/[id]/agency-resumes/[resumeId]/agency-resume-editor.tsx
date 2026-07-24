@@ -1,7 +1,8 @@
 "use client";
 
+import { GripVertical } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { type DragEvent, useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,56 @@ function joinYearMonth(year: string, month: string): string {
   const m = month.trim();
   if (!y && !m) return "";
   return m ? `${y}/${m}` : y;
+}
+
+/**
+ * リストのドラッグ&ドロップ並べ替え(ネイティブ HTML5 DnD、外部ライブラリ不使用)。
+ * ドラッグハンドルに handleProps(idx)、各行に rowProps(idx) を展開する。
+ */
+function useDragReorder<T>(setItems: (updater: (prev: T[]) => T[]) => void) {
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+
+  const drop = (to: number) => {
+    setItems((prev) => {
+      if (dragIndex === null || dragIndex === to || dragIndex < 0 || dragIndex >= prev.length) {
+        return prev;
+      }
+      const next = [...prev];
+      const [moved] = next.splice(dragIndex, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+    setDragIndex(null);
+    setOverIndex(null);
+  };
+
+  return {
+    dragIndex,
+    overIndex,
+    handleProps: (idx: number) => ({
+      draggable: true,
+      onDragStart: (e: DragEvent<HTMLElement>) => {
+        setDragIndex(idx);
+        e.dataTransfer.effectAllowed = "move";
+      },
+      onDragEnd: () => {
+        setDragIndex(null);
+        setOverIndex(null);
+      },
+    }),
+    rowProps: (idx: number) => ({
+      onDragOver: (e: DragEvent<HTMLElement>) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        if (overIndex !== idx) setOverIndex(idx);
+      },
+      onDrop: (e: DragEvent<HTMLElement>) => {
+        e.preventDefault();
+        drop(idx);
+      },
+    }),
+  };
 }
 
 export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
@@ -186,6 +237,10 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
   const updateLicense = (idx: number, patch: Partial<LicenseItem>) =>
     setLicenses((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
   const removeLicense = (idx: number) => setLicenses((prev) => prev.filter((_, i) => i !== idx));
+
+  // 学歴・職歴 / 免許・資格 の ドラッグ&ドロップ並べ替え。
+  const eduDnd = useDragReorder<EducationItem>(setEducation);
+  const licDnd = useDragReorder<LicenseItem>(setLicenses);
 
   return (
     <div className="space-y-6">
@@ -329,14 +384,29 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
         </div>
         <p className="text-muted-foreground text-xs">
           退職理由・自己PR などの自由記述も内容欄に書けます(年月は空欄でも可)。
-          「学歴」「職歴」だけの行は見出しとして中央寄せ・「学　　歴」表示になります
+          「学歴」「職歴」だけの行は見出しとして中央寄せ・「学　　歴」表示になります。
+          各行左のハンドルをドラッグすると順番を並べ替えられます。
         </p>
         {education.length === 0 ? (
           <p className="text-muted-foreground text-xs">未入力</p>
         ) : (
           <ul className="space-y-2">
             {education.map((it, idx) => (
-              <li key={idx} className="grid grid-cols-1 gap-2 sm:grid-cols-[11rem_1fr_auto]">
+              <li
+                key={idx}
+                {...eduDnd.rowProps(idx)}
+                className={`grid grid-cols-1 gap-2 rounded-md sm:grid-cols-[auto_11rem_1fr_auto] ${
+                  eduDnd.overIndex === idx ? "ring-primary/50 ring-2" : ""
+                } ${eduDnd.dragIndex === idx ? "opacity-50" : ""}`}
+              >
+                <span
+                  {...eduDnd.handleProps(idx)}
+                  className="text-muted-foreground hidden cursor-grab items-center justify-center active:cursor-grabbing sm:flex sm:pt-2"
+                  title="ドラッグで並べ替え"
+                  aria-label="ドラッグで並べ替え"
+                >
+                  <GripVertical className="size-4" aria-hidden />
+                </span>
                 <div className="grid grid-cols-2 gap-1">
                   <Input
                     type="number"
@@ -398,7 +468,21 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
         ) : (
           <ul className="space-y-2">
             {licenses.map((it, idx) => (
-              <li key={idx} className="grid grid-cols-1 gap-2 sm:grid-cols-[11rem_1fr_auto]">
+              <li
+                key={idx}
+                {...licDnd.rowProps(idx)}
+                className={`grid grid-cols-1 gap-2 rounded-md sm:grid-cols-[auto_11rem_1fr_auto] ${
+                  licDnd.overIndex === idx ? "ring-primary/50 ring-2" : ""
+                } ${licDnd.dragIndex === idx ? "opacity-50" : ""}`}
+              >
+                <span
+                  {...licDnd.handleProps(idx)}
+                  className="text-muted-foreground hidden cursor-grab items-center justify-center active:cursor-grabbing sm:flex sm:pt-2"
+                  title="ドラッグで並べ替え"
+                  aria-label="ドラッグで並べ替え"
+                >
+                  <GripVertical className="size-4" aria-hidden />
+                </span>
                 <div className="grid grid-cols-2 gap-1">
                   <Input
                     type="number"
