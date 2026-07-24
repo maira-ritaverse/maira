@@ -57,6 +57,14 @@ export default async function AgencyResumeEditPage({ params }: RouteParams) {
     notFound();
   }
 
+  // 履歴書エディタで自己PR欄を使うか(組織単位、既定 false)。
+  const { data: orgRow } = await supabase
+    .from("organizations")
+    .select("resume_self_pr_enabled")
+    .eq("id", role.organization.id)
+    .maybeSingle();
+  const selfPrEnabled = Boolean(orgRow?.resume_self_pr_enabled);
+
   // 写真の署名 URL は SSR で発行(エージェントセッションで Storage RLS を通す)。
   // 発行失敗時はプレースホルダにフォールバック。
   let photoSignedUrl: string | null = null;
@@ -120,6 +128,7 @@ export default async function AgencyResumeEditPage({ params }: RouteParams) {
         clientRecordId={clientRecordId}
         resume={resume}
         isAdmin={role.member.role === "admin"}
+        selfPrEnabled={selfPrEnabled}
       />
     </div>
   );

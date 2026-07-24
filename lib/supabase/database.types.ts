@@ -4763,6 +4763,7 @@ export type Database = {
           name: string;
           recording_upload_enabled: boolean;
           resend_api_key_encrypted: string | null;
+          resume_self_pr_enabled: boolean;
           revoke_grace_days: number;
           slack_webhook_url: string | null;
           updated_at: string;
@@ -4777,6 +4778,7 @@ export type Database = {
           name: string;
           recording_upload_enabled?: boolean;
           resend_api_key_encrypted?: string | null;
+          resume_self_pr_enabled?: boolean;
           revoke_grace_days?: number;
           slack_webhook_url?: string | null;
           updated_at?: string;
@@ -4791,6 +4793,7 @@ export type Database = {
           name?: string;
           recording_upload_enabled?: boolean;
           resend_api_key_encrypted?: string | null;
+          resume_self_pr_enabled?: boolean;
           revoke_grace_days?: number;
           slack_webhook_url?: string | null;
           updated_at?: string;

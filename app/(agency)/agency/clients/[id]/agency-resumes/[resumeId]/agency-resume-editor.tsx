@@ -33,6 +33,8 @@ type Props = {
   clientRecordId: string;
   resume: AgencyClientResume;
   isAdmin: boolean;
+  /** 組織設定:履歴書エディタで自己PR欄を使うか(既定 false)。 */
+  selfPrEnabled: boolean;
 };
 
 // 年月は "YYYY/MM"(月なしは "YYYY")の文字列1本で保持する(agency-resume-mapper の
@@ -99,7 +101,7 @@ function useDragReorder<T>(setItems: (updater: (prev: T[]) => T[]) => void) {
   };
 }
 
-export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
+export function AgencyResumeEditor({ clientRecordId, resume, isAdmin, selfPrEnabled }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -242,6 +244,26 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
   const eduDnd = useDragReorder<EducationItem>(setEducation);
   const licDnd = useDragReorder<LicenseItem>(setLicenses);
 
+  // 自己PR 使用トグル(組織単位の設定)。楽観的に反映しつつ API で永続化する。
+  const [selfPrOn, setSelfPrOn] = useState(selfPrEnabled);
+  const [selfPrSaving, setSelfPrSaving] = useState(false);
+  const toggleSelfPr = async (next: boolean) => {
+    setSelfPrOn(next);
+    setSelfPrSaving(true);
+    setError(null);
+    try {
+      await apiFetch("/api/agency/settings/resume-self-pr", {
+        method: "POST",
+        json: { enabled: next },
+      });
+    } catch (err) {
+      setSelfPrOn(!next); // 保存失敗時はロールバック
+      setError(getErrorMessage(err));
+    } finally {
+      setSelfPrSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {error && (
@@ -355,16 +377,33 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin }: Props) {
           kind="motivation"
           pending={pending}
         />
-        <TextareaWithAi
-          label="自己 PR"
-          value={pii.self_pr}
-          onChange={(v) => updatePii({ self_pr: v })}
-          rows={4}
-          maxLength={2000}
-          resumeId={resume.id}
-          kind="self_pr"
-          pending={pending}
-        />
+        {/* 自己PR は組織設定でオン/オフ(既定オフ)。トグルは組織全体で永続化する。 */}
+        <div className="space-y-2">
+          <label className="flex flex-wrap items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={selfPrOn}
+              disabled={selfPrSaving}
+              onChange={(e) => void toggleSelfPr(e.target.checked)}
+              className="size-4"
+            />
+            <span className="font-medium">自己 PR を使用する</span>
+            <span className="text-muted-foreground text-xs">(組織全体の設定・次回以降も保持)</span>
+            {selfPrSaving && <span className="text-muted-foreground text-xs">保存中…</span>}
+          </label>
+          {selfPrOn && (
+            <TextareaWithAi
+              label="自己 PR"
+              value={pii.self_pr}
+              onChange={(v) => updatePii({ self_pr: v })}
+              rows={4}
+              maxLength={2000}
+              resumeId={resume.id}
+              kind="self_pr"
+              pending={pending}
+            />
+          )}
+        </div>
         <TextareaField
           label="本人希望記入欄"
           value={pii.preferences}
