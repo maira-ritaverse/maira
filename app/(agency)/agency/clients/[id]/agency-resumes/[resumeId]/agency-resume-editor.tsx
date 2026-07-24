@@ -81,6 +81,8 @@ function useDragReorder<T>(setItems: (updater: (prev: T[]) => T[]) => void) {
       onDragStart: (e: DragEvent<HTMLElement>) => {
         setDragIndex(idx);
         e.dataTransfer.effectAllowed = "move";
+        // Firefox は dragstart で setData を呼ばないとドラッグが開始せず drop も発火しない。
+        e.dataTransfer.setData("text/plain", String(idx));
       },
       onDragEnd: () => {
         setDragIndex(null);
@@ -180,7 +182,9 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin, selfPrEnab
           json: {
             title,
             document_date: documentDate || null,
-            pii,
+            // 自己PRを使用しない設定(オフ)のときは self_pr を保存に載せない
+            //(= 保存で空になり、求職者への送付にも載らない)。トグルを真の使用可否にする。
+            pii: selfPrOn ? pii : { ...pii, self_pr: "" },
             education_history: education,
             licenses,
             ...(nextStatus ? { status: nextStatus } : {}),
