@@ -16,11 +16,12 @@
  * 100 % 信頼できる 抽出は 不可能なので、戻り値の `confidence`(high/medium/low)を
  * 添えて 返し、UI 側で「読み取り精度」を 表示できる ようにする。
  */
-import { generateText } from "ai";
+import { generateText, type ModelMessage } from "ai";
 
 import { getModel, MODELS } from "@/lib/ai/client";
 import { extractJsonFromText } from "@/lib/career-intake/extract-json";
 import {
+  buildJobExtractionTextPrompt,
   JOB_EXTRACTION_SYSTEM_PROMPT,
   JOB_EXTRACTION_USER_PROMPT,
   jobExtractionSchema,
@@ -58,37 +59,20 @@ export type ExtractJobOutput =
   | { ok: false; reason: "schema_error"; message: string };
 
 /**
- * Claude Sonnet 4.6 に PDF / 画像を 添付して 構造化抽出 を 依頼する。
+ * generateText で JSON 出力 を 指示 → フェンス除去 → zod 検証、までの 共通コア。
  *
- * AI SDK v6 の messages 形式で multimodal を 渡す。PDF / 画像 の 区別は
- * mimeType を 元に SDK 側が ハンドリングする。Anthropic は ネイティブで
- * application/pdf を 受け取れる ので、サーバー側で 画像化する 必要は ない。
+ * PDF / 画像 版(extractJobFromDocument)と URL / テキスト 版(extractJobFromText)で
+ * 入力メッセージだけ 差し替えて 使う。後段(パース + 検証 + エラー整形)は 完全に 共通。
+ * schema 制約は 後段の zod で 検証する ので、Anthropic 側 の tool use 制限
+ * (union 16 個 / Schema is too complex)を 完全に 回避 できる。
  */
-export async function extractJobFromDocument(input: ExtractJobInput): Promise<ExtractJobOutput> {
+async function runJobExtraction(messages: ModelMessage[]): Promise<ExtractJobOutput> {
   let rawText = "";
   try {
-    // generateText で JSON 出力 を 指示。schema 制約は 後段の zod で 検証する ので
-    // Anthropic 側 の tool use 制限 (union 16 個 / Schema is too complex) を 完全に
-    // 回避 できる。
     const result = await generateText({
       model: getModel(MODELS.CONVERSATION),
       system: JOB_EXTRACTION_SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "file",
-              data: input.data,
-              mediaType: input.mimeType,
-            },
-            {
-              type: "text",
-              text: JOB_EXTRACTION_USER_PROMPT,
-            },
-          ],
-        },
-      ],
+      messages,
     });
     rawText = result.text;
 
@@ -135,6 +119,45 @@ export async function extractJobFromDocument(input: ExtractJobInput): Promise<Ex
     });
     return { ok: false, reason: "ai_error", message };
   }
+}
+
+/**
+ * Claude Sonnet 4.6 に PDF / 画像を 添付して 構造化抽出 を 依頼する。
+ *
+ * AI SDK v6 の messages 形式で multimodal を 渡す。PDF / 画像 の 区別は
+ * mimeType を 元に SDK 側が ハンドリングする。Anthropic は ネイティブで
+ * application/pdf を 受け取れる ので、サーバー側で 画像化する 必要は ない。
+ */
+export async function extractJobFromDocument(input: ExtractJobInput): Promise<ExtractJobOutput> {
+  return runJobExtraction([
+    {
+      role: "user",
+      content: [
+        { type: "file", data: input.data, mediaType: input.mimeType },
+        { type: "text", text: JOB_EXTRACTION_USER_PROMPT },
+      ],
+    },
+  ]);
+}
+
+export type ExtractJobFromTextInput = {
+  /** 求人ページ から 取得・整形済みの 本文テキスト。 */
+  text: string;
+  /** AI 呼び出しに 紐づける セッション識別子(障害調査用、なくても OK)。 */
+  traceId?: string;
+};
+
+/**
+ * 求人ページ URL から 取得した 本文テキストを Claude に 渡して 構造化抽出する。
+ *
+ * PDF / 画像 版と 違い マルチモーダルでは なく テキストのみ。プロンプトで
+ * 「Web ページの ノイズ(ナビ / 広告 / 関連求人)を 無視し メイン求人 1 件だけ 抽出」を
+ * 明示している(buildJobExtractionTextPrompt)。
+ */
+export async function extractJobFromText(
+  input: ExtractJobFromTextInput,
+): Promise<ExtractJobOutput> {
+  return runJobExtraction([{ role: "user", content: buildJobExtractionTextPrompt(input.text) }]);
 }
 
 /**

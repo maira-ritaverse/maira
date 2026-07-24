@@ -18,6 +18,28 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ParseDocumentButton } from "./parse-document-button";
+import { ParseUrlButton } from "./parse-url-button";
+
+/** AI 抽出結果(PDF / 画像 / URL 共通)の フォーム既定値 形状。 */
+type ExtractedDefaults = {
+  company_name: string;
+  position: string;
+  employment_type: string;
+  location: string;
+  salary_min: number | "";
+  salary_max: number | "";
+  description: string;
+  required_skills: string;
+  preferred_skills: string;
+  work_change_scope: string;
+  location_change_scope: string;
+  smoking_prevention_measure: string;
+  probation_period: string;
+  work_hours: string;
+  break_time: string;
+  holidays: string;
+  application_qualifications: string;
+};
 
 /**
  * 求人新規登録フォーム
@@ -64,6 +86,34 @@ export function JobForm() {
     },
   });
 
+  // AI 抽出結果で フォームを 一斉に 上書き(PDF / 画像 / URL 取り込み 共通)。
+  // salary は number | "" → number | null に 寄せる。resetForm は 明示しない
+  // フィールドを undefined に 飛ばす ので、成約報酬(AI 抽出対象外)は
+  // getValues で ユーザーの 既入力を 明示保持する。
+  const applyExtracted = (d: ExtractedDefaults) => {
+    resetForm({
+      company_name: d.company_name,
+      position: d.position,
+      employment_type: d.employment_type,
+      location: d.location,
+      salary_min: d.salary_min === "" ? null : d.salary_min,
+      salary_max: d.salary_max === "" ? null : d.salary_max,
+      description: d.description,
+      required_skills: d.required_skills,
+      preferred_skills: d.preferred_skills,
+      status: "open",
+      work_change_scope: d.work_change_scope,
+      location_change_scope: d.location_change_scope,
+      smoking_prevention_measure: d.smoking_prevention_measure,
+      probation_period: d.probation_period,
+      work_hours: d.work_hours,
+      break_time: d.break_time,
+      holidays: d.holidays,
+      application_qualifications: d.application_qualifications,
+      placement_fee: getValues("placement_fee"),
+    });
+  };
+
   const onSubmit: SubmitHandler<CreateJobRequest> = (data) => {
     startTransition(async () => {
       setServerError(null);
@@ -94,36 +144,12 @@ export function JobForm() {
           </Alert>
         )}
 
-        <ParseDocumentButton
-          disabled={isPending}
-          onApply={(d) => {
-            // AI 抽出結果で フォームを 上書き(salary は number | "" → number | null に 寄せる)
-            resetForm({
-              company_name: d.company_name,
-              position: d.position,
-              employment_type: d.employment_type,
-              location: d.location,
-              salary_min: d.salary_min === "" ? null : d.salary_min,
-              salary_max: d.salary_max === "" ? null : d.salary_max,
-              description: d.description,
-              required_skills: d.required_skills,
-              preferred_skills: d.preferred_skills,
-              status: "open",
-              work_change_scope: d.work_change_scope,
-              location_change_scope: d.location_change_scope,
-              smoking_prevention_measure: d.smoking_prevention_measure,
-              probation_period: d.probation_period,
-              work_hours: d.work_hours,
-              break_time: d.break_time,
-              holidays: d.holidays,
-              application_qualifications: d.application_qualifications,
-              // 成約報酬 は AI 抽出 対象 外 (求人票 から は 取れ ない agency-private 情報)。
-              // resetForm は 明示 されない フィールド を undefined に 飛ばす ので、
-              // ユーザー が 先に 入力 して いた 値 を getValues で 明示 に 保持 する。
-              placement_fee: getValues("placement_fee"),
-            });
-          }}
-        />
+        {/* AI 取り込みは 2 経路:PDF / 画像 と URL。どちらも applyExtracted で
+            フォームに 反映する。取れない 場合は もう一方に 切り替えられる。 */}
+        <div className="space-y-2">
+          <ParseDocumentButton disabled={isPending} onApply={applyExtracted} />
+          <ParseUrlButton disabled={isPending} onApply={applyExtracted} />
+        </div>
 
         <div className="space-y-2">
           <Label htmlFor="company_name">
