@@ -112,7 +112,11 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin, selfPrEnab
   // 「保存しました」だけ出てフリガナが失われるため、生成中は保存/確定ボタンを止める。
   const [kanaGenerating, setKanaGenerating] = useState(false);
   const [kanaError, setKanaError] = useState<string | null>(null);
-  const actionsDisabled = pending || kanaGenerating;
+  // 保存/確定/削除は「実際の保存トランジション中(pending)」だけ抑止する。
+  // 住所フリガナの自動生成(kanaGenerating)はベストエフォートの背景処理なので、
+  // これで主要操作(特に保存)を止めない。以前は kanaGenerating も含めていたため、
+  // フリガナ生成 API が遅い/失敗/ハングすると保存ボタンが押せなくなっていた。
+  const actionsDisabled = pending;
 
   const [title, setTitle] = useState(resume.title);
   const [documentDate, setDocumentDate] = useState(resume.documentDate ?? "");
@@ -133,10 +137,14 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin, selfPrEnab
       }
       setKanaError(null);
       setKanaGenerating(true);
+      // 背景処理が本番で遅延/ハングしても spinner が残り続けないよう、
+      // クライアント側で 15 秒のタイムアウト(AbortController)を掛ける。
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
       try {
         const res = await apiFetch<{ kana: string }>(
           `/api/agency/client-resumes/${resume.id}/address-kana`,
-          { method: "POST", json: { address: addr } },
+          { method: "POST", json: { address: addr }, signal: controller.signal },
         );
         if (res?.kana) {
           setPii((prev) => ({ ...prev, address_kana: res.kana }));
@@ -146,6 +154,7 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin, selfPrEnab
       } catch (err) {
         if (!opts?.silent) setKanaError(apiErrorMessage(err));
       } finally {
+        clearTimeout(timeout);
         setKanaGenerating(false);
       }
     },
