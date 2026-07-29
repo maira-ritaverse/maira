@@ -222,9 +222,10 @@ export async function GET(request: Request) {
 //   9. audit_log を記録
 //
 // 注意:
-//   - メール送信は Supabase 側のテンプレを使う(Resend 経由ではなく Auth の Email)
-//   - Supabase ダッシュボード > Auth > Email Templates の Invite テンプレを
-//     日本語化するのは別作業(運用 TODO)
+//   - 招待メールは Resend 経由の自前 HTML(sendAgencyAdminInviteEmail)で日本語送信する。
+//     以前は Supabase Auth の英語 Invite テンプレだったが移行済み。
+//   - action_link は Supabase の /auth/v1/verify ではなく、独自 /auth/confirm を
+//     組み立てて渡す(code_verifier 不要でデバイス間で動く)。
 // =====================================================================
 
 const createOrgSchema = z.object({

@@ -31,7 +31,6 @@
  *   --mode=both       バックフィル → 検証(デフォルト)
  */
 
-/* eslint-disable no-console */
 // CLI スクリプトは stdout で進捗を出す必要があるため console.log を許容する。
 // 出力する内容は件数とフィールド名のみで、PII の生値は一切含めない。
 

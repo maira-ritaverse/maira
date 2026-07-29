@@ -32,7 +32,12 @@ export function ConversationListSidebar({ conversations, activeLineUserId }: Pro
   // 顧客 名 は 個人 情報 だが、 検索 は クライアント側 のみ で 完結 (追加 の
   // ネットワーク 送信 なし) の ため、 既存 の 一覧 データ 上 の 絞り込み と 同 等 の 情報 経路。
   const normalizedQuery = query.trim().toLowerCase();
-  const searchTokens = normalizedQuery.length > 0 ? normalizedQuery.split(/\s+/) : [];
+  // 毎レンダーで新しい配列を作ると下の useMemo が毎回再計算されメモが効かないため、
+  // searchTokens 自体も useMemo で安定化する(normalizedQuery が変わった時だけ再生成)。
+  const searchTokens = useMemo(
+    () => (normalizedQuery.length > 0 ? normalizedQuery.split(/\s+/) : []),
+    [normalizedQuery],
+  );
 
   const filtered = useMemo(() => {
     return conversations.filter((c) => {

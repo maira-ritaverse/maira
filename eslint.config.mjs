@@ -26,6 +26,13 @@ const eslintConfig = [
     },
   },
   {
+    // CLI / バックフィルスクリプトは進捗を console.log で出すのが正常なので除外する。
+    files: ["scripts/**/*.{ts,js,mjs,cjs}"],
+    rules: {
+      "no-console": "off",
+    },
+  },
+  {
     ignores: [
       ".next/**",
       "node_modules/**",

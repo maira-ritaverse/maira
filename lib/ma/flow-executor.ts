@@ -165,8 +165,8 @@ export async function executeSubscriptionTick(
         await handleRemoveTag(supabase, sub, step);
         break;
       case "add_score":
-        // Phase 2 実装 まで no-op。 log の み 残す。
-        console.log(`[flow-executor] add_score no-op (sub=${sub.id})`);
+        // Phase 2 実装 まで no-op。 設定 された のに 何も しない ため、 運用 で 気づける よう warn で 残す。
+        console.warn(`[flow-executor] add_score no-op (sub=${sub.id})`);
         break;
       case "set_field":
         await handleSetField(supabase, sub, step);
