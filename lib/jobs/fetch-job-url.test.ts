@@ -1,6 +1,42 @@
 import { describe, expect, it } from "vitest";
 
-import { htmlToText, isBlockedIp, JOB_URL_MAX_TEXT_CHARS } from "./fetch-job-url";
+import {
+  htmlToText,
+  isBlockedIp,
+  JOB_URL_MAX_TEXT_CHARS,
+  looksLikeJobContent,
+} from "./fetch-job-url";
+
+/**
+ * looksLikeJobContent = URL 取り込みの ハルシネーション対策 入口ガード。
+ * 緩すぎると ノイズ(SPA シェル)を AI に 渡して 捏造の 元になり、厳しすぎると
+ * 正当な 求人ページ(英語 / 口語 / 長文)を 誤ブロックする。両方向の 境界を 検証する。
+ */
+describe("looksLikeJobContent", () => {
+  it("求人本文らしい 語が 2 種 以上 ある 短文は 通す", () => {
+    expect(looksLikeJobContent("募集要項:給与 月給25万円 / 勤務地 東京")).toBe(true);
+  });
+
+  it("求人本文らしい 語が 1 種 以下の 短い シェルは 弾く", () => {
+    expect(looksLikeJobContent("トップ 会社概要 お問い合わせ ログイン")).toBe(false);
+    expect(looksLikeJobContent("未経験歓迎!まずはご登録ください")).toBe(false);
+  });
+
+  it("タイトル行は 判定対象から 除外する(タイトルだけで 通さない)", () => {
+    const text = "【ページタイトル】営業 年収400万〜 勤務地:東京\n\n関連求人 もっと見る";
+    expect(looksLikeJobContent(text)).toBe(false);
+  });
+
+  it("本文が 十分 長ければ 求人語が 無くても 通す(英語 / 長文の 誤ブロック回避)", () => {
+    const longEnglish =
+      "We are hiring a Senior Software Engineer to join our platform team. " +
+      "You will design and build scalable services, collaborate across teams, and mentor engineers. ".repeat(
+        10,
+      );
+    expect(longEnglish.length).toBeGreaterThanOrEqual(800);
+    expect(looksLikeJobContent(longEnglish)).toBe(true);
+  });
+});
 
 /**
  * SSRF 対策の 中核 = isBlockedIp。ここが 緩むと 内部ネットワーク / メタデータ

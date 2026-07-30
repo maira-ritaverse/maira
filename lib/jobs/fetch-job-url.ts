@@ -56,6 +56,7 @@ export type FetchJobUrlFailReason =
   | "unsupported_content"
   | "too_large"
   | "empty_content"
+  | "low_content"
   | "fetch_error";
 
 export type FetchJobUrlResult =
@@ -374,6 +375,82 @@ function decodeEntities(s: string): string {
 }
 
 /**
+ * 求人本文に 特徴的な 語。 ナビ / フッター / 「関連求人」 だけの SPA シェルには
+ * これらが 揃わない ため、 AI に 渡す 前の 「本文が 取れているか」 の 簡易判定に 使う。
+ * JS 描画サイト (リクナビ / doda / Green / Wantedly 等) を 静的取得すると 本文が 無く
+ * ノイズだけが 残る → AI が "それっぽい 求人" を 捏造する 事故を 入口で 防ぐ。
+ */
+const JOB_BODY_KEYWORDS = [
+  "仕事内容",
+  "職務内容",
+  "業務内容",
+  "職務詳細",
+  "応募資格",
+  "応募条件",
+  "応募要件",
+  "募集要項",
+  "給与",
+  "給料",
+  "年収",
+  "月給",
+  "時給",
+  "初任給",
+  "勤務時間",
+  "勤務地",
+  "勤務場所",
+  "休日",
+  "休暇",
+  "週休",
+  "待遇",
+  "福利厚生",
+  "試用期間",
+  "雇用形態",
+  "賞与",
+  "ボーナス",
+  "歓迎",
+  "必須",
+] as const;
+
+/**
+ * 本文が 十分に 取れて いる と 見なす 文字数の 下限。
+ *
+ * これ以上の 長さが あれば 「本文は 取れている(内容が 求人かどうかは AI が 判断)」と
+ * みなして 通す。英語 / 口語 / 長文ページの 誤ブロックを 避ける ための 逃がし弁。
+ * 長い SPA シェル(ナビ + 関連求人 だけで 長い)を 静的取得だけで 見分ける のは
+ * 事実上 不可能な ため、その 判断は temperature=0 の AI と confidence に 委ねる。
+ */
+const JOB_BODY_MIN_CHARS = 800;
+
+/**
+ * 取得テキストが 「実際の 求人本文」 を 含んで いそうか を **保守的に** 判定する。
+ *
+ * 設計方針(誤ブロックを 最優先で 避ける):
+ *   1. htmlToText が 先頭に 付ける「【ページタイトル】...」行は ナビ / 検索ファセット語
+ *      (年収から探す / 勤務地から探す 等)を 含みやすく 誤判定の 元なので、判定対象から 除外。
+ *   2. 本文が JOB_BODY_MIN_CHARS 以上あれば 通す(英語 / 口語 / 長文ページを 誤ブロック
+ *      しない。長い SPA シェルの 判別は 静的取得では 不可能なので AI 側に 委ねる)。
+ *   3. 本文が 短い 場合のみ、求人本文らしい 語が 2 種類 以上 あるかで「ほぼ空の シェル」を 弾く。
+ *
+ * つまり 本ガードは 「ほぼ空の シェルを 入口で 落とす 保守的な 網」であり、
+ * 求人かどうかの 精密判定では ない(そこは プロンプト + temperature=0 + confidence の 役割)。
+ */
+export function looksLikeJobContent(text: string): boolean {
+  // 1. タイトル行を 除外(先頭の「【ページタイトル】...」+ 続く 空行)。
+  const body = text.replace(/^【ページタイトル】[^\n]*\n{0,2}/, "");
+  // 2. 本文が 十分 長ければ 通す(誤ブロック回避)。
+  if (body.length >= JOB_BODY_MIN_CHARS) return true;
+  // 3. 短い 場合のみ 求人本文らしい 語で 判定。
+  let hits = 0;
+  for (const kw of JOB_BODY_KEYWORDS) {
+    if (body.includes(kw)) {
+      hits += 1;
+      if (hits >= 2) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * 求人ページ URL を 取得して 本文テキストを 返す。
  *
  * リダイレクトは 手動追跡し、各ホップで URL 検証 + 名前解決チェックを 再実行する
@@ -466,6 +543,16 @@ export async function fetchJobPageText(rawUrl: string): Promise<FetchJobUrlResul
           reason: "empty_content",
           message:
             "ページから本文を読み取れませんでした。JavaScript で表示されるページの可能性があります。PDF / 画像での取り込みをお試しください。",
+        };
+      }
+      // 本文らしさが 無い (ナビ / 関連求人 だけの SPA シェル 等) ページを AI に
+      // 渡すと 捏造の 元に なる ため、 入口で 弾いて PDF / 画像 取り込みへ 誘導する。
+      if (!looksLikeJobContent(text)) {
+        return {
+          ok: false,
+          reason: "low_content",
+          message:
+            "このページから求人本文を読み取れませんでした(JavaScript で内容を表示するサイトの可能性があります)。PDF / 画像での取り込みをお試しください。",
         };
       }
       return { ok: true, text, finalUrl: currentUrl };

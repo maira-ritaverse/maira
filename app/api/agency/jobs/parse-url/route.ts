@@ -80,6 +80,7 @@ export async function POST(request: Request) {
       page.reason === "blocked_host" ||
       page.reason === "unsupported_content" ||
       page.reason === "empty_content" ||
+      page.reason === "low_content" ||
       page.reason === "too_large";
     return NextResponse.json(
       { error: page.reason, message: page.message },

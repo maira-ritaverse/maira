@@ -71,6 +71,13 @@ async function runJobExtraction(messages: ModelMessage[]): Promise<ExtractJobOut
   try {
     const result = await generateText({
       model: getModel(MODELS.CONVERSATION),
+      // ハルシネーション対策(最重要): 求人票の抽出・転記タスクなので温度を 0 に固定。
+      // 未指定だと Anthropic 既定の 1.0 で動き、モデルが「もっともらしい値」を創作して
+      // 求人票に書かれていない情報を埋めてしまう。プロンプトで「推測禁止」と明記しても、
+      // サンプリング温度が高いと創作を許してしまうため、決定的抽出で捏造を最小化する。
+      // (claude-sonnet-4-6 は temperature 指定可。将来 Sonnet 5 / Opus 4.7 系へ移行する
+      //  場合は temperature 非対応になるので、その際はこの行を外すこと。)
+      temperature: 0,
       system: JOB_EXTRACTION_SYSTEM_PROMPT,
       messages,
     });
