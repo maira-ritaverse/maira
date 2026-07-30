@@ -282,6 +282,12 @@ export function ParseDocumentButton({ onApply, disabled }: Props) {
             )}
           </div>
 
+          {preview.confidence === "low" && (
+            <div className="rounded-md border border-red-200 bg-red-50 p-2.5 text-xs text-red-800">
+              読み取り精度が「低」です。AIが求人票をうまく読み取れず、値が不正確・不足している可能性があります。適用後、各項目を必ずご確認のうえ保存してください。
+            </div>
+          )}
+
           <p className="text-xs text-amber-900/70">
             適用すると、フォームの 全項目が 上書きされます。空欄の 項目は そのまま 空欄に なります。
           </p>

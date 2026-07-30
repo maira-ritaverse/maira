@@ -78,6 +78,11 @@ async function runJobExtraction(messages: ModelMessage[]): Promise<ExtractJobOut
       // (claude-sonnet-4-6 は temperature 指定可。将来 Sonnet 5 / Opus 4.7 系へ移行する
       //  場合は temperature 非対応になるので、その際はこの行を外すこと。)
       temperature: 0,
+      // 出力上限を明示する。未指定だと AI SDK 既定(4096)で JSON が途中で切れ、
+      // description を集約する長い求人票で JSON.parse / schema 検証に失敗しやすい。
+      // schema の最大長(description 12000 字等)を賄いつつ、非ストリーミングでも
+      // タイムアウトしにくい範囲として 16000 に設定(route の maxDuration は 300 秒)。
+      maxOutputTokens: 16000,
       system: JOB_EXTRACTION_SYSTEM_PROMPT,
       messages,
     });
