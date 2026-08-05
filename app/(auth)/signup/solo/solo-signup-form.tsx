@@ -64,12 +64,16 @@ export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
   const [orgName, setOrgName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // メール確認が必要で サインアップ後 セッションが 返らなかった 状態。
+  // 確認(再送可能)導線を 案内する ブロックに 切り替える。
+  const [needsConfirm, setNeedsConfirm] = useState(false);
 
   const supabase = useMemo(() => createClient(), []);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setNeedsConfirm(false);
 
     if (password.length < 8) {
       setError("パスワードは8文字以上で入力してください");
@@ -78,39 +82,41 @@ export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
 
     setIsSubmitting(true);
     try {
-      // 1. Supabase Auth で サインアップ
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          // メール確認 は 現行 project 設定 に 依存。 確認あり の 場合 session は
-          // 返らず、 メール 経由 で /auth/confirm → /signup/solo に 戻る 動線 が
-          // 必要 に なる。 現状 は 「session が 返れば すぐ 個人 org 作成 に 進む」
-          // と いう optimistic な 実装。 メール 未確認 な user から の 呼出 は
-          // API 側 で auth.uid() が 取れず 401 で 弾かれる。
-        },
-      });
-      if (signUpError) {
-        // 「既に登録済のメール」は Supabase のエラーメッセージに "already" を
-        // 含むことが多いので日本語に変換。
-        const msg = signUpError.message.toLowerCase();
-        if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
-          setError("このメールアドレスは既に登録済です。ログインページからお進みください。");
-        } else {
-          setError(`サインアップに失敗しました: ${signUpError.message}`);
+      // 既にログイン済み(確認メールのリンクを踏んで戻ってきた等)なら signUp を
+      // やり直さず、そのまま org 作成へ進む。未ログインのときだけ signUp する。
+      // メール確認が必須の本番では、signUp 直後はセッションが返らないため、
+      // 「確認 → ログイン済み → このページに戻って再送信」で org 作成が成立する。
+      // (未確認ユーザーからの create-solo-account は auth.uid() が取れず 401 で弾かれる)
+      const { data: sessionData } = await supabase.auth.getSession();
+
+      if (!sessionData.session) {
+        // 1. Supabase Auth で サインアップ(未ログイン時のみ)
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+        if (signUpError) {
+          // 「既に登録済のメール」は Supabase のエラーメッセージに "already" を
+          // 含むことが多いので日本語に変換。
+          const msg = signUpError.message.toLowerCase();
+          if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
+            setError(
+              "このメールアドレスは既に登録済です。ログイン後、もう一度このページで開始してください。",
+            );
+          } else {
+            setError(`サインアップに失敗しました: ${signUpError.message}`);
+          }
+          return;
         }
-        return;
+
+        // session が返らない = メール確認が必要。確認(再送可能)導線を案内する。
+        if (!signUpData.session) {
+          setNeedsConfirm(true);
+          return;
+        }
       }
 
-      // session が返っていない (メール確認が必要) 場合の案内
-      if (!signUpData.session) {
-        setError(
-          "確認メールをお送りしました。メール内のリンクをクリックしてから再度このページにアクセスしてプランを開始してください。",
-        );
-        return;
-      }
-
-      // 2. 個人 org + プラン を 作成
+      // 2. 個人 org + プラン を 作成(ログイン済みセッションの auth.uid() で作る)
       const res = await fetch("/api/self-serve/create-solo-account", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -169,132 +175,162 @@ export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
           </div>
         </div>
 
-        <form onSubmit={onSubmit} className="bg-card space-y-4 rounded-lg border p-6">
-          {/* プラン 選択 */}
-          <div className="space-y-2">
-            <Label>プラン</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {(["solo", "solo_pro"] as const).map((p) => {
-                const active = plan === p;
-                return (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setPlan(p)}
-                    className={`rounded-md border px-3 py-2 text-left text-xs transition-colors ${
-                      active
-                        ? "border-primary bg-primary/5"
-                        : "border-input hover:border-primary/40"
-                    }`}
-                    aria-pressed={active}
-                  >
-                    <div className="text-sm font-semibold">{PLAN_LABEL[p]}</div>
-                    <div className="text-muted-foreground mt-1">{PLAN_DESCRIPTION[p]}</div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 支払いサイクル選択 */}
-          <div className="space-y-2">
-            <Label>支払いサイクル</Label>
-            <div className="flex items-center gap-2">
-              {(["monthly", "yearly"] as const).map((c) => {
-                const active = cycle === c;
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setCycle(c)}
-                    className={`flex-1 rounded-md border px-3 py-1.5 text-xs transition-colors ${
-                      active
-                        ? "border-primary bg-primary/5"
-                        : "border-input hover:border-primary/40"
-                    }`}
-                    aria-pressed={active}
-                  >
-                    {c === "monthly" ? "月払い" : "年払い (2 ヶ月分割引)"}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="text-muted-foreground text-xs">{labelForCycle(plan, cycle)}</p>
-          </div>
-
-          {/* Email */}
-          <div className="space-y-2">
-            <Label htmlFor="email">
-              メールアドレス <span className="text-red-600">*</span>
-            </Label>
-            <Input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={isSubmitting}
-            />
-          </div>
-
-          {/* Password */}
-          <div className="space-y-2">
-            <Label htmlFor="password">
-              パスワード <span className="text-red-600">*</span>
-            </Label>
-            <PasswordInput
-              id="password"
-              autoComplete="new-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={isSubmitting}
-            />
-            <p className="text-muted-foreground text-xs">8 文字以上で入力してください</p>
-          </div>
-
-          {/* Organization Name (optional) */}
-          <div className="space-y-2">
-            <Label htmlFor="orgName">
-              表示名 <span className="text-muted-foreground text-xs">(任意)</span>
-            </Label>
-            <Input
-              id="orgName"
-              type="text"
-              placeholder="例: 山田太郎のワークスペース"
-              value={orgName}
-              onChange={(e) => setOrgName(e.target.value)}
-              disabled={isSubmitting}
-              maxLength={100}
-            />
-            <p className="text-muted-foreground text-xs">
-              未入力の場合はメールアドレスから自動生成されます
-            </p>
-          </div>
-
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
+        {needsConfirm ? (
+          <div className="bg-card space-y-4 rounded-lg border p-6 text-sm">
+            <Alert>
+              <AlertDescription>
+                確認メールをお送りしました。メール内のリンクを開いて、メールアドレスを確認してください(別のスマホ
+                / パソコンで開いても確認できます)。
+              </AlertDescription>
             </Alert>
-          )}
+            <p className="text-muted-foreground">
+              確認が済んだら、このページに戻って「14
+              日間無料で試す」をもう一度押すと、プランが開始されます。
+            </p>
+            <p className="text-muted-foreground text-xs">
+              メールが届かない / リンクが開けない場合は、
+              <Link href="/verify-email" className="underline">
+                確認メールの再送
+              </Link>
+              からやり直せます。
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => setNeedsConfirm(false)}
+            >
+              入力に戻る
+            </Button>
+          </div>
+        ) : (
+          <form onSubmit={onSubmit} className="bg-card space-y-4 rounded-lg border p-6">
+            {/* プラン 選択 */}
+            <div className="space-y-2">
+              <Label>プラン</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {(["solo", "solo_pro"] as const).map((p) => {
+                  const active = plan === p;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setPlan(p)}
+                      className={`rounded-md border px-3 py-2 text-left text-xs transition-colors ${
+                        active
+                          ? "border-primary bg-primary/5"
+                          : "border-input hover:border-primary/40"
+                      }`}
+                      aria-pressed={active}
+                    >
+                      <div className="text-sm font-semibold">{PLAN_LABEL[p]}</div>
+                      <div className="text-muted-foreground mt-1">{PLAN_DESCRIPTION[p]}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
-            {isSubmitting ? "処理中…" : "14 日間無料で試す"}
-          </Button>
+            {/* 支払いサイクル選択 */}
+            <div className="space-y-2">
+              <Label>支払いサイクル</Label>
+              <div className="flex items-center gap-2">
+                {(["monthly", "yearly"] as const).map((c) => {
+                  const active = cycle === c;
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setCycle(c)}
+                      className={`flex-1 rounded-md border px-3 py-1.5 text-xs transition-colors ${
+                        active
+                          ? "border-primary bg-primary/5"
+                          : "border-input hover:border-primary/40"
+                      }`}
+                      aria-pressed={active}
+                    >
+                      {c === "monthly" ? "月払い" : "年払い (2 ヶ月分割引)"}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-muted-foreground text-xs">{labelForCycle(plan, cycle)}</p>
+            </div>
 
-          <p className="text-muted-foreground text-center text-xs">
-            登録すると{" "}
-            <Link href="/terms" className="underline" target="_blank">
-              利用規約
-            </Link>{" "}
-            と{" "}
-            <Link href="/privacy" className="underline" target="_blank">
-              プライバシーポリシー
-            </Link>{" "}
-            に同意したものとします。
-          </p>
-        </form>
+            {/* Email */}
+            <div className="space-y-2">
+              <Label htmlFor="email">
+                メールアドレス <span className="text-red-600">*</span>
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={isSubmitting}
+              />
+            </div>
+
+            {/* Password */}
+            <div className="space-y-2">
+              <Label htmlFor="password">
+                パスワード <span className="text-red-600">*</span>
+              </Label>
+              <PasswordInput
+                id="password"
+                autoComplete="new-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={isSubmitting}
+              />
+              <p className="text-muted-foreground text-xs">8 文字以上で入力してください</p>
+            </div>
+
+            {/* Organization Name (optional) */}
+            <div className="space-y-2">
+              <Label htmlFor="orgName">
+                表示名 <span className="text-muted-foreground text-xs">(任意)</span>
+              </Label>
+              <Input
+                id="orgName"
+                type="text"
+                placeholder="例: 山田太郎のワークスペース"
+                value={orgName}
+                onChange={(e) => setOrgName(e.target.value)}
+                disabled={isSubmitting}
+                maxLength={100}
+              />
+              <p className="text-muted-foreground text-xs">
+                未入力の場合はメールアドレスから自動生成されます
+              </p>
+            </div>
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? "処理中…" : "14 日間無料で試す"}
+            </Button>
+
+            <p className="text-muted-foreground text-center text-xs">
+              登録すると{" "}
+              <Link href="/terms" className="underline" target="_blank">
+                利用規約
+              </Link>{" "}
+              と{" "}
+              <Link href="/privacy" className="underline" target="_blank">
+                プライバシーポリシー
+              </Link>{" "}
+              に同意したものとします。
+            </p>
+          </form>
+        )}
 
         <p className="text-muted-foreground text-center text-xs">
           既にアカウントをお持ちの方は{" "}
