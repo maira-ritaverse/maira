@@ -83,12 +83,24 @@ export function buildJobPostingHtml({ job, agencyName }: Options): string {
     page-break-inside: auto;
   }
   table + table { margin-top: 4px; }
+  /* 短い 項目行(ラベル + 値)は 行 途中の 改ページを 避ける。
+     一方、セクション本文(.section-row = 仕事内容 等の 長文)は 改ページを
+     「許可」する。本文行を avoid に すると、1 ページに 収まらない 長文が
+     行ごと 次ページへ 飛び、直前の ページに 大きな 空白が できる
+     (= 報告された「サイズが 崩れる」現象)。本文は 自然に ページを またがせる。 */
   tr { page-break-inside: avoid; }
+  tr.section-row { page-break-inside: auto; }
+  /* 見出し(「仕事内容」等)が ページ 下端に 独りぼっちで 残らない ように、
+     直後の 本文と 一緒の ページへ 送る。 */
+  tr.section-head-row { break-after: avoid; page-break-after: avoid; }
   th, td {
     border: 1px solid #888;
     padding: 6px 8px;
     vertical-align: top;
-    word-break: break-all;
+    /* 日本語は 文節 どこでも 改行できる ので break-all は 不要。
+       break-all だと 英単語 / 会社名 / 数字の 塊が 不自然に 割れる
+       (例:「クロージ」で 改行)。長い URL 等だけ overflow-wrap で 折る。 */
+    word-break: normal;
     overflow-wrap: anywhere;
   }
   th {
@@ -177,7 +189,7 @@ ${sectionBlock("歓迎条件", job.preferredSkills)}
     <th>年収</th>
     <td colspan="3">${escapeHtml(salaryRange)}</td>
   </tr>
-  ${salaryDetail ? `<tr><td class="section-head" colspan="4">給与詳細</td></tr><tr><td class="section-body" colspan="4">${escapeHtml(salaryDetail)}</td></tr>` : ""}
+  ${salaryDetail ? `<tr class="section-head-row"><td class="section-head" colspan="4">給与詳細</td></tr><tr class="section-row"><td class="section-body" colspan="4">${escapeHtml(salaryDetail)}</td></tr>` : ""}
   <tr>
     <th>転勤の可能性</th>
     <td class="col-v">${escapeHtmlOrEmpty(extractTransferPossibility(job.locationChangeScope))}</td>
@@ -220,9 +232,9 @@ ${companyInfo ? `<h2>会社概要</h2>${sectionBlock("採用企業 概要", comp
 function sectionBlock(title: string, content: string | null, skipHeader = false): string {
   if (!content || content.trim() === "") {
     // 空欄でも 行を 残す(サンプル の 体裁を 保つ)。空セル を 1 行で 出す。
-    return `<table><tr><td class="section-head">${escapeHtml(title)}</td></tr><tr><td class="section-body"><span class="empty">—</span></td></tr></table>`;
+    return `<table><tr class="section-head-row"><td class="section-head">${escapeHtml(title)}</td></tr><tr class="section-row"><td class="section-body"><span class="empty">—</span></td></tr></table>`;
   }
-  return `<table>${skipHeader ? "" : `<tr><td class="section-head">${escapeHtml(title)}</td></tr>`}<tr><td class="section-body">${escapeHtml(content)}</td></tr></table>`;
+  return `<table>${skipHeader ? "" : `<tr class="section-head-row"><td class="section-head">${escapeHtml(title)}</td></tr>`}<tr class="section-row"><td class="section-body">${escapeHtml(content)}</td></tr></table>`;
 }
 
 function escapeHtmlOrEmpty(v: string | null | undefined): string {

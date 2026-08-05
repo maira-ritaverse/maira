@@ -65,8 +65,14 @@ const HEADING_PATTERN = /^\s*★\s+(.+?)\s*$/;
 function isKnownHeading(raw: string): string | null {
   const aliased = SECTION_TITLE_ALIASES[raw];
   if (aliased) return aliased;
-  // タイトル末尾の "(必須)" "(任意、ある場合のみ)" を 落として 再判定
-  const stripped = raw.replace(/[((].*?[))]\s*$/u, "").trim();
+  // タイトル末尾の 補足を 落として 再判定:
+  //   ・末尾コロン ":" "："(モデルが 「★ 仕事内容:」と 復唱する ケース)
+  //   ・"(必須)" "(任意、ある場合のみ)" 等の 括弧補足
+  // 先に コロンを 落とし、その後 括弧を 落とす(「仕事内容(…):」の 順にも 対応)。
+  const stripped = raw
+    .replace(/[:：]\s*$/u, "")
+    .replace(/[((].*?[))]\s*$/u, "")
+    .trim();
   if (stripped && stripped !== raw) {
     const aliased2 = SECTION_TITLE_ALIASES[stripped];
     if (aliased2) return aliased2;

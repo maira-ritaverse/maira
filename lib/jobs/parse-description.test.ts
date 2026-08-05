@@ -25,6 +25,24 @@ describe("parseJobDescription", () => {
     expect(out[1]).toEqual({ title: "募集背景", body: "増員のため" });
   });
 
+  it("見出し末尾の コロン / 括弧補足を 許容する(★ 仕事内容: / ★ 仕事内容(原文にある場合のみ):)", () => {
+    // 回帰防止:モデルが 見出しヒントや コロンを 復唱しても セクションを 失わない。
+    const out = parseJobDescription(
+      [
+        "★ 仕事内容:",
+        "業務内容です",
+        "★ 募集背景(原文にある場合のみ):",
+        "増員のため",
+        "★ 福利厚生 :",
+        "各種保険完備",
+      ].join("\n"),
+    );
+    expect(out).toHaveLength(3);
+    expect(out[0]).toEqual({ title: "仕事内容", body: "業務内容です" });
+    expect(out[1]).toEqual({ title: "募集背景", body: "増員のため" });
+    expect(out[2]).toEqual({ title: "福利厚生", body: "各種保険完備" });
+  });
+
   it("本文中の '★コツコツ' (空白なし) は 本文として 残す", () => {
     // 回帰防止:AI が 原文の ★ を 残す 指示と 両立する
     const out = parseJobDescription(
