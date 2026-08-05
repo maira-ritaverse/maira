@@ -12,6 +12,7 @@ import { safeNextOr } from "@/lib/auth/safe-next";
 import { getSiteUrl } from "@/lib/config/site-url";
 import { isOpenSignupEnabled } from "@/lib/config/signup-mode";
 import { sendPasswordResetEmail } from "@/lib/email/password-reset";
+import { sendSignupConfirmationEmail } from "@/lib/email/signup-confirmation";
 import { consumeRateLimit } from "@/lib/rate-limit/rate-limit";
 
 /**
@@ -85,6 +86,133 @@ export async function signup(input: SignupInput) {
   }
 
   return { success: true };
+}
+
+/**
+ * 確認メール 再送 Server Action
+ *
+ * 背景:
+ *   ・新規登録の確認メールは Supabase 内蔵メール(signUp)で PKCE の
+ *     /auth/callback リンクとして送られるため、別端末 / アプリ内ブラウザで
+ *     開くと code_verifier が無く失敗する。内蔵メールは到達率も低い。
+ *   ・そこで「確認メールを再送」導線として、リセットと同じ generateLink +
+ *     Resend + /auth/confirm(verifyOtp)方式のリンクを送る。別端末でも通る。
+ *
+ * type=magiclink を使う理由:
+ *   ・既存の未確認ユーザーに対し、パスワード不要で確認リンクを生成できる
+ *     (signup 型は password 必須で再送に使えない)。
+ *   ・verifyOtp(type=magiclink)成功で email_confirmed_at がセットされ、
+ *     そのままログイン状態で /app に着地する(dev 実機確認済み)。
+ *
+ * enumeration 対策:
+ *   ・入力メールの登録有無に関わらず常に { success: true } を返す。
+ *   ・実際に送るのは「存在 かつ 未確認」のユーザーだけ(確認済みユーザーに
+ *     magic ログインリンクを送らない)。判定結果は呼び出し側に返さない。
+ */
+export async function resendConfirmationEmail(email: string) {
+  const siteUrl = getSiteUrl();
+  const normalizedEmail = email.trim().toLowerCase();
+
+  // レート制限(reset と同型):IP 1 分 5 回 / email 1 時間 5 回。
+  const hdrs = await headers();
+  const ip = hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const [ipCheck, emailCheck] = await Promise.all([
+    consumeRateLimit({
+      namespace: "confirm_resend:ip",
+      identifier: ip,
+      windowSeconds: 60,
+      maxCount: 5,
+    }),
+    consumeRateLimit({
+      namespace: "confirm_resend:email",
+      identifier: normalizedEmail,
+      // 確認リンクは 実質 magic ログインリンク なので、リセット(3/時)と 同じ 厳しさに 揃える。
+      windowSeconds: 3600,
+      maxCount: 3,
+      hashIdentifier: true,
+    }),
+  ]);
+  if (ipCheck.limited || emailCheck.limited) {
+    console.warn("[resendConfirmationEmail] rate limited", {
+      ip_limited: ipCheck.limited,
+      email_limited: emailCheck.limited,
+    });
+    return { success: true as const };
+  }
+
+  try {
+    const admin = createServiceClient();
+
+    // 「存在 かつ 未確認」ユーザーのみ対象。listUsers を走査して該当を探す。
+    // (getUserByEmail が admin API に無いため。確認済み / 未登録には送らない)
+    //
+    // スケール注意:これは O(n) 走査(50/ページ、最大 40 ページ = 2000 人)。
+    // 現状のユーザー数では 1 ページ目で完結する。将来 2000 人を超えたら、
+    // auth.users を lower(email) で 索引引きする SECURITY DEFINER RPC に
+    // 置き換えること(下の cap 到達 warning がその 検知トリガー)。
+    let target: { id: string; confirmed: boolean } | null = null;
+    let reachedScanCap = true;
+    for (let page = 1; page <= 40 && !target; page++) {
+      const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 50 });
+      if (error) {
+        reachedScanCap = false;
+        break;
+      }
+      const hit = data.users.find((u) => (u.email ?? "").toLowerCase() === normalizedEmail);
+      if (hit) {
+        target = { id: hit.id, confirmed: !!hit.email_confirmed_at };
+        reachedScanCap = false;
+        break;
+      }
+      if (data.users.length < 50) {
+        reachedScanCap = false; // 最終ページまで見た(= 全件走査済み)
+        break;
+      }
+    }
+    if (!target && reachedScanCap) {
+      // 2000 人を走査しても見つからない = ユーザー増でスキャン上限に達した可能性。
+      // 該当者が居ても再送されない silent 障害になる前に RPC 化するための検知ログ。
+      console.warn(
+        "[resendConfirmationEmail] listUsers scan hit cap without match (RPC lookup 化 を検討)",
+      );
+    }
+    if (!target || target.confirmed) {
+      // 未登録 or 確認済み:enumeration 対策で成功を装い、送信しない。
+      return { success: true as const };
+    }
+
+    const { data, error } = await admin.auth.admin.generateLink({
+      type: "magiclink",
+      email: normalizedEmail,
+      options: { redirectTo: `${siteUrl}/auth/confirm` },
+    });
+    if (error || !data?.properties?.hashed_token) {
+      console.error("[resendConfirmationEmail] generateLink failed", {
+        name: error?.name,
+        status: error?.status,
+      });
+      return { success: true as const };
+    }
+
+    const confirmUrl = new URL(`${siteUrl}/auth/confirm`);
+    confirmUrl.searchParams.set("token_hash", data.properties.hashed_token);
+    confirmUrl.searchParams.set("type", "magiclink");
+    confirmUrl.searchParams.set("next", "/app");
+
+    const result = await sendSignupConfirmationEmail({
+      toEmail: normalizedEmail,
+      actionLink: confirmUrl.toString(),
+    });
+    if (!result.sent) {
+      console.error("[resendConfirmationEmail] send failed", { reason: result.reason });
+    }
+  } catch (err) {
+    console.error("[resendConfirmationEmail] unexpected", {
+      name: err instanceof Error ? err.name : "unknown",
+    });
+  }
+
+  return { success: true as const };
 }
 
 /**

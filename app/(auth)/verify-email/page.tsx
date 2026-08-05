@@ -2,6 +2,8 @@ import { Mail } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
+import { VerifyEmailResend } from "./verify-email-resend";
+
 export default function VerifyEmailPage() {
   return (
     <main className="bg-background flex min-h-screen items-center justify-center p-4">
@@ -17,12 +19,16 @@ export default function VerifyEmailPage() {
           </p>
         </div>
 
-        <div className="bg-card space-y-3 rounded-lg border p-6 text-left text-sm">
-          <p className="font-semibold">メールが届かない場合:</p>
-          <ul className="text-muted-foreground space-y-1">
-            <li>・迷惑メールフォルダをご確認ください</li>
-            <li>・数分待ってもメールが届かない場合は、再度登録をお試しください</li>
-          </ul>
+        <div className="bg-card space-y-4 rounded-lg border p-6 text-sm">
+          <div className="text-left">
+            <p className="font-semibold">メールが届かない / リンクが開けない場合:</p>
+            <ul className="text-muted-foreground mt-1 space-y-1">
+              <li>・迷惑メールフォルダをご確認ください</li>
+              <li>・登録した端末と別のスマホ / パソコンで開いても確認できます</li>
+              <li>・下のフォームから確認メールを再送できます</li>
+            </ul>
+          </div>
+          <VerifyEmailResend />
         </div>
 
         <Button variant="outline" className="w-full" render={<Link href="/login" />}>
