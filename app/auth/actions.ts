@@ -10,7 +10,7 @@ import { recordAuditLog } from "@/lib/audit/audit-log";
 import { PW_RESET_TICKET_COOKIE, verifyPwResetTicket } from "@/lib/auth/pw-reset-ticket";
 import { safeNextOr } from "@/lib/auth/safe-next";
 import { getSiteUrl } from "@/lib/config/site-url";
-import { isOpenSignupEnabled } from "@/lib/config/signup-mode";
+import { isOpenSignupEnabled, isSoloSignupEnabled } from "@/lib/config/signup-mode";
 import { sendPasswordResetEmail } from "@/lib/email/password-reset";
 import { sendSignupConfirmationEmail } from "@/lib/email/signup-confirmation";
 import { consumeRateLimit } from "@/lib/rate-limit/rate-limit";
@@ -213,6 +213,165 @@ export async function resendConfirmationEmail(email: string) {
   }
 
   return { success: true as const };
+}
+
+/**
+ * Solo セルフサーブ サインアップ 開始 Server Action
+ *
+ * 背景:
+ *   ・旧実装は client の supabase.auth.signUp で「即セッション」前提の楽観フロー
+ *     だったが、メール確認必須の本番では session が返らず、確認後の org 作成も
+ *     成立しなかった(確認リンクも PKCE で別端末に弱い)。
+ *
+ * 新フロー(手動で戻る手間なし):
+ *   1. generateLink(type=signup) で未確認ユーザーを作成し、登録意図(plan / cycle /
+ *      表示名)を user_metadata.pending_solo に保存(Supabase 内蔵メールは送らない)
+ *   2. Resend で /auth/confirm?type=signup&next=/signup/solo/complete のリンクを送信
+ *   3. 確認リンク(別端末OK)→ verifyOtp で確認+ログイン → /signup/solo/complete が
+ *      metadata を読んで create-solo-account を呼び org+プラン作成 → Checkout / agency
+ *
+ * 既存ユーザー:
+ *   ・確認済み → 通常ログインへ誘導(既存フォームと同じ UX。signup は enumeration より
+ *     「登録済みなら知らせる」ほうが親切)
+ *   ・未確認 → 意図を最新に更新し、magiclink で確認リンクを再送
+ */
+export async function startSoloSignup(input: {
+  email: string;
+  password: string;
+  plan: "solo" | "solo_pro";
+  cycle: "monthly" | "yearly";
+  organizationName?: string;
+}): Promise<{ error: string } | { needsConfirm: true }> {
+  // ページの redirect と一致させ、API 直叩きでも Solo 未開放環境では弾く。
+  if (!isSoloSignupEnabled()) {
+    return { error: "Solo プランのセルフサーブ登録は現在受付を停止しています。" };
+  }
+
+  const email = input.email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { error: "メールアドレスの形式が正しくありません。" };
+  }
+  if (input.password.length < 8) {
+    return { error: "パスワードは8文字以上で入力してください。" };
+  }
+  // bcrypt の 72 バイト上限(signupSchema と 同じ)。超えると generateLink が
+  // 不透明なエラーになるため、ここで 分かりやすい 文言に して 返す。
+  if (input.password.length > 72) {
+    return { error: "パスワードは72文字以内で入力してください。" };
+  }
+  const plan = input.plan === "solo_pro" ? "solo_pro" : "solo";
+  const cycle = input.cycle === "yearly" ? "yearly" : "monthly";
+  const orgName = input.organizationName?.trim().slice(0, 100) || null;
+  const pendingSolo = { plan, cycle, org_name: orgName };
+
+  const siteUrl = getSiteUrl();
+
+  // レート制限(reset / 確認再送と同型):IP 1 分 5 回 / email 1 時間 5 回。
+  const hdrs = await headers();
+  const ip = hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const [ipCheck, emailCheck] = await Promise.all([
+    consumeRateLimit({
+      namespace: "solo_signup:ip",
+      identifier: ip,
+      windowSeconds: 60,
+      maxCount: 5,
+    }),
+    consumeRateLimit({
+      namespace: "solo_signup:email",
+      identifier: email,
+      windowSeconds: 3600,
+      maxCount: 5,
+      hashIdentifier: true,
+    }),
+  ]);
+  if (ipCheck.limited || emailCheck.limited) {
+    return { error: "試行が多すぎます。しばらく待ってから再度お試しください。" };
+  }
+
+  const admin = createServiceClient();
+
+  // 既存ユーザー判定(getUserByEmail が admin API に無いため listUsers 走査)。
+  // スケール注意:現状は 1 ページで完結。2000 人超で RPC 化する(confirm_resend と同じ)。
+  let existing: { id: string; confirmed: boolean } | null = null;
+  for (let page = 1; page <= 40 && !existing; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 50 });
+    if (error) break;
+    const hit = data.users.find((u) => (u.email ?? "").toLowerCase() === email);
+    if (hit) existing = { id: hit.id, confirmed: !!hit.email_confirmed_at };
+    if (data.users.length < 50) break;
+  }
+
+  try {
+    let tokenHash: string | null = null;
+    let otpType: "signup" | "magiclink" = "signup";
+
+    if (!existing) {
+      // 新規:signup 型で 作成 + 意図を metadata に 保存
+      const { data, error } = await admin.auth.admin.generateLink({
+        type: "signup",
+        email,
+        password: input.password,
+        options: { data: { pending_solo: pendingSolo }, redirectTo: `${siteUrl}/auth/confirm` },
+      });
+      if (error || !data?.properties?.hashed_token) {
+        console.error("[startSoloSignup] generateLink(signup) failed", {
+          name: error?.name,
+          status: error?.status,
+        });
+        return { error: "登録に失敗しました。時間をおいて再度お試しください。" };
+      }
+      tokenHash = data.properties.hashed_token;
+      otpType = "signup";
+    } else if (existing.confirmed) {
+      return { error: "このメールアドレスは既に登録済です。ログインしてからお進みください。" };
+    } else {
+      // 既存 未確認(再送):意図(plan / cycle / 表示名)だけ 最新に 更新 → magiclink で
+      // 確認リンクを 再送する。
+      // ★パスワードは あえて 更新しない(セキュリティ)。未確認アカウントの パスワードを
+      //   後続の 呼出で 差し替え可能に すると、攻撃者が 被害者の 未確認メール宛に 自分の
+      //   パスワードを 仕込み → 被害者が 確認リンクを 踏む → 攻撃者が その パスワードで
+      //   ログイン、という 乗っ取り経路が 生じる。初回サインアップ時の パスワードを 保持する。
+      //   (updateUserById の user_metadata は shallow merge なので display_name 等は 消えない)
+      await admin.auth.admin.updateUserById(existing.id, {
+        user_metadata: { pending_solo: pendingSolo },
+      });
+      const { data, error } = await admin.auth.admin.generateLink({
+        type: "magiclink",
+        email,
+        options: { redirectTo: `${siteUrl}/auth/confirm` },
+      });
+      if (error || !data?.properties?.hashed_token) {
+        console.error("[startSoloSignup] generateLink(magiclink) failed", {
+          name: error?.name,
+          status: error?.status,
+        });
+        return { error: "確認メールの再送に失敗しました。時間をおいて再度お試しください。" };
+      }
+      tokenHash = data.properties.hashed_token;
+      otpType = "magiclink";
+    }
+
+    const confirmUrl = new URL(`${siteUrl}/auth/confirm`);
+    confirmUrl.searchParams.set("token_hash", tokenHash);
+    confirmUrl.searchParams.set("type", otpType);
+    confirmUrl.searchParams.set("next", "/signup/solo/complete");
+
+    const result = await sendSignupConfirmationEmail({
+      toEmail: email,
+      actionLink: confirmUrl.toString(),
+    });
+    if (!result.sent) {
+      console.error("[startSoloSignup] send failed", { reason: result.reason });
+      return { error: "確認メールの送信に失敗しました。時間をおいて再度お試しください。" };
+    }
+  } catch (err) {
+    console.error("[startSoloSignup] unexpected", {
+      name: err instanceof Error ? err.name : "unknown",
+    });
+    return { error: "登録処理でエラーが発生しました。時間をおいて再度お試しください。" };
+  }
+
+  return { needsConfirm: true };
 }
 
 /**

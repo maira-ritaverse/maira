@@ -3,21 +3,21 @@
 /**
  * Solo プラン セルフサーブ サインアップ フォーム。
  *
- * フロー:
- *   1. メール / パスワード / (任意) 表示名 で サインアップ
- *   2. supabase.auth.signUp で auth.users 作成 + セッション 発行
- *   3. POST /api/self-serve/create-solo-account を 叩き 個人 org + plan を 作成
- *   4. Stripe 設定済 → Checkout URL に redirect / 未設定 → /agency?welcome=1
+ * フロー(メール確認必須でも別端末で完結):
+ *   1. startSoloSignup(server action)が 未確認ユーザーを 作成し、登録意図(plan /
+ *      cycle / 表示名)を user_metadata に 保存 → Resend で 確認メール送信
+ *      (/auth/confirm?type=signup&next=/signup/solo/complete)
+ *   2. 確認リンク(別端末OK)を 開くと 確認 + ログイン → /signup/solo/complete が
+ *      個人 org + プランを 自動作成 → Stripe Checkout / /agency へ
  *
  * トライアル 14 日 の 案内 と、 Solo / Solo Pro の 切替 UI 付き。
  */
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
+import { startSoloSignup } from "@/app/auth/actions";
 import { SOLO_MONTHLY_PRICE } from "@/lib/billing/agency";
-import { createClient } from "@/lib/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,7 +56,6 @@ function labelForCycle(plan: SoloPlan, cycle: Cycle): string {
 }
 
 export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
-  const router = useRouter();
   const [plan, setPlan] = useState<SoloPlan>(initialPlan);
   const [cycle, setCycle] = useState<Cycle>(initialCycle);
   const [email, setEmail] = useState("");
@@ -64,11 +63,8 @@ export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
   const [orgName, setOrgName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // メール確認が必要で サインアップ後 セッションが 返らなかった 状態。
-  // 確認(再送可能)導線を 案内する ブロックに 切り替える。
+  // 確認メール送信済み(送信後の 案内ブロックに 切り替える)。
   const [needsConfirm, setNeedsConfirm] = useState(false);
-
-  const supabase = useMemo(() => createClient(), []);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,72 +78,20 @@ export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
 
     setIsSubmitting(true);
     try {
-      // 既にログイン済み(確認メールのリンクを踏んで戻ってきた等)なら signUp を
-      // やり直さず、そのまま org 作成へ進む。未ログインのときだけ signUp する。
-      // メール確認が必須の本番では、signUp 直後はセッションが返らないため、
-      // 「確認 → ログイン済み → このページに戻って再送信」で org 作成が成立する。
-      // (未確認ユーザーからの create-solo-account は auth.uid() が取れず 401 で弾かれる)
-      const { data: sessionData } = await supabase.auth.getSession();
-
-      if (!sessionData.session) {
-        // 1. Supabase Auth で サインアップ(未ログイン時のみ)
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        if (signUpError) {
-          // 「既に登録済のメール」は Supabase のエラーメッセージに "already" を
-          // 含むことが多いので日本語に変換。
-          const msg = signUpError.message.toLowerCase();
-          if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
-            setError(
-              "このメールアドレスは既に登録済です。ログイン後、もう一度このページで開始してください。",
-            );
-          } else {
-            setError(`サインアップに失敗しました: ${signUpError.message}`);
-          }
-          return;
-        }
-
-        // session が返らない = メール確認が必要。確認(再送可能)導線を案内する。
-        if (!signUpData.session) {
-          setNeedsConfirm(true);
-          return;
-        }
-      }
-
-      // 2. 個人 org + プラン を 作成(ログイン済みセッションの auth.uid() で作る)
-      const res = await fetch("/api/self-serve/create-solo-account", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          plan,
-          cycle,
-          ...(orgName.trim() ? { organizationName: orgName.trim() } : {}),
-        }),
+      // 未確認ユーザー作成 + 意図保存 + 確認メール送信(server action)。
+      // 実際の org 作成は 確認リンク → /signup/solo/complete で 自動実行される。
+      const result = await startSoloSignup({
+        email,
+        password,
+        plan,
+        cycle,
+        organizationName: orgName.trim() || undefined,
       });
-
-      const body = (await res.json().catch(() => ({}))) as {
-        ok?: boolean;
-        error?: string;
-        message?: string;
-        redirectTo?: string;
-        checkoutUrl?: string | null;
-      };
-
-      if (!res.ok || !body.ok) {
-        setError(body.message ?? body.error ?? `プラン開始に失敗しました (HTTP ${res.status})`);
+      if ("error" in result) {
+        setError(result.error);
         return;
       }
-
-      // 3. Stripe Checkout URL が あれば そこへ (checkoutUrl は 決済 導入前 は null)
-      //    それ以外 は /agency?welcome=1 に 遷移
-      const dest = body.checkoutUrl || body.redirectTo || "/agency?welcome=1";
-      if (dest.startsWith("http")) {
-        window.location.href = dest;
-      } else {
-        router.push(dest);
-      }
+      setNeedsConfirm(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "不明なエラーが発生しました");
     } finally {
@@ -179,20 +123,14 @@ export function SoloSignupForm({ initialPlan, initialCycle }: Props) {
           <div className="bg-card space-y-4 rounded-lg border p-6 text-sm">
             <Alert>
               <AlertDescription>
-                確認メールをお送りしました。メール内のリンクを開いて、メールアドレスを確認してください(別のスマホ
-                / パソコンで開いても確認できます)。
+                {email || "ご入力のメールアドレス"}{" "}
+                宛に確認メールをお送りしました。メール内のリンクを開くだけで登録が完了し、そのままプランが始まります(別のスマホ
+                / パソコンで開いても大丈夫です)。このページに戻る必要はありません。
               </AlertDescription>
             </Alert>
-            <p className="text-muted-foreground">
-              確認が済んだら、このページに戻って「14
-              日間無料で試す」をもう一度押すと、プランが開始されます。
-            </p>
             <p className="text-muted-foreground text-xs">
-              メールが届かない / リンクが開けない場合は、
-              <Link href="/verify-email" className="underline">
-                確認メールの再送
-              </Link>
-              からやり直せます。
+              メールが届かない /
+              リンクの有効期限が切れた場合は、下の「入力に戻る」からもう一度送信すると再送されます。
             </p>
             <Button
               type="button"
