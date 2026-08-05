@@ -581,6 +581,8 @@ async function resolveOrgIdFromInvoice(
 async function handleInvoicePaid(
   admin: AdminClient,
   invoice: StripeInvoice,
+  eventId: string,
+  eventCreatedAtSec: number,
 ): Promise<{ ok: boolean; reason?: string }> {
   const orgId = await resolveOrgIdFromInvoice(admin, invoice);
   if (!orgId) return { ok: true, reason: "no_org_link" };
@@ -592,25 +594,38 @@ async function handleInvoicePaid(
     : null;
   const periodEnd = invoice.period_end ? new Date(invoice.period_end * 1000).toISOString() : null;
 
-  // M3 修正: .select("organization_id") で 影響 行数 を 検知 し、
-  // 0 row (organization_plans が 未作成) の 場合 は 明示 的 に silent_skip を 返す。
-  // subscription.updated 側 で 状態 更新 が 走る ため、 ここ で は fatal 化 し ない。
+  // イベント順序ガード(subscription sync と 同じ last_synced_at を 高水位に する)。
+  // Stripe は 配信順序を 保証しない ため、これが 無いと 順序前後した 古い invoice
+  // イベントが 新しい状態を 上書きし、「支払い中の 顧客が 古い payment_failed で
+  // read-only に 落ちる」「未払いが 古い paid で active に 戻る」事故が 起きる。
+  // last_synced_at が 未設定(checkout 直後)か、本イベント時刻 以下の ときだけ 適用。
+  const eventIso = new Date(eventCreatedAtSec * 1000).toISOString();
+  // .or() フィルタ値の ドット誤解析を 避けるため、比較用は ミリ秒を 落とす
+  // (timestamptz として 同一 instant に 解釈される)。
+  const eventIsoForFilter = eventIso.replace(/\.\d{3}Z$/, "Z");
+
+  // M3 修正: .select("organization_id") で 影響 行数 を 検知 し、0 row のときは
+  // 明示的に skip を 返す(subscription.updated 側で 状態更新が 走るため fatal 化しない)。
   const { data, error } = await admin
     .from("organization_plans")
     .update({
       status: "active",
       current_period_start: periodStart,
       current_period_end: periodEnd,
+      last_synced_at: eventIso,
+      last_stripe_event_id: eventId,
+      updated_at: new Date().toISOString(),
     })
     .eq("organization_id", orgId)
     .in("status", ["active", "past_due", "trialing"])
+    .or(`last_synced_at.is.null,last_synced_at.lte.${eventIsoForFilter}`)
     .select("organization_id");
   if (error) return { ok: false, reason: `db_update_failed:${error.message}` };
   if (!data || data.length === 0) {
     console.warn(
-      `[stripe-webhook] Invoice paid but no matching plan row org=${orgId}, invoice=${invoice.id}`,
+      `[stripe-webhook] Invoice paid: no update (no plan row / status gate / stale event) org=${orgId}, invoice=${invoice.id}`,
     );
-    return { ok: true, reason: "no_plan_row_or_status_gate" };
+    return { ok: true, reason: "no_update_no_row_or_stale" };
   }
   console.warn(`[stripe-webhook] Invoice paid for org=${orgId}, invoice=${invoice.id}`);
   return { ok: true };
@@ -619,26 +634,37 @@ async function handleInvoicePaid(
 async function handleInvoicePaymentFailed(
   admin: AdminClient,
   invoice: StripeInvoice,
+  eventId: string,
+  eventCreatedAtSec: number,
 ): Promise<{ ok: boolean; reason?: string }> {
   const orgId = await resolveOrgIdFromInvoice(admin, invoice);
   if (!orgId) return { ok: true, reason: "no_org_link" };
 
   if (await isOrgExempt(admin, orgId)) return { ok: true, reason: "org_is_exempt" };
 
+  // handleInvoicePaid と 同じ イベント順序ガード(古い payment_failed で active を
+  // past_due に 落とさない)。
+  const eventIso = new Date(eventCreatedAtSec * 1000).toISOString();
+  const eventIsoForFilter = eventIso.replace(/\.\d{3}Z$/, "Z");
+
   const { data, error } = await admin
     .from("organization_plans")
     .update({
       status: "past_due",
+      last_synced_at: eventIso,
+      last_stripe_event_id: eventId,
+      updated_at: new Date().toISOString(),
     })
     .eq("organization_id", orgId)
     .neq("status", "canceled")
+    .or(`last_synced_at.is.null,last_synced_at.lte.${eventIsoForFilter}`)
     .select("organization_id");
   if (error) return { ok: false, reason: `db_update_failed:${error.message}` };
   if (!data || data.length === 0) {
     console.warn(
-      `[stripe-webhook] Invoice payment failed but no matching plan row org=${orgId}, invoice=${invoice.id}`,
+      `[stripe-webhook] Invoice payment failed: no update (no plan row / canceled / stale event) org=${orgId}, invoice=${invoice.id}`,
     );
-    return { ok: true, reason: "no_plan_row_or_canceled" };
+    return { ok: true, reason: "no_update_no_row_canceled_or_stale" };
   }
   console.warn(
     `[stripe-webhook] Invoice payment failed org=${orgId}, invoice=${invoice.id}, attempt=${invoice.attempt_count}`,
@@ -787,7 +813,7 @@ export async function POST(request: Request): Promise<Response> {
 
     if (type === "invoice.paid") {
       const invoice = event.data.object as StripeInvoice;
-      const r = await handleInvoicePaid(admin, invoice);
+      const r = await handleInvoicePaid(admin, invoice, event.id, event.created);
       await markEventProcessed(admin, event.id, r.ok ? "processed" : "failed", r.reason ?? null);
       if (!r.ok) await releaseOnRetryable(r.reason ?? null);
       return NextResponse.json({ ok: r.ok, kind: "invoice_paid" });
@@ -795,7 +821,7 @@ export async function POST(request: Request): Promise<Response> {
 
     if (type === "invoice.payment_failed") {
       const invoice = event.data.object as StripeInvoice;
-      const r = await handleInvoicePaymentFailed(admin, invoice);
+      const r = await handleInvoicePaymentFailed(admin, invoice, event.id, event.created);
       await markEventProcessed(admin, event.id, r.ok ? "processed" : "failed", r.reason ?? null);
       if (!r.ok) await releaseOnRetryable(r.reason ?? null);
       return NextResponse.json({ ok: r.ok, kind: "invoice_failed" });

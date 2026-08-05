@@ -150,18 +150,9 @@ export async function POST(request: Request) {
   const organizationName =
     rawOrgName?.trim() || (emailLocal ? `${emailLocal}のワークスペース` : "個人ワークスペース");
 
-  // ── 4. profiles.account_type upsert
-  //     (Supabase Auth の on-user-created trigger で 空 行 が 作られて いる 想定、
-  //      無くて も upsert なので 問題 なし)
-  const { error: profileErr } = await admin
-    .from("profiles")
-    .upsert({ id: user.id, account_type: "organization_member" });
-  if (profileErr) {
-    return NextResponse.json(
-      { error: "profile_upsert_failed", message: profileErr.message },
-      { status: 500 },
-    );
-  }
+  // profiles.account_type の 昇格 は「org + member + plan が すべて 出来た 後」に 行う
+  // (下の ステップ 7 の 後)。途中で 失敗した ときに account_type だけ
+  // organization_member に 昇格して membership が 無い 孤児プロフィールが 残るのを 防ぐ。
 
   // ── 5. organizations 作成
   const { data: orgRow, error: orgErr } = await admin
@@ -216,6 +207,36 @@ export async function POST(request: Request) {
     await admin.from("organizations").delete().eq("id", organizationId);
     return NextResponse.json(
       { error: "plan_create_failed", message: planErr.message },
+      { status: 500 },
+    );
+  }
+
+  // ── 7.5 profiles.account_type を organization_member に(全ステップ成功後)。
+  //     ここで 失敗したら 直前までの plan → member → org も 逆順で ロールバックして
+  //     「account_type 未昇格 なのに membership あり」= getUserRole が membership 前に
+  //     seeker と 判定して 自分で 作った org に 入れなくなる 不整合を 残さない。
+  //     (Supabase Auth の on-user-created trigger で 空行が ある 想定。無くても upsert)
+  //     ★ returned-error だけでなく throw(ネットワーク断 等)も 同じ ロールバックに
+  //       落とす。ここが 復旧不能な 半端状態を 生む 唯一の 窓なので throw も 拾う。
+  let profileUpsertError: string | null = null;
+  try {
+    const { error } = await admin
+      .from("profiles")
+      .upsert({ id: user.id, account_type: "organization_member" });
+    if (error) profileUpsertError = error.message;
+  } catch (err) {
+    profileUpsertError = err instanceof Error ? err.message : String(err);
+  }
+  if (profileUpsertError) {
+    await admin.from("organization_plans").delete().eq("organization_id", organizationId);
+    await admin
+      .from("organization_members")
+      .delete()
+      .eq("organization_id", organizationId)
+      .eq("user_id", user.id);
+    await admin.from("organizations").delete().eq("id", organizationId);
+    return NextResponse.json(
+      { error: "profile_upsert_failed", message: profileUpsertError },
       { status: 500 },
     );
   }

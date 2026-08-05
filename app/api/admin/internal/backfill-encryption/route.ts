@@ -154,9 +154,12 @@ async function catchUpFromBytea(): Promise<{
       []) {
       const text = decodeBytea(row.encrypted_details, decoder);
       if (text == null) continue;
+      // 旧 bytea は 平文JSON。暗号化必須列 _v2 に 平文を 一時でも 置かない ため、
+      // ここで 暗号化してから 書く(既に v プレフィックス付きなら そのまま)。
+      const out = ENCRYPTED_PREFIX_RE.test(text) ? text : await encryptField(text);
       const { error } = await supabase
         .from("applications")
-        .update({ encrypted_details_v2: text })
+        .update({ encrypted_details_v2: out })
         .eq("id", row.id);
       if (!error) result.applications++;
     }
@@ -173,9 +176,10 @@ async function catchUpFromBytea(): Promise<{
     for (const row of (data as unknown as Array<{ id: string; encrypted_title: unknown }>) ?? []) {
       const text = decodeBytea(row.encrypted_title, decoder);
       if (text == null) continue;
+      const out = ENCRYPTED_PREFIX_RE.test(text) ? text : await encryptField(text);
       const { error } = await supabase
         .from("tasks")
-        .update({ encrypted_title_v2: text })
+        .update({ encrypted_title_v2: out })
         .eq("id", row.id);
       if (!error) result.tasks_title++;
     }
@@ -193,9 +197,10 @@ async function catchUpFromBytea(): Promise<{
       []) {
       const text = decodeBytea(row.encrypted_description, decoder);
       if (text == null) continue;
+      const out = ENCRYPTED_PREFIX_RE.test(text) ? text : await encryptField(text);
       const { error } = await supabase
         .from("tasks")
-        .update({ encrypted_description_v2: text })
+        .update({ encrypted_description_v2: out })
         .eq("id", row.id);
       if (!error) result.tasks_description++;
     }
@@ -213,9 +218,10 @@ async function catchUpFromBytea(): Promise<{
       []) {
       const text = decodeBytea(row.encrypted_content, decoder);
       if (text == null) continue;
+      const out = ENCRYPTED_PREFIX_RE.test(text) ? text : await encryptField(text);
       const { error } = await supabase
         .from("messages")
-        .update({ encrypted_content_v2: text })
+        .update({ encrypted_content_v2: out })
         .eq("id", row.id);
       if (!error) result.messages++;
     }
