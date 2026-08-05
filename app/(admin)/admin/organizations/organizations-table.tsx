@@ -57,6 +57,8 @@ type SortKey =
   | "status";
 type SortDir = "asc" | "desc";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /** ステータスの並び順:アラート寄りを優先(運営が対応必要な順)。 */
 const STATUS_ORDER: Record<OrgStatus, number> = {
   no_admin: 0,
@@ -94,6 +96,9 @@ export function OrganizationsTable({ archived }: { archived: boolean }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
+  // レンダー中の Date.now() を避けるため、fetch 完了時の now を state に持つ
+  // (トライアル残日数の表示を再取得時に最新化する)。
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
   // ソート状態を localStorage に永続化(画面遷移後も復元)
   const [sortKey, setSortKey] = usePersistedState<SortKey>("admin-orgs-sortKey", "createdAt");
   const [sortDir, setSortDir] = usePersistedState<SortDir>("admin-orgs-sortDir", "desc");
@@ -109,6 +114,7 @@ export function OrganizationsTable({ archived }: { archived: boolean }) {
       const qs = archived ? "?archived=true" : "";
       const res = await apiFetch<ListResponse>(`/api/admin/organizations${qs}`);
       setOrgs(res?.organizations ?? []);
+      setNowMs(Date.now());
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -346,7 +352,7 @@ export function OrganizationsTable({ archived }: { archived: boolean }) {
                         個人
                       </span>
                     )}
-                    <TierBadge plan={o.plan} />
+                    <TierBadge plan={o.plan} nowMs={nowMs} />
                   </div>
                   <div className="text-muted-foreground text-[10px]">{o.id}</div>
                 </td>
@@ -708,7 +714,7 @@ function RecordingUploadToggle({
 /**
  * 契約 プラン の tier / trial 状態 を バッジ 表示。 未 契約 org は null で 何 も 出さ ない。
  */
-function TierBadge({ plan }: { plan: OrgPlan | null }) {
+function TierBadge({ plan, nowMs }: { plan: OrgPlan | null; nowMs: number }) {
   if (!plan) return null;
   const label: Record<string, string> = {
     solo: "Solo",
@@ -736,11 +742,7 @@ function TierBadge({ plan }: { plan: OrgPlan | null }) {
       >
         {label[plan.tier] ?? plan.tier}
       </span>
-      {isTrial && (
-        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-          Trial
-        </span>
-      )}
+      {isTrial && <TrialRemainBadge trialEndsAt={plan.trialEndsAt} nowMs={nowMs} />}
       {isPastDue && (
         <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
           課金失敗
@@ -753,6 +755,37 @@ function TierBadge({ plan }: { plan: OrgPlan | null }) {
       )}
     </span>
   );
+}
+
+/**
+ * トライアルの残り日数バッジ。残り多め=緑 / 残り 7 日以下=橙 / 期限切れ=赤。
+ * TierBadge の「Trial」表示を、期限が一目で分かる形に置き換えたもの。
+ */
+function TrialRemainBadge({ trialEndsAt, nowMs }: { trialEndsAt: string | null; nowMs: number }) {
+  const base = "rounded px-1.5 py-0.5 text-[9px] font-semibold";
+  const endMs = trialEndsAt ? new Date(trialEndsAt).getTime() : NaN;
+  if (!Number.isFinite(endMs)) {
+    return (
+      <span
+        className={`${base} bg-emerald-100 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200`}
+      >
+        Trial
+      </span>
+    );
+  }
+  if (endMs <= nowMs) {
+    return (
+      <span className={`${base} bg-red-100 text-red-900 dark:bg-red-950/40 dark:text-red-200`}>
+        Trial 期限切れ
+      </span>
+    );
+  }
+  const remain = Math.ceil((endMs - nowMs) / DAY_MS);
+  const tone =
+    remain <= 7
+      ? "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+      : "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200";
+  return <span className={`${base} ${tone}`}>Trial 残り{remain}日</span>;
 }
 
 function StatusBadge({ status }: { status: OrgStatus }) {

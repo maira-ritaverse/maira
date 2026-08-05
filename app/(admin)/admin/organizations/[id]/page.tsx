@@ -2,10 +2,12 @@ import Link from "next/link";
 
 import { Card } from "@/components/ui/card";
 import { getBillingExemption } from "@/lib/billing/exemption";
+import { getOrganizationTrialState } from "@/lib/billing/trial";
 
 import { BillingExemptSection } from "./billing-exempt-section";
 import { OrganizationDetail } from "./organization-detail";
 import { PlatformAiQuotasSection } from "./platform-ai-quotas-section";
+import { TrialExtensionSection } from "./trial-extension-section";
 
 /**
  * /admin/organizations/[id]
@@ -24,7 +26,10 @@ export default async function OrganizationDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const exemption = await getBillingExemption(id);
+  const [exemption, trial] = await Promise.all([
+    getBillingExemption(id),
+    getOrganizationTrialState(id),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -35,6 +40,9 @@ export default async function OrganizationDetailPage({
       </div>
       <Card className="p-6">
         <OrganizationDetail organizationId={id} />
+      </Card>
+      <Card className="p-6">
+        <TrialExtensionSection organizationId={id} initial={trial} />
       </Card>
       <Card className="p-6">
         <BillingExemptSection
