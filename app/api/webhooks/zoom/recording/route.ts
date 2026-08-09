@@ -57,7 +57,17 @@ function verifyZoomSignature(
   const a = Buffer.from(signatureHeader);
   const b = Buffer.from(expected);
   if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
+  if (!timingSafeEqual(a, b)) return false;
+
+  // ★監査 修正: タイムスタンプ 鮮度 を 検証(リプレイ対策)。 これ が 無い と、
+  //   一度 傍受 した 署名 済み recording.completed を 無期限 に リプレイ できる。
+  //   Stripe webhook と 同じ 300 秒 許容。 冪等性(external_recording_id)で
+  //   実害 は 限定 的 だが、 兄弟 の Stripe ハンドラ に 揃えて 塞ぐ。
+  const tsNum = Number(timestampHeader);
+  if (!Number.isFinite(tsNum)) return false;
+  if (Math.abs(Math.floor(Date.now() / 1000) - tsNum) > 300) return false;
+
+  return true;
 }
 
 export async function POST(request: Request) {

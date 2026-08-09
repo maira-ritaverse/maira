@@ -89,6 +89,8 @@ type StripeInvoice = {
   period_start: number | null;
   period_end: number | null;
   paid: boolean;
+  // 実際に支払われた金額(最小通貨単位)。トライアル開始時の $0 請求書は 0。
+  amount_paid?: number;
   attempt_count: number;
   metadata?: Record<string, string>;
 };
@@ -604,8 +606,18 @@ async function handleInvoicePaid(
   // (timestamptz として 同一 instant に 解釈される)。
   const eventIsoForFilter = eventIso.replace(/\.\d{3}Z$/, "Z");
 
-  // M3 修正: .select("organization_id") で 影響 行数 を 検知 し、0 row のときは
-  // 明示的に skip を 返す(subscription.updated 側で 状態更新が 走るため fatal 化しない)。
+  // ★監査 修正: $0 の トライアル 開始 請求書(amount_paid=0)で trialing→active に
+  //   上げない。 Stripe は トライアル 付き サブスク 作成時 に $0 invoice を 自動 paid
+  //   にして invoice.paid を 送る ため、これを 含める と トライアル 中 ずっと active
+  //   表示 に なり、 trial-notifications cron の 未送・カウントダウン UI 消失・AI 上限
+  //   半減 が 起きる。 実支払い(amount_paid>0)の ときだけ trialing を active 化 対象 に
+  //   含め、 $0 は active/past_due の 期間 更新 のみ(trialing→active は
+  //   subscription.updated = トライアル終了 に 委ねる)。
+  const amountPaid = invoice.amount_paid ?? 0;
+  const statusGate = amountPaid > 0 ? ["active", "past_due", "trialing"] : ["active", "past_due"];
+
+  // .select("organization_id") で 影響 行数 を 検知 し、0 row のときは 明示的に skip を
+  // 返す(subscription.updated 側で 状態更新が 走るため fatal 化しない)。
   const { data, error } = await admin
     .from("organization_plans")
     .update({
@@ -617,7 +629,7 @@ async function handleInvoicePaid(
       updated_at: new Date().toISOString(),
     })
     .eq("organization_id", orgId)
-    .in("status", ["active", "past_due", "trialing"])
+    .in("status", statusGate)
     .or(`last_synced_at.is.null,last_synced_at.lte.${eventIsoForFilter}`)
     .select("organization_id");
   if (error) return { ok: false, reason: `db_update_failed:${error.message}` };
