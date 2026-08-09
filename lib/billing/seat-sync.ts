@@ -192,11 +192,16 @@ async function syncOrganizationSeatCountInner(args: {
       resultItemId = updated.id;
     } else if (extraSeatQuantity > 0 && !extraSeatItemId) {
       // 5-b. subscription に 新規 line item を 追加
+      // ★H3 修正: 冪等 キー を 付与。 これ が 無い と、 DB 反映 失敗 + Webhook ロスト の
+      //   後 に reconcile cron が item_id=NULL を 見て 再び 5-b を 走らせ、 Stripe に
+      //   Extra Seat 行 が 二重 生成(= 二重 課金)される。 同 subscription × 同 price で
+      //   冪等 に し、 再実行 時 も 同一 item に 収束 させる(boost route と 同型)。
       const created = await addSubscriptionItem(config, {
         subscriptionId: plan.stripe_subscription_id,
         priceId,
         quantity: extraSeatQuantity,
         prorationBehavior: "create_prorations",
+        idempotencyKey: `seat-add:${plan.stripe_subscription_id}:${priceId}`,
       });
       resultItemId = created.id;
     } else if (extraSeatQuantity === 0 && extraSeatItemId) {
@@ -214,13 +219,24 @@ async function syncOrganizationSeatCountInner(args: {
     // 6. DB の item_id と seat_count を 更新
     //    Webhook でも 同じ 更新 が 来る が、 last_synced_at + last_stripe_event_id で
     //    idempotency が 効く の で 重複 更新 に よる 事故 は 起きない。
-    await admin
+    const { error: updateError } = await admin
       .from("organization_plans")
       .update({
         stripe_subscription_item_id_extra_seat: resultItemId,
         seat_count: memberCount < SEAT_BASE_INCLUDED ? SEAT_BASE_INCLUDED : memberCount,
       })
       .eq("organization_id", args.organizationId);
+
+    // ★H3 修正: DB 反映 の error を 検査 する。 ここ を 握りつぶす と、 Stripe 側 は
+    //   item を 作った のに DB の item_id が NULL の まま 残り、 かつ seat_sync_failures
+    //   にも 積まれ ず(ok を 返す ため)、 reconcile cron が 再び 追加 して 二重 課金 に
+    //   なる。 失敗 を 呼び出し 元 に 返し、 syncSeatCountOrEnqueueFailure に キュー させる。
+    if (updateError) {
+      return {
+        ok: false,
+        error: `organization_plans update failed: ${updateError.message}`,
+      };
+    }
 
     return {
       ok: true,

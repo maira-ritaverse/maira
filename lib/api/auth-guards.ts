@@ -48,6 +48,57 @@ export type AuthFail = {
 };
 
 /**
+ * MFA(AAL2)強制。verified TOTP factor を持つユーザーが aal1(パスワードのみ)の
+ * セッションで保護 API を叩いた場合に弾く。
+ *
+ * 経緯(監査 H2):
+ *   MFA ゲートは lib/supabase/middleware.ts の positive-list
+ *   (/app, /agency, /admin, /api/app|agency|admin)でのみ効いており、
+ *   求職者データ API(/api/account/*, /api/resumes/*, /api/applications/* 等)は
+ *   対象外だった。そのため MFA 有効化済みの求職者でもパスワードのみの aal1
+ *   セッションで /api/account/export 等から復号済み個人データを抜けた。
+ *   パス列挙は将来また漏れるため、認証ガード層(requireUser / requireOrgMember)で
+ *   確実に塞ぐ。
+ *
+ * 返り値:
+ *   ・null     → 問題なし(MFA 未設定 or 既に aal2)
+ *   ・AuthFail → 403 mfa_required / 503 mfa_check_failed(middleware の API 分岐と同挙動)
+ */
+async function enforceAal2(supabase: SupabaseServerClient): Promise<AuthFail | null> {
+  const aalRes = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (aalRes.error) {
+    // fail-closed: 状態不明なので保護側に倒す(middleware と同じ)。
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: "mfa_check_failed",
+          message: "MFA 状態の確認に失敗しました。再度お試しください。",
+        },
+        { status: 503 },
+      ),
+    };
+  }
+  // nextLevel==='aal2'(= verified factor を保有)かつ currentLevel!=='aal2'
+  // (= まだ TOTP 検証していない)のときだけ弾く。MFA 未設定ユーザーは nextLevel
+  // が 'aal1' になるので何も起きない。
+  if (aalRes.data?.nextLevel === "aal2" && aalRes.data?.currentLevel !== "aal2") {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: "mfa_required",
+          message: "この操作には二段階認証が必要です。ログインし直してください。",
+          redirectTo: "/login/mfa",
+        },
+        { status: 403 },
+      ),
+    };
+  }
+  return null;
+}
+
+/**
  * 「組織メンバーである」ことを保証する。admin / advisor どちらでも OK。
  * 失敗時は 401 / 403 の NextResponse を返す。
  *
@@ -99,6 +150,11 @@ export async function requireOrgMember(): Promise<OrgMemberContext | AuthFail> {
       response: NextResponse.json({ error: "organization_archived" }, { status: 403 }),
     };
   }
+
+  // MFA(AAL2)強制(監査 H2)。middleware でも /api/agency は守られるが、
+  // パス列挙漏れに強くするためガード層でも二重に確認する。
+  const aalFail = await enforceAal2(supabase);
+  if (aalFail) return aalFail;
 
   return {
     ok: true,
@@ -159,6 +215,11 @@ export async function requireUser(): Promise<AuthedUserContext | AuthFail> {
       response: NextResponse.json({ error: "archived" }, { status: 403 }),
     };
   }
+
+  // MFA(AAL2)強制(監査 H2)。求職者データ API(/api/account/*, /api/resumes/* 等)は
+  // middleware の positive-list 外だったため、ここで確実に MFA を要求する。
+  const aalFail = await enforceAal2(supabase);
+  if (aalFail) return aalFail;
 
   return { ok: true, user, supabase };
 }
