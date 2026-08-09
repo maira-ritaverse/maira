@@ -2,6 +2,7 @@ import { convertToModelMessages, streamText, type UIMessage } from "ai";
 import { NextResponse } from "next/server";
 import { getModel, MODELS } from "@/lib/ai/client";
 import { logAiStreamError } from "@/lib/ai/rate-limit-monitor";
+import { chatInputExceedsLimit } from "@/lib/ai/chat-input-limits";
 import {
   APPLICATION_ADVISOR_SYSTEM_PROMPT,
   buildAdvisorContext,
@@ -62,6 +63,14 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json(
       { error: "messages and conversationId are required" },
       { status: 400 },
+    );
+  }
+
+  // 入力サイズ上限(監査): 巨大な messages で Anthropic コストを濫用させない。
+  if (chatInputExceedsLimit(messages)) {
+    return NextResponse.json(
+      { error: "会話が長すぎます。新しいセッションを開始してください。" },
+      { status: 413 },
     );
   }
 

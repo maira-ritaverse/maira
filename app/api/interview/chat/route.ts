@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { getModel, MODELS } from "@/lib/ai/client";
 import { logAiStreamError } from "@/lib/ai/rate-limit-monitor";
+import { chatInputExceedsLimit } from "@/lib/ai/chat-input-limits";
 import { buildInterviewSystemPrompt } from "@/lib/ai/prompts/mock-interview";
 import { createClient } from "@/lib/supabase/server";
 
@@ -39,6 +40,14 @@ export async function POST(request: Request) {
   const { messages, positionContext } = body;
   if (!messages || !Array.isArray(messages)) {
     return NextResponse.json({ error: "messages is required" }, { status: 400 });
+  }
+
+  // 入力サイズ上限(監査): 巨大な messages で Anthropic コストを濫用させない。
+  if (chatInputExceedsLimit(messages)) {
+    return NextResponse.json(
+      { error: "会話が長すぎます。新しいセッションを開始してください。" },
+      { status: 413 },
+    );
   }
 
   const modelMessages = await convertToModelMessages(messages);

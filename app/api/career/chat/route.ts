@@ -5,6 +5,7 @@ import { logAiStreamError } from "@/lib/ai/rate-limit-monitor";
 import { CAREER_INVENTORY_SYSTEM_PROMPT } from "@/lib/ai/prompts/career-inventory";
 import { createClient } from "@/lib/supabase/server";
 import { saveMessage, verifyConversationOwner } from "@/lib/career/conversations";
+import { chatInputExceedsLimit } from "@/lib/ai/chat-input-limits";
 
 /**
  * キャリア棚卸しチャットAPI(ストリーミング応答)
@@ -50,6 +51,14 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "messages and conversationId are required" },
       { status: 400 },
+    );
+  }
+
+  // 入力サイズ上限(監査): 巨大な messages で Anthropic コストを濫用させない。
+  if (chatInputExceedsLimit(messages)) {
+    return NextResponse.json(
+      { error: "会話が長すぎます。新しいセッションを開始してください。" },
+      { status: 413 },
     );
   }
 
