@@ -6,6 +6,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { SignupInput, LoginInput } from "@/lib/validations/auth";
+import { signupSchema } from "@/lib/validations/auth";
 import { recordAuditLog } from "@/lib/audit/audit-log";
 import { PW_RESET_TICKET_COOKIE, verifyPwResetTicket } from "@/lib/auth/pw-reset-ticket";
 import { safeNextOr } from "@/lib/auth/safe-next";
@@ -40,15 +41,26 @@ function extractLoginIp(
 /**
  * 新規登録 Server Action
  *
- * Supabase Authでアカウントを作成し、確認メールを送信する。
- * emailRedirectToでメール内リンクのクリック後のリダイレクト先を指定。
+ * 確認メールの リンクを token_hash + /auth/confirm(verifyOtp)方式で 送る。
  *
- * invitationToken が渡されている場合(招待経由のサインアップ):
- *   emailRedirectTo に next=/invite/[token] を付ける。
- *   → メール確認後 callback → /invite/[token] に戻り、S5a の受諾フローに乗る。
- *   ※ token 自体の検証は /invite/[token] 着地ページと RPC で行うため、
- *     ここでは「リダイレクト先を組み立てる文字列」としてのみ扱う。
- *     URL に直接埋め込むので、文字数の上限(256)はバリデーション側で担保している。
+ * 経緯(2026-08-09 改定):
+ *   ・旧実装は supabase.auth.signUp() + emailRedirectTo=/auth/callback だった。
+ *     これは Supabase 内蔵メールで PKCE の ?code= リンクを送るため、確認リンクを
+ *     登録時と別のブラウザ / 別端末 / メールアプリのアプリ内ブラウザで開くと
+ *     code_verifier クッキーが無く exchangeCodeForSession が失敗していた
+ *     (= 認証失敗)。内蔵メールは到達率も低い。
+ *   ・パスワードリセット / Solo / 確認メール再送は既に generateLink + Resend +
+ *     /auth/confirm(verifyOtp)方式に移行済みで別端末でも通る。本体 signup も
+ *     同じ堅牢な方式に統一する。code_verifier 不要でデバイス間で動作する。
+ *
+ * 確認後の遷移先(next):
+ *   ・メンバー招待  → /invite/[token](着地ページで accept_invitation ボタン)
+ *   ・求職者招待 / 自由登録 → /app
+ *     求職者招待は /auth/confirm 側で accept_client_invitation を email 一致で
+ *     自動受諾する(token の受け渡しは不要)。
+ *   ※ token 自体の検証は /invite/[token] 着地ページと RPC が信頼境界として行う。
+ *     ここでは「リダイレクト先を組み立てる文字列」としてのみ扱う(上限 256 は
+ *     signupSchema で担保)。
  */
 export async function signup(input: SignupInput) {
   // BtoBtoC モード:招待トークン無しの自由登録は API レベルでも拒否する
@@ -59,33 +71,151 @@ export async function signup(input: SignupInput) {
     return { error: "自由登録は受け付けていません。管理者からの招待が必要です。" };
   }
 
-  const supabase = await createClient();
+  // Server Action は直叩き可能なので、サーバー側でも入力を再検証する。
+  // ・agreeToTerms(利用規約 / プライバシーポリシー同意・ADR 0006)を強制
+  // ・email 形式 / パスワード長(bcrypt 72 バイト上限)を担保し、generateLink の
+  //   不透明なエラーを分かりやすい文言に前倒しする。
+  const parsed = signupSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+  const { email: rawEmail, password, displayName, invitationToken } = parsed.data;
+  const email = rawEmail.trim().toLowerCase();
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  const callbackBase = `${siteUrl}/auth/callback`;
-  // メンバー招待は /invite/[token] 着地で accept_invitation RPC を呼ぶフロー、
-  // 求職者招待は callback で accept_client_invitation RPC を呼ぶフローなので、
-  // 求職者招待では next は付けない(/app に戻して終わり)。
-  const emailRedirectTo = input.invitationToken
-    ? `${callbackBase}?next=${encodeURIComponent(`/invite/${input.invitationToken}`)}`
-    : callbackBase;
+  const siteUrl = getSiteUrl();
 
-  const { error } = await supabase.auth.signUp({
-    email: input.email,
-    password: input.password,
-    options: {
-      emailRedirectTo,
-      data: {
-        display_name: input.displayName,
-      },
-    },
-  });
-
-  if (error) {
-    return { error: error.message };
+  // レート制限(reset / Solo と同型):IP 1 分 5 回 / email 1 時間 5 回。
+  // 未認証 Server Action から generateLink + Resend を叩くため、無制限だと
+  // メール砲で Resend クォータ枯渇 + ドメインレピュテーション毀損に繋がる。
+  const hdrs = await headers();
+  const ip = hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const [ipCheck, emailCheck] = await Promise.all([
+    consumeRateLimit({ namespace: "signup:ip", identifier: ip, windowSeconds: 60, maxCount: 5 }),
+    consumeRateLimit({
+      namespace: "signup:email",
+      identifier: email,
+      windowSeconds: 3600,
+      maxCount: 5,
+      hashIdentifier: true,
+    }),
+  ]);
+  if (ipCheck.limited || emailCheck.limited) {
+    return { error: "試行が多すぎます。しばらく待ってから再度お試しください。" };
   }
 
-  return { success: true };
+  // メンバー招待だけ /invite/[token] に戻す。求職者招待 / 自由登録は /app。
+  const next = invitationToken ? `/invite/${invitationToken}` : "/app";
+
+  const admin = createServiceClient();
+
+  // 既存ユーザー判定(getUserByEmail が admin API に無いため listUsers 走査)。
+  // Solo / confirm_resend と同型。現状は 1 ページで完結、2000 人超で RPC 化する。
+  let existing: { id: string; confirmed: boolean } | null = null;
+  let reachedScanCap = true;
+  for (let page = 1; page <= 40 && !existing; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 50 });
+    if (error) {
+      reachedScanCap = false;
+      break;
+    }
+    const hit = data.users.find((u) => (u.email ?? "").toLowerCase() === email);
+    if (hit) {
+      existing = { id: hit.id, confirmed: !!hit.email_confirmed_at };
+      reachedScanCap = false;
+      break;
+    }
+    if (data.users.length < 50) {
+      reachedScanCap = false; // 最終ページまで見た(= 全件走査済み)
+      break;
+    }
+  }
+  if (!existing && reachedScanCap) {
+    // 2000 人を走査しても見つからない = ユーザー増でスキャン上限に達した可能性。
+    // cap 超過時は既存の未確認ユーザーを「新規」と誤判定し得る。その場合
+    // generateLink(type:signup, password) が未確認アカウントのパスワードを上書きし、
+    // 下の「パスワードを更新しない」乗っ取り対策が回避されるため、RPC 化の検知ログを残す。
+    console.warn("[signup] listUsers scan hit cap without match (RPC lookup 化 を検討)");
+  }
+
+  try {
+    let tokenHash: string | null = null;
+    let otpType: "signup" | "magiclink" = "signup";
+
+    if (!existing) {
+      // 新規:signup 型で未確認ユーザーを作成し、表示名を metadata に保存。
+      const { data, error } = await admin.auth.admin.generateLink({
+        type: "signup",
+        email,
+        password,
+        options: {
+          data: { display_name: displayName },
+          redirectTo: `${siteUrl}/auth/confirm`,
+        },
+      });
+      if (error || !data?.properties?.hashed_token) {
+        console.error("[signup] generateLink(signup) failed", {
+          name: error?.name,
+          status: error?.status,
+        });
+        return { error: "登録に失敗しました。時間をおいて再度お試しください。" };
+      }
+      tokenHash = data.properties.hashed_token;
+      otpType = "signup";
+    } else if (existing.confirmed) {
+      // 既に確認済み:enumeration 対策で、招待経由 / 自由登録どちらでも一律に成功を
+      // 装って何も送らない(内蔵 signUp の従来挙動に合わせる)。
+      // ※招待経由だけ「既に登録済み」と個別文言を返すと、ダミートークンを 1 個
+      //   足すだけで「その email が確認済みユーザーか」を判別できる列挙オラクルに
+      //   なるため出さない。登録済みユーザーは /invite/[token] 着地ページと
+      //   ログイン導線で誘導する。
+      return { success: true as const };
+    } else {
+      // 既存 未確認(再登録):magiclink で確認リンクを再送する。
+      // ★パスワードは更新しない(セキュリティ)。未確認アカウントのパスワードを
+      //   後続の呼出で差し替え可能にすると、攻撃者が被害者の未確認メール宛に自分の
+      //   パスワードを仕込み → 被害者が確認リンクを踏む → 攻撃者がそのパスワードで
+      //   ログイン、という乗っ取り経路が生じる。初回登録時のパスワードを保持する。
+      //   表示名だけは最新に更新(shallow merge なので他 metadata は消えない)。
+      await admin.auth.admin.updateUserById(existing.id, {
+        user_metadata: { display_name: displayName },
+      });
+      const { data, error } = await admin.auth.admin.generateLink({
+        type: "magiclink",
+        email,
+        options: { redirectTo: `${siteUrl}/auth/confirm` },
+      });
+      if (error || !data?.properties?.hashed_token) {
+        console.error("[signup] generateLink(magiclink) failed", {
+          name: error?.name,
+          status: error?.status,
+        });
+        return { error: "確認メールの送信に失敗しました。時間をおいて再度お試しください。" };
+      }
+      tokenHash = data.properties.hashed_token;
+      otpType = "magiclink";
+    }
+
+    const confirmUrl = new URL(`${siteUrl}/auth/confirm`);
+    confirmUrl.searchParams.set("token_hash", tokenHash);
+    confirmUrl.searchParams.set("type", otpType);
+    confirmUrl.searchParams.set("next", next);
+
+    const result = await sendSignupConfirmationEmail({
+      toEmail: email,
+      actionLink: confirmUrl.toString(),
+    });
+    if (!result.sent) {
+      console.error("[signup] send failed", { reason: result.reason });
+      return { error: "確認メールの送信に失敗しました。時間をおいて再度お試しください。" };
+    }
+  } catch (err) {
+    console.error("[signup] unexpected", {
+      name: err instanceof Error ? err.name : "unknown",
+    });
+    return { error: "登録処理でエラーが発生しました。時間をおいて再度お試しください。" };
+  }
+
+  return { success: true as const };
 }
 
 /**

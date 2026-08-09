@@ -43,6 +43,26 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
   }
 
+  // ─── 求職者(client_record)招待の自動受諾 ───────────────────────────
+  // signup / magiclink 経由(= 新規登録・確認メール再送のメール確認)で着地した
+  // ユーザーが、自分の email 宛の pending な client_invitations を持っていれば
+  // accept する(トークンの受け渡し無しで email 一致で成立)。
+  //
+  // 経緯:signup を PKCE /auth/callback から token_hash /auth/confirm へ移行した
+  //   ため、従来 /auth/callback だけで呼んでいた accept を confirm 側でも呼ぶ。
+  //   /auth/callback と同じく該当無しは no-op で安全。失敗しても確認自体は成立
+  //   済みなのでログだけ残して継続する。
+  if (type === "signup" || type === "magiclink") {
+    try {
+      const { error: acceptErr } = await supabase.rpc("accept_client_invitation");
+      if (acceptErr) {
+        console.error("[auth/confirm] accept_client_invitation failed", acceptErr.message);
+      }
+    } catch (err) {
+      console.error("[auth/confirm] accept_client_invitation threw", err);
+    }
+  }
+
   const res = NextResponse.redirect(`${origin}${next}`);
 
   // H1 修正: type='recovery' / 'invite' で 認証 が 通った 場合 だけ、 短命 の
