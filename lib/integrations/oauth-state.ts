@@ -29,7 +29,14 @@ function b64urlDecode(s: string): Buffer {
 function getSecret(): string {
   const s = process.env.OAUTH_STATE_SECRET;
   if (!s || s.length < 16) {
-    // dev で未設定の場合のフォールバック。本番は env 必須にする(setup doc に明記)。
+    // ★監査 修正: 本番(Vercel 含む)では絶対にフォールバックを使わず throw する
+    //   (fail-closed)。公開されたハードコード文字列で HMAC をかけると、誰でも
+    //   有効な state を偽造でき、Google / Zoom OAuth コールバックの CSRF 保護が
+    //   無効化される。env が外れても黙って弱い鍵で動き続けないようにする。
+    if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
+      throw new Error("OAUTH_STATE_SECRET is not configured (>= 16 chars required in production)");
+    }
+    // dev / test でのみフォールバック(ローカルで OAuth 動作確認するため)。
     return "maira-oauth-state-dev-fallback-do-not-use-in-prod";
   }
   return s;

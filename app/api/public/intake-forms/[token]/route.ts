@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createServiceClient } from "@/lib/supabase/service";
 import { publicIntakeSubmitSchema } from "@/lib/intake-forms/types";
+import { consumeRateLimit } from "@/lib/rate-limit/rate-limit";
 
 /**
  * POST /api/public/intake-forms/[token]
@@ -28,6 +29,32 @@ export async function POST(request: Request, { params }: RouteParams) {
   const { token } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(token)) {
     return NextResponse.json({ error: "Invalid form URL" }, { status: 400 });
+  }
+
+  // レート制限(監査 M4)。認証不要 + service_role で client_records に INSERT する
+  // エンドポイントなので、無制限だと偽顧客の大量投入や email 配信パイプラインへの
+  // 任意アドレス注入が可能になる。content-length ガードだけでは回数を絞れない。
+  // IP 単位(1 分 5 回)+ フォーム token 単位(1 分 30 回)で二重に絞る。
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const [ipLimit, tokenLimit] = await Promise.all([
+    consumeRateLimit({
+      namespace: "public_intake:ip",
+      identifier: ip,
+      windowSeconds: 60,
+      maxCount: 5,
+    }),
+    consumeRateLimit({
+      namespace: "public_intake:token",
+      identifier: token,
+      windowSeconds: 60,
+      maxCount: 30,
+    }),
+  ]);
+  if (ipLimit.limited || tokenLimit.limited) {
+    return NextResponse.json(
+      { error: "リクエストが多すぎます。しばらく待ってから再度お試しください。" },
+      { status: 429 },
+    );
   }
 
   const contentLength = Number(request.headers.get("content-length") ?? "0");

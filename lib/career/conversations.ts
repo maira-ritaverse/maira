@@ -85,11 +85,26 @@ export async function getMessages(conversationId: string): Promise<MessageForCha
     throw new Error(`Failed to fetch messages: ${error.message}`);
   }
 
+  // 復号は行単位で try/catch する。1 件でも壊れた行(鍵バージョン脱落 / 保管破損)が
+  // あると Promise.all が reject し、会話全体が 500 で開けなくなるため(監査 M7)。
+  // 他の読み取り経路(notifications / applications / doc-drafts)と同じく、失敗した
+  // 行だけ空文字にフォールバックして会話は表示できるようにする(機密漏洩ではなく可用性)。
   return await Promise.all(
-    (data ?? []).map(async (row) => ({
-      role: row.role as MessageForChat["role"],
-      content: (await decryptField(row.encrypted_content_v2 as string | null)) ?? "",
-    })),
+    (data ?? []).map(async (row) => {
+      let content = "";
+      try {
+        content = (await decryptField(row.encrypted_content_v2 as string | null)) ?? "";
+      } catch (e) {
+        console.error("[getMessages] decrypt failed for a row", {
+          conversation_id: conversationId,
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+      return {
+        role: row.role as MessageForChat["role"],
+        content,
+      };
+    }),
   );
 }
 
