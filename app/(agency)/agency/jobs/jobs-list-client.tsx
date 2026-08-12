@@ -25,6 +25,7 @@ import {
   type JobSortColumn,
   type JobSortDirection,
 } from "@/lib/jobs/filter-sort";
+import { jobSummaryExcerpt } from "@/lib/jobs/parse-description";
 
 type Props = {
   jobs: JobPosting[];
@@ -363,51 +364,60 @@ export function JobsListClient({ jobs }: Props) {
         <p className="text-muted-foreground py-8 text-center text-sm">該当する求人がありません</p>
       ) : (
         <div className="space-y-2">
-          {filtered.map((job) => (
-            <Card
-              key={job.id}
-              className={`p-0 ${selectedIds.has(job.id) ? "ring-primary/50 ring-2" : ""}`}
-            >
-              <div className="flex items-center gap-2 p-4">
-                <input
-                  type="checkbox"
-                  checked={selectedIds.has(job.id)}
-                  onChange={() => toggleSelectId(job.id)}
-                  onClick={(e) => e.stopPropagation()}
-                  aria-label={`${job.companyName} を選択`}
-                />
-                <Link
-                  href={`/agency/jobs/${job.id}`}
-                  className="hover:bg-accent flex flex-1 items-center justify-between gap-4 rounded-md transition-colors"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{job.companyName}</p>
-                    <p className="text-muted-foreground truncate text-sm">
-                      {job.position}
-                      {job.location ? ` ・ ${job.location}` : ""}
-                    </p>
-                    <p className="text-muted-foreground mt-0.5 text-xs">
-                      {formatSalaryRange(job.salaryMin, job.salaryMax)}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <LabourBadge filled={countLabourFieldsFilled(job)} />
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs ${
-                        job.status === "open"
-                          ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300"
-                          : job.status === "paused"
-                            ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300"
-                            : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {jobStatusLabels[job.status]}
-                    </span>
-                  </div>
-                </Link>
-              </div>
-            </Card>
-          ))}
+          {filtered.map((job) => {
+            // 一覧カードに「仕事内容」の冒頭抜粋(★除去・1 行要約)を出す。
+            const excerpt = jobSummaryExcerpt(job.description);
+            return (
+              <Card
+                key={job.id}
+                className={`p-0 ${selectedIds.has(job.id) ? "ring-primary/50 ring-2" : ""}`}
+              >
+                <div className="flex items-center gap-2 p-4">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(job.id)}
+                    onChange={() => toggleSelectId(job.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`${job.companyName} を選択`}
+                  />
+                  <Link
+                    href={`/agency/jobs/${job.id}`}
+                    className="hover:bg-accent flex flex-1 items-center justify-between gap-4 rounded-md transition-colors"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{job.companyName}</p>
+                      <p className="text-muted-foreground truncate text-sm">
+                        {job.position}
+                        {job.location ? ` ・ ${job.location}` : ""}
+                      </p>
+                      <p className="text-muted-foreground mt-0.5 text-xs">
+                        {formatSalaryRange(job.salaryMin, job.salaryMax)}
+                      </p>
+                      {excerpt && (
+                        <p className="text-muted-foreground mt-1 line-clamp-2 text-xs leading-relaxed">
+                          {excerpt}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <LabourBadge filled={countLabourFieldsFilled(job)} />
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs ${
+                          job.status === "open"
+                            ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300"
+                            : job.status === "paused"
+                              ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300"
+                              : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {jobStatusLabels[job.status]}
+                      </span>
+                    </div>
+                  </Link>
+                </div>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>

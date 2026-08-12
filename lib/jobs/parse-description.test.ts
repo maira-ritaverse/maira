@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { parseJobDescription, sortJobDescriptionSections } from "./parse-description";
+import {
+  jobSummaryExcerpt,
+  parseJobDescription,
+  sortJobDescriptionSections,
+} from "./parse-description";
 
 describe("parseJobDescription", () => {
   it("空入力は 空配列を 返す", () => {
@@ -109,5 +113,33 @@ describe("sortJobDescriptionSections", () => {
       { title: "仕事内容", body: "work" },
     ]);
     expect(out.map((s) => s.title)).toEqual([null, "仕事内容", "未知"]);
+  });
+});
+
+describe("jobSummaryExcerpt", () => {
+  it("空 / null は null を 返す", () => {
+    expect(jobSummaryExcerpt(null)).toBeNull();
+    expect(jobSummaryExcerpt("")).toBeNull();
+    expect(jobSummaryExcerpt("   \n  ")).toBeNull();
+  });
+
+  it("★ 仕事内容 セクションの 本文を 1 行に 畳んで 返す(★ は混ざらない)", () => {
+    const desc = "★ 仕事内容\n新規事業の\n開発を担当します。\n\n★ 募集背景\n増員のため";
+    expect(jobSummaryExcerpt(desc)).toBe("新規事業の 開発を担当します。");
+  });
+
+  it("★ が無い(手動入力)場合は 冒頭本文に フォールバックする", () => {
+    expect(jobSummaryExcerpt("Webエンジニアの募集です。")).toBe("Webエンジニアの募集です。");
+  });
+
+  it("仕事内容が無く 他セクションのみ の 場合は 最初の本文を 使う", () => {
+    expect(jobSummaryExcerpt("★ 募集背景\n事業拡大のため")).toBe("事業拡大のため");
+  });
+
+  it("maxLen を 超えたら 末尾を 切って … を 付ける", () => {
+    const long = "★ 仕事内容\n" + "あ".repeat(150);
+    const out = jobSummaryExcerpt(long, 100);
+    expect(out).toHaveLength(101); // 100 文字 + "…"
+    expect(out?.endsWith("…")).toBe(true);
   });
 });

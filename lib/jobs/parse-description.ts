@@ -125,3 +125,32 @@ export function sortJobDescriptionSections(sections: DescriptionSection[]): Desc
   });
   return [...nullSec, ...rest];
 }
+
+/**
+ * 一覧カード用の「仕事内容」冒頭抜粋を返す。
+ *
+ * ・AI 抽出済み(★ 区切りあり)なら「★ 仕事内容」セクションの本文を使う。
+ * ・★ が無い(手動入力 / 旧データ)場合は、最初の本文があるセクション
+ *   (= ★無しなら description 全体の冒頭部分)にフォールバックする。
+ * ・改行・連続空白は 1 スペースに畳んで 1 行の要約にし、maxLen で切って "…" を付ける。
+ * ・本文が空 / description 無しなら null(呼び出し側で非表示にする)。
+ *
+ * 詳細ページの ★ セクション表示(parseJobDescription)と同じ解析を再利用するので、
+ * 見出しの ★ マーカーは抜粋に混ざらない。
+ */
+export function jobSummaryExcerpt(
+  description: string | null | undefined,
+  maxLen = 100,
+): string | null {
+  const sections = parseJobDescription(description);
+  if (sections.length === 0) return null;
+
+  const jobContent = sections.find((s) => s.title === "仕事内容" && s.body.trim().length > 0);
+  const source = jobContent ?? sections.find((s) => s.body.trim().length > 0);
+  if (!source) return null;
+
+  const text = source.body.replace(/\s+/g, " ").trim();
+  if (!text) return null;
+
+  return text.length > maxLen ? `${text.slice(0, maxLen).trimEnd()}…` : text;
+}
