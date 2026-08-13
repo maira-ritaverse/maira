@@ -84,10 +84,10 @@ export function clientRecordToResumePii(client: ClientRecordWithDecrypted): Resu
   };
 }
 
-/** 学歴詳細(自由記述)→ 履歴書の学歴・職歴行(1 行 = 1 レコード、年月は自動抽出) */
-export function clientRecordToEducationHistory(client: ClientRecordWithDecrypted): EducationItem[] {
-  if (!client.educationDetail) return [];
-  return client.educationDetail
+/** 自由記述の学歴・職歴テキスト → 履歴書の行(1 行 = 1 レコード、先頭の年月は自動抽出) */
+function textToHistoryRows(text: string | null | undefined): EducationItem[] {
+  if (!text) return [];
+  return text
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
@@ -96,6 +96,11 @@ export function clientRecordToEducationHistory(client: ClientRecordWithDecrypted
       const { year, description } = extractLeadingYearMonth(line);
       return { year: year.slice(0, 7), description: description.slice(0, 500) };
     });
+}
+
+/** 学歴詳細(自由記述)→ 履歴書の学歴・職歴行(1 行 = 1 レコード、年月は自動抽出) */
+export function clientRecordToEducationHistory(client: ClientRecordWithDecrypted): EducationItem[] {
+  return textToHistoryRows(client.educationDetail);
 }
 
 /** 保有資格・スキル(自由記述)→ 履歴書の免許・資格行(改行 /「/」「、」区切りで 1 件ずつ) */
@@ -178,11 +183,39 @@ export function clientExtractionToResumePii(extraction: ClientExtractionResult):
   };
 }
 
-/** 書類抽出結果 → 履歴書の学歴・職歴(年月自動抽出) */
+/**
+ * 書類抽出結果 → 履歴書の学歴・職歴(年月自動抽出)。
+ *
+ * education_detail(学歴)と work_history_detail(職歴)を統合する。両方あるときは
+ * 厚労省様式に倣って「学歴」「職歴」の見出し行を挟む(historyDividerKind が
+ * description === "学歴" / "職歴" を見出しと判定し、プレビュー / PDF で中央寄せ表示する)。
+ *
+ * 修正の経緯:
+ *   以前は education_detail(学歴)だけを履歴書に反映しており、職歴が履歴書の
+ *   「学歴・職歴」欄に載らなかった(職歴は work_history_text = 職務経歴書 CV 本文
+ *   にしか入っていなかった)。書類取り込みで「学歴は反映されるが職歴が反映されない」
+ *   不具合の原因。career-intake 抽出が workHistory(履歴書用)/ workExperiences
+ *   (CV 用)を分けているのと同じ構造を、書類抽出側にも用意する。
+ */
 export function clientExtractionToEducationHistory(
   extraction: ClientExtractionResult,
 ): EducationItem[] {
-  return clientRecordToEducationHistory(clientExtractionToClientLike(extraction));
+  const eduRows = textToHistoryRows(extraction.education_detail);
+  const workRows = textToHistoryRows(extraction.work_history_detail);
+  const bothPresent = eduRows.length > 0 && workRows.length > 0;
+
+  const out: EducationItem[] = [];
+  if (eduRows.length > 0) {
+    // 学歴・職歴が両方あるときだけ「学歴」見出しを付ける(1 セクションなら不要)。
+    if (bothPresent) out.push({ year: "", description: "学歴" });
+    out.push(...eduRows);
+  }
+  if (workRows.length > 0) {
+    if (bothPresent) out.push({ year: "", description: "職歴" });
+    out.push(...workRows);
+  }
+  // 見出し行も含めた総数を 50 行に収める(schema の education_history.max(50) と揃える)。
+  return out.slice(0, 50);
 }
 
 /** 書類抽出結果 → 履歴書の免許・資格 */

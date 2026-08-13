@@ -188,6 +188,10 @@ export const clientExtractionSchema = z.object({
   // from-document で職務経歴書を作るときに、経験タグからの薄い要約ではなく原文の職歴を
   // 本文へ流し込むために使う。CLIENT_EXTRACTION_FIELD_KEYS 非対象(プロフィール反映モーダルには出さない)。
   work_history_text: truncatedText(12000),
+  // 履歴書の「学歴・職歴」欄に入れる職歴の行(履歴書様式のコンパクトな「〜年〜月 会社名 入社/退社」)。
+  // work_history_text(職務経歴書 CV 本文用の詳細)とは用途が別で、こちらは履歴書へ流し込む。
+  // CLIENT_EXTRACTION_FIELD_KEYS 非対象(プロフィール反映モーダルには出さない)。
+  work_history_detail: truncatedText(2000),
 
   // ── 抽出メタ (UI で「読み取り精度」 表示 に 使う)
   extraction_notes: z.string().max(5000).default(""),
@@ -389,6 +393,7 @@ export const CLIENT_EXTRACTION_SYSTEM_PROMPT = `あなたは日本の人材紹�
    ・desired_conditions: 「給与 / 勤務地 / 業界 / 職種 / 働き方 / 福利厚生 / チーム / その他」の希望条件詳細をまとめて 5〜20 行、**5000 文字以内**。desired_industries 等の構造化タグでは表現できない粒度をここに残す。
    ・self_pr: 自己PR / アピールポイント / 自己紹介 欄の内容を転記(**2000 文字以内**)。「強み・実績・人柄」の自己PRに限定し、志望動機は job_change_reason 側に入れる。該当欄が無ければ空文字。
    ・work_history_text: **職務経歴書の「職務経歴」本体をそのまま書き起こす**。会社ごとに「在籍期間(YYYY/MM〜YYYY/MM)/ 会社名 / 雇用形態 / 役職 / 事業内容 / 担当業務 / 実績(可能なら数値)」を、原文の情報を落とさずテキスト化する(見出し・箇条書きで読みやすく整形してよい、**12000 文字以内**)。これは職務経歴書を作る際の本文の主役になるので、skills や education_detail と内容が重複しても構わない。職務経歴の記載が無い書類(履歴書のみ 等)の場合は空文字。
+   ・work_history_detail: **履歴書の「職歴」欄に入れる行**。会社ごとに「〜年〜月 会社名 入社」「〜年〜月 会社名 退社」の順で、原本の履歴書の職歴表記に倣って 1 行 1 レコードで並べる(役職変更・出向・転籍等も年月付きで 1 行)。年月は原文にある範囲で(無ければ年だけでも、空でも可)。**2000 文字以内**。職歴の記載が無い書類(学歴のみ 等)の場合は空文字。education_detail(学歴)と対になる履歴書用のコンパクトな職歴で、work_history_text(職務経歴書 CV 用の詳細本文)とは使い分ける(同じ職歴を 2 形式で返す形になって構わない)。
 
 9. **extraction_notes に書くこと**(担当者の確認用メモ)。
    ・推測・換算・統一表記を当てた項目を 1 行ずつ列挙。例:
@@ -442,6 +447,7 @@ export const CLIENT_EXTRACTION_SYSTEM_PROMPT = `あなたは日本の人材紹�
   "desired_conditions": "<string>",
   "self_pr": "<string>",
   "work_history_text": "<string>",
+  "work_history_detail": "<string>",
   "extraction_notes": "<string>",
   "confidence": "high"|"medium"|"low"
 }
