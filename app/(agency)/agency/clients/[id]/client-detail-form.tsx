@@ -132,6 +132,11 @@ export function ClientDetailForm({ client, seekerPhoto }: Props) {
       job_change_timing: client.jobChangeTiming ?? "",
       intake_date: client.intakeDate ?? "",
       first_meeting_date: client.firstMeetingDate ?? "",
+      // プロセス管理 CSV 由来の名簿メモ(平文。20260815000001)
+      inflow_job: client.inflowJob ?? "",
+      proposed_company: client.proposedCompany ?? "",
+      job_source: client.jobSource ?? "",
+      past_meeting_note: client.pastMeetingNote ?? "",
       // CRM 自由タグ(20260615140001)。default は空配列で「タグ無し」。
       crm_tags: client.crmTags,
       // 暗号化対象の自由記述
@@ -786,6 +791,56 @@ export function ClientDetailForm({ client, seekerPhoto }: Props) {
                 />
               </div>
             </div>
+
+            {/* プロセス管理 CSV 由来の名簿メモ(平文)。応募・選考の履歴ではなく、
+                名簿上の「現時点のスナップショット / 流入経路」。CSV 取込でも入力できる。 */}
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="inflow_job">流入求人</Label>
+                <Input
+                  id="inflow_job"
+                  {...register("inflow_job")}
+                  disabled={isPending}
+                  placeholder="例:未経験歓迎の営業職(Indeed)"
+                />
+                <p className="text-muted-foreground text-xs">どの求人・経路で流入したか。</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="proposed_company">提案企業名(進行中)</Label>
+                <Input
+                  id="proposed_company"
+                  {...register("proposed_company")}
+                  disabled={isPending}
+                  placeholder="例:株式会社サンプル商事"
+                />
+                <p className="text-muted-foreground text-xs">現在進行中の提案先。</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="job_source">求人元データ</Label>
+                <Input
+                  id="job_source"
+                  {...register("job_source")}
+                  disabled={isPending}
+                  placeholder="例:自社求人 / 求人元エージェント名"
+                />
+                <p className="text-muted-foreground text-xs">求人の出所。</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="past_meeting_note">過去の面談日</Label>
+              <textarea
+                id="past_meeting_note"
+                {...register("past_meeting_note")}
+                disabled={isPending}
+                rows={2}
+                placeholder="実施済み面談日のメモ(例:2026-07-01, 2026-07-20)"
+                className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+              />
+              <p className="text-muted-foreground text-xs">
+                過去に行った面談日の自由記述。平文保存。
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="meeting_notes">面談所感</Label>
               <textarea

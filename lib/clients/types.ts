@@ -209,6 +209,16 @@ export type ClientRecord = {
   // experience_industries / desired_industries とは別物(あちらは業務軸の構造化タグ)。
   crmTags: string[];
 
+  // ────────────────────────────────────────────
+  // プロセス管理 CSV 由来の名簿メモ(平文、20260815000001)
+  // 応募・選考の履歴(1求職者=複数応募)ではなく、名簿に持っておきたい
+  // 「現時点のスナップショット / 流入経路」を自由テキストで保持する。
+  // ────────────────────────────────────────────
+  inflowJob: string | null; // 流入求人(どの求人・経路で流入したか)
+  proposedCompany: string | null; // 提案企業名(現在進行中の提案先)
+  jobSource: string | null; // 求人元データ(求人の出所)
+  pastMeetingNote: string | null; // 過去の面談日メモ(実施済み面談日の自由記述)
+
   // カスタムフィールド値(20260615210001)。空オブジェクトがデフォルト。
   // キーは client_custom_field_definitions.key と対応。値は型ごとに異なる(JSON)。
   customFields: Record<string, unknown>;
@@ -457,6 +467,15 @@ export const updateClientRequestSchema = z.object({
   // CRM 自由タグ(20260615140001 マイグレーション)
   // 空配列で「クリア」(API ルートで [] → null は無く、そのまま [] を保存)。
   crm_tags: tagArrayField.optional(),
+
+  // ────────────────────────────────────────────
+  // プロセス管理 CSV 由来の名簿メモ(平文。20260815000001)
+  // 応募・選考の履歴ではなく、名簿上のスナップショット / 流入経路の自由テキスト。
+  // ────────────────────────────────────────────
+  inflow_job: z.string().max(500).optional().or(z.literal("")),
+  proposed_company: z.string().max(500).optional().or(z.literal("")),
+  job_source: z.string().max(500).optional().or(z.literal("")),
+  past_meeting_note: z.string().max(2000).optional().or(z.literal("")),
 
   // ────────────────────────────────────────────
   // EMPRO 準拠の暗号化対象(自由記述、API ルートで encryptField)

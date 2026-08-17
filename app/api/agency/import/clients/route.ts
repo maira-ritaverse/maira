@@ -84,11 +84,21 @@ const HEADER_ALIASES: Record<string, string[]> = {
   experience_occupations: ["経験職種", "experience_occupations"],
   // 運用 キー 日付
   intake_date: ["受付日", "受付日時", "intake_date"],
-  first_meeting_date: ["初回面談日", "初回面談", "first_meeting_date"],
+  // 面談実施予定日 も 初回面談日 として 取り込む ( 他ツール の プロセス管理 CSV 由来 )
+  first_meeting_date: ["初回面談日", "初回面談", "面談実施予定日", "first_meeting_date"],
   // その他
-  entry_site: ["媒体", "エントリーサイト", "entry_site"],
+  // 流入媒体名 も 媒体 (entry_site) に 寄せる
+  entry_site: ["媒体", "流入媒体名", "流入媒体", "エントリーサイト", "entry_site"],
   notes: ["備考", "メモ", "notes"],
   crm_tags: ["タグ", "CRMタグ", "crm_tags"],
+  // 現状進捗 → ステータス。 日本語 進捗 値 は 後段 で enum に 変換 する ( PROGRESS_STATUS_MAP )。
+  status: ["現状進捗", "ステータス", "進捗", "status"],
+  // プロセス管理 CSV 由来 の 名簿 メモ ( 平文 )。 応募・選考 の 履歴 では なく
+  // 「現時点 の スナップショット / 流入 経路」 を 名簿 に 保持 する ため の 自由 テキスト。
+  inflow_job: ["流入求人", "流入経路", "inflow_job"],
+  proposed_company: ["提案企業名", "提案企業", "現在進行企業", "proposed_company"],
+  job_source: ["求人元データ", "求人元", "求人ソース", "job_source"],
+  past_meeting_note: ["過去の面談日", "面談履歴", "面談実施日", "past_meeting_note"],
   // 担当 アドバイザー ( 別担当 に アサインしたい 時のみ )
   assignee_email: [
     "担当者メールアドレス",
@@ -238,6 +248,67 @@ const JOB_CHANGE_TIMING_MAP: Record<string, string> = {
 };
 
 /**
+ * 現状進捗 ( 他ツール の 日本語 進捗 ラベル ) → Myaira の ステータス enum。
+ *
+ * Myaira の status は 6 段階 ( initial_meeting / job_matching / in_screening /
+ * offer / completed / declined )。 プロセス管理 CSV の 進捗 は 粒度 が 細かい ため、
+ * 意味 が 近い 段階 に 寄せる。 未知 の 値 は 「無指定」= schema default ( 初回面談 )。
+ *
+ * 用語 の 区別:
+ *   ・面談 = エージェント ↔ 求職者 の 面談 ( 初回面談段階 = initial_meeting )
+ *   ・面接 = 求職者 ↔ 企業 の 選考 ( in_screening )
+ */
+const PROGRESS_STATUS_MAP: Record<string, string> = {
+  // 見送り・失注・辞退・離脱・不採用 → declined
+  お見送り: "declined",
+  見送り: "declined",
+  辞退: "declined",
+  離脱: "declined",
+  不採用: "declined",
+  不採用通知: "declined",
+  応募承諾取れず: "declined",
+  失注: "declined",
+  declined: "declined",
+  // エージェント面談の前後 → initial_meeting
+  面談前: "initial_meeting",
+  面談設定: "initial_meeting",
+  面談調整: "initial_meeting",
+  面談: "initial_meeting",
+  初回面談: "initial_meeting",
+  面談実施: "initial_meeting",
+  initial_meeting: "initial_meeting",
+  // 求人紹介・追客・応募承諾 → job_matching
+  ワーク中: "job_matching",
+  追客中: "job_matching",
+  求人提案: "job_matching",
+  求人紹介: "job_matching",
+  応募承諾: "job_matching",
+  応募: "job_matching",
+  job_matching: "job_matching",
+  // 企業選考 → in_screening
+  面接設定: "in_screening",
+  面接調整: "in_screening",
+  面接実施: "in_screening",
+  面接: "in_screening",
+  一次選考: "in_screening",
+  二次選考: "in_screening",
+  最終選考: "in_screening",
+  適性検査: "in_screening",
+  選考中: "in_screening",
+  in_screening: "in_screening",
+  // 内定 → offer
+  内定: "offer",
+  内定承諾: "offer",
+  承諾: "offer",
+  offer: "offer",
+  // 入社・成約 → completed
+  入社: "completed",
+  転職完了: "completed",
+  成約: "completed",
+  completed: "completed",
+};
+
+/**
  * enum 値 の 正規化。 マップ に 一致 する 値 の みを 返し、
  * それ 以外 は undefined ( = insert に 含めない、 エラー に せず 「無指定」 扱い )。
  * 空白除去 + 大文字小文字 は マップ の キー が 全部 含む 前提。
@@ -328,6 +399,10 @@ const FIELD_LABEL_JA: Record<string, string> = {
   crm_tags: "タグ",
   assignee_email: "担当者メール",
   status: "ステータス",
+  inflow_job: "流入求人",
+  proposed_company: "提案企業名",
+  job_source: "求人元データ",
+  past_meeting_note: "過去の面談日",
 };
 
 const hasJapanese = (s: string): boolean => /[ぁ-んァ-ヶ一-龠]/.test(s);
@@ -519,6 +594,16 @@ export async function POST(request: Request) {
         normalizeDate(normalized.first_meeting_date) ?? normalized.first_meeting_date;
     }
 
+    // 現状進捗(日本語)→ ステータス enum。
+    // createClientRequestSchema.status は enum で、日本語のままだと invalid_enum で行が
+    // まるごとエラーになる。ここで enum に寄せ、未知値はキーごと削除して schema の
+    // default(初回面談)に倒す(status 未指定でエラーにしないため)。
+    if (normalized.status) {
+      const mappedStatus = normalizeEnum(normalized.status, PROGRESS_STATUS_MAP);
+      if (mappedStatus) normalized.status = mappedStatus;
+      else delete normalized.status;
+    }
+
     // メールの重複チェック(in-batch 重複も既存と同じく "重複" として扱う)
     const emailLower = (normalized.email ?? "").toLowerCase();
     if (emailLower && existingEmails.has(emailLower)) {
@@ -583,6 +668,11 @@ export async function POST(request: Request) {
       "city",
       "street",
       "building",
+      // プロセス管理 CSV 由来の名簿メモ(平文)
+      "inflow_job",
+      "proposed_company",
+      "job_source",
+      "past_meeting_note",
     ];
     for (const key of passthroughText) {
       if (normalized[key]) insertRow[key] = normalized[key];

@@ -69,11 +69,22 @@ export const CSV_CANONICAL_COLUMNS: Record<CsvMapTarget, ReadonlyArray<Canonical
     { key: "experience_occupations", label: "経験職種(複数可)", required: false },
     // 運用 キー日付
     { key: "intake_date", label: "受付日(YYYY-MM-DD)", required: false },
-    { key: "first_meeting_date", label: "初回面談日(YYYY-MM-DD)", required: false },
+    {
+      key: "first_meeting_date",
+      label: "初回面談日 / 面談実施予定日(YYYY-MM-DD)",
+      required: false,
+    },
     // その他
-    { key: "entry_site", label: "媒体 / エントリーサイト", required: false },
+    { key: "entry_site", label: "媒体 / エントリーサイト / 流入媒体名", required: false },
     { key: "crm_tags", label: "CRM タグ(自由タグ、複数可)", required: false },
     { key: "notes", label: "備考 / メモ", required: false },
+    // 進捗 → ステータス(日本語進捗は import API 側で enum に変換して取り込む)
+    { key: "status", label: "ステータス / 現状進捗", required: false },
+    // プロセス管理 CSV 由来の名簿メモ(平文。応募・選考の履歴ではなくスナップショット)
+    { key: "inflow_job", label: "流入求人 / 流入経路", required: false },
+    { key: "proposed_company", label: "提案企業名(現在進行中)", required: false },
+    { key: "job_source", label: "求人元データ / 求人元", required: false },
+    { key: "past_meeting_note", label: "過去の面談日(メモ)", required: false },
     // 担当 アドバイザー (別担当 に アサインしたい 時のみ)
     { key: "assignee_email", label: "担当アドバイザーのメールアドレス", required: false },
   ],

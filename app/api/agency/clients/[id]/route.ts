@@ -162,6 +162,11 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     "job_change_timing",
     "intake_date",
     "first_meeting_date",
+    // プロセス管理 CSV 由来の名簿メモ(平文。20260815000001)
+    "inflow_job",
+    "proposed_company",
+    "job_source",
+    "past_meeting_note",
   ];
   for (const key of PLAIN_PASSTHROUGH_KEYS) {
     const v = d[key];
@@ -269,6 +274,10 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     "desired_occupations",
     "desired_locations",
     "crm_tags",
+    "inflow_job",
+    "proposed_company",
+    "job_source",
+    "past_meeting_note",
   ]);
   // 暗号化フィールドの監査:値は記録しないが「変更があった事実」だけは残す。
   // 比較は暗号文同士で行う(平文の復号は行わない、サーバー側に平文を持たないため)。

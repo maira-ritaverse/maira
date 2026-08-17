@@ -85,6 +85,12 @@ type ClientRecordRow = {
   // CRM 自由タグ(20260615140001 マイグレーション)
   crm_tags: string[] | null;
 
+  // プロセス管理 CSV 由来の名簿メモ(平文。20260815000001)
+  inflow_job: string | null;
+  proposed_company: string | null;
+  job_source: string | null;
+  past_meeting_note: string | null;
+
   // カスタムフィールド値(20260615210001)
   custom_fields: Record<string, unknown> | null;
 
@@ -147,6 +153,11 @@ function rowToClientRecord(row: ClientRecordRow): ClientRecord {
     firstMeetingDate: row.first_meeting_date,
     // CRM タグは DB default '{}' なので null は来ない契約だが、念のため [] にフォールバック。
     crmTags: row.crm_tags ?? [],
+    // プロセス管理 CSV 由来の名簿メモ(平文)。未入力は null。
+    inflowJob: row.inflow_job,
+    proposedCompany: row.proposed_company,
+    jobSource: row.job_source,
+    pastMeetingNote: row.past_meeting_note,
     // カスタムフィールドも DB default '{}'::jsonb。
     customFields: row.custom_fields ?? {},
     createdAt: row.created_at,

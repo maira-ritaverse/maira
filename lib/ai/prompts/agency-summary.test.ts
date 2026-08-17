@@ -72,6 +72,11 @@ const baseClient: ClientRecord = {
   intakeDate: null,
   firstMeetingDate: null,
   crmTags: [],
+  // プロセス管理 CSV 由来の名簿メモ(20260815000001)。テストでは null 固定。
+  inflowJob: null,
+  proposedCompany: null,
+  jobSource: null,
+  pastMeetingNote: null,
   customFields: {},
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-06-14T00:00:00Z",
