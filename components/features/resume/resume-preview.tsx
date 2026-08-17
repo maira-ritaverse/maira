@@ -377,7 +377,8 @@ function MotivationBox({ text }: { text: string | null }) {
       <div className="border-b border-black bg-white px-2 py-1 text-[11px]">
         志望の動機、特技、好きな学科、アピールポイントなど
       </div>
-      <div className="min-h-[60mm] px-3 py-2 text-[12px] whitespace-pre-wrap">{text ?? ""}</div>
+      {/* 内容に応じて可変(短いときに枠が余らないよう下限のみ小さく) */}
+      <div className="min-h-[12mm] px-3 py-2 text-[12px] whitespace-pre-wrap">{text ?? ""}</div>
     </div>
   );
 }
@@ -392,7 +393,8 @@ function RequestsBox({ text }: { text: string | null }) {
       <div className="border-b border-black bg-white px-2 py-1 text-[11px]">
         本人希望記入欄(特に給料・職種・勤務時間・勤務地・その他についての希望などがあれば記入)
       </div>
-      <div className="min-h-[30mm] px-3 py-2 text-[12px] whitespace-pre-wrap">{text ?? ""}</div>
+      {/* 内容に応じて可変(短いときに枠が余らないよう下限のみ小さく) */}
+      <div className="min-h-[8mm] px-3 py-2 text-[12px] whitespace-pre-wrap">{text ?? ""}</div>
     </div>
   );
 }

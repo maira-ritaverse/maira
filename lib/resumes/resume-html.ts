@@ -332,14 +332,17 @@ export function buildResumeHtml(resume: Resume, options: BuildResumeHtmlOptions)
     padding: 4px 8px;
     font-size: 11px;
   }
+  /* 志望動機 / 自己PR・本人希望欄は内容に応じて可変。短いときに枠が余らないよう
+     固定の大きな高さは持たせず、空でも枠として見える程度の小さな下限だけ残す。
+     長文のときは block 要素として自然に伸びる(ページは A4 を維持)。 */
   .motiv-box .body {
-    min-height: 60mm;
+    min-height: 12mm;
     padding: 8px 12px;
     font-size: 12px;
     white-space: pre-wrap;
   }
   .req-box .body {
-    min-height: 30mm;
+    min-height: 8mm;
     padding: 8px 12px;
     font-size: 12px;
     white-space: pre-wrap;
