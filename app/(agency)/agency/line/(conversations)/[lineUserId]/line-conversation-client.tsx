@@ -53,9 +53,10 @@ type Props = {
   }>;
 };
 
-// 受信 メッセージ 反映 の レイテンシー。 3 秒 = 1 分 で 20 回 = Vercel
-// Function 呼び出し は 小規模 で 余裕 が ある。 体感 を 大幅 改善。
-const POLL_INTERVAL_MS = 3_000;
+// 受信 メッセージ 反映 の レイテンシー。 2 秒 (旧 3 秒) = 1 分 で 30 回。
+// Vercel Function 呼び出し は 小規模 で 余裕 が ある。 開いて いる 会話 の 新着 を
+// 体感 ほぼ 即時 に する。 visibilitychange で タブ 復帰 時 は 即時 取得。
+const POLL_INTERVAL_MS = 2_000;
 const STICKER_CDN = "https://stickershop.line-scdn.net/stickershop/v1/sticker";
 
 export function LineConversationClient({
@@ -101,8 +102,13 @@ export function LineConversationClient({
   useEffect(() => {
     const ctrl = new AbortController();
     let active = true;
+    // 前回 poll が 未完了 の 間 は 次 を 発火 しない (間隔 短縮 で リクエスト が
+    // 重畳 する のを 防ぐ。 応答 が 間隔 を 超えて 遅延 した とき の 積み上がり 対策)。
+    let inFlight = false;
 
     const poll = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         const url = `/api/agency/line/conversations/${encodeURIComponent(lineUserId)}/messages`;
         const res = await fetch(url, { signal: ctrl.signal });
@@ -113,6 +119,8 @@ export function LineConversationClient({
         }
       } catch {
         // ポーリング 失敗 は 無視 (次回 試行)
+      } finally {
+        inFlight = false;
       }
     };
 

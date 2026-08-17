@@ -16,7 +16,9 @@ import { ConversationListSidebar } from "./conversation-list-sidebar";
  */
 type Props = { conversations: ConversationListItem[] };
 
-const POLL_INTERVAL_MS = 5_000;
+// 3 秒 間隔 (旧 5 秒)。 新着 / 並び替え の 反映 を 体感 で 早める。
+// visibilitychange で タブ 復帰 時 は 即時 更新。
+const POLL_INTERVAL_MS = 3_000;
 
 export function ActiveSync({ conversations: initial }: Props) {
   const pathname = usePathname();
@@ -30,8 +32,12 @@ export function ActiveSync({ conversations: initial }: Props) {
   useEffect(() => {
     let active = true;
     const ctrl = new AbortController();
+    // 前回 poll 未完了 の 間 は 次 を 発火 しない (間隔 短縮 で の リクエスト 重畳 防止)。
+    let inFlight = false;
 
     const poll = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         const res = await fetch("/api/agency/line/conversations", { signal: ctrl.signal });
         if (!res.ok) return;
@@ -39,6 +45,8 @@ export function ActiveSync({ conversations: initial }: Props) {
         if (active) setConversations(json.conversations);
       } catch {
         // 失敗 は サイレント (次回 試行)
+      } finally {
+        inFlight = false;
       }
     };
 

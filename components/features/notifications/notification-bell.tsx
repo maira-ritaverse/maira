@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
  *
  * 取得方式:
  *   - マウント時に GET /api/notifications で最新30件を取得(本文は復号済)
- *   - GET /api/notifications/unread-count を 45 秒間隔でポーリング(軽量)
+ *   - GET /api/notifications/unread-count を 15 秒間隔でポーリング(軽量)
  *   - ベルを開いた時にも本文を再取得(タブ復帰後すぐ最新を見せる)
  *   - Realtime は今回不採用(Phase 2)
  *
@@ -45,9 +45,10 @@ type NotificationItem = {
   payload: NotificationPayload | null;
 };
 
-// ポーリング 間隔 を 30 秒 に 短縮 (旧 45 秒)。 加えて visibilitychange で
-// タブ 復帰 時 に 即時 再取得 する。 これ で 「新着 が 遅れて 気づく」 曖昧 さ を 解消。
-const POLL_INTERVAL_MS = 30_000;
+// ポーリング 間隔 を 15 秒 に 短縮 (旧 30 秒)。 LINE 新着 等 の 通知 バッジ が
+// 最大 30 秒 遅れて いた ため。 unread-count は 軽量 クエリ な ので 頻度 を 上げても
+// 負荷 は 小さい。 加えて visibilitychange で タブ 復帰 時 に 即時 再取得 する。
+const POLL_INTERVAL_MS = 15_000;
 
 /**
  * 内部状態の単一化:items / unreadCount / hasLoaded を 1 つのオブジェクトに

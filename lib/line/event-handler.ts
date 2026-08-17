@@ -11,6 +11,7 @@
  *   ・line_messages (organization_id, line_message_id) unique
  *   ・on conflict do nothing で 二重INSERT を 防ぐ
  */
+import { after } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
@@ -193,54 +194,72 @@ async function handleMessage(
     return { ok: false, type: "message", reason: `insert_failed: ${error.message}` };
   }
 
-  // 通知 fan-out (in-app + Slack + メール)。 失敗は 握り潰す。
-  try {
-    const { data: linkRow } = await ctx.service
-      .from("line_user_links")
-      .select("display_name, client_record_id")
-      .eq("organization_id", ctx.organizationId)
-      .eq("line_user_id", lineUserId)
-      .maybeSingle();
-    const link = linkRow as { display_name: string | null; client_record_id: string | null } | null;
-
-    let clientName: string | null = null;
-    if (link?.client_record_id) {
-      const { data: cr } = await ctx.service
-        .from("client_records")
-        .select("name")
-        .eq("id", link.client_record_id)
-        .maybeSingle();
-      clientName = (cr as { name?: string } | null)?.name ?? null;
-    }
-
-    const preview = buildPreview(msg);
-    await notifyAgencyOfLineMessage({
-      organizationId: ctx.organizationId,
-      lineUserId,
-      senderDisplayName: link?.display_name ?? null,
-      clientName,
-      preview,
-      messageType: msg.type,
-    });
-  } catch (err) {
-    console.warn("[line/event-handler] notify failed", err);
+  // 重複 再送 (onConflict ignoreDuplicates で 既存 行 → inserted なし) の 場合 は
+  // 通知 / Flow を 再 発火 させ ない (LINE 再送 に よる 二重 通知 / 二重 enroll 防止)。
+  // メッセージ 自体 は 既存 行 が ある ので これ で 完結。
+  if (!inserted) {
+    return { ok: true, type: "message", reason: "duplicate_ignored" };
   }
+
+  // 通知 fan-out (in-app + Slack + メール) は LINE への 200 応答 を ブロック しない
+  // ため after() で 応答 後 に 回す。 Slack / メール / Auth ルックアップ は 外部 呼び出し
+  // で 数百 ms〜秒 単位。 メッセージ 保存 は 上 で 完了 済み な ので UI 反映 は 遅れ ない。
+  // 失敗 は 握り潰す。
+  const preview = buildPreview(msg);
+  after(async () => {
+    try {
+      const { data: linkRow } = await ctx.service
+        .from("line_user_links")
+        .select("display_name, client_record_id")
+        .eq("organization_id", ctx.organizationId)
+        .eq("line_user_id", lineUserId)
+        .maybeSingle();
+      const link = linkRow as {
+        display_name: string | null;
+        client_record_id: string | null;
+      } | null;
+
+      let clientName: string | null = null;
+      if (link?.client_record_id) {
+        const { data: cr } = await ctx.service
+          .from("client_records")
+          .select("name")
+          .eq("id", link.client_record_id)
+          .maybeSingle();
+        clientName = (cr as { name?: string } | null)?.name ?? null;
+      }
+
+      await notifyAgencyOfLineMessage({
+        organizationId: ctx.organizationId,
+        lineUserId,
+        senderDisplayName: link?.display_name ?? null,
+        clientName,
+        preview,
+        messageType: msg.type,
+      });
+    } catch (err) {
+      console.warn("[line/event-handler] notify failed", err);
+    }
+  });
 
   // キーワード応答:text の場合、trigger_type='keyword_matched' の active Flow を検索
   // し、trigger_config.keyword に一致する Flow を enroll。テキスト以外は無視。
-  // 失敗しても本体レスポンスに影響させない(fire-and-forget、握り潰し)。
+  // これも webhook 応答 を ブロック しない よう after() で 後 回し (fire-and-forget)。
   if (msg.type === "text") {
-    try {
-      await dispatchFlowTrigger(ctx.service, ctx.organizationId, {
-        type: "keyword_matched",
-        line_user_id: lineUserId,
-        keyword: msg.text,
-      });
-    } catch (err) {
-      console.warn("[line/event-handler] keyword_matched dispatch failed", {
-        message: err instanceof Error ? err.message : String(err),
-      });
-    }
+    const keyword = msg.text;
+    after(async () => {
+      try {
+        await dispatchFlowTrigger(ctx.service, ctx.organizationId, {
+          type: "keyword_matched",
+          line_user_id: lineUserId,
+          keyword,
+        });
+      } catch (err) {
+        console.warn("[line/event-handler] keyword_matched dispatch failed", {
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    });
   }
 
   return {
@@ -369,15 +388,18 @@ async function handleFollow(
     console.warn("[line/welcome] threw", err);
   }
 
-  // Phase 1: friend_added trigger の Flow を enroll (best-effort、 webhook 失敗 に は 波及 させない)
-  try {
-    await dispatchFlowTrigger(ctx.service, ctx.organizationId, {
-      type: "friend_added",
-      line_user_id: lineUserId,
-    });
-  } catch (err) {
-    console.warn("[flow-trigger] friend_added dispatch failed", err);
-  }
+  // Phase 1: friend_added trigger の Flow を enroll (best-effort)。
+  // webhook 応答 を ブロック しない よう after() で 後 回し (歓迎 返信 は 上 で 即時 送信済)。
+  after(async () => {
+    try {
+      await dispatchFlowTrigger(ctx.service, ctx.organizationId, {
+        type: "friend_added",
+        line_user_id: lineUserId,
+      });
+    } catch (err) {
+      console.warn("[flow-trigger] friend_added dispatch failed", err);
+    }
+  });
 
   return { ok: true, type: "follow" };
 }
@@ -397,16 +419,19 @@ async function handlePostback(
 
   // Phase 1: postback_received trigger の Flow を enroll (既存 postback 処理 と 並行)
   // Flow ビルダー 側 の trigger_config.postback_data_prefix で 絞り 込まれ る の で、
-  // ここ で は 全 postback を dispatch する。
-  try {
-    await dispatchFlowTrigger(ctx.service, ctx.organizationId, {
-      type: "postback_received",
-      line_user_id: lineUserId,
-      postback_data: data,
-    });
-  } catch (err) {
-    console.warn("[flow-trigger] postback_received dispatch failed", err);
-  }
+  // ここ で は 全 postback を dispatch する。 webhook 応答 を ブロック しない よう
+  // after() で 後 回し (下 の 確定 / 返信 処理 は 従来 どおり 即時)。
+  after(async () => {
+    try {
+      await dispatchFlowTrigger(ctx.service, ctx.organizationId, {
+        type: "postback_received",
+        line_user_id: lineUserId,
+        postback_data: data,
+      });
+    } catch (err) {
+      console.warn("[flow-trigger] postback_received dispatch failed", err);
+    }
+  });
 
   // 「別の日時 を 希望」: line_meeting_other:{proposalId}
   if (data.startsWith("line_meeting_other:")) {
@@ -506,28 +531,31 @@ async function handlePostback(
       .eq("organization_id", ctx.organizationId)
       .eq("line_user_id", lineUserId);
 
-    // 3) 通知 fan-out (in-app + Slack + メール) — 担当 エージェント に 即時通知
-    try {
-      let clientName: string | null = null;
-      if (friend?.client_record_id) {
-        const { data: cr } = await ctx.service
-          .from("client_records")
-          .select("name")
-          .eq("id", friend.client_record_id)
-          .maybeSingle();
-        clientName = (cr as { name?: string } | null)?.name ?? null;
+    // 3) 通知 fan-out (in-app + Slack + メール) — webhook 応答 を ブロック しない よう
+    //    after() で 後 回し (履歴 保存 は 上 で 完了、 下 の LINE 返信 は 即時)。
+    after(async () => {
+      try {
+        let clientName: string | null = null;
+        if (friend?.client_record_id) {
+          const { data: cr } = await ctx.service
+            .from("client_records")
+            .select("name")
+            .eq("id", friend.client_record_id)
+            .maybeSingle();
+          clientName = (cr as { name?: string } | null)?.name ?? null;
+        }
+        await notifyAgencyOfLineMessage({
+          organizationId: ctx.organizationId,
+          lineUserId,
+          senderDisplayName: friend?.display_name ?? null,
+          clientName,
+          preview: `★ 興味あり: ${jobLabel}`,
+          messageType: "system",
+        });
+      } catch (err) {
+        console.warn("[line/job_interest] notify failed", err);
       }
-      await notifyAgencyOfLineMessage({
-        organizationId: ctx.organizationId,
-        lineUserId,
-        senderDisplayName: friend?.display_name ?? null,
-        clientName,
-        preview: `★ 興味あり: ${jobLabel}`,
-        messageType: "system",
-      });
-    } catch (err) {
-      console.warn("[line/job_interest] notify failed", err);
-    }
+    });
 
     // 4) LINE 側 に Reply で 受領 通知 (求職者 体験)
     await replyMessage(ctx.accessToken, event.replyToken, [
