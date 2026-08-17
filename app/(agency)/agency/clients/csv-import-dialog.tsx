@@ -24,8 +24,9 @@ type ImportResponse = {
 };
 
 const PREVIEW_ROWS = 5;
-// API 側と同じ閾値。UI 側でも先に弾いて無駄な往復を減らす。
-const MAX_ROWS = 500;
+// API 側と同じ安全上限。UI 側でも先に弾いて無駄な往復を減らす。
+// 500 行のハード制限は撤廃し、代わりに AI 利用枠(500 行=1 回)を消費する運用。
+const MAX_ROWS = 5000;
 
 /**
  * CSV インポートダイアログ(ボタン + モーダル)。
@@ -92,7 +93,9 @@ export function CsvImportDialog() {
         return;
       }
       if (rows.length > MAX_ROWS) {
-        setParseError(`行数が多すぎます(最大 ${MAX_ROWS} 行 / 検出 ${rows.length} 行)`);
+        setParseError(
+          `1 回のインポートは最大 ${MAX_ROWS} 行までです(検出 ${rows.length} 行)。分割してお試しください。`,
+        );
         setParsedHeaders(headers);
         setParsedRows([]);
         return;
@@ -120,9 +123,13 @@ export function CsvImportDialog() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rows: rowsToPost }),
       });
-      const json = (await res.json()) as Partial<ImportResponse> & { error?: string };
+      const json = (await res.json()) as Partial<ImportResponse> & {
+        error?: string;
+        message?: string;
+      };
       if (!res.ok) {
-        setParseError(json.error ?? `HTTP ${res.status}`);
+        // over_quota 等は message に日本語の詳細が入る。無ければ error / HTTP コード。
+        setParseError(json.message ?? json.error ?? `HTTP ${res.status}`);
         return;
       }
       setResult(json as ImportResponse);
@@ -179,6 +186,11 @@ export function CsvImportDialog() {
               <p>
                 同 organization に同じメールが既にあれば「重複」としてスキップします
                 (既存レコードは上書きしません)。
+              </p>
+              <p>
+                1 回あたり最大 {MAX_ROWS.toLocaleString()} 行。
+                <span className="font-medium">500 行ごとに CSV の AI 利用枠を 1 回消費</span>
+                します(枠が足りない場合は取り込めません)。
               </p>
             </section>
 

@@ -7,6 +7,7 @@ import { getCurrentOrganizationPlan } from "@/lib/billing/agency";
 import { getPlanEntitlements } from "@/lib/billing/plan-entitlements";
 import { createClientRequestSchema } from "@/lib/clients/types";
 import { logClientCreate } from "@/lib/audit/client-audit-log";
+import { checkAiUsageLimit, recordAiUsage } from "@/lib/features/ai-usage";
 
 /**
  * POST /api/agency/import/clients
@@ -20,18 +21,28 @@ import { logClientCreate } from "@/lib/audit/client-audit-log";
  *     氏名 / メール は必須。それ以外は任意。
  *   - 同 organization に同 email のレコードが既にあれば「重複」として skip
  *     (既存の連携状態や名簿入力を上書きしないため)。
- *   - 1 リクエスト最大 500 行(無制限投入で誤コピペ→大量増殖を防ぐ)。
+ *   - 行数のハード上限は撤廃し、代わりに AI 利用枠(csv_column_mapping)を
+ *     500 行 = 1 件 として消費するスロットルに置き換える。信頼性のため 5000 行の
+ *     安全上限は残す(このルートは 1 行ずつ順次 insert するため、際限なく増やすと
+ *     サーバーレスのタイムアウトに達し得る)。
  *   - エラー行があっても他の正常行は登録する(部分成功)。
  *   - assigned_member_id は呼び出しユーザ(=デフォルト担当)に固定。
+ *
+ * AI 利用枠(スロットル):
+ *   - このインポート自体は Anthropic を呼ばないが、無制限投入(誤コピペ→大量増殖)を
+ *     防ぐため、送信行数に応じて csv_column_mapping の月次枠を消費する。
+ *   - ceil(行数 / 500) 件を消費。事前に残枠を確認し、足りなければ 429 で弾く。
  *
  * セキュリティ:
  *   - 平文の name / email / phone / name_kana / prefecture / 備考 / intake_date /
  *     entry_site のみ受け付ける(暗号化フィールドは UI 側で 1 件ずつ入力する運用)。
- *   - 行数上限とサイズ上限(8 MiB)で DoS を抑える。
+ *   - 行数の安全上限とサイズ上限(8 MiB)で DoS を抑える。
  */
 
-const MAX_ROWS = 500;
+const MAX_ROWS = 5000;
 const MAX_BYTES = 8 * 1024 * 1024;
+// AI 利用枠(csv_column_mapping)を 500 行 = 1 件 として消費するスロットル単位。
+const AI_UNIT_ROWS = 500;
 
 /**
  * CSV ヘッダー(日本語)→ DB / zod のキー(snake_case)へのマッピング。
@@ -425,7 +436,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ created: 0, skippedDuplicate: 0, errors: 0, results: [] });
   }
   if (rows.length > MAX_ROWS) {
-    return NextResponse.json({ error: `行数が多すぎます(最大 ${MAX_ROWS} 行)` }, { status: 413 });
+    return NextResponse.json(
+      {
+        error: `1 回のインポートは最大 ${MAX_ROWS} 行までです(検出 ${rows.length} 行)。分割してお試しください。`,
+      },
+      { status: 413 },
+    );
+  }
+
+  // AI 利用枠(csv_column_mapping)を 500 行 = 1 件 として消費する。行数上限の代わりの
+  // スロットル。事前に残枠を確認し、足りなければ 429 で弾く(実インポートは行わない)。
+  const unitsNeeded = Math.ceil(rows.length / AI_UNIT_ROWS);
+  const usage = await checkAiUsageLimit(supabase, user.id, "csv_column_mapping");
+  const remaining = Math.max(0, usage.limit - usage.current);
+  if (remaining < unitsNeeded) {
+    return NextResponse.json(
+      {
+        error: "over_quota",
+        message: `AI 利用枠が不足しています。このインポート(${rows.length} 行)には ${unitsNeeded} 回分必要ですが、残り ${remaining} 回です(500 行ごとに 1 回消費)。来月のリセット後、または管理者が上限を引き上げてから再試行してください。`,
+        current: usage.current,
+        limit: usage.limit,
+        needed: unitsNeeded,
+        resetsAt: usage.resetsAt,
+      },
+      { status: 429 },
+    );
   }
 
   // 既存メールを取得して重複判定。RLS で自組織のみに絞られるが、明示的にも絞る。
@@ -462,7 +497,8 @@ export async function POST(request: Request) {
 
   const results: ImportResultRow[] = [];
   // 1 行ずつ validate → insert。バルク insert は失敗時の部分成功制御が難しいので
-  // 1 件単位で回す(MAX_ROWS=500 件なので往復コストは許容範囲)。
+  // 1 件単位で回す(安全上限 5000 行なので順次でも許容範囲。将来これを超えるなら
+  // バルク insert 化 or フロント側チャンク送信を検討する)。
   for (let i = 0; i < rows.length; i++) {
     const rowIndex = i + 1;
     const raw = rows[i];
@@ -621,5 +657,23 @@ export async function POST(request: Request) {
   const skippedDuplicate = results.filter((r) => r.outcome === "skipped_duplicate").length;
   const errors = results.filter((r) => r.outcome === "error").length;
 
-  return NextResponse.json({ created, skippedDuplicate, errors, results });
+  // AI 利用枠の消費を記録(500 行 = 1 件)。送信行数ベースで課金する(部分成功・
+  // 重複 skip も操作規模に含める)。事前チェックで残枠は確保済み。
+  // csv_column_mapping は weight=1 なので N 件 = N 行 INSERT で表現する。
+  for (let u = 0; u < unitsNeeded; u++) {
+    await recordAiUsage(supabase, user.id, "csv_column_mapping", {
+      source: "client_csv_import",
+      total_rows: rows.length,
+      unit_index: u + 1,
+      unit_total: unitsNeeded,
+    });
+  }
+
+  return NextResponse.json({
+    created,
+    skippedDuplicate,
+    errors,
+    results,
+    aiUnitsUsed: unitsNeeded,
+  });
 }
