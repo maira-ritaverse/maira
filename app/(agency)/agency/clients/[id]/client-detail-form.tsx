@@ -16,6 +16,7 @@ import {
   clientEmploymentTypeLabels,
   clientFinalEducationLabels,
   clientJobChangeTimingLabels,
+  type ClientCloseReason,
 } from "@/lib/clients/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatAgeLabel } from "@/lib/date/age";
+
+import { DeclineReasonDialog } from "./decline-reason-dialog";
 
 /**
  * クライアント詳細編集フォーム
@@ -74,11 +77,14 @@ export function ClientDetailForm({ client, seekerPhoto }: Props) {
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  // 見送り(declined)に変えた時に理由入力を促すモーダルの開閉。
+  const [declineDialogOpen, setDeclineDialogOpen] = useState(false);
 
   const {
     register,
     handleSubmit,
     control,
+    setValue,
     formState: { errors },
   } = useForm<UpdateClientRequest>({
     // updateClientRequestSchema は EMPRO 拡張で 40+ フィールドに膨らんだ結果、
@@ -94,6 +100,7 @@ export function ClientDetailForm({ client, seekerPhoto }: Props) {
       status: client.status,
       notes: client.notes ?? "",
       close_reason: client.closeReason,
+      close_reason_note: client.closeReasonNote ?? "",
       email_distribution_enabled: client.emailDistributionEnabled,
       entry_site: client.entrySite ?? "",
       recommendation_comment: client.recommendationComment ?? "",
@@ -140,6 +147,9 @@ export function ClientDetailForm({ client, seekerPhoto }: Props) {
   // 生年 月日 の 入力 値 を リアル タイム 監視 し、 「満 X 歳」 の ラベル を Label 横 に 出す。
   // watch() は memo 化 でき ない 警告 が 出る ので、 useWatch を 使う。
   const watchedBirthDate = useWatch({ control, name: "birth_date" });
+  // 見送り理由モーダルの初期値に使う(現在のフォーム値)。
+  const watchedCloseReason = useWatch({ control, name: "close_reason" });
+  const watchedCloseReasonNote = useWatch({ control, name: "close_reason_note" });
   const birthDateAgeLabel = formatAgeLabel(
     typeof watchedBirthDate === "string" ? watchedBirthDate : undefined,
   );
@@ -258,7 +268,12 @@ export function ClientDetailForm({ client, seekerPhoto }: Props) {
           <Label htmlFor="status">ステータス</Label>
           <select
             id="status"
-            {...register("status")}
+            {...register("status", {
+              // 見送り(declined)に変えた瞬間に、理由入力モーダルで理由を促す。
+              onChange: (e) => {
+                if (e.target.value === "declined") setDeclineDialogOpen(true);
+              },
+            })}
             disabled={isPending}
             className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
           >
@@ -303,6 +318,22 @@ export function ClientDetailForm({ client, seekerPhoto }: Props) {
           </select>
           <p className="text-muted-foreground text-xs">
             失注分析・KPI 集計に使われます。成約や辞退の理由をカテゴリで残してください。
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="close_reason_note">詳細理由(見送り・失注)</Label>
+          <textarea
+            id="close_reason_note"
+            {...register("close_reason_note")}
+            disabled={isPending}
+            rows={3}
+            maxLength={2000}
+            placeholder="例: 提示年収が競合より 50 万低く B 社に流れた。次回は年収レンジを事前確認する。"
+            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+          />
+          <p className="text-muted-foreground text-xs">
+            カテゴリだけでは分からない具体的な理由を残すと、失注の傾向分析と改善に使えます(暗号化して保存)。
           </p>
         </div>
 
@@ -786,6 +817,22 @@ export function ClientDetailForm({ client, seekerPhoto }: Props) {
           {isPending ? "保存中..." : "保存"}
         </Button>
       </form>
+
+      {declineDialogOpen && (
+        <DeclineReasonDialog
+          clientName={client.name}
+          initialReason={(watchedCloseReason ?? "") as ClientCloseReason | ""}
+          initialNote={watchedCloseReasonNote ?? ""}
+          onConfirm={(reason, note) => {
+            // モーダルで入力した理由をフォームに反映し、見送り+理由をまとめて保存する。
+            setValue("close_reason", reason === "" ? null : reason);
+            setValue("close_reason_note", note);
+            setDeclineDialogOpen(false);
+            void handleSubmit(onSubmit)();
+          }}
+          onCancel={() => setDeclineDialogOpen(false)}
+        />
+      )}
     </Card>
   );
 }
