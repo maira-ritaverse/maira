@@ -236,6 +236,7 @@ export type ClientRecordWithDecrypted = ClientRecord & {
   desiredConditions: string | null; // 希望条件詳細
   meetingNotes: string | null; // 面談所感(内部メモ)
   statusMemo: string | null; // ステータスメモ(内部メモ)
+  closeReasonNote: string | null; // 見送り/失注の詳細理由(自由記述、close_reason と対)
 };
 
 // クライアント一覧表示用に担当アドバイザーの表示名を付与した型
@@ -407,6 +408,9 @@ export const updateClientRequestSchema = z.object({
     ])
     .nullable()
     .optional(),
+  // 見送り/失注の詳細理由(自由記述)。close_reason(カテゴリ)と対。
+  // サーバー側で暗号化して encrypted_close_reason_note に保存(空文字 → null)。
+  close_reason_note: z.string().max(2000).optional().or(z.literal("")),
   // MA 配信抑制フラグ。false で MA から除外。
   email_distribution_enabled: z.boolean().optional(),
   // EMPRO 観察項目。サーバー側で暗号化して保存(API ルートで encryptField)。

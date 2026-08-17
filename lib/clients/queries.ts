@@ -80,6 +80,8 @@ type ClientRecordRow = {
   first_meeting_date: string | null;
   encrypted_meeting_notes: string | null;
   encrypted_status_memo: string | null;
+  // 見送り/失注の詳細理由(自由記述、暗号化)
+  encrypted_close_reason_note: string | null;
   // CRM 自由タグ(20260615140001 マイグレーション)
   crm_tags: string[] | null;
 
@@ -416,6 +418,7 @@ export async function getClientRecordWithDecrypted(
     desiredConditions,
     meetingNotes,
     statusMemo,
+    closeReasonNote,
   ] = await Promise.all([
     decryptField(row.encrypted_recommendation_comment),
     decryptField(row.encrypted_other_agency_status),
@@ -426,6 +429,7 @@ export async function getClientRecordWithDecrypted(
     decryptField(row.encrypted_desired_conditions),
     decryptField(row.encrypted_meeting_notes),
     decryptField(row.encrypted_status_memo),
+    decryptField(row.encrypted_close_reason_note),
   ]);
   return {
     ...base,
@@ -440,6 +444,7 @@ export async function getClientRecordWithDecrypted(
     desiredConditions: desiredConditions ?? null,
     meetingNotes: meetingNotes ?? null,
     statusMemo: statusMemo ?? null,
+    closeReasonNote: closeReasonNote ?? null,
   };
 }
 

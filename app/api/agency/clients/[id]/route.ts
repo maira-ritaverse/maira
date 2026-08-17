@@ -107,9 +107,10 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   if (
     d.recommendation_comment !== undefined ||
     d.other_agency_status !== undefined ||
-    d.contact_method_preference !== undefined
+    d.contact_method_preference !== undefined ||
+    d.close_reason_note !== undefined
   ) {
-    const [encRec, encOther, encPref] = await Promise.all([
+    const [encRec, encOther, encPref, encCloseNote] = await Promise.all([
       d.recommendation_comment === undefined
         ? Promise.resolve(undefined)
         : d.recommendation_comment === ""
@@ -125,10 +126,16 @@ export async function PATCH(request: Request, { params }: RouteParams) {
         : d.contact_method_preference === ""
           ? Promise.resolve<string | null>(null)
           : encryptField(d.contact_method_preference),
+      d.close_reason_note === undefined
+        ? Promise.resolve(undefined)
+        : d.close_reason_note === ""
+          ? Promise.resolve<string | null>(null)
+          : encryptField(d.close_reason_note),
     ]);
     if (encRec !== undefined) updateData.encrypted_recommendation_comment = encRec;
     if (encOther !== undefined) updateData.encrypted_other_agency_status = encOther;
     if (encPref !== undefined) updateData.encrypted_contact_method_preference = encPref;
+    if (encCloseNote !== undefined) updateData.encrypted_close_reason_note = encCloseNote;
   }
 
   // ────────────────────────────────────────────
@@ -278,6 +285,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     "encrypted_desired_conditions",
     "encrypted_meeting_notes",
     "encrypted_status_memo",
+    "encrypted_close_reason_note",
   ]);
   const loggableTouchedKeys = Object.keys(updateData).filter(
     (k) => PLAIN_LOGGABLE_KEYS.has(k) || ENCRYPTED_LOGGABLE_KEYS.has(k),
