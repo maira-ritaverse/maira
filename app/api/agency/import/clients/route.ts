@@ -44,6 +44,15 @@ const MAX_BYTES = 8 * 1024 * 1024;
 // AI 利用枠(csv_column_mapping)を 500 行 = 1 件 として消費するスロットル単位。
 const AI_UNIT_ROWS = 500;
 
+// プロセス管理 CSV 由来の名簿メモは createClientRequestSchema を通さず normalized から
+// 直挿しするため、PATCH 側の zod 上限に合わせてここで切り詰める(巨大セルの流し込み防止)。
+const MEMO_TEXT_CAPS: Record<string, number> = {
+  inflow_job: 500,
+  proposed_company: 500,
+  job_source: 500,
+  past_meeting_note: 2000,
+};
+
 /**
  * CSV ヘッダー(日本語)→ DB / zod のキー(snake_case)へのマッピング。
  * エクスポート CSV のヘッダーと合わせている。複数表記を許容するため Array で持つ。
@@ -84,21 +93,30 @@ const HEADER_ALIASES: Record<string, string[]> = {
   experience_occupations: ["経験職種", "experience_occupations"],
   // 運用 キー 日付
   intake_date: ["受付日", "受付日時", "intake_date"],
-  // 面談実施予定日 も 初回面談日 として 取り込む ( 他ツール の プロセス管理 CSV 由来 )
-  first_meeting_date: ["初回面談日", "初回面談", "面談実施予定日", "first_meeting_date"],
+  // 「面談実施日」= 自社エクスポート / 詳細フォームの初回面談日ラベル。
+  // 「面談実施予定日」= 他ツール(プロセス管理 CSV)の予定日。どちらも初回面談日に寄せる。
+  // ※ 「面談実施日」は past_meeting_note では使わない(エクスポート往復で first_meeting_date と衝突するため)。
+  first_meeting_date: [
+    "初回面談日",
+    "初回面談",
+    "面談実施日",
+    "面談実施予定日",
+    "first_meeting_date",
+  ],
   // その他
   // 流入媒体名 も 媒体 (entry_site) に 寄せる
   entry_site: ["媒体", "流入媒体名", "流入媒体", "エントリーサイト", "entry_site"],
   notes: ["備考", "メモ", "notes"],
   crm_tags: ["タグ", "CRMタグ", "crm_tags"],
-  // 現状進捗 → ステータス。 日本語 進捗 値 は 後段 で enum に 変換 する ( PROGRESS_STATUS_MAP )。
-  status: ["現状進捗", "ステータス", "進捗", "status"],
+  // 現状進捗 → ステータス。 「対応状況」は 自社エクスポートの status ヘッダー(往復用)。
+  // 日本語 進捗 値 は 後段 で enum に 変換 する ( PROGRESS_STATUS_MAP )。
+  status: ["現状進捗", "対応状況", "ステータス", "進捗", "status"],
   // プロセス管理 CSV 由来 の 名簿 メモ ( 平文 )。 応募・選考 の 履歴 では なく
   // 「現時点 の スナップショット / 流入 経路」 を 名簿 に 保持 する ため の 自由 テキスト。
   inflow_job: ["流入求人", "流入経路", "inflow_job"],
   proposed_company: ["提案企業名", "提案企業", "現在進行企業", "proposed_company"],
   job_source: ["求人元データ", "求人元", "求人ソース", "job_source"],
-  past_meeting_note: ["過去の面談日", "面談履歴", "面談実施日", "past_meeting_note"],
+  past_meeting_note: ["過去の面談日", "面談履歴", "past_meeting_note"],
   // 担当 アドバイザー ( 別担当 に アサインしたい 時のみ )
   assignee_email: [
     "担当者メールアドレス",
@@ -278,6 +296,8 @@ const PROGRESS_STATUS_MAP: Record<string, string> = {
   面談実施: "initial_meeting",
   initial_meeting: "initial_meeting",
   // 求人紹介・追客・応募承諾 → job_matching
+  // 「求人紹介中」は clientStatusLabels[job_matching](自社エクスポートの値)。往復用。
+  求人紹介中: "job_matching",
   ワーク中: "job_matching",
   追客中: "job_matching",
   求人提案: "job_matching",
@@ -675,7 +695,11 @@ export async function POST(request: Request) {
       "past_meeting_note",
     ];
     for (const key of passthroughText) {
-      if (normalized[key]) insertRow[key] = normalized[key];
+      const v = normalized[key];
+      if (!v) continue;
+      // 新規メモ列だけ上限を掛ける(既存の平文列は元々短いので対象外)。
+      const cap = MEMO_TEXT_CAPS[key];
+      insertRow[key] = cap && v.length > cap ? v.slice(0, cap) : v;
     }
     if (normalized.birth_date) insertRow.birth_date = normalized.birth_date;
     if (normalized.first_meeting_date) insertRow.first_meeting_date = normalized.first_meeting_date;

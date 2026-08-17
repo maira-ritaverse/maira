@@ -61,6 +61,10 @@ export type ExportColumnKey =
   | "close_reason"
   | "email_distribution_enabled"
   | "notes"
+  | "inflow_job"
+  | "proposed_company"
+  | "job_source"
+  | "past_meeting_note"
   | "created_at"
   | "updated_at";
 
@@ -200,6 +204,11 @@ export const EXPORT_COLUMNS: ExportColumnDef[] = [
     getValue: (c) => (c.emailDistributionEnabled ? "許可" : "停止"),
   },
   { key: "notes", label: "備考", getValue: (c) => c.notes },
+  // プロセス管理 CSV 由来の名簿メモ(平文)。label は import の別名と一致させ往復可能にする。
+  { key: "inflow_job", label: "流入求人", getValue: (c) => c.inflowJob },
+  { key: "proposed_company", label: "提案企業名", getValue: (c) => c.proposedCompany },
+  { key: "job_source", label: "求人元データ", getValue: (c) => c.jobSource },
+  { key: "past_meeting_note", label: "過去の面談日", getValue: (c) => c.pastMeetingNote },
   { key: "created_at", label: "登録日時", getValue: (c) => c.createdAt },
   { key: "updated_at", label: "更新日時", getValue: (c) => c.updatedAt },
 ];
