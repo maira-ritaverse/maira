@@ -59,6 +59,16 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   if (d.phone !== undefined) updateData.phone = d.phone || null;
   if (d.status !== undefined) updateData.status = d.status;
   if (d.assigned_member_id !== undefined) {
+    // 主担当の変更は管理者(admin)のみに限定する(要望: 詳細画面からの主担当変更は
+    // 管理者だけ)。一般メンバーは name/status 等の一般編集は可能だが assigned_member_id
+    // を送ってきた場合は 403 で弾く。既存の一括担当変更(/bulk の set_assignee)は別経路で
+    // 全メンバー可のまま(今回は変更しない)。
+    if (!role.member || role.member.role !== "admin") {
+      return NextResponse.json(
+        { error: "admin_only", message: "主担当の変更は管理者のみ可能です。" },
+        { status: 403 },
+      );
+    }
     // 担当を変える場合は、その member.id が自組織のメンバーか検証する
     // (他組織の member.id を担当に書き込めるとデータ整合性が壊れるため)。
     // null は「担当解除」なので検証スキップ。agency_tasks PATCH と同型。

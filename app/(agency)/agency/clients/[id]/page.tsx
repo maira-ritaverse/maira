@@ -343,8 +343,9 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
         </Card>
       )}
 
-      {/* 副 担当 ( 共同 担当 ) セクション。 同 組織 advisor を 1:N で 並行 共有。
-          主 担当 は ClientDetailForm 側 で 編集 する 既存 動線 を 維持。 */}
+      {/* 主担当(管理者のみ変更可)+ 副担当(共同担当)セクション。
+          主担当 = client_records.assigned_member_id を管理者が付け替える。
+          副担当 = 同組織 advisor を 1:N で並行共有。 */}
       <CollaboratorsSection
         clientRecordId={client.id}
         primaryAssigneeMemberId={client.assignedMemberId ?? null}

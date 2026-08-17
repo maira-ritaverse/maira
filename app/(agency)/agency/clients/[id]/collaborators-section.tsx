@@ -47,6 +47,8 @@ export function CollaboratorsSection({
   const [isPending, startTransition] = useTransition();
   const [selectedMemberId, setSelectedMemberId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  // 主担当(assigned_member_id)の選択。管理者のみ操作する(下の select の value)。
+  const [assigneeSelection, setAssigneeSelection] = useState<string>(primaryAssigneeMemberId ?? "");
 
   const canManageAll = viewerRole === "admin" || viewerMemberId === primaryAssigneeMemberId;
 
@@ -98,8 +100,67 @@ export function CollaboratorsSection({
     });
   };
 
+  // 主担当の変更(管理者のみ)。既存の PATCH /api/agency/clients/[id] を使う。
+  // "" は「担当者なし」= assigned_member_id を null にする(担当解除)。
+  const changePrimaryAssignee = async () => {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const res = await fetch(`/api/agency/clients/${clientRecordId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assigned_member_id: assigneeSelection || null }),
+        });
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as {
+            message?: string;
+            error?: string;
+          } | null;
+          setError(body?.message ?? messageForError(body?.error));
+          return;
+        }
+        router.refresh();
+      } catch {
+        setError("主担当の変更に失敗しました");
+      }
+    });
+  };
+
   return (
     <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
+      {/* 主担当の変更(管理者のみ)。一般メンバーには表示しない(サーバー側でも 403)。 */}
+      {viewerRole === "admin" && (
+        <div className="space-y-2 border-b border-slate-200 pb-3">
+          <h3 className="text-sm font-semibold">主担当</h3>
+          <div className="flex items-center gap-2">
+            <select
+              value={assigneeSelection}
+              onChange={(e) => setAssigneeSelection(e.target.value)}
+              disabled={isPending}
+              className="flex-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+              aria-label="主担当を選択"
+            >
+              <option value="">(担当者なし)</option>
+              {members.map((m) => (
+                <option key={m.memberId} value={m.memberId}>
+                  {m.displayName ?? "(名前未設定)"}
+                  {m.memberId === viewerMemberId ? " (自分)" : ""}
+                </option>
+              ))}
+            </select>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isPending || assigneeSelection === (primaryAssigneeMemberId ?? "")}
+              onClick={changePrimaryAssignee}
+            >
+              変更
+            </Button>
+          </div>
+          <p className="text-muted-foreground text-xs">主担当の変更は管理者のみ可能です。</p>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">副担当(共同担当)</h3>
         <span className="text-muted-foreground text-xs">{collaborators.length} 名</span>
