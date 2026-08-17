@@ -332,9 +332,9 @@ export function buildResumeHtml(resume: Resume, options: BuildResumeHtmlOptions)
     padding: 4px 8px;
     font-size: 11px;
   }
-  /* 志望動機 / 自己PR・本人希望欄は内容に応じて可変。短いときに枠が余らないよう
-     固定の大きな高さは持たせず、空でも枠として見える程度の小さな下限だけ残す。
-     長文のときは block 要素として自然に伸びる(ページは A4 を維持)。 */
+  /* 志望動機 / 自己PR・本人希望欄は内容に応じて可変。空でも枠として見える程度の
+     小さな下限だけ持たせ、長文時は自然に伸びる。下限だけだと 2 ページ目の下端に
+     余白が出るため、ページ 2 側の flex-grow(下記 .page-2)で主要記入欄を伸ばして埋める。 */
   .motiv-box .body {
     min-height: 12mm;
     padding: 8px 12px;
@@ -346,6 +346,24 @@ export function buildResumeHtml(resume: Resume, options: BuildResumeHtmlOptions)
     padding: 8px 12px;
     font-size: 12px;
     white-space: pre-wrap;
+  }
+
+  /* ===== ページ 2 の下端埋め ===== */
+  /* 学歴続き・免許表の下に来る志望動機/本人希望欄が、可変高だとページ下端に
+     余白を残す。ページ 2 を縦フレックスにし、主要記入欄(志望動機)を残り高さまで
+     伸ばして全体を自然に埋める。本人希望欄は内容サイズのまま最下部に残る。
+     長文時は志望動機がそのまま伸び、A4 の最低高さは維持される。 */
+  .page-2 {
+    display: flex;
+    flex-direction: column;
+  }
+  .page-2 .motiv-box {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .page-2 .motiv-box .body {
+    flex: 1 1 auto;
   }
 
   /* ===== 注記 ===== */
@@ -413,7 +431,7 @@ export function buildResumeHtml(resume: Resume, options: BuildResumeHtmlOptions)
   </div>
 
   <!-- ===== 2 ページ目 ===== -->
-  <div class="page">
+  <div class="page page-2">
     <!-- 学歴・職歴の続き -->
     ${renderHistoryTable(historyPage2, true)}
 
