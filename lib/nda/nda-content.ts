@@ -26,15 +26,25 @@ export const NDA_DISCLOSER_NAME = "株式会社Revorise";
 /**
  * 開示者(甲)の住所(本店所在地)。
  * ⚠️ 要設定:正式な本店所在地を記入すること(第14条の管轄・当事者特定に用いる)。
+ * 未設定(下記プレースホルダのまま)の間は、前文・署名記録に住所を表示しない
+ * (プレースホルダを本番の契約書に出さないため)。実値を入れると自動で表示される。
  */
 export const NDA_DISCLOSER_ADDRESS = "（本店所在地を設定してください）";
 
+/** 住所が実値として設定されているか(プレースホルダ / 空は false)。 */
+export const NDA_HAS_DISCLOSER_ADDRESS =
+  NDA_DISCLOSER_ADDRESS.trim().length > 0 && !NDA_DISCLOSER_ADDRESS.includes("設定してください");
+
 export const NDA_TITLE = "秘密保持契約書(NDA)";
+
+// 開示者(甲)の特定。住所が設定済みのときだけ「所在地:…」を含める。
+const DISCLOSER_IDENTIFICATION = NDA_HAS_DISCLOSER_ADDRESS
+  ? `${NDA_DISCLOSER_NAME}(所在地:${NDA_DISCLOSER_ADDRESS}。AI 採用エージェント「Myaira」の運営者。以下「甲」という。)`
+  : `${NDA_DISCLOSER_NAME}(AI 採用エージェント「Myaira」の運営者。以下「甲」という。)`;
 
 /** 前文(当事者の特定は署名時の組織名 / 署名者名で補完する)。 */
 export const NDA_PREAMBLE =
-  `${NDA_DISCLOSER_NAME}(所在地:${NDA_DISCLOSER_ADDRESS}。AI 採用エージェント「Myaira」の` +
-  `運営者。以下「甲」という。)と、本サービスを利用するエージェント企業(以下「乙」という。)は、` +
+  `${DISCLOSER_IDENTIFICATION}と、本サービスを利用するエージェント企業(以下「乙」という。)は、` +
   `乙が本サービスを通じて取り扱う秘密情報の保護に関し、以下のとおり秘密保持契約` +
   `(以下「本契約」という。)を締結する。`;
 

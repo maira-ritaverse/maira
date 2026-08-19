@@ -1,8 +1,20 @@
 import { describe, it, expect } from "vitest";
 
 import { needsToAcceptNda } from "./nda";
-import { CURRENT_NDA_VERSION } from "./nda-content";
+import { CURRENT_NDA_VERSION, NDA_HAS_DISCLOSER_ADDRESS, NDA_PREAMBLE } from "./nda-content";
 import { buildNdaHtml } from "./nda-html";
+
+describe("NDA 住所の条件表示", () => {
+  it("住所が未設定(プレースホルダ)なら前文にプレースホルダを出さない", () => {
+    if (!NDA_HAS_DISCLOSER_ADDRESS) {
+      expect(NDA_PREAMBLE).not.toContain("設定してください");
+      expect(NDA_PREAMBLE).not.toContain("所在地:");
+    } else {
+      // 住所が設定済みなら前文に所在地が入る
+      expect(NDA_PREAMBLE).toContain("所在地:");
+    }
+  });
+});
 
 describe("needsToAcceptNda", () => {
   it("未同意 → true", () => {

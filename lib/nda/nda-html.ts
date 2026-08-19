@@ -3,6 +3,7 @@ import {
   CURRENT_NDA_VERSION,
   NDA_DISCLOSER_ADDRESS,
   NDA_DISCLOSER_NAME,
+  NDA_HAS_DISCLOSER_ADDRESS,
   NDA_PREAMBLE,
   NDA_SECTIONS,
   NDA_TITLE,
@@ -97,7 +98,7 @@ export function buildNdaHtml(sign: NdaSignInfo): string {
   <div class="sign">
     <h2>同意の記録</h2>
     <table class="sign-table">
-      <tr><th>開示者(甲)</th><td>${escapeHtml(NDA_DISCLOSER_NAME)}<br>所在地:${escapeHtml(NDA_DISCLOSER_ADDRESS)}</td></tr>
+      <tr><th>開示者(甲)</th><td>${escapeHtml(NDA_DISCLOSER_NAME)}${NDA_HAS_DISCLOSER_ADDRESS ? `<br>所在地:${escapeHtml(NDA_DISCLOSER_ADDRESS)}` : ""}</td></tr>
       <tr><th>受領者(乙)</th><td>${escapeHtml(sign.organizationName)}</td></tr>
       <tr><th>署名者(氏名)</th><td>${escapeHtml(sign.signerName ?? "（未署名)")}</td></tr>
       <tr><th>同意日時</th><td>${escapeHtml(acceptedText)}</td></tr>
