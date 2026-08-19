@@ -35,6 +35,7 @@ export type AuditAction =
   | "privacy_policy_accepted"
   | "nda_accepted"
   | "nda_signature_requested"
+  | "terms_accepted"
   | "admin_accessed_user"
   | "platform_ai_quota_changed";
 

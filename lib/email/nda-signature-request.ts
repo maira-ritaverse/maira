@@ -20,12 +20,12 @@ export async function sendNdaSignatureRequestEmail(args: {
   const from = process.env.EMAIL_FROM;
   if (!from) return { sent: false, reason: "not_configured" };
 
-  const subject = "【Myaira】秘密保持契約(NDA)へのご署名のお願い";
+  const subject = "【Myaira】秘密保持契約(NDA)・利用規約へのご署名のお願い";
   const url = buildAbsoluteUrl("/agency");
   const bodyHtml = `
     <p>${escapeHtml(args.organizationName)} ご担当者様</p>
-    <p>Myaira のご利用にあたり、秘密保持契約(NDA)へのご同意(ご署名)をお願いしております。</p>
-    <p>下記より Myaira にログインいただくと、NDA の同意画面が表示されます。組織の管理者アカウントでご署名ください。</p>
+    <p>Myaira のご利用にあたり、秘密保持契約(NDA)および利用規約へのご同意(ご署名)をお願いしております。</p>
+    <p>下記より Myaira にログインいただくと、同意画面が表示されます。組織の管理者アカウントでご署名ください。</p>
     ${primaryButton(url, "Myaira にログインして署名する")}
     <p>ご署名後、署名済みの控え(PDF)をメールでお送りします。</p>
   `;
@@ -33,7 +33,7 @@ export async function sendNdaSignatureRequestEmail(args: {
   const text = [
     `${args.organizationName} ご担当者様`,
     "",
-    "Myaira のご利用にあたり、秘密保持契約(NDA)へのご署名をお願いしております。",
+    "Myaira のご利用にあたり、秘密保持契約(NDA)および利用規約へのご署名をお願いしております。",
     "以下からログインすると同意画面が表示されます。管理者アカウントでご署名ください。",
     url,
     "",
