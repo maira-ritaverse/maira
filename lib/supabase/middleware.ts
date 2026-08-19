@@ -95,13 +95,38 @@ export async function updateSession(request: NextRequest) {
   //       silent-open で MFA gate が 事実 上 無効化 され うる バグ が あった)。
   //     ★API リクエスト は JSON 403 で 返す (fetch が redirect を 追跡 して HTML を
   //       受け取ら ない よう に)。 UI 側 の handling は client-fetch 側 で 拾う。
+  // 求職者の個人データ API(監査 L3 / H2 の残りを塞ぐ)。/api/app 配下ではなく
+  // トップレベル /api/ にあり positive-list から漏れていたため、MFA 有効化済みユーザーが
+  // aal1 セッションで復号済みの履歴書 / 応募情報等を取得できる穴が残っていた。
+  // MFA 昇格(challenge/verify)は client-side Supabase SDK 経由で /api ルートを持たない
+  // ため、これらを一括 gate しても昇格フローはロックしない。未認証は下の `user &&` で通過。
+  // コレクションルート(/api/resumes)とサブルート(/api/resumes/[id])の両方に一致させる。
+  const SEEKER_DATA_API_PREFIXES = [
+    "/api/resumes",
+    "/api/applications",
+    "/api/cvs",
+    "/api/career",
+    "/api/notifications",
+    "/api/tasks",
+    "/api/settings",
+    "/api/diagnosis",
+    "/api/documents",
+    "/api/onboarding",
+    "/api/interview",
+    "/api/me",
+    "/api/account",
+  ];
+  const isSeekerDataApi = SEEKER_DATA_API_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
   const isMfaGuarded =
     pathname.startsWith("/app") ||
     pathname.startsWith("/agency") ||
     pathname.startsWith("/admin") ||
     pathname.startsWith("/api/app/") ||
     pathname.startsWith("/api/agency/") ||
-    pathname.startsWith("/api/admin/");
+    pathname.startsWith("/api/admin/") ||
+    isSeekerDataApi;
   if (user && isMfaGuarded) {
     const aalRes = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     if (aalRes.error) {
