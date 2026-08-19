@@ -721,22 +721,42 @@ async function handleAddonSubscription(
     ? new Date(sub.current_period_end * 1000).toISOString()
     : null;
 
-  // 順序ガード:直近に適用したイベントの created より古い(または同一)なら無視する。
+  // 順序ガード:直近に適用したイベントの created より古いイベントは無視する。
   // Stripe の順不同配信で canceled の後に古い active が届いても status を巻き戻さない
   // (= キャンセル済み有料機能の復活を防ぐ)。fetch→upsert の間に別イベントが挟まる
-  // 極小レースは残るが、addon イベントは低頻度なので許容する。
+  // 極小レースは残るが、addon イベントは低頻度なので許容する(将来 addon 種別が
+  // 増えたら org 経路と同様に SELECT FOR UPDATE の RPC 化を検討)。
+  //
+  // event.created は秒精度なので、同一秒に別イベント(activation と cancellation)が
+  // 順不同で届き得る。この場合 created では順序を決められないため、より「終端的」な
+  // status(canceled > past_due > active)を優先し、active への巻き戻し(有料機能の
+  // 復活)を許さない。
+  const STATUS_PRIORITY: Record<string, number> = { active: 1, past_due: 2, canceled: 3 };
   const eventCreatedMs = eventCreated * 1000;
   const { data: existingAddon } = await admin
     .from("subscription_addons")
-    .select("last_event_created_at")
+    .select("last_event_created_at, status")
     .eq("user_id", userId)
     .eq("addon_key", "meeting_recording_auto")
     .maybeSingle();
-  const lastApplied =
-    (existingAddon as { last_event_created_at: string | null } | null)?.last_event_created_at ??
-    null;
-  if (lastApplied && new Date(lastApplied).getTime() >= eventCreatedMs) {
-    return { ok: true, reason: "stale_addon_event" };
+  const existing = existingAddon as {
+    last_event_created_at: string | null;
+    status: string | null;
+  } | null;
+  const lastApplied = existing?.last_event_created_at ?? null;
+  if (lastApplied) {
+    const lastMs = new Date(lastApplied).getTime();
+    if (eventCreatedMs < lastMs) {
+      return { ok: true, reason: "stale_addon_event" };
+    }
+    if (eventCreatedMs === lastMs) {
+      // 同一秒:終端度が現状 以下 の status は適用しない(復活防止)。
+      const incomingPriority = STATUS_PRIORITY[status] ?? 0;
+      const currentPriority = STATUS_PRIORITY[existing?.status ?? ""] ?? 0;
+      if (incomingPriority <= currentPriority) {
+        return { ok: true, reason: "stale_addon_event_same_second" };
+      }
+    }
   }
 
   const { error } = await admin.from("subscription_addons").upsert(

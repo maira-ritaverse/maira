@@ -16,11 +16,12 @@ import { createServiceClient } from "@/lib/supabase/service";
  *     ・残 7 日 前後 1 時間 (7 日 通知)
  *     ・残 1 日 前後 1 時間 (1 日 通知)
  *
- * 冪等性:
- *   organization_plans に notification_sent_at_X を 追加 せず、 audit_log
- *   ベース で 重複 防止 する のが クリーン だが、 MVP では organization_plans
- *   の updated_at を 都度更新 し、 「同 cron tick 内 で 重複 送信 しない」
- *   程度の シンプル 制御 のみ 行う (本格 対応は Stripe 統合時 に 検討)。
+ * 冪等性(M8 修正):
+ *   organization_plans.trial_notified_7d_at / trial_notified_1d_at を
+ *   しきい値ごとのマーカーに使う。未通知(NULL)の組織だけを対象にし、送信成功後に
+ *   マーカーを立てることで「1 しきい値 = 1 通」に収める(毎時 cron でも重複しない)。
+ *   マーカーは送信後に立てるため at-least-once(稀に再送)。トライアル延長で
+ *   trial_ends_at が動いた場合は旧マーカーが残り再通知されない稀な edge がある。
  */
 export async function POST(request: Request) {
   const auth = checkCronAuth(request);

@@ -55,6 +55,9 @@ export async function handleLineEvent(
   // 冪等性: 同一 webhookEventId を 2 度処理しない(LINE の at-least-once 再送対策)。
   // follow/unfollow/postback は line_message_id を持たず既存の重複防止が効かないため、
   // webhook イベント単位で claim する(message も通知/フローの二重発火をここで弾ける)。
+  // claim は本処理前(at-most-once)。タイムアウト/クラッシュで途中失敗したイベントの
+  // 再送は skip され再処理されないが、致命的な二重課金(会議確定)は consumed_at の
+  // atomic check-and-set で別途保護済み。二重通知/二重 enroll を防ぐ方を優先する判断。
   if (event.webhookEventId) {
     const { error: claimErr } = await ctx.service.from("line_webhook_events").insert({
       organization_id: ctx.organizationId,
