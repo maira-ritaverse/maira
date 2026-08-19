@@ -775,11 +775,23 @@ export async function POST(request: Request): Promise<Response> {
 
   const type = event.type as StripeEventType;
 
-  /** ハンドラ が db_update_failed を 返した とき、 claim 行 を 削除 して
-   *  Stripe の 次回 リトライ で 再度 処理 させる。 200/400 は claim 行 を 残す
-   *  (成功 済み or 意図的な reject な の で リトライ 不要)。 */
+  /** ハンドラ が「一時的 or 設定修正で再処理すべき」理由を返したとき、claim 行を削除して
+   *  Stripe の次回リトライで再度処理させる。恒久 reject(missing_* 等)は claim を残す。
+   *
+   *  retryable 扱い:
+   *   - db_update_failed*: 一時的な DB 障害。リトライで復旧し得る。
+   *   - unknown_price_ids* / solo_with_team_items: price/env のドリフトや構成不整合。
+   *     放置すると status 遷移・seat 同期が恒久停止するため、claim を解放して Stripe に
+   *     再送させ続ける(修正されるまで Stripe ダッシュボードに失敗として可視化される。
+   *     旧実装は初回 400 で claim を残し、再送が PK 重複→200 で無言ドロップしていた)。 */
+  const isRetryableReason = (reason: string | null): boolean =>
+    !!reason &&
+    (reason.startsWith("db_update_failed") ||
+      reason.startsWith("db_upsert_failed") || // addon 経路の一過性 DB 障害(旧: 未リリースで dedup ロスト)
+      reason.startsWith("unknown_price_ids") ||
+      reason === "solo_with_team_items");
   const releaseOnRetryable = async (reason: string | null) => {
-    if (reason && reason.startsWith("db_update_failed")) {
+    if (isRetryableReason(reason)) {
       await releaseEventClaim(admin, event.id);
     }
   };
@@ -819,24 +831,35 @@ export async function POST(request: Request): Promise<Response> {
       const sub = event.data.object as StripeSubscription;
       const r = await handleTrialWillEnd(admin, sub);
       await markEventProcessed(admin, event.id, r.ok ? "processed" : "failed", r.reason ?? null);
-      if (!r.ok) await releaseOnRetryable(r.reason ?? null);
-      return NextResponse.json({ ok: r.ok, kind: "trial_will_end" });
+      // 失敗時は非2xx を返して Stripe に再送させる(200 だと再送されず状態遷移が失われる)。
+      // retryable は claim 解放済みで再処理、恒久 reject は再送が dedup で 200 に落ちる。
+      if (!r.ok) {
+        await releaseOnRetryable(r.reason ?? null);
+        return NextResponse.json({ error: r.reason, kind: "trial_will_end" }, { status: 400 });
+      }
+      return NextResponse.json({ ok: true, kind: "trial_will_end" });
     }
 
     if (type === "invoice.paid") {
       const invoice = event.data.object as StripeInvoice;
       const r = await handleInvoicePaid(admin, invoice, event.id, event.created);
       await markEventProcessed(admin, event.id, r.ok ? "processed" : "failed", r.reason ?? null);
-      if (!r.ok) await releaseOnRetryable(r.reason ?? null);
-      return NextResponse.json({ ok: r.ok, kind: "invoice_paid" });
+      if (!r.ok) {
+        await releaseOnRetryable(r.reason ?? null);
+        return NextResponse.json({ error: r.reason, kind: "invoice_paid" }, { status: 400 });
+      }
+      return NextResponse.json({ ok: true, kind: "invoice_paid" });
     }
 
     if (type === "invoice.payment_failed") {
       const invoice = event.data.object as StripeInvoice;
       const r = await handleInvoicePaymentFailed(admin, invoice, event.id, event.created);
       await markEventProcessed(admin, event.id, r.ok ? "processed" : "failed", r.reason ?? null);
-      if (!r.ok) await releaseOnRetryable(r.reason ?? null);
-      return NextResponse.json({ ok: r.ok, kind: "invoice_failed" });
+      if (!r.ok) {
+        await releaseOnRetryable(r.reason ?? null);
+        return NextResponse.json({ error: r.reason, kind: "invoice_failed" }, { status: 400 });
+      }
+      return NextResponse.json({ ok: true, kind: "invoice_failed" });
     }
 
     // その 他 は 無視

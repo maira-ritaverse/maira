@@ -11,6 +11,7 @@
  *   - 連携状態 / 連携 user_id 等の内部 ID は出力しない(運用時に意味薄)。
  */
 import {
+  clientCloseReasonLabels,
   clientEmploymentTypeLabels,
   clientFinalEducationLabels,
   clientGenderLabels,
@@ -73,17 +74,6 @@ export type ExportColumnDef = {
   key: ExportColumnKey;
   label: string;
   getValue: (c: ClientRecordWithAssignee) => string | null;
-};
-
-/** クローズ理由のラベル(filter-sort 等と無関係なのでここに定義) */
-const CLOSE_REASON_LABEL: Record<string, string> = {
-  declined: "見送り",
-  self_arranged: "自己手配",
-  other_agency: "他社経由",
-  unresponsive: "連絡不能",
-  ineligible: "条件不一致",
-  passed_screening: "選考通過",
-  other: "その他",
 };
 
 /** 単一の YYYY-MM-DD → そのまま返す helper。null セーフ。 */
@@ -196,7 +186,8 @@ export const EXPORT_COLUMNS: ExportColumnDef[] = [
   {
     key: "close_reason",
     label: "クローズ理由",
-    getValue: (c) => (c.closeReason ? (CLOSE_REASON_LABEL[c.closeReason] ?? c.closeReason) : null),
+    getValue: (c) =>
+      c.closeReason ? (clientCloseReasonLabels[c.closeReason] ?? c.closeReason) : null,
   },
   {
     key: "email_distribution_enabled",

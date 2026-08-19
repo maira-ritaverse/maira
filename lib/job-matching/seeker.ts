@@ -138,13 +138,16 @@ export async function getSeekerJobRecommendations(
   }
 
   // 3) 自身の career_profile を取得 → 復号 + 更新時刻も取得(hash 用)
+  // encrypted_data_v2 は 20260607000003 で encrypted_data にリネーム済み。旧名を SELECT
+  // していたため PostgREST がカラム不在で失敗 → 握り潰されて profile が常に null になり、
+  // 本人のキャリア棚卸しが求人マッチングに反映されていなかった。
   const { data: cpRow } = await supabase
     .from("career_profiles")
-    .select("encrypted_data_v2, updated_at")
+    .select("encrypted_data, updated_at")
     .eq("user_id", user.id)
     .maybeSingle();
-  const profile = cpRow?.encrypted_data_v2
-    ? await decodeCareerProfileBlob(cpRow.encrypted_data_v2)
+  const profile = cpRow?.encrypted_data
+    ? await decodeCareerProfileBlob(cpRow.encrypted_data)
     : null;
 
   // 3.4) 求職者側 の 有効 preset を 決定 (opt-in の 単一 組織 のみ 反映、 それ 以外 は fit_focused)

@@ -559,15 +559,27 @@ export async function POST(request: Request) {
   }
 
   // 既存メールを取得して重複判定。RLS で自組織のみに絞られるが、明示的にも絞る。
-  // 1000 件超え組織では full scan になり得るが、import の頻度は低い前提で許容する。
-  const { data: existingRows } = await supabase
-    .from("client_records")
-    .select("email")
-    .eq("organization_id", role.organization.id);
+  // client_records が 1000 件を超えると max_rows(PostgREST)で頭打ちになり、超過分の
+  // 既存メールが重複判定から漏れて二重登録されていた(email に一意制約なし)。分割取得で
+  // 全件読む。from は実返却数だけ進めるので server の max_rows 値に依存しない。
+  // email が NULL の行は重複判定に無関係なので DB 側で除外(null 参照クラッシュも防ぐ)。
   const existingEmails = new Set<string>();
-  if (existingRows) {
-    for (const r of existingRows as Array<{ email: string }>) {
-      existingEmails.add(r.email.toLowerCase());
+  {
+    const SPAN = 1000;
+    let from = 0;
+    for (let req = 0; req < 200; req++) {
+      const { data, error } = await supabase
+        .from("client_records")
+        .select("email")
+        .eq("organization_id", role.organization.id)
+        .not("email", "is", null)
+        .order("id", { ascending: true }) // 一意 order でページ境界の重複/欠落を防ぐ
+        .range(from, from + SPAN - 1);
+      if (error || !data || data.length === 0) break;
+      for (const r of data as Array<{ email: string | null }>) {
+        if (r.email) existingEmails.add(r.email.toLowerCase());
+      }
+      from += data.length;
     }
   }
 

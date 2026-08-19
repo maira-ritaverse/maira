@@ -384,18 +384,17 @@ export async function getOrganizationCrmTagsStats(organizationId: string): Promi
   withTagsClients: number;
 }> {
   const supabase = await createClient();
-  // crm_tags 列 は NOT NULL DEFAULT '{}' な ので IS NULL で 弾く 必要 は ない。
-  // 全 行 取って クライアント 数 と タグ有 数 も 同時 に 集計 する。
-  const { data, error } = await supabase
-    .from("client_records")
-    .select("crm_tags")
-    .eq("organization_id", organizationId);
-  if (error) {
-    console.error("[clients/queries] tags select failed", error.message);
-    return { tags: [], totalClients: 0, withTagsClients: 0 };
-  }
-  type Row = { crm_tags: string[] | null };
-  const rows = (data ?? []) as Row[];
+  // crm_tags 列は NOT NULL DEFAULT '{}'。全行を分割取得(max_rows 越え)して集計する。
+  // 1000 件超の組織で、1000 件目以降にしか付いていないタグが配信ピッカーから漏れ、
+  // totalClients も過少になっていた問題を解消。id で安定ページング。
+  const { rows } = await fetchAllRows<{ crm_tags: string[] | null }>((from, to) =>
+    supabase
+      .from("client_records")
+      .select("crm_tags")
+      .eq("organization_id", organizationId)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
   const set = new Set<string>();
   let withTags = 0;
   for (const r of rows) {
