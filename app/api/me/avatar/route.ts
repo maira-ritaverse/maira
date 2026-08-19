@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { buildAvatarStoragePath } from "@/lib/profile/avatar";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/api/auth-guards";
 import { createServiceClient } from "@/lib/supabase/service";
 
 /**
@@ -21,11 +21,9 @@ const BUCKET = "avatar-images";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireUser();
+  if (!auth.ok) return auth.response;
+  const { user, supabase } = auth;
 
   let form: FormData;
   try {
@@ -97,11 +95,9 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireUser();
+  if (!auth.ok) return auth.response;
+  const { user, supabase } = auth;
 
   const { data: profileRow } = await supabase
     .from("profiles")

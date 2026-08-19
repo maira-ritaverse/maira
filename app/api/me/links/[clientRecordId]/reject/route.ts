@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/api/auth-guards";
 
 /**
  * 求職者側:エージェントから受けたクライアント連携招待を拒否する
@@ -40,14 +40,9 @@ function mapRpcError(message: string): { status: number; code: string; message: 
 export async function POST(_request: Request, { params }: RouteParams) {
   const { clientRecordId } = await params;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireUser();
+  if (!auth.ok) return auth.response;
+  const { supabase } = auth;
 
   const { error } = await supabase.rpc("reject_client_link", {
     p_client_record_id: clientRecordId,

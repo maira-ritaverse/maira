@@ -5,7 +5,7 @@ import { getModel, MODELS } from "@/lib/ai/client";
 import { logAiStreamError } from "@/lib/ai/rate-limit-monitor";
 import { chatInputExceedsLimit } from "@/lib/ai/chat-input-limits";
 import { buildInterviewSystemPrompt } from "@/lib/ai/prompts/mock-interview";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/api/auth-guards";
 
 /**
  * 面接シミュレーター(β:テキスト)チャット API
@@ -17,11 +17,11 @@ import { createClient } from "@/lib/supabase/server";
  * 将来:音声 I/O 対応時に Anthropic の音声入出力 / Whisper 連携などに切り替える。
  */
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // requireUser 経由で認証 + AAL2(MFA)強制。middleware の positive-list 外の
+  // 求職者 API でも MFA 登録済みユーザーには二段階認証を要求する(監査 L3)。
+  // このルートは認可ゲートのみ(β機能で DB 保存せず user/supabase は後段で未使用)。
+  const auth = await requireUser();
+  if (!auth.ok) return auth.response;
 
   let body: {
     messages?: UIMessage[];
