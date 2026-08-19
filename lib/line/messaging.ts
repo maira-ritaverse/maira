@@ -142,10 +142,21 @@ export async function sendMessages(
 
   const insertedIds = (inserted as Array<{ id: string }>).map((r) => r.id);
 
-  // LINE API 送信
-  const result = replyToken
+  // LINE API 送信。reply を試し、失敗したら push でフォールバックしてサイレント消失を防ぐ。
+  // reply token は 1 度きり & 短時間で失効し、並行送信で競合消費もされ得る。失敗時に push
+  // (課金 1 通)へ切り替え、エージェントのメッセージが届かない事故を防ぐ(push は失敗時のみ)。
+  let usedMethod: "reply" | "push" = replyToken ? "reply" : "push";
+  let result = replyToken
     ? await replyMessage(accessToken, replyToken, messages)
     : await pushMessage(accessToken, lineUserId, messages);
+  if (!result.ok && usedMethod === "reply") {
+    console.warn("[line/messaging] reply failed, falling back to push", {
+      organizationId,
+      status: result.status,
+    });
+    result = await pushMessage(accessToken, lineUserId, messages);
+    usedMethod = "push";
+  }
 
   if (!result.ok) {
     const errorClass = classifyLineError(result.status, result.message);
@@ -176,8 +187,9 @@ export async function sendMessages(
     };
   }
 
-  // 成功 → reply_token を クリア (= 消費済) + sent 状態 で 更新
-  if (replyToken) {
+  // 成功 → reply を実際に使ったときだけ reply_token をクリア(= 消費済)。
+  // push フォールバック時は reply していないので触らない(元トークンは失効/競合消費済み)。
+  if (usedMethod === "reply" && replyToken) {
     await service
       .from("line_messages")
       .update({ reply_token: null })
@@ -187,11 +199,15 @@ export async function sendMessages(
 
   const lineMessageIds = result.data.sentMessages?.map((m) => m.id) ?? [];
 
-  await service.from("line_messages").update({ send_status: "sent" }).in("id", insertedIds);
+  // フォールバックで実際の送信方法が変わり得るので send_method も実値で更新する。
+  await service
+    .from("line_messages")
+    .update({ send_status: "sent", send_method: usedMethod })
+    .in("id", insertedIds);
 
   return {
     ok: true,
-    sendMethod: replyToken ? "reply" : "push",
+    sendMethod: usedMethod,
     messageId: insertedIds[0],
     lineMessageIds,
   };

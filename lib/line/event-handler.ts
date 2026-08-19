@@ -20,7 +20,7 @@ import { createGoogleMeetEvent } from "@/lib/integrations/google-meet";
 import { createZoomMeeting } from "@/lib/integrations/zoom-meeting";
 import { getZoomAccessToken } from "@/lib/integrations/zoom-token";
 import { dispatchFlowTrigger } from "@/lib/ma/flow-enroller";
-import { getMessageContent, getUserProfile, replyMessage } from "./api";
+import { getMessageContent, getUserProfile, pushMessage, replyMessage } from "./api";
 import type {
   LineMessageEvent,
   LineFollowEvent,
@@ -815,9 +815,22 @@ async function confirmMeetingProposal(
     .filter((line) => line !== null)
     .join("\n");
 
-  const replyResult = await replyMessage(ctx.accessToken, event.replyToken, [
+  // reply token が失効(Zoom 作成に時間がかかった / LINE の実 TTL が短い等)しても
+  // join URL を確実に届けるため、reply 失敗時は push でフォールバックする。URL が届かないと
+  // 確定した会議に参加できず致命的なので、課金 1 通よりも確実な配信を優先する。
+  let replyResult = await replyMessage(ctx.accessToken, event.replyToken, [
     { type: "text", text: replyText },
   ]);
+  let joinUrlSendMethod: "reply" | "push" = "reply";
+  if (!replyResult.ok) {
+    console.warn("[line/postback] join URL reply failed, falling back to push", {
+      status: replyResult.status,
+    });
+    replyResult = await pushMessage(ctx.accessToken, lineUserId, [
+      { type: "text", text: replyText },
+    ]);
+    joinUrlSendMethod = "push";
+  }
 
   // 送信 履歴 を 残す (outbound)
   if (replyResult.ok) {
@@ -828,7 +841,7 @@ async function confirmMeetingProposal(
       message_type: "text",
       encrypted_content: (await encryptField(replyText)) ?? null,
       send_status: "sent",
-      send_method: "reply",
+      send_method: joinUrlSendMethod,
       related_meeting_schedule_id: meetingScheduleId,
       client_record_id: proposal.client_record_id,
     });

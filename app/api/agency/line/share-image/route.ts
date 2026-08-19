@@ -154,9 +154,18 @@ export async function POST(request: Request) {
     previewImageUrl: imageUrl,
   };
 
-  const sendResult = replyToken
+  // reply を試し、失敗したら push でフォールバック(画像がサイレント消失しないように)。
+  let usedMethod: "reply" | "push" = replyToken ? "reply" : "push";
+  let sendResult = replyToken
     ? await replyMessage(channel.channelAccessToken, replyToken, [imageMessage])
     : await pushMessage(channel.channelAccessToken, lineUserId, [imageMessage]);
+  if (!sendResult.ok && usedMethod === "reply") {
+    console.warn("[line/share-image] reply failed, falling back to push", {
+      status: sendResult.status,
+    });
+    sendResult = await pushMessage(channel.channelAccessToken, lineUserId, [imageMessage]);
+    usedMethod = "push";
+  }
 
   if (!sendResult.ok) {
     await admin
@@ -169,7 +178,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (replyToken) {
+  if (usedMethod === "reply" && replyToken) {
     await admin
       .from("line_messages")
       .update({ reply_token: null })
@@ -179,7 +188,7 @@ export async function POST(request: Request) {
 
   await admin
     .from("line_messages")
-    .update({ send_status: "sent", send_method: replyToken ? "reply" : "push" })
+    .update({ send_status: "sent", send_method: usedMethod })
     .eq("id", insertedId);
 
   await markConversationHandled(admin, guard.organization.id, lineUserId, guard.user.id);
