@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+import { todayInJst } from "@/lib/date/jst";
 import { z } from "zod";
 
 import { readJsonBody, requireOrgMember } from "@/lib/api/auth-guards";
@@ -174,7 +176,7 @@ export async function POST(request: Request) {
   const education = mergeExtractionIntoEducation([], extraction);
   const licenses = mergeExtractionIntoLicenses([], extraction);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayInJst();
   const title = `面談から生成(${today})`;
 
   const created = await createAgencyClientResume({

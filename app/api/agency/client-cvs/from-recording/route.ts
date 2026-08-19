@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+import { todayInJst } from "@/lib/date/jst";
 import { z } from "zod";
 
 import { readJsonBody, requireOrgMember } from "@/lib/api/auth-guards";
@@ -127,7 +129,7 @@ export async function POST(request: Request) {
   // 新規作成
   const initialBody = cvBodySchema.parse({});
   const cvBody = mergeExtractionIntoCvBody(initialBody, extraction);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayInJst();
   const title = `面談から生成(${today})`;
 
   const created = await createAgencyClientCv({

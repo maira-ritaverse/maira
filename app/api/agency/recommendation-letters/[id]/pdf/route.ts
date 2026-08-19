@@ -1,4 +1,5 @@
 import { requireOrgMember } from "@/lib/api/auth-guards";
+import { todayInJst } from "@/lib/date/jst";
 import { getClientRecord } from "@/lib/clients/queries";
 import { getJobPosting } from "@/lib/jobs/queries";
 import { generatePdfFromHtml } from "@/lib/pdf/generate";
@@ -28,8 +29,8 @@ export const dynamic = "force-dynamic";
 type RouteParams = { params: Promise<{ id: string }> };
 
 function todayIsoDate(): string {
-  // UTC 日付を YYYY-MM-DD で(タイムゾーンを跨ぐ運用でも安定するように)
-  return new Date().toISOString().slice(0, 10);
+  // 推薦状の作成日は日本の「今日」。UTC だと JST 0〜9時に前日になるため JST 暦日を使う。
+  return todayInJst();
 }
 
 export async function GET(_request: Request, { params }: RouteParams) {

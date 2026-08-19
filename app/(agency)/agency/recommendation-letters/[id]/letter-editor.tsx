@@ -12,6 +12,8 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
+
+import { todayInJst } from "@/lib/date/jst";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -279,7 +281,7 @@ export function LetterEditor({
         template: selectedTemplate,
         recipientCompanyName: job.companyName,
         organizationName,
-        documentDate: new Date().toISOString().slice(0, 10),
+        documentDate: todayInJst(),
       });
       await navigator.clipboard.writeText(text);
       setSaveState({ kind: "saved", at: Date.now() });
@@ -301,7 +303,7 @@ export function LetterEditor({
         organizationName,
         recipientCompanyName: job.companyName,
         recipientPosition: job.position,
-        documentDate: new Date().toISOString().slice(0, 10),
+        documentDate: todayInJst(),
       }),
     [
       headline,

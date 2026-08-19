@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { todayInJst } from "@/lib/date/jst";
+
 import { createServiceClient } from "@/lib/supabase/service";
 import { publicIntakeSubmitSchema } from "@/lib/intake-forms/types";
 import { consumeRateLimit } from "@/lib/rate-limit/rate-limit";
@@ -129,7 +131,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       desired_locations: desiredLocations.length === 0 ? null : desiredLocations,
       desired_annual_income: parsed.data.desiredAnnualIncome ?? null,
       // 受付日は今日
-      intake_date: new Date().toISOString().slice(0, 10),
+      intake_date: todayInJst(),
     });
     if (insErr) {
       return NextResponse.json(
