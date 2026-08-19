@@ -8,13 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiFetch, getErrorMessage } from "@/lib/api/client-fetch";
-import {
-  CURRENT_NDA_VERSION,
-  NDA_DISCLOSER_NAME,
-  NDA_PREAMBLE,
-  NDA_SECTIONS,
-  NDA_TITLE,
-} from "@/lib/nda/nda-content";
+import { NDA_DISCLOSER_NAME, NDA_PREAMBLE, NDA_SECTIONS, NDA_TITLE } from "@/lib/nda/nda-content";
 
 type Props = {
   /** 旧バージョンに同意済み(true)か完全新規(false)か。文面切替に使う。 */
@@ -101,9 +95,6 @@ export function NdaConsentModal({ hasPrior, canSign }: Props) {
             {/* NDA 全文(スクロール) */}
             <div className="bg-muted/30 mt-4 flex-1 overflow-y-auto rounded border p-4 text-xs leading-relaxed">
               <p className="text-center text-sm font-bold">{NDA_TITLE}</p>
-              <p className="text-muted-foreground mt-1 text-center text-[10px]">
-                バージョン: {CURRENT_NDA_VERSION}
-              </p>
               <p className="mt-3">{NDA_PREAMBLE}</p>
               {NDA_SECTIONS.map((s) => (
                 <div key={s.heading} className="mt-3">

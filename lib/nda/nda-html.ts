@@ -1,6 +1,5 @@
 import { escapeHtml } from "@/lib/html/escape";
 import {
-  CURRENT_NDA_VERSION,
   NDA_DISCLOSER_ADDRESS,
   NDA_DISCLOSER_NAME,
   NDA_HAS_DISCLOSER_ADDRESS,
@@ -74,8 +73,7 @@ export function buildNdaHtml(sign: NdaSignInfo): string {
     font-size: 11.5px; line-height: 1.8;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  h1 { font-size: 18px; text-align: center; margin: 0 0 4px; letter-spacing: 0.1em; }
-  .version { text-align: center; font-size: 10px; color: #555; margin-bottom: 16px; }
+  h1 { font-size: 18px; text-align: center; margin: 0 0 16px; letter-spacing: 0.1em; }
   .preamble { margin: 0 0 14px; text-align: justify; }
   .clause { margin: 0 0 10px; break-inside: avoid; }
   .clause h2 { font-size: 12px; margin: 0 0 2px; }
@@ -92,7 +90,6 @@ export function buildNdaHtml(sign: NdaSignInfo): string {
 </head>
 <body>
   <h1>${escapeHtml(NDA_TITLE)}</h1>
-  <div class="version">バージョン: ${escapeHtml(sign.version || CURRENT_NDA_VERSION)}</div>
   <p class="preamble">${escapeHtml(NDA_PREAMBLE)}</p>
   ${clausesHtml}
   <div class="sign">
@@ -102,12 +99,10 @@ export function buildNdaHtml(sign: NdaSignInfo): string {
       <tr><th>受領者(乙)</th><td>${escapeHtml(sign.organizationName)}</td></tr>
       <tr><th>署名者(氏名)</th><td>${escapeHtml(sign.signerName ?? "（未署名)")}</td></tr>
       <tr><th>同意日時</th><td>${escapeHtml(acceptedText)}</td></tr>
-      <tr><th>バージョン</th><td>${escapeHtml(sign.version || CURRENT_NDA_VERSION)}</td></tr>
       ${ipRow}
     </table>
     <p class="note">
       本書面は、乙の管理者が本サービス上で氏名を入力し「同意する」を選択した記録に基づき電子的に生成されたものです。
-      本文面は法務レビュー前のドラフトを含む場合があります。正式な契約内容は運営者との合意に従います。
     </p>
   </div>
 </body>
