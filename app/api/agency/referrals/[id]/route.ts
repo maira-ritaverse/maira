@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { fireReferralConversionFlow } from "@/lib/ma/conversion-events";
@@ -148,13 +148,19 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     // service client を使うのは ma_flows / ma_flow_subscriptions / ma_conversion_events が
     // service_role INSERT 想定で RLS が厳しめのため。
     if (referralClientRecordId) {
-      void fireReferralConversionFlow({
-        admin: createServiceClient(),
-        organizationId: orgId,
-        clientRecordId: referralClientRecordId,
-        referralId: id,
-        newStatus: d.status,
-      });
+      // 応答後に実行(after)。void のままだとサーバーレスで応答返却後に破棄され得る。
+      // d.status はこの時点で string に narrowing 済(上位の `if (d.status !== undefined)`)。
+      // クロージャに入ると narrowing が失われるため const に退避する。
+      const newStatus = d.status;
+      after(() =>
+        fireReferralConversionFlow({
+          admin: createServiceClient(),
+          organizationId: orgId,
+          clientRecordId: referralClientRecordId,
+          referralId: id,
+          newStatus,
+        }).catch((err) => console.warn("[referrals] CV flow failed", err)),
+      );
     }
 
     // 通知発火(同組織の別メンバー向け、本人は除外)。

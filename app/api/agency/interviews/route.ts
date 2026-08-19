@@ -6,7 +6,7 @@
  *
  * 認証: organization_member のみ。 RLS で 自 組織 の レコード のみ 見える / 作れる。
  */
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { listInterviewsByReferral } from "@/lib/interviews/queries";
 import { createInterviewRequestSchema } from "@/lib/interviews/types";
@@ -97,13 +97,19 @@ export async function POST(request: Request) {
   // 2次以降は「面接シリーズ継続中」なのでスキップし、result=done の PATCH で
   // interview_done を発火する。
   if (d.kind === "first" || d.kind === "company") {
-    void fireInterviewConversionFlow({
-      admin: createServiceClient(),
-      organizationId: role.organization.id,
-      referralId: d.referral_id,
-      interviewId: inserted.id as string,
-      eventKey: "meeting_confirmed",
-    });
+    // 応答後に実行(after)。void のままだとサーバーレスで応答返却後に破棄され得る。
+    // クロージャ内で role.organization の narrowing が失われるため const に退避。
+    const organizationId = role.organization.id;
+    const interviewId = inserted.id as string;
+    after(() =>
+      fireInterviewConversionFlow({
+        admin: createServiceClient(),
+        organizationId,
+        referralId: d.referral_id,
+        interviewId,
+        eventKey: "meeting_confirmed",
+      }).catch((err) => console.warn("[interviews] CV flow failed", err)),
+    );
   }
 
   return NextResponse.json({ ok: true, id: inserted.id });

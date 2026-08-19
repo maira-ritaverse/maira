@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { readJsonBody, requireOrgAdmin, requireOrgMember } from "@/lib/api/auth-guards";
 import { notifyRecommendationLetterFinalized } from "@/lib/recommendation-letters/notify";
@@ -70,16 +70,19 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   // finalized になったとみなして良い(status を明示的に "finalized" に上書きしたケース)。
   if (parsed.data.status === "finalized" && result.status === "finalized") {
     // 通知失敗はログだけ。本フローは成功扱いで返す。
-    void notifyRecommendationLetterFinalized({
-      letterId: result.id,
-      referralId: result.referralId,
-      organizationId: organization.id,
-    }).catch((err) => {
-      console.error("[recommendation-letters/PATCH] notify failed", {
+    // 応答後に実行(after)。void のままだとサーバーレスで応答返却後に破棄され得る。
+    after(() =>
+      notifyRecommendationLetterFinalized({
         letterId: result.id,
-        message: err instanceof Error ? err.message : String(err),
-      });
-    });
+        referralId: result.referralId,
+        organizationId: organization.id,
+      }).catch((err) => {
+        console.error("[recommendation-letters/PATCH] notify failed", {
+          letterId: result.id,
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }),
+    );
   }
 
   return NextResponse.json({ letter: result });

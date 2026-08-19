@@ -4,7 +4,7 @@
  * 面接 の 部分 更新 (主 に result 変更 「1 次 通過 = done」) と 削除。
  * RLS で 自 組織 の レコード のみ 更新 / 削除 可。
  */
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { updateInterviewRequestSchema } from "@/lib/interviews/types";
 import { fireInterviewConversionFlow } from "@/lib/ma/conversion-events";
@@ -81,13 +81,18 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
   // 面接完了 → 「interview_done」CV Flow を発火(fire-and-forget)
   if (d.result === "done" && previousResult !== "done" && referralIdForCv) {
-    void fireInterviewConversionFlow({
-      admin: createServiceClient(),
-      organizationId: role.organization.id,
-      referralId: referralIdForCv,
-      interviewId: id,
-      eventKey: "interview_done",
-    });
+    // 応答後に実行(after)。void のままだとサーバーレスで応答返却後に破棄され得る。
+    // クロージャ内で role.organization の narrowing が失われるため const に退避。
+    const organizationId = role.organization.id;
+    after(() =>
+      fireInterviewConversionFlow({
+        admin: createServiceClient(),
+        organizationId,
+        referralId: referralIdForCv,
+        interviewId: id,
+        eventKey: "interview_done",
+      }).catch((err) => console.warn("[interviews] CV flow failed", err)),
+    );
   }
 
   return NextResponse.json({ ok: true });
