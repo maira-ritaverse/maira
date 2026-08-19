@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { isMairaAdmin } from "@/lib/announcements/platform-queries";
 import { recordAuditLog } from "@/lib/audit/audit-log";
-import { PLAN_TIERS } from "@/lib/billing/agency";
+import { PLAN_TIERS, SOLO_TIERS } from "@/lib/billing/agency";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -16,9 +16,10 @@ import { createServiceClient } from "@/lib/supabase/service";
  *
  * Auth: profiles.is_maira_admin = true のみ。
  */
+// PLAN_TIERS は Team 系のみ。Solo 系(SOLO_TIERS)を合わせて全 tier を許可する。
+const ALL_TIERS = [...PLAN_TIERS, ...SOLO_TIERS] as unknown as [string, ...string[]];
 const bodySchema = z.object({
-  // PLAN_TIERS を zod enum に流用(値は tier-limits の PlanTierValue と一致)。
-  tier: z.enum(PLAN_TIERS as unknown as [string, ...string[]]),
+  tier: z.enum(ALL_TIERS),
 });
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -49,7 +50,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     .from("organization_plans")
     .upsert({ organization_id: id, tier }, { onConflict: "organization_id" });
   if (error) {
-    return NextResponse.json({ error: "update_failed", message: error.message }, { status: 500 });
+    console.error("[admin/tier] update failed", { organizationId: id, message: error.message });
+    return NextResponse.json({ error: "update_failed" }, { status: 500 });
   }
 
   await recordAuditLog({

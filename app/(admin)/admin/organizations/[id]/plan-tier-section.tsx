@@ -21,6 +21,8 @@ type Props = {
 
 const LABEL = PLAN_TIER_LABEL as Record<string, string>;
 const SOLO = SOLO_TIERS as readonly string[];
+// PLAN_TIERS は Team 系のみ。Solo 系(SOLO_TIERS)を合わせて全 tier を候補にする。
+const ALL_TIERS: readonly string[] = [...PLAN_TIERS, ...SOLO_TIERS];
 
 export function PlanTierSection({ organizationId, initialTier, memberCount }: Props) {
   const router = useRouter();
@@ -33,6 +35,14 @@ export function PlanTierSection({ organizationId, initialTier, memberCount }: Pr
   const soloWithMultiMembers = SOLO.includes(tier) && memberCount > 1;
 
   const submit = () => {
+    const label = LABEL[tier] ?? tier;
+    if (
+      !window.confirm(
+        `プラン種別を「${label}」に変更します。Stripe 課金とは同期しないため、課金は別途調整が必要です。よろしいですか?`,
+      )
+    ) {
+      return;
+    }
     setError(null);
     setDone(false);
     startTransition(async () => {
@@ -81,9 +91,9 @@ export function PlanTierSection({ organizationId, initialTier, memberCount }: Pr
               disabled={isPending}
               className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
             >
-              {PLAN_TIERS.map((t) => (
+              {ALL_TIERS.map((t) => (
                 <option key={t} value={t}>
-                  {LABEL[t]}({SOLO.includes(t) ? "Solo" : "Team"})
+                  {LABEL[t] ?? t}({SOLO.includes(t) ? "Solo" : "Team"})
                 </option>
               ))}
             </select>

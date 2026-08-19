@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { isMairaAdmin } from "@/lib/announcements/platform-queries";
+import { recordAuditLog } from "@/lib/audit/audit-log";
 import { sendNdaSignatureRequestEmail } from "@/lib/email/nda-signature-request";
+import { consumeRateLimit } from "@/lib/rate-limit/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -22,6 +24,20 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!(await isMairaAdmin())) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+
+  // 連打 / 濫用でのメールスパム防止(reveal-notes と同じ多層防御)。
+  const rl = await consumeRateLimit({
+    namespace: "admin:nda-request",
+    identifier: user.id,
+    windowSeconds: 60,
+    maxCount: 20,
+  });
+  if (rl.limited) {
+    return NextResponse.json(
+      { error: "rate_limited", message: "送信が多すぎます。しばらくしてからお試しください。" },
+      { status: 429 },
+    );
+  }
 
   const admin = createServiceClient();
 
@@ -67,5 +83,25 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     else console.warn("[admin/nda-request] send failed", { reason: r.reason });
   }
 
+  await recordAuditLog({
+    userId: user.id,
+    action: "nda_signature_requested",
+    metadata: { organizationId: id, sentCount: sent, totalAdmins: emails.length },
+    ipAddress: request.headers.get("x-forwarded-for"),
+    userAgent: request.headers.get("user-agent"),
+  });
+
+  // 1 件も送れなかった場合(EMAIL_FROM 未設定 / 全失敗)は成功扱いにしない。
+  if (sent === 0) {
+    return NextResponse.json(
+      {
+        error: "send_failed",
+        message: "メールを送信できませんでした(メール設定をご確認ください)。",
+        sentCount: 0,
+        totalAdmins: emails.length,
+      },
+      { status: 502 },
+    );
+  }
   return NextResponse.json({ ok: true, sentCount: sent, totalAdmins: emails.length });
 }
