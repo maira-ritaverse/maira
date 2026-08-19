@@ -18,7 +18,7 @@
  */
 
 /** 現在の NDA バージョン。文面改定時に必ず更新する。 */
-export const CURRENT_NDA_VERSION = "2026-08-19";
+export const CURRENT_NDA_VERSION = "2026-08-19-2";
 
 /** 開示者(運営会社)。正式名称は法務確認のうえ確定すること。 */
 export const NDA_DISCLOSER_NAME = "株式会社Revorise";
@@ -29,7 +29,8 @@ export const NDA_DISCLOSER_NAME = "株式会社Revorise";
  * 未設定(下記プレースホルダのまま)の間は、前文・署名記録に住所を表示しない
  * (プレースホルダを本番の契約書に出さないため)。実値を入れると自動で表示される。
  */
-export const NDA_DISCLOSER_ADDRESS = "（本店所在地を設定してください）";
+export const NDA_DISCLOSER_ADDRESS =
+  "〒531-0072 大阪府大阪市北区豊崎1丁目8-1 ブエナビスタ梅田イースト603号室";
 
 /** 住所が実値として設定されているか(プレースホルダ / 空は false)。 */
 export const NDA_HAS_DISCLOSER_ADDRESS =
