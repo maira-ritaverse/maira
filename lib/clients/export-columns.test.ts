@@ -26,6 +26,11 @@ describe("parseExportColumnsParam", () => {
     const r = parseExportColumnsParam("email,name");
     expect(r).toEqual(["email", "name"]);
   });
+
+  it("重複するキーは 1 回に一意化する", () => {
+    const r = parseExportColumnsParam("name,name,email");
+    expect(r).toEqual(["name", "email"]);
+  });
 });
 
 describe("EXPORT_COLUMNS / DEFAULT_EXPORT_COLUMNS", () => {

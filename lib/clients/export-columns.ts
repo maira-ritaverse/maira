@@ -227,9 +227,14 @@ export const DEFAULT_EXPORT_COLUMNS: ExportColumnKey[] = [
 export function parseExportColumnsParam(raw: string | null): ExportColumnKey[] {
   if (!raw) return DEFAULT_EXPORT_COLUMNS;
   const known = new Set<string>(EXPORT_COLUMNS.map((c) => c.key));
-  const parsed = raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0 && known.has(s)) as ExportColumnKey[];
+  // 同じキーが複数回来ても列が重複しないよう Set で一意化する(?columns=name,name,email 対策)。
+  const parsed = [
+    ...new Set(
+      raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0 && known.has(s)),
+    ),
+  ] as ExportColumnKey[];
   return parsed.length > 0 ? parsed : DEFAULT_EXPORT_COLUMNS;
 }
