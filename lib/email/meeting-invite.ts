@@ -180,6 +180,9 @@ export async function sendMeetingInviteEmail(
   // .ics は base64 で attach。 Resend は filename + content (base64) 形式。
   const icsBase64 = Buffer.from(args.icsContent, "utf-8").toString("base64");
   const filename = args.variant === "cancel" ? "cancel.ics" : "invite.ics";
+  // ics 本文の METHOD と MIME の method を一致させる(cancel は CANCEL)。
+  // Outlook 等は MIME の method を見るため、PUBLISH 固定だとキャンセルが自動反映されない。
+  const icsMethod = args.variant === "cancel" ? "CANCEL" : "PUBLISH";
 
   // C2-1: Resend wrapper 経由 で リトライ 付き 送信。
   const result = await sendResendEmail(
@@ -193,7 +196,7 @@ export async function sendMeetingInviteEmail(
         {
           filename,
           content: icsBase64,
-          content_type: "text/calendar; charset=utf-8; method=PUBLISH",
+          content_type: `text/calendar; charset=utf-8; method=${icsMethod}`,
         },
       ],
     },
