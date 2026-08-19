@@ -357,12 +357,22 @@ export function buildResumeHtml(resume: Resume, options: BuildResumeHtmlOptions)
     display: flex;
     flex-direction: column;
   }
-  .page-2 .motiv-box {
-    flex: 1 1 auto;
+  /* 志望動機 と 本人希望 で ページ 残り高さ を バランス 良く 分け合う。
+     どちらか 一方 が 全部 埋める のでは なく、 志望動機 を やや 大きめ (3 : 2) に
+     配分 して 全体 を 埋める。 各 body は 枠 いっぱいに 広げる。 */
+  .page-2 .motiv-box,
+  .page-2 .req-box {
     display: flex;
     flex-direction: column;
   }
-  .page-2 .motiv-box .body {
+  .page-2 .motiv-box {
+    flex: 3 1 0;
+  }
+  .page-2 .req-box {
+    flex: 2 1 0;
+  }
+  .page-2 .motiv-box .body,
+  .page-2 .req-box .body {
     flex: 1 1 auto;
   }
 
