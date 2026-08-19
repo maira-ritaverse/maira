@@ -33,6 +33,7 @@ export type AuditAction =
   | "admin_force_deleted_user"
   | "account_export_requested"
   | "privacy_policy_accepted"
+  | "nda_accepted"
   | "admin_accessed_user"
   | "platform_ai_quota_changed";
 

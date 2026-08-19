@@ -3,10 +3,12 @@ import { redirect } from "next/navigation";
 import { AgencySidebar } from "@/components/features/agency/agency-sidebar";
 import { NotificationBell } from "@/components/features/notifications/notification-bell";
 import { PrivacyPolicyModal } from "@/components/features/privacy-policy-modal";
+import { NdaConsentModal } from "@/components/features/nda/nda-consent-modal";
 import { Toaster } from "@/components/features/admin/toaster";
 import { UserMenu } from "@/components/features/user-menu";
 import { ToastProvider } from "@/lib/admin/toast/store";
 import { getPlanEntitlements } from "@/lib/billing/plan-entitlements";
+import { getOrgNdaAcceptance, needsToAcceptNda } from "@/lib/nda/nda";
 import {
   getTrialCountdown,
   isPlanReadOnly,
@@ -56,13 +58,14 @@ export default async function AgencyLayout({ children }: { children: React.React
 
   // 組織アーカイブ + 課金プラン を まとめて 取得 (別クエリを直列にしないため)
   // tier は サイドバー の 機能 ゲート (MA 項目 の 出し分け) に 使う。
-  const [{ data: orgRow }, { data: planRow }] = await Promise.all([
+  const [{ data: orgRow }, { data: planRow }, ndaAcceptance] = await Promise.all([
     supabase.from("organizations").select("archived_at").eq("id", role.organization.id).single(),
     supabase
       .from("organization_plans")
       .select("tier, status, trial_ends_at, stripe_subscription_id, is_billing_exempt")
       .eq("organization_id", role.organization.id)
       .maybeSingle(),
+    getOrgNdaAcceptance(role.organization.id),
   ]);
 
   // 運営者によってアーカイブされたユーザ / 組織はログイン不可。
@@ -72,6 +75,11 @@ export default async function AgencyLayout({ children }: { children: React.React
   }
   const requirePolicy = needsToAccept(policyAcceptance);
   const hasPriorPolicy = policyAcceptance.acceptedAt !== null;
+
+  // NDA(秘密保持契約)ゲート。組織単位で判定し、代表署名は管理者のみ可能。
+  const requireNda = needsToAcceptNda(ndaAcceptance);
+  const canSignNda = role.member.role === "admin";
+  const hasPriorNda = ndaAcceptance.acceptedAt !== null;
 
   // 課金プランに基づくバナー / モーダル判定
   // planRow は tier を 追加 select して いる の で、 バナー 判定 用 の 形 に narrow して 渡す。
@@ -135,6 +143,10 @@ export default async function AgencyLayout({ children }: { children: React.React
           <main className="flex-1 overflow-auto p-6">{children}</main>
         </div>
         {requirePolicy && <PrivacyPolicyModal hasPrior={hasPriorPolicy} />}
+        {/* プライバシーポリシー同意後に NDA ゲートを出す(モーダルの重なりを避ける)。 */}
+        {!requirePolicy && requireNda && (
+          <NdaConsentModal hasPrior={hasPriorNda} canSign={canSignNda} />
+        )}
         {showReminder && plan && (
           <TrialReminderModal
             daysRemaining={trialDays!}
