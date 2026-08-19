@@ -7,6 +7,7 @@ import { buildCsvFilename, csvFormat, toCsv } from "@/lib/csv/format";
 import { csvResponse } from "@/lib/csv/response";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 
 /**
  * GET /api/agency/export/interviews
@@ -45,15 +46,25 @@ export async function GET() {
   }
 
   // referrals → client_records / job_postings を join して 「誰 が」「どこ で」を 一発 で 出す
-  const { data, error } = await supabase
-    .from("interviews")
-    .select(
-      "id, kind, scheduled_at, result, notes, created_at, updated_at, referrals!inner(client_record_id, job_posting_id, status, client_records(name), job_postings(company_name, position))",
-    )
-    .eq("organization_id", role.organization.id)
-    .order("scheduled_at", { ascending: false });
-  if (error) {
-    return NextResponse.json({ error: "fetch_failed", message: error.message }, { status: 500 });
+  // 全件取得(max_rows 越え)。id で安定ページング。全件失敗時のみ 500。
+  // クロージャ内で role.organization の narrowing が失われるため const に退避。
+  const organizationId = role.organization.id;
+  const { rows: data, complete } = await fetchAllRows((from, to) =>
+    supabase
+      .from("interviews")
+      .select(
+        "id, kind, scheduled_at, result, notes, created_at, updated_at, referrals!inner(client_record_id, job_posting_id, status, client_records(name), job_postings(company_name, position))",
+      )
+      .eq("organization_id", organizationId)
+      .order("scheduled_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to),
+  );
+  if (!complete && data.length === 0) {
+    return NextResponse.json(
+      { error: "fetch_failed", message: "面接の取得に失敗しました" },
+      { status: 500 },
+    );
   }
 
   type Row = {

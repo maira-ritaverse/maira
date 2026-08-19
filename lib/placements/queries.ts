@@ -13,6 +13,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 import type { Placement, PlacementEventType, PaymentStatus, PlacementWithAuthor } from "./types";
 
 type PlacementRow = {
@@ -123,14 +124,17 @@ export async function listPlacementsByClient(
 export async function listPlacementsByOrganization(organizationId: string): Promise<Placement[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("placements")
-    .select("*")
-    .eq("organization_id", organizationId)
-    .order("event_date", { ascending: false })
-    .order("created_at", { ascending: false });
+  // 全件取得(max_rows 越え)。集計・export で全イベントが必要。id で安定ページング。
+  const { rows: data } = await fetchAllRows<PlacementRow>((from, to) =>
+    supabase
+      .from("placements")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .order("event_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to),
+  );
 
-  if (error || !data) return [];
-
-  return (data as PlacementRow[]).map(rowToPlacement);
+  return data.map(rowToPlacement);
 }

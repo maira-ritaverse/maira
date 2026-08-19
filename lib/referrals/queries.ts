@@ -10,6 +10,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 import type {
   Referral,
   ReferralStatus,
@@ -154,21 +155,25 @@ export async function listReferralsByOrganization(
 ): Promise<ReferralWithClientAndJob[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("referrals")
-    .select(
-      `
+  // 全件取得(max_rows 越え)。1000 件超で切れると、export/placements の突合で
+  // 「削除されたクライアント/求人」と誤表示される。id で安定ページング。
+  const { rows: data } = await fetchAllRows<ReferralWithClientAndJobRow>((from, to) =>
+    supabase
+      .from("referrals")
+      .select(
+        `
       *,
       client_records ( name, email ),
       job_postings ( company_name, position )
     `,
-    )
-    .eq("organization_id", organizationId)
-    .order("created_at", { ascending: false });
+      )
+      .eq("organization_id", organizationId)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to),
+  );
 
-  if (error || !data) return [];
-
-  return (data as ReferralWithClientAndJobRow[]).map((row) => {
+  return data.map((row) => {
     const client = pickOne(row.client_records);
     const job = pickOne(row.job_postings);
     return {

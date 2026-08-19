@@ -6,6 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 import { decryptField } from "@/lib/crypto/field-encryption";
 import type {
   ClientCloseReason,
@@ -255,42 +256,6 @@ export async function getClientDistributionStats(
 // 公開する型エイリアス(close_reason のキーセット)を再エクスポートしておくと、
 // UI 側で Record の key 型を絞り込みやすい。
 export type { ClientCloseReason };
-
-/**
- * PostgREST の max_rows(返却行数の上限)を分割取得で越えて全行を読み込む。
- *
- * 背景:一覧クエリは limit/range を付けず「全件」のつもりだが、実際は max_rows で
- * 頭打ちになり、超過分がブラウザに渡らず検索・エクスポートから漏れていた。
- *
- * 重要:from の前進は「要求幅(SPAN)」ではなく「実際に返ってきた行数」で行う。
- * こうすると server の max_rows が SPAN より小さくても取りこぼさない(SPAN に
- * ハードコードした値と max_rows が一致する前提に依存しない = 設定変更で静かに
- * 壊れない)。終端は「空ページが返ったら」で判定する(max_rows 非依存)。
- *
- * 注意:buildPage には必ず「一意で安定した order」を付けること(order が不安定だと
- * ページ境界で行の重複 / 欠落が起きる)。id を最終タイブレークにするのが安全。
- *
- * 戻り値の complete:全ページを最後まで読めたら true。途中エラー / 安全弁到達で
- * 打ち切った場合は false(件数集計など「過少表示が誤解を生む」用途で使い分ける)。
- */
-async function fetchAllRows<T>(
-  buildPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
-): Promise<{ rows: T[]; complete: boolean }> {
-  const SPAN = 1000; // 1 リクエストで要求する行数(実返却は max_rows でこれ以下になり得る)
-  const MAX_REQUESTS = 200; // 安全弁:最大 20 万件相当。無限ループ防止。
-  const rows: T[] = [];
-  let from = 0;
-  for (let req = 0; req < MAX_REQUESTS; req++) {
-    const { data, error } = await buildPage(from, from + SPAN - 1);
-    if (error || !data) return { rows, complete: false }; // 途中失敗:取れた分で打ち切り
-    if (data.length === 0) return { rows, complete: true }; // 空ページ = 末尾に到達
-    rows.push(...data);
-    from += data.length; // 実返却数だけ前進(max_rows < SPAN でも取りこぼさない)
-  }
-  // MAX_REQUESTS 到達(極端に多い)。無言切り捨てを避けて警告を残す。
-  console.warn("[clients/queries] fetchAllRows hit MAX_REQUESTS cap", { fetched: rows.length });
-  return { rows, complete: false };
-}
 
 /**
  * 企業のクライアント総件数を取得(ページネーション / アラート判定用)。

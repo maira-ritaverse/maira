@@ -7,6 +7,7 @@ import { buildCsvFilename, csvFormat, toCsv } from "@/lib/csv/format";
 import { csvResponse } from "@/lib/csv/response";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 
 /**
  * GET /api/agency/export/line-broadcasts
@@ -43,15 +44,25 @@ export async function GET() {
     );
   }
 
-  const { data, error } = await supabase
-    .from("line_broadcasts")
-    .select(
-      "id, message_type, target_filter, target_count, status, sent_count, failed_count, scheduled_for, sent_at, error_message, created_at",
-    )
-    .eq("organization_id", role.organization.id)
-    .order("created_at", { ascending: false });
-  if (error) {
-    return NextResponse.json({ error: "fetch_failed", message: error.message }, { status: 500 });
+  // 全件取得(max_rows 越え)。id で安定ページング。全件失敗時のみ 500。
+  // クロージャ内で role.organization の narrowing が失われるため const に退避。
+  const organizationId = role.organization.id;
+  const { rows: data, complete } = await fetchAllRows((from, to) =>
+    supabase
+      .from("line_broadcasts")
+      .select(
+        "id, message_type, target_filter, target_count, status, sent_count, failed_count, scheduled_for, sent_at, error_message, created_at",
+      )
+      .eq("organization_id", organizationId)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to),
+  );
+  if (!complete && data.length === 0) {
+    return NextResponse.json(
+      { error: "fetch_failed", message: "配信履歴の取得に失敗しました" },
+      { status: 500 },
+    );
   }
 
   type Row = {
