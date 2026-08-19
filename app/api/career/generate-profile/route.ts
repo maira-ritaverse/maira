@@ -33,8 +33,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = (await request.json()) as { conversationId?: string };
-  const { conversationId } = body;
+  // 不正 JSON / 空ボディ / null ボディでも 500 にせず 400 を返す(他ルートと同じ作法)。
+  let body: { conversationId?: string } | null;
+  try {
+    body = (await request.json()) as { conversationId?: string } | null;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+  const conversationId = body?.conversationId;
 
   if (!conversationId) {
     return NextResponse.json({ error: "conversationId is required" }, { status: 400 });
