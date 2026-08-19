@@ -27,9 +27,10 @@ export async function sendSignedNdaEmail(args: {
     <p>${escapeHtml(args.signerName)} 様</p>
     <p>Myaira の秘密保持契約(NDA)へのご同意ありがとうございます。同意内容の控えを PDF で添付いたします。</p>
     ${infoCard(
-      infoRow("組織名", escapeHtml(args.organizationName)) +
-        infoRow("署名者", escapeHtml(args.signerName)) +
-        infoRow("バージョン", escapeHtml(args.version)),
+      // infoRow は内部で escape するので二重エスケープしない。
+      infoRow("組織名", args.organizationName) +
+        infoRow("署名者", args.signerName) +
+        infoRow("バージョン", args.version),
     )}
     <p>本メールは同意記録の控えです。大切に保管してください。</p>
   `;

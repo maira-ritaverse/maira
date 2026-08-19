@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -77,6 +78,16 @@ export function NdaConsentModal({ hasPrior, canSign }: Props) {
             </p>
             <p className="text-muted-foreground mt-2">
               お手数ですが、組織の管理者にログインのうえ同意手続きを行うようご連絡ください。
+              管理者が不在などでお困りの場合は{" "}
+              <Link
+                href="/support"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium underline"
+              >
+                サポート
+              </Link>{" "}
+              までお問い合わせください。
             </p>
           </div>
         ) : (
