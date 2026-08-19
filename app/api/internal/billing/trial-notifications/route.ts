@@ -50,24 +50,36 @@ export async function POST(request: Request) {
     trial_ends_at: string;
   };
 
-  const fetchInWindow = async (from: Date, to: Date): Promise<PlanRow[]> => {
+  type MarkerCol = "trial_notified_7d_at" | "trial_notified_1d_at";
+
+  // 未通知(markerCol IS NULL)の組織だけを対象にする(冪等: 同一しきい値で 1 回だけ)。
+  const fetchInWindow = async (from: Date, to: Date, markerCol: MarkerCol): Promise<PlanRow[]> => {
     const { data, error } = await admin
       .from("organization_plans")
       .select("organization_id, trial_ends_at")
       .eq("status", "trialing")
+      .is(markerCol, null)
       .gte("trial_ends_at", from.toISOString())
       .lte("trial_ends_at", to.toISOString());
     if (error) return [];
     return (data ?? []) as PlanRow[];
   };
 
-  const plans7 = await fetchInWindow(in7DaysFrom, in7DaysTo);
-  const plans1 = await fetchInWindow(in1DayFrom, in1DayTo);
+  const plans7 = await fetchInWindow(in7DaysFrom, in7DaysTo, "trial_notified_7d_at");
+  const plans1 = await fetchInWindow(in1DayFrom, in1DayTo, "trial_notified_1d_at");
 
-  type SendTarget = { plan: PlanRow; daysRemaining: number };
+  type SendTarget = { plan: PlanRow; daysRemaining: number; markerCol: MarkerCol };
   const targets: SendTarget[] = [
-    ...plans7.map((p) => ({ plan: p, daysRemaining: 7 })),
-    ...plans1.map((p) => ({ plan: p, daysRemaining: 1 })),
+    ...plans7.map((p) => ({
+      plan: p,
+      daysRemaining: 7,
+      markerCol: "trial_notified_7d_at" as const,
+    })),
+    ...plans1.map((p) => ({
+      plan: p,
+      daysRemaining: 1,
+      markerCol: "trial_notified_1d_at" as const,
+    })),
   ];
 
   let sent = 0;
@@ -117,6 +129,21 @@ export async function POST(request: Request) {
 
     if (result.sent) {
       sent += 1;
+      // 送信成功後に冪等マーカーを立てる(同一しきい値の重複送信を防ぐ)。
+      // 送信後に立てるので、稀にマーカー更新失敗→次tickで再送(at-least-once)。
+      // 未通知のまま48通送るより遥かに良い。失敗はログのみ。
+      const { error: markErr } = await admin
+        .from("organization_plans")
+        .update({ [target.markerCol]: now.toISOString() })
+        .eq("organization_id", target.plan.organization_id)
+        .eq("status", "trialing");
+      if (markErr) {
+        console.warn("[trial-notifications] mark failed", {
+          organizationId: target.plan.organization_id,
+          markerCol: target.markerCol,
+          message: markErr.message,
+        });
+      }
     } else {
       failed += 1;
       errors.push(

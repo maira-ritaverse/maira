@@ -694,6 +694,7 @@ async function handleAddonSubscription(
   sub: StripeSubscription,
   eventType: StripeEventType,
   addonPriceId: string,
+  eventCreated: number,
 ): Promise<{ ok: boolean; reason?: string }> {
   const item = sub.items.data.find((i) => i.price.id === addonPriceId);
   if (!item) return { ok: true, reason: "no_addon_item" };
@@ -720,6 +721,24 @@ async function handleAddonSubscription(
     ? new Date(sub.current_period_end * 1000).toISOString()
     : null;
 
+  // 順序ガード:直近に適用したイベントの created より古い(または同一)なら無視する。
+  // Stripe の順不同配信で canceled の後に古い active が届いても status を巻き戻さない
+  // (= キャンセル済み有料機能の復活を防ぐ)。fetch→upsert の間に別イベントが挟まる
+  // 極小レースは残るが、addon イベントは低頻度なので許容する。
+  const eventCreatedMs = eventCreated * 1000;
+  const { data: existingAddon } = await admin
+    .from("subscription_addons")
+    .select("last_event_created_at")
+    .eq("user_id", userId)
+    .eq("addon_key", "meeting_recording_auto")
+    .maybeSingle();
+  const lastApplied =
+    (existingAddon as { last_event_created_at: string | null } | null)?.last_event_created_at ??
+    null;
+  if (lastApplied && new Date(lastApplied).getTime() >= eventCreatedMs) {
+    return { ok: true, reason: "stale_addon_event" };
+  }
+
   const { error } = await admin.from("subscription_addons").upsert(
     {
       user_id: userId,
@@ -728,6 +747,7 @@ async function handleAddonSubscription(
       stripe_subscription_item_id: item.id,
       stripe_customer_id: sub.customer,
       current_period_end: currentPeriodEnd,
+      last_event_created_at: new Date(eventCreatedMs).toISOString(),
     },
     { onConflict: "user_id,addon_key" },
   );
@@ -818,7 +838,7 @@ export async function POST(request: Request): Promise<Response> {
       const r =
         scope === "organization"
           ? await handleSubscriptionSync(admin, sub, type, event.id, event.created, cfg.orgPrices)
-          : await handleAddonSubscription(admin, sub, type, cfg.addonPriceId);
+          : await handleAddonSubscription(admin, sub, type, cfg.addonPriceId, event.created);
       await markEventProcessed(admin, event.id, r.ok ? "processed" : "failed", r.reason ?? null);
       if (!r.ok) {
         await releaseOnRetryable(r.reason ?? null);

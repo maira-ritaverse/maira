@@ -52,6 +52,27 @@ export async function handleLineEvent(
   ctx: HandlerContext,
   event: LineWebhookEvent,
 ): Promise<HandleEventResult> {
+  // 冪等性: 同一 webhookEventId を 2 度処理しない(LINE の at-least-once 再送対策)。
+  // follow/unfollow/postback は line_message_id を持たず既存の重複防止が効かないため、
+  // webhook イベント単位で claim する(message も通知/フローの二重発火をここで弾ける)。
+  if (event.webhookEventId) {
+    const { error: claimErr } = await ctx.service.from("line_webhook_events").insert({
+      organization_id: ctx.organizationId,
+      webhook_event_id: event.webhookEventId,
+      event_type: event.type,
+    });
+    if (claimErr) {
+      // 23505 = 一意制約違反 = 既処理 → スキップ。
+      if ((claimErr as { code?: string }).code === "23505") {
+        return { ok: true, type: event.type, reason: "duplicate_webhook_event" };
+      }
+      // それ以外(一過性 DB 障害等)は claim できなくても本処理を続行する
+      // (冪等保護は失うが、イベントを取りこぼすよりは良い)。ログのみ。
+      console.warn("[line/event] dedup claim failed (non-conflict)", {
+        message: claimErr.message,
+      });
+    }
+  }
   switch (event.type) {
     case "message":
       return await handleMessage(ctx, event);
