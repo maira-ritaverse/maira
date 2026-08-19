@@ -1,5 +1,7 @@
 import { isMairaAdmin } from "@/lib/announcements/platform-queries";
+import { recordAuditLog } from "@/lib/audit/audit-log";
 import { generatePdfFromHtml } from "@/lib/pdf/generate";
+import { consumeRateLimit } from "@/lib/rate-limit/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { buildTermsHtml } from "@/lib/terms/terms-html";
@@ -11,8 +13,9 @@ import { buildTermsHtml } from "@/lib/terms/terms-html";
  * 署名記録(署名者・日時・IP・利用組織の所在地)入り。
  *
  * Auth: profiles.is_maira_admin = true のみ。対象組織は service_role で読む。
+ * 監査: 運営者による他組織の機密書類アクセスは admin_accessed_user で記録する。
  */
-export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
 
   const supabase = await createClient();
@@ -21,6 +24,15 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
   } = await supabase.auth.getUser();
   if (!user) return new Response("unauthorized", { status: 401 });
   if (!(await isMairaAdmin())) return new Response("forbidden", { status: 403 });
+
+  // PDF 生成は Puppeteer を起動するため、連打 / 濫用でのコストを抑える。
+  const rl = await consumeRateLimit({
+    namespace: "admin:doc-download",
+    identifier: user.id,
+    windowSeconds: 60,
+    maxCount: 30,
+  });
+  if (rl.limited) return new Response("rate limited", { status: 429 });
 
   const admin = createServiceClient();
   const { data } = await admin
@@ -36,6 +48,15 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     signing_org_address: string | null;
   } | null;
   if (!row) return new Response("not found", { status: 404 });
+
+  // 誰がどの組織の署名済み書類をいつ取得したかを残す(証跡)。
+  await recordAuditLog({
+    userId: user.id,
+    action: "admin_accessed_user",
+    metadata: { event_subtype: "admin_downloaded_org_terms_pdf", organization_id: id },
+    ipAddress: request.headers.get("x-forwarded-for"),
+    userAgent: request.headers.get("user-agent"),
+  });
 
   try {
     const html = buildTermsHtml({

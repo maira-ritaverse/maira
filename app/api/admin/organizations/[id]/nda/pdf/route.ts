@@ -1,7 +1,9 @@
 import { isMairaAdmin } from "@/lib/announcements/platform-queries";
+import { recordAuditLog } from "@/lib/audit/audit-log";
 import { CURRENT_NDA_VERSION } from "@/lib/nda/nda-content";
 import { buildNdaHtml } from "@/lib/nda/nda-html";
 import { generatePdfFromHtml } from "@/lib/pdf/generate";
+import { consumeRateLimit } from "@/lib/rate-limit/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -13,8 +15,10 @@ import { createServiceClient } from "@/lib/supabase/service";
  *
  * Auth: profiles.is_maira_admin = true のみ。対象組織は service_role で読む
  *       (運営者は全組織の署名控えを取得できる。RLS を跨ぐため service client)。
+ * 監査: 運営者による他組織の機密書類アクセスは admin_accessed_user で記録する
+ *       (reveal-notes と同じ方針)。
  */
-export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
 
   const supabase = await createClient();
@@ -23,6 +27,15 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
   } = await supabase.auth.getUser();
   if (!user) return new Response("unauthorized", { status: 401 });
   if (!(await isMairaAdmin())) return new Response("forbidden", { status: 403 });
+
+  // PDF 生成は Puppeteer を起動するため、連打 / 濫用でのコストを抑える。
+  const rl = await consumeRateLimit({
+    namespace: "admin:doc-download",
+    identifier: user.id,
+    windowSeconds: 60,
+    maxCount: 30,
+  });
+  if (rl.limited) return new Response("rate limited", { status: 429 });
 
   const admin = createServiceClient();
   const { data } = await admin
@@ -42,6 +55,15 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
   } | null;
   if (!row) return new Response("not found", { status: 404 });
 
+  // 誰がどの組織の署名済み書類をいつ取得したかを残す(証跡)。
+  await recordAuditLog({
+    userId: user.id,
+    action: "admin_accessed_user",
+    metadata: { event_subtype: "admin_downloaded_org_nda_pdf", organization_id: id },
+    ipAddress: request.headers.get("x-forwarded-for"),
+    userAgent: request.headers.get("user-agent"),
+  });
+
   try {
     const html = buildNdaHtml({
       organizationName: row.name ?? "(エージェント企業)",
@@ -52,7 +74,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
       orgAddress: row.signing_org_address ?? null,
     });
     const pdf = await generatePdfFromHtml(html);
-    // 運営者は複数組織をダウンロードするため、ファイル名に組織名を含める(UTF-8)。
+    // 運営者は複数組織をダウンロードするため、ファイル名(UTF-8)に組織名を含める。
     const downloadName = `${row.name ?? "organization"}_NDA.pdf`;
     return new Response(new Uint8Array(pdf), {
       headers: {
