@@ -1,6 +1,7 @@
 import { escapeHtml } from "@/lib/html/escape";
 import {
   CURRENT_NDA_VERSION,
+  NDA_DISCLOSER_ADDRESS,
   NDA_DISCLOSER_NAME,
   NDA_PREAMBLE,
   NDA_SECTIONS,
@@ -16,14 +17,16 @@ import {
  */
 export type NdaSignInfo = {
   organizationName: string;
-  signerName: string;
-  /** 同意日時(ISO 文字列) */
-  acceptedAt: string;
+  /** 署名者氏名。未署名(管理画面から未同意状態を表示)のときは null。 */
+  signerName: string | null;
+  /** 同意日時(ISO 文字列)。未署名のときは null。 */
+  acceptedAt: string | null;
   version: string;
   ipAddress?: string | null;
 };
 
-function formatJstDateTime(iso: string): string {
+function formatJstDateTime(iso: string | null): string {
+  if (!iso) return "（未同意)";
   // Asia/Tokyo で "YYYY-MM-DD HH:mm" を返す(UTC ズレを避ける)。
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Tokyo",
@@ -94,9 +97,9 @@ export function buildNdaHtml(sign: NdaSignInfo): string {
   <div class="sign">
     <h2>同意の記録</h2>
     <table class="sign-table">
-      <tr><th>開示者(甲)</th><td>${escapeHtml(NDA_DISCLOSER_NAME)}</td></tr>
+      <tr><th>開示者(甲)</th><td>${escapeHtml(NDA_DISCLOSER_NAME)}<br>所在地:${escapeHtml(NDA_DISCLOSER_ADDRESS)}</td></tr>
       <tr><th>受領者(乙)</th><td>${escapeHtml(sign.organizationName)}</td></tr>
-      <tr><th>署名者(氏名)</th><td>${escapeHtml(sign.signerName)}</td></tr>
+      <tr><th>署名者(氏名)</th><td>${escapeHtml(sign.signerName ?? "（未署名)")}</td></tr>
       <tr><th>同意日時</th><td>${escapeHtml(acceptedText)}</td></tr>
       <tr><th>バージョン</th><td>${escapeHtml(sign.version || CURRENT_NDA_VERSION)}</td></tr>
       ${ipRow}

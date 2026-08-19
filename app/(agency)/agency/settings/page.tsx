@@ -157,6 +157,24 @@ export default async function SettingsPage() {
             </Link>
           </Card>
 
+          {/* 秘密保持契約(NDA)PDF(全メンバー閲覧・保存可) */}
+          <Card className="p-4">
+            <a
+              href="/api/agency/nda/pdf"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:bg-accent -m-4 flex items-center gap-3 rounded-md p-4 transition-colors"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">秘密保持契約(NDA)</p>
+                <p className="text-muted-foreground text-xs">
+                  同意済みの秘密保持契約を PDF で表示・保存できます
+                </p>
+              </div>
+              <span className="text-muted-foreground text-sm">↗</span>
+            </a>
+          </Card>
+
           {isAdmin && (
             <Card className="p-4">
               <Link
