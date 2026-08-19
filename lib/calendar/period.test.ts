@@ -121,6 +121,13 @@ describe("formatPeriodLabel", () => {
     expect(formatPeriodLabel("2026-07-30", "week")).toBe("2026年7月26日 - 8月1日");
   });
 
+  it("week mode 年跨ぎ → 終端に年を明示", () => {
+    // 2026-12-31 を含む週は年をまたぐ。旧実装は終端の年が欠落していた。
+    const label = formatPeriodLabel("2026-12-31", "week");
+    expect(label.startsWith("2026年12月")).toBe(true);
+    expect(label).toContain(" - 2027年");
+  });
+
   it("month mode → 年月", () => {
     expect(formatPeriodLabel("2026-07-15", "month")).toBe("2026年7月");
   });

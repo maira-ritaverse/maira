@@ -110,10 +110,16 @@ export function formatPeriodLabel(ymd: string, mode: ViewMode): string {
     const { rangeStart, rangeEnd } = getWeekRange(ymd);
     const s = parseYmd(rangeStart);
     const e = parseYmd(rangeEnd);
-    // 「2026年7月5日 - 11日」形式 (跨月なら「2026年7月28日 - 8月3日」)
+    // 「2026年7月5日 - 11日」形式 (跨月なら「2026年7月28日 - 8月3日」、
+    //  跨年なら終端に年を付けて「2026年12月28日 - 2027年1月3日」)
     const sFmt = `${s.getFullYear()}年${s.getMonth() + 1}月${s.getDate()}日`;
-    const sameMonth = s.getFullYear() === e.getFullYear() && s.getMonth() === e.getMonth();
-    const eFmt = sameMonth ? `${e.getDate()}日` : `${e.getMonth() + 1}月${e.getDate()}日`;
+    const sameYear = s.getFullYear() === e.getFullYear();
+    const sameMonth = sameYear && s.getMonth() === e.getMonth();
+    const eFmt = sameMonth
+      ? `${e.getDate()}日`
+      : sameYear
+        ? `${e.getMonth() + 1}月${e.getDate()}日`
+        : `${e.getFullYear()}年${e.getMonth() + 1}月${e.getDate()}日`;
     return `${sFmt} - ${eFmt}`;
   }
   return `${d.getFullYear()}年${d.getMonth() + 1}月`;
