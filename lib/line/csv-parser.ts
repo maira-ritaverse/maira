@@ -100,6 +100,13 @@ export function parseLineHistoryCsv(csvText: string, selfSenderLabels: string[])
 }
 
 function findColumnIdx(header: string[], candidates: string[]): number {
+  // まず完全一致を優先する。部分一致だけだと、例えば見出し「メッセージ種別」が
+  // 候補「メッセージ」に誤ヒットし、本文列(内容)ではなく種別列を拾ってしまう。
+  for (const c of candidates) {
+    const exact = header.findIndex((h) => h === c);
+    if (exact >= 0) return exact;
+  }
+  // 次に部分一致(見出しの表記ゆれのフォールバック、従来挙動)。
   for (let i = 0; i < header.length; i += 1) {
     for (const c of candidates) {
       if (header[i].includes(c)) return i;

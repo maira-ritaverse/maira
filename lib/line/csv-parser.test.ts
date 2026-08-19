@@ -21,6 +21,19 @@ describe("parseLineHistoryCsv", () => {
     expect(result.messages[1].text).toBe("始めました");
   });
 
+  it("「メッセージ種別」列があっても本文は「内容」列を拾う(完全一致優先)", () => {
+    // 部分一致だけだと「メッセージ種別」が候補「メッセージ」に誤ヒットして本文が種別になる
+    const csv = [
+      "日時,送信者,メッセージ種別,内容",
+      "2026-06-20 15:47:00,user,テキスト,こんにちは",
+    ].join("\n");
+    const result = parseLineHistoryCsv(csv, ["bot"]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0].text).toBe("こんにちは");
+  });
+
   it("英語 ヘッダ + ISO timestamp", () => {
     const csv = [
       "timestamp,sender,text",
