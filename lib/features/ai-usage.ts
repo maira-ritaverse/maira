@@ -51,7 +51,9 @@ export type AiUsageKind =
   // Segment ビルダー AI ジェネレーター (自然文 → SegmentCondition ツリー)
   | "agency_ma_segment_generation"
   // Flow 改善 提案 (既存 Flow を レビュー して 改善点 を 提示)
-  | "agency_ma_flow_improvement";
+  | "agency_ma_flow_improvement"
+  // 面接対策 生成 (referral 単位、 候補者 × 求人。 長文 生成 で recommendation_letter 同等 の 重み)
+  | "agency_interview_prep";
 
 /** kind の scope:組織側(全メンバー合算上限)/ 求職者側(1 人あたり上限) */
 type KindScope = "agency_org" | "seeker_per_user";
@@ -77,6 +79,7 @@ const KIND_SCOPE: Record<AiUsageKind, KindScope> = {
   agency_ma_flow_generation: "agency_org",
   agency_ma_segment_generation: "agency_org",
   agency_ma_flow_improvement: "agency_org",
+  agency_interview_prep: "agency_org",
 };
 
 // クライアント サマリー 月次上限 既定値 (軽量 タスク、 1 回 ¥1-3 程度)
@@ -109,6 +112,9 @@ export const JOB_RECOMMENDATION_AGENCY_FREE_MONTHLY = 50;
 export const JOB_RECOMMENDATION_AGENCY_ADDON_MONTHLY = 500;
 export const RECOMMENDATION_LETTER_DRAFT_FREE_MONTHLY = 100;
 export const RECOMMENDATION_LETTER_DRAFT_ADDON_MONTHLY = 1000;
+// 面接対策 生成(referral 単位、Claude Sonnet 4.6、長文生成で recommendation_letter 同等)
+export const AGENCY_INTERVIEW_PREP_FREE_MONTHLY = 100;
+export const AGENCY_INTERVIEW_PREP_ADDON_MONTHLY = 1000;
 // 履歴書 / 職務経歴書 AI 下書き(エージェント側、組織横断 月次上限)
 export const AGENCY_CV_DRAFT_FREE_MONTHLY = 100;
 export const AGENCY_CV_DRAFT_ADDON_MONTHLY = 1000;
@@ -232,6 +238,8 @@ function defaultLimitFor(kind: AiUsageKind, addon: boolean): number {
       return addon
         ? AGENCY_MA_FLOW_IMPROVEMENT_ADDON_MONTHLY
         : AGENCY_MA_FLOW_IMPROVEMENT_FREE_MONTHLY;
+    case "agency_interview_prep":
+      return addon ? AGENCY_INTERVIEW_PREP_ADDON_MONTHLY : AGENCY_INTERVIEW_PREP_FREE_MONTHLY;
   }
 }
 
@@ -655,6 +663,7 @@ const AI_KIND_WEIGHT: Record<AiUsageKind, number> = {
   agency_ma_flow_generation: 2,
   agency_ma_segment_generation: 2,
   agency_ma_flow_improvement: 2,
+  agency_interview_prep: 2,
 };
 
 /**

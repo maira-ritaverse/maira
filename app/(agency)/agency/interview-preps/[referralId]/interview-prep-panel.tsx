@@ -1,0 +1,158 @@
+"use client";
+
+import { Check, Copy, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import type { InterviewPrepContent } from "@/lib/interview-preps/types";
+
+type Props = {
+  referralId: string;
+  clientName: string;
+  initialContent: InterviewPrepContent | null;
+  initialGeneratedAt: string | null;
+};
+
+/** 生成日時を Asia/Tokyo で "YYYY/MM/DD HH:mm" 表示。 */
+function formatJst(iso: string): string {
+  return new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(iso));
+}
+
+/** セクション配列をコピー用のプレーンテキストに整形。 */
+function toPlainText(content: InterviewPrepContent): string {
+  return content.sections
+    .map((s) => `■ ${s.heading}\n${s.items.map((i) => `・${i}`).join("\n")}`)
+    .join("\n\n");
+}
+
+export function InterviewPrepPanel({
+  referralId,
+  clientName,
+  initialContent,
+  initialGeneratedAt,
+}: Props) {
+  const [content, setContent] = useState<InterviewPrepContent | null>(initialContent);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(initialGeneratedAt);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/agency/referrals/${referralId}/interview-prep`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        prep?: { content: InterviewPrepContent; generatedAt: string };
+        error?: string;
+        message?: string;
+      };
+      if (!res.ok || !data.prep) {
+        throw new Error(data.message ?? data.error ?? "生成に失敗しました");
+      }
+      setContent(data.prep.content);
+      setGeneratedAt(data.prep.generatedAt);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "生成に失敗しました");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!content) return;
+    try {
+      await navigator.clipboard.writeText(toPlainText(content));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("クリップボードにコピーできませんでした");
+    }
+  };
+
+  const hasContent = content !== null && content.sections.length > 0;
+
+  return (
+    <Card className="flex flex-col gap-4 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="font-semibold">AI 面接対策</h2>
+          {generatedAt && (
+            <p className="text-muted-foreground text-xs">生成日時:{formatJst(generatedAt)}</p>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {hasContent && (
+            <Button type="button" variant="outline" size="sm" onClick={() => void handleCopy()}>
+              {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+              {copied ? "コピーしました" : "コピー"}
+            </Button>
+          )}
+          <Button type="button" size="sm" onClick={() => void handleGenerate()} disabled={loading}>
+            {loading ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : hasContent ? (
+              <RefreshCw className="size-3.5" />
+            ) : (
+              <Sparkles className="size-3.5" />
+            )}
+            {loading ? "生成中…" : hasContent ? "再生成" : "面接対策を生成"}
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-muted-foreground text-xs">
+        {clientName}さんの棚卸し結果とこの求人内容をもとに、面接対策を生成します。内容は AI
+        による提案です。事前に事実確認のうえご活用ください。
+      </p>
+
+      {error && <p className="text-destructive text-sm">{error}</p>}
+
+      {loading && !hasContent && (
+        <div className="text-muted-foreground flex items-center gap-2 py-8 text-sm">
+          <Loader2 className="size-4 animate-spin" />
+          面接対策を生成しています(20〜40 秒ほどかかります)…
+        </div>
+      )}
+
+      {!loading && !hasContent && !error && (
+        <div className="text-muted-foreground rounded border border-dashed p-6 text-center text-sm">
+          まだ面接対策が生成されていません。
+          <br />
+          「面接対策を生成」を押してください。
+        </div>
+      )}
+
+      {hasContent && (
+        <div className="space-y-5">
+          {content.sections.map((section, idx) => (
+            <section key={idx}>
+              <h3 className="border-border mb-1.5 border-b pb-1 text-sm font-semibold">
+                {section.heading}
+              </h3>
+              <ul className="ml-4 list-disc space-y-1 text-sm leading-relaxed">
+                {section.items.map((item, i) => (
+                  <li key={i} className="whitespace-pre-wrap">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}

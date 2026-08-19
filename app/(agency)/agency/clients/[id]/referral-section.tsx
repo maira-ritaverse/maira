@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, CheckCircle2, FilePlus, PenLine } from "lucide-react";
+import { CalendarClock, CheckCircle2, FilePlus, PenLine, Sparkles } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { JobPosting } from "@/lib/jobs/types";
@@ -234,6 +234,8 @@ function ReferralRow({
       )}
 
       <RecommendationLetterEntry referralId={referral.id} latestLetter={latestLetter} />
+
+      <InterviewPrepEntry referralId={referral.id} />
 
       {/* #3: 面接 ラウンド 一覧 + 結果 記録。 1 応募 × N 回 面接 の 業務 フロー を 完 結。 */}
       <InterviewsBlock referralId={referral.id} />
@@ -538,6 +540,25 @@ function OfferDeadlineEditor({
 // 「作成」を押すと空の推薦文を POST し、専用エディタへ遷移する。
 // 履歴件数が複数あれば小さくバッジで示し、編集画面の履歴ドロップダウンで切替できる。
 // ============================================
+/** 面接対策ページへの導線(referral 単位)。 */
+function InterviewPrepEntry({ referralId }: { referralId: string }) {
+  const router = useRouter();
+  return (
+    <div className="border-border/60 mt-3 space-y-2 border-t pt-3">
+      <h4 className="text-muted-foreground text-xs font-medium">面接対策(AI)</h4>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => router.push(`/agency/interview-preps/${referralId}`)}
+      >
+        <Sparkles className="size-3.5" />
+        面接対策を開く
+      </Button>
+    </div>
+  );
+}
+
 function RecommendationLetterEntry({
   referralId,
   latestLetter,
