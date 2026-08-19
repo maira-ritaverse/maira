@@ -18,13 +18,14 @@ export async function GET() {
 
   const { data } = await supabase
     .from("organizations")
-    .select("terms_accepted_at, terms_signer_name, terms_signer_ip")
+    .select("terms_accepted_at, terms_signer_name, terms_signer_ip, signing_org_address")
     .eq("id", organization.id)
     .maybeSingle();
   const row = data as {
     terms_accepted_at: string | null;
     terms_signer_name: string | null;
     terms_signer_ip: string | null;
+    signing_org_address: string | null;
   } | null;
 
   try {
@@ -33,6 +34,7 @@ export async function GET() {
       signerName: row?.terms_signer_name ?? null,
       acceptedAt: row?.terms_accepted_at ?? null,
       ipAddress: row?.terms_signer_ip ?? null,
+      orgAddress: row?.signing_org_address ?? null,
     });
     const pdf = await generatePdfFromHtml(html);
     const filename = "Myaira_Terms.pdf";

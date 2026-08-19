@@ -24,6 +24,8 @@ export type TermsSignInfo = {
   /** 同意日時(ISO 文字列)。未署名のときは null。 */
   acceptedAt: string | null;
   ipAddress?: string | null;
+  /** 利用組織(乙)の所在地。署名時に入力。未入力のときは表示しない。 */
+  orgAddress?: string | null;
 };
 
 function formatJstDateTime(iso: string | null): string {
@@ -108,7 +110,7 @@ export function buildTermsHtml(sign: TermsSignInfo): string {
     <h2>同意の記録</h2>
     <table class="sign-table">
       <tr><th>事業者</th><td>${businessCell}</td></tr>
-      <tr><th>利用組織</th><td>${escapeHtml(sign.organizationName)}</td></tr>
+      <tr><th>利用組織</th><td>${escapeHtml(sign.organizationName)}${sign.orgAddress ? `<br>所在地:${escapeHtml(sign.orgAddress)}` : ""}</td></tr>
       <tr><th>署名者(氏名)</th><td>${escapeHtml(sign.signerName ?? "(未署名)")}</td></tr>
       <tr><th>同意日時</th><td>${escapeHtml(acceptedText)}</td></tr>
       ${ipRow}

@@ -19,7 +19,7 @@ export async function GET() {
 
   const { data } = await supabase
     .from("organizations")
-    .select("nda_accepted_at, nda_version, nda_signer_name, nda_signer_ip")
+    .select("nda_accepted_at, nda_version, nda_signer_name, nda_signer_ip, signing_org_address")
     .eq("id", organization.id)
     .maybeSingle();
   const row = data as {
@@ -27,6 +27,7 @@ export async function GET() {
     nda_version: string | null;
     nda_signer_name: string | null;
     nda_signer_ip: string | null;
+    signing_org_address: string | null;
   } | null;
 
   try {
@@ -36,6 +37,7 @@ export async function GET() {
       acceptedAt: row?.nda_accepted_at ?? null,
       version: row?.nda_version ?? CURRENT_NDA_VERSION,
       ipAddress: row?.nda_signer_ip ?? null,
+      orgAddress: row?.signing_org_address ?? null,
     });
     const pdf = await generatePdfFromHtml(html);
     const filename = "Myaira_NDA.pdf";

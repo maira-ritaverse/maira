@@ -29,7 +29,8 @@ type Props = {
  *
  * UX:
  *   - 画面をブロックする overlay。両方(または未同意のもの)に同意するまで dismiss 不可。
- *   - 管理者:必要な書類の全文を表示 + 書類ごとに同意チェック + 氏名入力(タイプ署名)1 つ。
+ *   - 管理者:必要な書類の全文をスクロール表示 → 文面の下に同意チェックをまとめて配置 →
+ *     所在地・氏名(タイプ署名)を入力して同意。チェック / 入力が揃うまでボタンは無効。
  *   - 管理者以外:管理者の同意待ち表示(署名フォームは出さない)。
  *   - 同意成功 → router.refresh() でレイアウト側の判定を再評価 → モーダルが消える。
  *   - 同意時に署名済みの控え(PDF)が 1 通にまとめて署名者の登録メールに送付される。
@@ -43,6 +44,7 @@ export function LegalConsentModal({
 }: Props) {
   const router = useRouter();
   const [signerName, setSignerName] = useState("");
+  const [orgAddress, setOrgAddress] = useState("");
   const [ndaChecked, setNdaChecked] = useState(false);
   const [termsChecked, setTermsChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -51,15 +53,26 @@ export function LegalConsentModal({
   // 表示中の書類のチェックが揃っているか。表示していない書類は判定対象外。
   const ndaReady = !requireNda || ndaChecked;
   const termsReady = !requireTerms || termsChecked;
-  const canSubmit = Boolean(signerName.trim()) && ndaReady && termsReady && !submitting;
+  const canSubmit =
+    Boolean(signerName.trim()) &&
+    Boolean(orgAddress.trim()) &&
+    ndaReady &&
+    termsReady &&
+    !submitting;
 
   const handleAccept = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     setError(null);
     try {
-      const json: { signerName: string; agreedNda?: true; agreedTerms?: true } = {
+      const json: {
+        signerName: string;
+        orgAddress: string;
+        agreedNda?: true;
+        agreedTerms?: true;
+      } = {
         signerName: signerName.trim(),
+        orgAddress: orgAddress.trim(),
       };
       if (requireNda) json.agreedNda = true;
       if (requireTerms) json.agreedTerms = true;
@@ -77,7 +90,7 @@ export function LegalConsentModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="consent-title"
@@ -115,74 +128,94 @@ export function LegalConsentModal({
               本サービスを通じて求職者・クライアントの秘密情報を取り扱うにあたり、以下の内容に組織を代表してご同意ください。同意すると、署名済みの控え(PDF)をご登録のメールアドレスに送付します。
             </p>
 
-            {/* 各書類の全文(スクロール)+ 個別チェック */}
-            <div className="mt-4 flex-1 space-y-4 overflow-y-auto">
+            {/* 書類の全文(スクロール)。チェックは文面の下にまとめる。 */}
+            <div className="bg-muted/30 mt-4 flex-1 space-y-6 overflow-y-auto rounded border p-4 text-xs leading-relaxed">
               {requireNda && (
-                <section>
-                  <div className="bg-muted/30 rounded border p-4 text-xs leading-relaxed">
-                    <p className="text-center text-sm font-bold">{NDA_TITLE}</p>
-                    <p className="mt-3">{NDA_PREAMBLE}</p>
-                    {NDA_SECTIONS.map((s) => (
-                      <div key={s.heading} className="mt-3">
-                        <p className="font-semibold">{s.heading}</p>
-                        {s.paragraphs.map((p, i) => (
-                          <p key={i} className="mt-0.5 whitespace-pre-wrap">
-                            {p}
-                          </p>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                  <label className="mt-2 flex items-start gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={ndaChecked}
-                      onChange={(e) => setNdaChecked(e.target.checked)}
-                      disabled={submitting}
-                      className="mt-1"
-                    />
-                    <span>上記の秘密保持契約(NDA)の内容を確認し、組織を代表して同意します。</span>
-                  </label>
-                </section>
+                <div>
+                  <p className="text-center text-sm font-bold">{NDA_TITLE}</p>
+                  <p className="mt-3">{NDA_PREAMBLE}</p>
+                  {NDA_SECTIONS.map((s) => (
+                    <div key={s.heading} className="mt-3">
+                      <p className="font-semibold">{s.heading}</p>
+                      {s.paragraphs.map((p, i) => (
+                        <p key={i} className="mt-0.5 whitespace-pre-wrap">
+                          {p}
+                        </p>
+                      ))}
+                    </div>
+                  ))}
+                </div>
               )}
 
+              {requireNda && requireTerms && <hr className="border-border" />}
+
               {requireTerms && (
-                <section>
-                  <div className="bg-muted/30 rounded border p-4 text-xs leading-relaxed">
-                    <p className="text-center text-sm font-bold">{TERMS_TITLE}</p>
-                    <p className="text-muted-foreground mt-1 text-center text-[10px]">
-                      最終更新日:{TERMS_LAST_UPDATED}
-                    </p>
-                    {TERMS_SECTIONS.map((s) => (
-                      <div key={s.heading} className="mt-3">
-                        <p className="font-semibold">{s.heading}</p>
-                        {s.paragraphs.map((p, i) => (
-                          <p key={i} className="mt-0.5 whitespace-pre-wrap">
-                            {p}
-                          </p>
-                        ))}
-                        {s.bullets && (
-                          <ul className="mt-1 ml-4 list-disc space-y-0.5">
-                            {s.bullets.map((b, i) => (
-                              <li key={i}>{b}</li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <label className="mt-2 flex items-start gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={termsChecked}
-                      onChange={(e) => setTermsChecked(e.target.checked)}
-                      disabled={submitting}
-                      className="mt-1"
-                    />
-                    <span>上記の利用規約の内容を確認し、組織を代表して同意します。</span>
-                  </label>
-                </section>
+                <div>
+                  <p className="text-center text-sm font-bold">{TERMS_TITLE}</p>
+                  <p className="text-muted-foreground mt-1 text-center text-[10px]">
+                    最終更新日:{TERMS_LAST_UPDATED}
+                  </p>
+                  {TERMS_SECTIONS.map((s) => (
+                    <div key={s.heading} className="mt-3">
+                      <p className="font-semibold">{s.heading}</p>
+                      {s.paragraphs.map((p, i) => (
+                        <p key={i} className="mt-0.5 whitespace-pre-wrap">
+                          {p}
+                        </p>
+                      ))}
+                      {s.bullets && (
+                        <ul className="mt-1 ml-4 list-disc space-y-0.5">
+                          {s.bullets.map((b, i) => (
+                            <li key={i}>{b}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
+            </div>
+
+            {/* 同意チェック(文面の下にまとめて配置) */}
+            <div className="mt-4 space-y-2 border-t pt-4">
+              {requireNda && (
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={ndaChecked}
+                    onChange={(e) => setNdaChecked(e.target.checked)}
+                    disabled={submitting}
+                    className="mt-1"
+                  />
+                  <span>上記の秘密保持契約(NDA)の内容を確認し、組織を代表して同意します。</span>
+                </label>
+              )}
+              {requireTerms && (
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={termsChecked}
+                    onChange={(e) => setTermsChecked(e.target.checked)}
+                    disabled={submitting}
+                    className="mt-1"
+                  />
+                  <span>上記の利用規約の内容を確認し、組織を代表して同意します。</span>
+                </label>
+              )}
+            </div>
+
+            {/* 所在地(利用組織の住所)+ 署名(氏名) */}
+            <div className="mt-4 space-y-2">
+              <Label htmlFor="consent-org-address">所在地(利用組織の住所)</Label>
+              <Input
+                id="consent-org-address"
+                value={orgAddress}
+                onChange={(e) => setOrgAddress(e.target.value)}
+                disabled={submitting}
+                maxLength={200}
+                placeholder="例:〒100-0001　東京都千代田区千代田1-1"
+                autoComplete="street-address"
+              />
             </div>
 
             <div className="mt-4 space-y-2">
@@ -192,6 +225,7 @@ export function LegalConsentModal({
                 value={signerName}
                 onChange={(e) => setSignerName(e.target.value)}
                 disabled={submitting}
+                maxLength={100}
                 placeholder="例:山田 太郎"
                 autoComplete="name"
               />
@@ -202,7 +236,13 @@ export function LegalConsentModal({
 
             {error && <p className="text-destructive mt-2 text-xs">{error}</p>}
 
-            <div className="mt-4 flex justify-end">
+            {!canSubmit && !submitting && (
+              <p className="text-muted-foreground mt-3 text-[11px]">
+                同意するには、上記のチェックをすべて入れ、所在地と氏名を入力してください。
+              </p>
+            )}
+
+            <div className="mt-2 flex justify-end">
               <Button size="sm" onClick={() => void handleAccept()} disabled={!canSubmit}>
                 {submitting ? "送信中…" : "同意する"}
               </Button>

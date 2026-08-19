@@ -27,7 +27,16 @@ import { buildTermsHtml } from "@/lib/terms/terms-html";
  */
 const bodySchema = z
   .object({
-    signerName: z.string().trim().min(1, "氏名を入力してください").max(100),
+    signerName: z
+      .string()
+      .trim()
+      .min(1, "氏名を入力してください")
+      .max(100, "氏名は100文字以内で入力してください"),
+    orgAddress: z
+      .string()
+      .trim()
+      .min(1, "所在地を入力してください")
+      .max(200, "所在地は200文字以内で入力してください"),
     agreedNda: z.boolean().optional(),
     agreedTerms: z.boolean().optional(),
   })
@@ -70,6 +79,7 @@ export async function POST(request: Request) {
   }
 
   const signerName = parsed.data.signerName;
+  const orgAddress = parsed.data.orgAddress;
   // after のクロージャで再ナローイングが外れないよう、boolean は const に確定させる。
   const acceptedNda = parsed.data.agreedNda === true;
   const acceptedTerms = parsed.data.agreedTerms === true;
@@ -82,6 +92,8 @@ export async function POST(request: Request) {
   // 記録は service_role で organizations を更新(管理者本人であることは上で検証済み)。
   // 同意した書類のカラムだけを更新する。
   const update: Record<string, unknown> = {};
+  // 利用組織(乙)の所在地は書類共通(組織単位・最新入力で上書き)。
+  update.signing_org_address = orgAddress;
   if (acceptedNda) {
     update.nda_accepted_at = nowIso;
     update.nda_version = CURRENT_NDA_VERSION;
@@ -147,6 +159,7 @@ export async function POST(request: Request) {
             acceptedAt: nowIso,
             version: CURRENT_NDA_VERSION,
             ipAddress: ip,
+            orgAddress,
           });
           attachments.push({ kind: "nda", pdfBuffer: await generatePdfFromHtml(html) });
         }
@@ -156,6 +169,7 @@ export async function POST(request: Request) {
             signerName,
             acceptedAt: nowIso,
             ipAddress: ip,
+            orgAddress,
           });
           attachments.push({ kind: "terms", pdfBuffer: await generatePdfFromHtml(html) });
         }
