@@ -257,6 +257,42 @@ export async function getClientDistributionStats(
 export type { ClientCloseReason };
 
 /**
+ * PostgREST の max_rows(返却行数の上限)を分割取得で越えて全行を読み込む。
+ *
+ * 背景:一覧クエリは limit/range を付けず「全件」のつもりだが、実際は max_rows で
+ * 頭打ちになり、超過分がブラウザに渡らず検索・エクスポートから漏れていた。
+ *
+ * 重要:from の前進は「要求幅(SPAN)」ではなく「実際に返ってきた行数」で行う。
+ * こうすると server の max_rows が SPAN より小さくても取りこぼさない(SPAN に
+ * ハードコードした値と max_rows が一致する前提に依存しない = 設定変更で静かに
+ * 壊れない)。終端は「空ページが返ったら」で判定する(max_rows 非依存)。
+ *
+ * 注意:buildPage には必ず「一意で安定した order」を付けること(order が不安定だと
+ * ページ境界で行の重複 / 欠落が起きる)。id を最終タイブレークにするのが安全。
+ *
+ * 戻り値の complete:全ページを最後まで読めたら true。途中エラー / 安全弁到達で
+ * 打ち切った場合は false(件数集計など「過少表示が誤解を生む」用途で使い分ける)。
+ */
+async function fetchAllRows<T>(
+  buildPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+): Promise<{ rows: T[]; complete: boolean }> {
+  const SPAN = 1000; // 1 リクエストで要求する行数(実返却は max_rows でこれ以下になり得る)
+  const MAX_REQUESTS = 200; // 安全弁:最大 20 万件相当。無限ループ防止。
+  const rows: T[] = [];
+  let from = 0;
+  for (let req = 0; req < MAX_REQUESTS; req++) {
+    const { data, error } = await buildPage(from, from + SPAN - 1);
+    if (error || !data) return { rows, complete: false }; // 途中失敗:取れた分で打ち切り
+    if (data.length === 0) return { rows, complete: true }; // 空ページ = 末尾に到達
+    rows.push(...data);
+    from += data.length; // 実返却数だけ前進(max_rows < SPAN でも取りこぼさない)
+  }
+  // MAX_REQUESTS 到達(極端に多い)。無言切り捨てを避けて警告を残す。
+  console.warn("[clients/queries] fetchAllRows hit MAX_REQUESTS cap", { fetched: rows.length });
+  return { rows, complete: false };
+}
+
+/**
  * 企業のクライアント総件数を取得(ページネーション / アラート判定用)。
  *
  * head: true で行データを取らずに count だけ返すので高速。
@@ -479,15 +515,26 @@ export async function listClientRecordsWithAssignee(
 ): Promise<ClientRecordWithAssignee[]> {
   const supabase = await createClient();
 
-  const { data: clientRows, error: clientError } = await supabase
-    .from("client_records")
-    .select("*")
-    .eq("organization_id", organizationId)
-    .order("created_at", { ascending: false });
+  // 全件取得:max_rows の壁を分割取得で越える。created_at 降順 + id で安定ページング
+  // (id はタイブレーク。無いとページ境界で重複 / 欠落し得る)。
+  const { rows: clientRows } = await fetchAllRows<ClientRecordRow>((from, to) =>
+    supabase
+      .from("client_records")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to),
+  );
 
-  if (clientError || !clientRows) return [];
-
-  const clients = (clientRows as ClientRecordRow[]).map(rowToClientRecord);
+  // 分割取得中の並行 insert でページ境界の行が重複し得る(offset ベースのため)。
+  // 重複 id は React key 衝突 / 二重表示になるので id で一意化(先着を採用)。
+  const clientById = new Map<string, ClientRecord>();
+  for (const row of clientRows) {
+    const c = rowToClientRecord(row);
+    if (!clientById.has(c.id)) clientById.set(c.id, c);
+  }
+  const clients = [...clientById.values()];
 
   // 組織メンバーの表示名 Map を取得(RLS バイパス関数経由)
   const { data: memberRows, error: memberError } = await supabase.rpc(
@@ -530,22 +577,24 @@ export async function listClientRecordsWithAssigneeAndDues(
   // 1. 既存ロジックでクライアント + 担当者名を取得
   const clients = await listClientRecordsWithAssignee(organizationId);
 
-  // 2. 同 organization の未完了タスクを1クエリで取得
-  //    select は必要最小限(client_record_id と due_at のみ)
-  const { data: taskRows, error } = await supabase
-    .from("agency_tasks")
-    .select("client_record_id, due_at")
-    .eq("organization_id", organizationId)
-    .eq("status", "pending");
-
-  if (error || !taskRows) {
-    // タスク取得に失敗してもクライアント一覧自体は返す(バッジが出ないだけ)
-    return clients.map((c) => ({ ...c, pendingDueAts: [] }));
-  }
+  // 2. 同 organization の未完了タスクを全件取得(max_rows 越え)。
+  //    select は必要最小限(client_record_id と due_at)。id で安定ページング。
+  const { rows: taskRows } = await fetchAllRows<{
+    client_record_id: string;
+    due_at: string | null;
+  }>((from, to) =>
+    supabase
+      .from("agency_tasks")
+      .select("client_record_id, due_at")
+      .eq("organization_id", organizationId)
+      .eq("status", "pending")
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 
   // 3. client_record_id ごとに due_at を寄せる
   const duesByClientId = new Map<string, (string | null)[]>();
-  for (const row of taskRows as Array<{ client_record_id: string; due_at: string | null }>) {
+  for (const row of taskRows) {
     const arr = duesByClientId.get(row.client_record_id) ?? [];
     arr.push(row.due_at);
     duesByClientId.set(row.client_record_id, arr);
@@ -583,24 +632,30 @@ export async function listClientRecordsWithReferralBreakdown(
   // 1) 既存ロジックでクライアント + 担当者 + 期限を取得
   const clients = await listClientRecordsWithAssigneeAndDues(organizationId);
 
-  // 2) 同 organization の referrals を 1 クエリで取得(必要最小限の 2 カラム)
-  const { data: refRows, error } = await supabase
-    .from("referrals")
-    .select("client_record_id, status")
-    .eq("organization_id", organizationId);
+  // 2) 同 organization の referrals を全件取得(max_rows 越え)。必要最小限の 2 カラム。
+  //    id で安定ページング(件数集約のため重複は厳禁)。
+  const { rows: refRows, complete: refComplete } = await fetchAllRows<{
+    client_record_id: string;
+    status: string;
+  }>((from, to) =>
+    supabase
+      .from("referrals")
+      .select("client_record_id, status")
+      .eq("organization_id", organizationId)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 
-  if (error || !refRows) {
-    // 失敗してもクライアント一覧は返す(応募状況は空で)
-    return clients.map((c) => ({
-      ...c,
-      referralBreakdown: { byStatus: {}, total: 0 },
-    }));
+  // 途中失敗で全件読めなかった場合、件数を過少表示すると誤解を生む(「3 社応募中」が
+  // 「2 社」に見える)。旧挙動どおり「応募状況なし」にフォールバックする。
+  if (!refComplete) {
+    return clients.map((c) => ({ ...c, referralBreakdown: { byStatus: {}, total: 0 } }));
   }
 
   // 3) client_record_id ごとに status 別件数を集約
   //    Map<clientId, Map<status, count>> の形で持って、最後にプレーンオブジェクト化。
   const breakdownByClient = new Map<string, Map<ReferralStatus, number>>();
-  for (const row of refRows as Array<{ client_record_id: string; status: string }>) {
+  for (const row of refRows) {
     const status = row.status as ReferralStatus;
     const inner = breakdownByClient.get(row.client_record_id) ?? new Map();
     inner.set(status, (inner.get(status) ?? 0) + 1);
@@ -671,44 +726,44 @@ export async function listClientRecordsWithUpdateBadge(
 
   // 最終対応日時(沈黙アラート用)+ 次の面談 を並列に集約。
   const nowIso = new Date().toISOString();
-  const [interactionRowsRes, nextMeetingRowsRes] = await Promise.all([
-    supabase
-      .from("client_interactions")
-      .select("client_record_id, occurred_at")
-      .order("occurred_at", { ascending: false }),
-    // meeting_schedules:本人組織分の今後の予約(キャンセル除外)を starts_at 昇順
-    supabase
-      .from("meeting_schedules")
-      .select("client_record_id, starts_at")
-      .eq("organization_id", organizationId)
-      .neq("status", "canceled")
-      .gte("starts_at", nowIso)
-      .order("starts_at", { ascending: true }),
+  const [{ rows: interactionRows }, { rows: nextMeetingRows }] = await Promise.all([
+    // 最終対応日時:全件取得(max_rows 越え)。occurred_at 降順 + id で安定ページング
+    // (先頭採用 = 最新)。
+    fetchAllRows<{ client_record_id: string; occurred_at: string }>((from, to) =>
+      supabase
+        .from("client_interactions")
+        .select("client_record_id, occurred_at")
+        .order("occurred_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to),
+    ),
+    // meeting_schedules:本人組織分の今後の予約(キャンセル除外)を starts_at 昇順で全件。
+    fetchAllRows<{ client_record_id: string | null; starts_at: string }>((from, to) =>
+      supabase
+        .from("meeting_schedules")
+        .select("client_record_id, starts_at")
+        .eq("organization_id", organizationId)
+        .neq("status", "canceled")
+        .gte("starts_at", nowIso)
+        .order("starts_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
   ]);
 
   const lastInteractionByClientId = new Map<string, string>();
-  if (!interactionRowsRes.error && interactionRowsRes.data) {
-    for (const row of interactionRowsRes.data as Array<{
-      client_record_id: string;
-      occurred_at: string;
-    }>) {
-      if (!lastInteractionByClientId.has(row.client_record_id)) {
-        lastInteractionByClientId.set(row.client_record_id, row.occurred_at);
-      }
+  for (const row of interactionRows) {
+    if (!lastInteractionByClientId.has(row.client_record_id)) {
+      lastInteractionByClientId.set(row.client_record_id, row.occurred_at);
     }
   }
 
   // 次の面談 Map(starts_at 昇順なので、先頭採用で最小値が入る)
   const nextMeetingByClientId = new Map<string, string>();
-  if (!nextMeetingRowsRes.error && nextMeetingRowsRes.data) {
-    for (const row of nextMeetingRowsRes.data as Array<{
-      client_record_id: string | null;
-      starts_at: string;
-    }>) {
-      if (!row.client_record_id) continue;
-      if (!nextMeetingByClientId.has(row.client_record_id)) {
-        nextMeetingByClientId.set(row.client_record_id, row.starts_at);
-      }
+  for (const row of nextMeetingRows) {
+    if (!row.client_record_id) continue;
+    if (!nextMeetingByClientId.has(row.client_record_id)) {
+      nextMeetingByClientId.set(row.client_record_id, row.starts_at);
     }
   }
 
