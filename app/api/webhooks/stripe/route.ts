@@ -345,9 +345,14 @@ function mapOrgPlanStatus(s: StripeSubscriptionStatus, deleted: boolean): OrgPla
     case "canceled":
       return "canceled";
     case "incomplete":
-    case "incomplete_expired":
     case "paused":
       return "incomplete";
+    case "incomplete_expired":
+      // 初回決済が完了しないまま期限切れ = サブスクは復活不可(ポータルからは直せず、
+      // 新規 Checkout が必要)。canceled(read-only + 新規契約導線)に倒す。旧実装は
+      // incomplete に畳んでいて「ポータルで決済を完了してください」という直せない
+      // 行き止まり導線に誘導していた。
+      return "canceled";
   }
 }
 
