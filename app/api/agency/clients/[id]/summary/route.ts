@@ -10,7 +10,7 @@ import {
 import { listTasksByClient } from "@/lib/agency-tasks/queries";
 import { getClientRecord } from "@/lib/clients/queries";
 import { getDisclosableProfileForLinkedClient } from "@/lib/connections/agency-queries";
-import { recordAiUsage } from "@/lib/features/ai-usage";
+import { checkAiUsageLimit, recordAiUsage } from "@/lib/features/ai-usage";
 import { listInteractionsByClient } from "@/lib/interactions/queries";
 import { getUserRole } from "@/lib/organizations/queries";
 import { listPlacementsByClient } from "@/lib/placements/queries";
@@ -69,6 +69,26 @@ export async function POST(_request: Request, { params }: RouteParams) {
   }
 
   const orgId = role.organization.id;
+
+  // 3.5) 組織横断 月次 AI 上限チェック(admin が /agency/settings/ai-usage で設定)。
+  //      他の agency AI ルート(面接対策・推薦文下書き 等)は全て生成前にこのチェックを
+  //      行うが、本ルートだけ抜けており上限が全く効かず、かつ agency_client_summary は
+  //      組織総量の集計対象なので他機能の枠を食い潰していた。生成前に必ずチェックする。
+  const usage = await checkAiUsageLimit(supabase, user.id, "agency_client_summary");
+  if (!usage.allowed) {
+    // このルートのクライアント(client-summary-card)は error をそのまま画面表示するため、
+    // error には機械コードでなく日本語の表示文言を入れる(over_quota は category に持たせる)。
+    return NextResponse.json(
+      {
+        error: `組織の月次 AI 利用上限に達しました(${usage.current} / ${usage.limit})。来月のリセット後、または管理者が設定変更後に再試行してください。`,
+        category: "over_quota",
+        current: usage.current,
+        limit: usage.limit,
+        resetsAt: usage.resetsAt,
+      },
+      { status: 429 },
+    );
+  }
 
   // 4) データ収集(全て org スコープ・既存 lib 関数を再利用)
   //    画面と同じ関数を使い、画面に出ているデータと AI に渡すデータを揃える。

@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { Card } from "@/components/ui/card";
 import { requireUser } from "@/lib/api/auth-guards";
-import { decryptField } from "@/lib/crypto/field-encryption";
+import { decryptFieldSafe } from "@/lib/crypto/field-encryption";
 import { createServiceClient } from "@/lib/supabase/service";
 
 /**
@@ -67,8 +67,10 @@ async function loadLetters(userId: string) {
   );
 
   const referralById = new Map<string, ReferralRow>(referrals.map((r) => [r.id, r]));
+  // 1 件の暗号文破損 / 旧鍵版で一覧全体が 500 になるのを防ぐため decryptFieldSafe を使う
+  // (失敗時は null → 下の `?? ""` で空見出しにフォールバックし、他の推薦文は表示を継続)。
   const decryptedHeadlines = await Promise.all(
-    letters.map((l) => decryptField(l.encrypted_headline)),
+    letters.map((l) => decryptFieldSafe(l.encrypted_headline)),
   );
 
   return letters.map((l, idx) => {

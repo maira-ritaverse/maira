@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { checkCronAuth } from "@/lib/api/cron-auth";
 import { buildAbsoluteUrl } from "@/lib/config/site-url";
-import { decryptField } from "@/lib/crypto/field-encryption";
+import { decryptFieldSafe } from "@/lib/crypto/field-encryption";
 import { getJobShareImageUrl } from "@/lib/jobs/image-url";
 import { formatSalaryRange } from "@/lib/jobs/types";
 import { multicastMessage, type LineMessage } from "@/lib/line/api";
@@ -158,7 +158,28 @@ export async function POST(request: Request) {
     // メッセージ 復元
     let message: LineMessage;
     if (bc.message_type === "text") {
-      const text = (await decryptField(bc.encrypted_content)) ?? "";
+      // 裸 decryptField だと 1 件でも 暗号文 破損 / 旧鍵版 が あると throw し、
+      // status='sending' に ロック 済 の 行 が 塩漬け に なった まま cron 全体 が 500 で
+      // 中断 する(以降 の 配信 も 止まる)。 decryptFieldSafe で null を 受けて、
+      // 復号 不能 な 配信 は 空 送信 せず failed に 確定 して 次 へ 進む(cron は 継続)。
+      const text = await decryptFieldSafe(bc.encrypted_content);
+      if (text === null) {
+        await admin
+          .from("line_broadcasts")
+          .update({
+            status: "failed",
+            error_message: "decrypt_failed",
+            sent_at: new Date().toISOString(),
+          })
+          .eq("id", bc.id);
+        processed.push({
+          id: bc.id,
+          status: "failed",
+          sentCount: 0,
+          failedCount: bc.target_count,
+        });
+        continue;
+      }
       message = { type: "text", text };
     } else {
       // job flex: filter.jobIds から 再構築

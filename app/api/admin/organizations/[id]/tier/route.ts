@@ -46,9 +46,17 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
   const admin = createServiceClient();
   // organization_id は PK。プラン行が無い組織でも tier を設定できるよう upsert。
+  // ai_boost_enabled は CHECK 制約 org_plans_ai_boost_matches_tier_check
+  //   (tier='standard_pro' <=> ai_boost_enabled=true)に一致させる必要がある。
+  // tier だけ更新すると standard_pro への切替 / からの切替・新規挿入で必ず CHECK 違反 →
+  // 500 になり「Standard + Pro」が選べず、Pro 組織を他 tier に戻すこともできなかった。
+  // tier と ai_boost_enabled を必ずセットで更新する。
   const { error } = await admin
     .from("organization_plans")
-    .upsert({ organization_id: id, tier }, { onConflict: "organization_id" });
+    .upsert(
+      { organization_id: id, tier, ai_boost_enabled: tier === "standard_pro" },
+      { onConflict: "organization_id" },
+    );
   if (error) {
     console.error("[admin/tier] update failed", { organizationId: id, message: error.message });
     return NextResponse.json({ error: "update_failed" }, { status: 500 });
