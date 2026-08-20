@@ -28,6 +28,7 @@ import {
 } from "@/lib/career/merge-from-extraction";
 import { extractionResultSchema } from "@/lib/career-intake/types";
 import { decryptField } from "@/lib/crypto/field-encryption";
+import { createServiceClient } from "@/lib/supabase/service";
 
 const requestSchema = z.object({
   action: z.enum(["accept", "reject"]),
@@ -100,7 +101,13 @@ export async function PATCH(request: Request, context: RouteContext) {
   let changedFields: string[] = [];
   if (parsed.data.action === "accept") {
     try {
-      const { data: recRow } = await supabase
+      // career_intake_recordings は所有者(録音を作成したエージェント)のみ RLS 可読
+      // のため、seeker セッションの supabase では 0 行になりマージが常に空振りしていた
+      // (それでも success を返すため反映されたと誤認する)。共有行が本人のものだと
+      // 検証済み(上の row.seeker_user_id !== user.id → 403 ガード)なので、その share が
+      // 指す録音の抽出 JSON だけを service client で読む(recording_id にスコープ)。
+      const admin = createServiceClient();
+      const { data: recRow } = await admin
         .from("career_intake_recordings")
         .select("encrypted_extraction")
         .eq("id", row.recording_id)
