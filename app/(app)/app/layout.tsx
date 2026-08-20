@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 
 import { AppSidebar } from "@/components/features/app-sidebar";
 import { MobileNavDrawer } from "@/components/features/mobile-nav-drawer";
@@ -16,6 +17,7 @@ import { countInvitedConnections } from "@/lib/connections/queries";
 import { getUserRole } from "@/lib/organizations/queries";
 import { getPolicyAcceptance, needsToAccept } from "@/lib/privacy/policy";
 import { resolveAvatarPublicUrl } from "@/lib/profile/avatar";
+import { touchLastSeen } from "@/lib/profile/last-seen";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 
 /**
@@ -62,6 +64,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     await supabase.auth.signOut();
     redirect("/login?archived=1");
   }
+
+  // 最終アクセス精度向上: 正当なアクセス(ロール/停止判定を通過した求職者)のみ
+  // last_seen_at を更新する。リダイレクトで弾かれるアクセスは対象外にして、
+  // 停止済みユーザーが「最終アクセス=本日」に見える誤表示を避ける。
+  // レンダリングをブロックしないよう after()(レスポンス送出後)で 5 分スロットル更新。
+  after(() => touchLastSeen(user.id));
 
   // プライバシーポリシー再同意が必要かを判定。古いバージョン同意済 or 完全新規で文面切替。
   const requirePolicy = needsToAccept(policyAcceptance);

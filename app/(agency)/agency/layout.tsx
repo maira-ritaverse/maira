@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 
 import { AgencySidebar } from "@/components/features/agency/agency-sidebar";
 import { NotificationBell } from "@/components/features/notifications/notification-bell";
@@ -19,6 +20,7 @@ import {
 import { getUserRole } from "@/lib/organizations/queries";
 import { getPolicyAcceptance, needsToAccept } from "@/lib/privacy/policy";
 import { resolveAvatarPublicUrl } from "@/lib/profile/avatar";
+import { touchLastSeen } from "@/lib/profile/last-seen";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 
 import { ReadOnlyBanner } from "./read-only-banner";
@@ -75,6 +77,13 @@ export default async function AgencyLayout({ children }: { children: React.React
     await supabase.auth.signOut();
     redirect("/login?archived=1");
   }
+
+  // 最終アクセス精度向上: 正当なアクセス(ロール/停止判定を通過した組織メンバー)のみ
+  // last_seen_at を更新する。リダイレクトで弾かれるアクセスは対象外にして、
+  // 停止済みユーザー / 組織が「最終アクセス=本日」に見える誤表示を避ける。
+  // レンダリングをブロックしないよう after()(レスポンス送出後)で 5 分スロットル更新。
+  after(() => touchLastSeen(user.id));
+
   const requirePolicy = needsToAccept(policyAcceptance);
   const hasPriorPolicy = policyAcceptance.acceptedAt !== null;
 

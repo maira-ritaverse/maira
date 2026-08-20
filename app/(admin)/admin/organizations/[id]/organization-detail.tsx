@@ -16,7 +16,8 @@ type Member = {
   linkedClientCount: number;
   recentClientsAdded30d: number;
   // 稼働 状況 (直近 30 日)
-  lastSignInAt: string | null;
+  // last_sign_in_at と profiles.last_seen_at の新しい方(= 実質の最終アクセス)。
+  lastAccessAt: string | null;
   activity30d: {
     clients: number;
     jobs: number;
@@ -213,7 +214,7 @@ export function OrganizationDetail({ organizationId }: Props) {
                       <th className="px-3 py-2.5">メアド</th>
                       <th className="px-3 py-2.5 text-right">担当 client</th>
                       <th className="px-3 py-2.5 text-right">うち連携済</th>
-                      <th className="px-3 py-2.5">最終ログイン</th>
+                      <th className="px-3 py-2.5">最終アクセス</th>
                       <th className="px-3 py-2.5">加入日</th>
                     </tr>
                   </thead>
@@ -284,7 +285,7 @@ function MemberRow({ member: m, nowMs }: { member: Member; nowMs: number }) {
         <td className="px-3 py-2.5 text-right text-xs font-semibold">{m.clientCount}</td>
         <td className="px-3 py-2.5 text-right text-xs">{m.linkedClientCount}</td>
         <td className="px-3 py-2.5 text-xs">
-          <LastSignInCell iso={m.lastSignInAt} nowMs={nowMs} />
+          <LastAccessCell iso={m.lastAccessAt} nowMs={nowMs} />
         </td>
         <td className="px-3 py-2.5 text-xs">{new Date(m.createdAt).toLocaleDateString("ja-JP")}</td>
       </tr>
@@ -317,8 +318,8 @@ function MemberRow({ member: m, nowMs }: { member: Member; nowMs: number }) {
   );
 }
 
-function LastSignInCell({ iso, nowMs }: { iso: string | null; nowMs: number }) {
-  if (!iso) return <span className="text-muted-foreground">未ログイン</span>;
+function LastAccessCell({ iso, nowMs }: { iso: string | null; nowMs: number }) {
+  if (!iso) return <span className="text-muted-foreground">記録なし</span>;
   const d = new Date(iso);
   const diffMs = nowMs - d.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));

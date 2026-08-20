@@ -144,7 +144,8 @@ export async function GET(request: Request) {
         email: au?.email ?? "",
         displayName: p.display_name,
         createdAt: au?.createdAt ?? null,
-        lastSignInAt: au?.lastSignInAt ?? null,
+        // 最終アクセス = last_sign_in_at と profiles.last_seen_at の新しい方(精度向上)。
+        lastAccessAt: au?.lastAccessAt ?? null,
         onboardedAt: p.onboarded_at,
         archivedAt: p.archived_at,
         archivedReason: p.archived_reason,

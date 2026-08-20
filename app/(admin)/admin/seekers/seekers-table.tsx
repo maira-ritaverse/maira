@@ -12,7 +12,8 @@ type SeekerRow = {
   email: string;
   displayName: string | null;
   createdAt: string | null;
-  lastSignInAt: string | null;
+  // last_sign_in_at と profiles.last_seen_at の新しい方(= 実質の最終アクセス)。
+  lastAccessAt: string | null;
   onboardedAt: string | null;
   archivedAt: string | null;
   archivedReason: string | null;
@@ -99,7 +100,7 @@ export function SeekersTable({ archived }: { archived: boolean }) {
             <thead className="bg-muted/50 text-muted-foreground sticky top-0 z-10 text-xs">
               <tr>
                 <th className="px-3 py-2.5">メアド / 表示名</th>
-                <th className="px-3 py-2.5">最終ログイン</th>
+                <th className="px-3 py-2.5">最終アクセス</th>
                 <th className="px-3 py-2.5 text-right">履歴書</th>
                 <th className="px-3 py-2.5 text-right">応募</th>
                 <th className="px-3 py-2.5 text-right">AI会話</th>
@@ -150,7 +151,7 @@ function SeekerRowView({
         )}
       </td>
       <td className="px-3 py-2.5 text-xs">
-        <LastSignInCell iso={s.lastSignInAt} nowMs={nowMs} />
+        <LastAccessCell iso={s.lastAccessAt} nowMs={nowMs} />
       </td>
       <td className="px-3 py-2.5 text-right text-xs">
         <MetricNumber value={s.resumeCount} />
@@ -186,8 +187,8 @@ function MetricNumber({ value }: { value: number }) {
   return <span className="font-semibold text-emerald-700 dark:text-emerald-400">{value}</span>;
 }
 
-function LastSignInCell({ iso, nowMs }: { iso: string | null; nowMs: number }) {
-  if (!iso) return <span className="text-muted-foreground">未ログイン</span>;
+function LastAccessCell({ iso, nowMs }: { iso: string | null; nowMs: number }) {
+  if (!iso) return <span className="text-muted-foreground">記録なし</span>;
   const d = new Date(iso);
   const diffMs = nowMs - d.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));

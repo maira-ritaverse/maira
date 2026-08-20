@@ -80,11 +80,12 @@ export async function GET(_request: Request, { params }: RouteParams) {
     members.map((m) => m.user_id),
   );
   const emailByUserId = new Map<string, string>();
-  const lastSignInByUserId = new Map<string, string | null>();
+  // 最終アクセス = last_sign_in_at と profiles.last_seen_at の新しい方(精度向上)。
+  const lastAccessByUserId = new Map<string, string | null>();
   for (const m of members) {
     const au = authUsersById.get(m.user_id);
     if (au?.email) emailByUserId.set(m.user_id, au.email);
-    lastSignInByUserId.set(m.user_id, au?.lastSignInAt ?? null);
+    lastAccessByUserId.set(m.user_id, au?.lastAccessAt ?? null);
   }
 
   // クライアント
@@ -254,7 +255,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
         recentClientsAdded30d: cs.recent30d,
         // 稼働 状況 (直近 30 日、 2026-07-19 に created_by_member_id 追加 済 の
         // ため 過去 分 は 集計 対象 外。 「新しい 起票 分」 の みが 見える 想定)
-        lastSignInAt: lastSignInByUserId.get(m.user_id) ?? null,
+        lastAccessAt: lastAccessByUserId.get(m.user_id) ?? null,
         activity30d: {
           clients: clientsCreatedByMember.get(m.id) ?? 0,
           jobs: jobsCreatedByMember.get(m.id) ?? 0,

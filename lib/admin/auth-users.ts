@@ -28,14 +28,59 @@ const MAX_PAGES = 20;
 export type AuthUserSlim = {
   id: string;
   email: string | null;
+  /** auth.users.last_sign_in_at(明示的なサインイン時のみ更新。日々の利用では更新されない)。 */
   lastSignInAt: string | null;
+  /** profiles.last_seen_at(認証後レイアウト表示ごとに更新、5 分スロットル)。 */
+  lastSeenAt: string | null;
+  /** lastSignInAt と lastSeenAt の新しい方 = 実質の最終アクセス。運営者画面の表示に使う。 */
+  lastAccessAt: string | null;
   createdAt: string | null;
 };
+
+/** ISO 日時文字列 a, b の新しい方を返す(null は無視)。フォーマット差異に強い getTime 比較。 */
+function laterIso(a: string | null, b: string | null): string | null {
+  if (!a) return b;
+  if (!b) return a;
+  return new Date(a).getTime() >= new Date(b).getTime() ? a : b;
+}
+
+/**
+ * 収集済みの AuthUserSlim に profiles.last_seen_at を合流させ、lastAccessAt を確定する。
+ *
+ * last_sign_in_at は明示サインイン時しか更新されないため、それだけだと「毎日使っている
+ * のに数週間前」になり最終アクセスの精度が悪い。認証後レイアウトで更新している
+ * last_seen_at と突き合わせ、新しい方を lastAccessAt(= 実質の最終アクセス)とする。
+ * 取得失敗時は last_sign_in_at ベース(初期値)のままにする。
+ */
+async function enrichWithLastSeen(
+  admin: SupabaseClient,
+  found: Map<string, AuthUserSlim>,
+): Promise<void> {
+  const ids = [...found.keys()];
+  if (ids.length === 0) return;
+  const { data, error } = await admin.from("profiles").select("id, last_seen_at").in("id", ids);
+  if (error) {
+    console.warn("[admin/auth-users] profiles last_seen_at fetch failed", {
+      message: error.message,
+    });
+    return;
+  }
+  for (const row of data ?? []) {
+    const slim = found.get(row.id as string);
+    if (!slim) continue;
+    const lastSeenAt = (row.last_seen_at as string | null) ?? null;
+    slim.lastSeenAt = lastSeenAt;
+    slim.lastAccessAt = laterIso(slim.lastSignInAt, lastSeenAt);
+  }
+}
 
 /**
  * 指定 した id 集合 に 対して auth.users を bulk 取得。 見つから ない id は Map に 入らない。
  * 最終 ページ 到達 前 に MAX_PAGES を 使い 切って 未 発見 の target が 残った 場合、
  * 明示的 に warn を 吐く (silent-drop の 監視 の ため)。
+ *
+ * 取得後、profiles.last_seen_at を合流させて lastAccessAt を確定する
+ * (最終アクセス表示の精度向上。詳細は enrichWithLastSeen を参照)。
  */
 export async function getAuthUsersByIds(
   admin: SupabaseClient,
@@ -59,11 +104,15 @@ export async function getAuthUsersByIds(
           id: u.id,
           email: u.email ?? null,
           lastSignInAt: u.last_sign_in_at ?? null,
+          // last_seen_at は下の enrichWithLastSeen で合流。ここでは sign_in を初期値に。
+          lastSeenAt: null,
+          lastAccessAt: u.last_sign_in_at ?? null,
           createdAt: u.created_at ?? null,
         });
       }
     }
-    if (found.size >= targets.size) return found;
+    // 全 target 発見でも、profiles 合流のためループを抜けてから enrich する。
+    if (found.size >= targets.size) break;
     if (users.length < PER_PAGE) {
       reachedEnd = true;
       break;
@@ -79,6 +128,8 @@ export async function getAuthUsersByIds(
       maxUsersScanned: MAX_PAGES * PER_PAGE,
     });
   }
+
+  await enrichWithLastSeen(admin, found);
   return found;
 }
 
