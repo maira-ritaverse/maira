@@ -122,13 +122,17 @@ export async function POST(request: Request) {
       elapsedBudgetExceeded = true;
       break;
     }
-    // status='sending' に 進める (二重 起動 防止)
-    const { error: lockErr } = await admin
+    // status='sending' に 進める (二重 起動 防止)。
+    // .select() で 実際 に 更新 された 行 を 受け取る。 supabase-js は .select() 無し だと
+    // 0 行 一致 でも error=null を 返す ため、 tick が 重なった 際 に 両方 が ロック 取得
+    // 成功 と 誤認 して 二重 送信 に なる。 更新 行 が 0 なら 他 tick が 取得 済 と して skip。
+    const { data: locked, error: lockErr } = await admin
       .from("line_broadcasts")
       .update({ status: "sending" })
       .eq("id", bc.id)
-      .eq("status", "queued");
-    if (lockErr) continue;
+      .eq("status", "queued")
+      .select("id");
+    if (lockErr || !locked || locked.length === 0) continue;
 
     const channel = await getLineChannelByOrgId(admin, bc.organization_id);
     if (!channel) {
