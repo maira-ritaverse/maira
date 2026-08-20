@@ -71,7 +71,7 @@ export default function LegalPage() {
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">販売価格</h2>
-          <p>各 サービスページ または アプリ内 課金画面 に 表示する 金額(税込)とします。</p>
+          <p>各 サービスページ または アプリ内 課金画面 に 表示する 金額(税別)とします。</p>
           <ul className="ml-6 list-disc space-y-1 text-xs">
             <li>求職者向け 基本機能:無料(AI 利用回数 / 月次 制限 あり)</li>
             <li>求職者向け アドオン:アプリ内 表示価格 に従い 月額 課金</li>
