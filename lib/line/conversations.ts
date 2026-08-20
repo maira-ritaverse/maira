@@ -8,7 +8,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { decryptField } from "@/lib/crypto/field-encryption";
+import { decryptFieldSafe } from "@/lib/crypto/field-encryption";
 
 export type ConversationListItem = {
   lineUserId: string;
@@ -205,7 +205,9 @@ export async function listConversationMessages(
   const rows = data as Row[];
   const decoded = await Promise.all(
     rows.map(async (r) => {
-      const decryptedText = r.encrypted_content ? await decryptField(r.encrypted_content) : null;
+      const decryptedText = r.encrypted_content
+        ? await decryptFieldSafe(r.encrypted_content)
+        : null;
       // image / video / audio / file は encrypted_content に メタJSON が 入る ので
       // テキスト として 復号 した 結果 を JSON parse して 表示用 に 整形 する
       let displayText: string | null = decryptedText;
@@ -308,7 +310,7 @@ async function previewFor(row: {
   sticker_id: string | null;
 }): Promise<string> {
   if (row.message_type === "text" && row.encrypted_content) {
-    const text = await decryptField(row.encrypted_content);
+    const text = await decryptFieldSafe(row.encrypted_content);
     if (!text) return "(復号失敗)";
     return text.length > 40 ? text.slice(0, 40) + "..." : text;
   }
@@ -330,7 +332,7 @@ async function previewFor(row: {
       return "[リッチメッセージ]";
     case "system": {
       if (!row.encrypted_content) return "[システム]";
-      const decoded = (await decryptField(row.encrypted_content)) ?? "[システム]";
+      const decoded = (await decryptFieldSafe(row.encrypted_content)) ?? "[システム]";
       // 構造化 system (kind:"job_interest" 等) は text 部分 を 抜き出し、 ★ で 強調
       try {
         const parsed = JSON.parse(decoded) as { kind?: string; text?: string };

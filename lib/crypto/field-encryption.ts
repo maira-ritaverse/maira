@@ -267,3 +267,26 @@ export async function decryptField(
 
   return new TextDecoder().decode(plaintext);
 }
+
+/**
+ * 一覧・表示系のバッチ復号用。復号に失敗しても throw せず null を返す。
+ *
+ * decryptField は鍵バージョン未登録・壊れた暗号文・認証タグ不一致で throw する。
+ * これを Promise.all(rows.map(...)) 等の一覧処理でそのまま使うと、1 レコードの
+ * 破損 / 旧鍵バージョンで一覧全体が落ちる(例:LINE 受信箱が丸ごと開けない)。
+ * 表示系ではこの safe 版を使い、失敗レコードは null(呼出側でプレースホルダ表示)に
+ * 劣化させる。
+ *
+ * 注意:セキュリティ上「復号できなければ処理を止めるべき」単一レコード読取
+ * (推薦文本文の取得など)には、必ず throw する decryptField を使うこと。
+ */
+export async function decryptFieldSafe(value: string | null | undefined): Promise<string | null> {
+  try {
+    return (await decryptField(value)) ?? null;
+  } catch (err) {
+    console.warn("[field-encryption] 復号に失敗しました(safe パスで null に劣化)", {
+      message: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
