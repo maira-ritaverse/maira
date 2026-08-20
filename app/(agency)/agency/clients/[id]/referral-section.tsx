@@ -550,7 +550,7 @@ function InterviewPrepEntry({ referralId }: { referralId: string }) {
         type="button"
         size="sm"
         onClick={() => router.push(`/agency/interview-preps/${referralId}`)}
-        className="border-transparent bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-500"
+        className="border-transparent bg-orange-600 text-white hover:bg-orange-700 dark:bg-orange-600 dark:hover:bg-orange-500"
       >
         <Sparkles className="size-3.5" />
         面接対策を開く

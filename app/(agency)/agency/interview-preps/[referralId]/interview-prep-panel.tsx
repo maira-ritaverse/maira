@@ -164,7 +164,7 @@ export function InterviewPrepPanel({
           {content.sections.map((section, idx) => (
             <section key={idx} className="border-border/70 bg-muted/20 rounded-lg border p-4">
               <h3 className="mb-2.5 flex items-center gap-2 text-[0.95rem] leading-snug font-semibold">
-                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange-600 text-xs font-bold text-white">
                   {idx + 1}
                 </span>
                 {section.heading}
@@ -173,7 +173,7 @@ export function InterviewPrepPanel({
                 {section.items.map((item, i) => (
                   <li key={i} className="flex gap-2">
                     <span
-                      className="mt-2 size-1.5 shrink-0 rounded-full bg-violet-500"
+                      className="mt-2 size-1.5 shrink-0 rounded-full bg-orange-500"
                       aria-hidden
                     />
                     <span className="whitespace-pre-wrap">{item}</span>
