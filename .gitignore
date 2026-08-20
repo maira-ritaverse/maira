@@ -65,3 +65,7 @@ coverage/
 playwright-report/
 test-results/
 e2e/.auth/*.json
+
+# autoresearch 自律改善ループの作業ログ(コミットしない)
+results.tsv
+run.log
