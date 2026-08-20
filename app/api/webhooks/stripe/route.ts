@@ -503,6 +503,10 @@ async function handleSubscriptionSync(
 
   // seat_count は 「管理者 含めた 総 席 数」 で、 line item の quantity は
   // Extra Seat = seat_count - 3 (Base に 3 席 込 み)。 DB に は 総 席 数 を 保存 する。
+  // NOTE: Solo 系 は 席 概念 が 無く seatCount=0 のため +3 で「3席」保存になる(表示上の
+  //   軽微な不整合)。ただし DB 側 CHECK 制約 org_plans_seat_count_min_check が seat_count>=3 を
+  //   要求するため、ここで 1 を書くと Solo 同期が制約違反でハードフェイルする。表示の是正は
+  //   課金画面側(tier で「1席」表示)か制約緩和 migration で Solo ローンチ時に別途行う。
   const totalSeats = parsed.seatCount + 3;
 
   const { error } = await admin.rpc("apply_stripe_subscription_sync", {

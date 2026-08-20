@@ -59,14 +59,14 @@ export async function POST(request: Request) {
   for (const row of rows) {
     // Stripe 契約 前 (stripe_subscription_id NULL) の トライアル 期限 切れ は、
     // 「決済 せず に 使い 続け られる 穴」 を 塞ぐ ため canceled に 遷移 させる。
-    // (旧 実装 は tier='standard' に 移して active 化 して いた が、
-    //  それ だと 未 決済 で フル 機能 使え て しま う ので 廃止)。
-    // ai_boost_enabled は tier CHECK 制約 に 合わせ て false に 明示。
+    // canceled は read-only なので、tier に関わらずフル機能は使えない。
+    // tier / ai_boost_enabled は元の値を保持する(旧実装は一律 tier='standard' に
+    //  上書きしていたが、Solo/Solo Pro のトライアルが Team の standard に化けて
+    //  課金画面表示や復帰導線が誤る不具合があったため廃止)。tier を触らないので
+    //  ai_boost_enabled との CHECK 制約整合も保たれる。
     const { error: updateErr } = await admin
       .from("organization_plans")
       .update({
-        tier: "standard",
-        ai_boost_enabled: false,
         status: "canceled",
         canceled_at: now.toISOString(),
       })
