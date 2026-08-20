@@ -4,7 +4,7 @@
  * メッセージは AES-256-GCM(lib/crypto/field-encryption)で暗号化保存。
  * セッション総評(summary)も同方式。
  */
-import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
+import { decryptFieldSafe, encryptField } from "@/lib/crypto/field-encryption";
 import { createClient } from "@/lib/supabase/server";
 
 export type InterviewPositionContext = {
@@ -51,7 +51,8 @@ type MessageRow = {
 
 async function rowToSession(row: SessionRow): Promise<InterviewSession> {
   const ctx = (row.position_context ?? {}) as InterviewPositionContext;
-  const summary = row.encrypted_summary ? await decryptField(row.encrypted_summary) : null;
+  // サマリーの復号失敗でセッション全体が開けなくなるのを防ぐ safe 版(失敗は null 表示)。
+  const summary = row.encrypted_summary ? await decryptFieldSafe(row.encrypted_summary) : null;
   return {
     id: row.id,
     userId: row.user_id,
@@ -68,7 +69,8 @@ async function rowToMessage(row: MessageRow): Promise<InterviewMessage> {
     id: row.id,
     sessionId: row.session_id,
     role: row.role as "user" | "assistant",
-    content: (await decryptField(row.encrypted_content)) ?? "",
+    // 1 メッセージの復号失敗でセッションのレビュー全体が 500 にならないよう safe 版。
+    content: (await decryptFieldSafe(row.encrypted_content)) ?? "",
     createdAt: row.created_at,
   };
 }

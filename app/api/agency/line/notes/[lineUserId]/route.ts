@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireOrgMember } from "@/lib/api/auth-guards";
-import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
+import { decryptFieldSafe, encryptField } from "@/lib/crypto/field-encryption";
 import { createServiceClient } from "@/lib/supabase/service";
 
 /**
@@ -60,7 +60,8 @@ export async function GET(_request: Request, context: RouteContext) {
   const notes = await Promise.all(
     rows.map(async (r) => ({
       id: r.id,
-      content: (await decryptField(r.encrypted_content)) ?? "",
+      // 1 件の復号失敗でメモ一覧全体が 500 にならないよう safe 版(失敗は空文字)。
+      content: (await decryptFieldSafe(r.encrypted_content)) ?? "",
       createdByUserId: r.created_by_user_id,
       createdByLabel: r.created_by_user_id
         ? `(${userNameMap.get(r.created_by_user_id) ?? "メンバー"})`

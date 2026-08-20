@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { checkCronAuth } from "@/lib/api/cron-auth";
-import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
+import { decryptFieldSafe, encryptField } from "@/lib/crypto/field-encryption";
 import { pushMessage } from "@/lib/line/api";
 import { classifyLineError } from "@/lib/line/errors";
 import { getLineChannelByOrgId } from "@/lib/line/queries";
@@ -148,8 +148,11 @@ export async function POST(request: Request) {
       totalSkipped++;
       continue;
     }
-    const subject = (await decryptField(template.encrypted_subject)) ?? "";
-    const body = (await decryptField(template.encrypted_body)) ?? "";
+    // 裸 decryptField だと poison テンプレ 1 件で throw し、ループ全体(=cron)が 500 中断
+    // して以降のシナリオが配信されない。safe 版で null を受け、復号不能なテンプレは
+    // skip して次のシナリオへ進む(既存の `if (!body)` ガードが null を吸収)。
+    const subject = (await decryptFieldSafe(template.encrypted_subject)) ?? "";
+    const body = (await decryptFieldSafe(template.encrypted_body)) ?? "";
     if (!body) {
       totalSkipped++;
       continue;

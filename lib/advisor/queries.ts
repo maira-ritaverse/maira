@@ -14,7 +14,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
+import { decryptFieldSafe, encryptField } from "@/lib/crypto/field-encryption";
 import type { AdvisorMessageView, AdvisorSenderKind, AdvisorThreadView } from "./types";
 
 type ThreadRow = {
@@ -167,7 +167,9 @@ async function loadLastMessagePreviews(
         .maybeSingle();
       const cipher = (data as { encrypted_content: string } | null)?.encrypted_content;
       if (!cipher) return;
-      const plain = await decryptField(cipher);
+      // 1 スレッドの復号失敗(破損 / 旧鍵)で一覧全体が 500 にならないよう safe 版。
+      // 失敗時は null → プレビュー未設定のままスキップ(他スレッドの表示は継続)。
+      const plain = await decryptFieldSafe(cipher);
       if (plain) map.set(id, plain.slice(0, 80));
     }),
   );
@@ -199,7 +201,8 @@ export async function listMessages(
       threadId: r.thread_id,
       senderKind: r.sender_kind,
       senderUserId: r.sender_user_id,
-      content: (await decryptField(r.encrypted_content)) ?? "",
+      // 1 メッセージの復号失敗で会話全体が 500 にならないよう safe 版(失敗は空文字)。
+      content: (await decryptFieldSafe(r.encrypted_content)) ?? "",
       readAt: r.read_at,
       createdAt: r.created_at,
     })),

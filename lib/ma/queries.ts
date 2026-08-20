@@ -10,7 +10,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
-import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
+import { decryptField, decryptFieldSafe, encryptField } from "@/lib/crypto/field-encryption";
 import type {
   ConsentLogEntry,
   ConsentStatus,
@@ -345,13 +345,14 @@ export async function listSendLogs(
   }
   if (!data) return [];
 
-  // 各行の subject/body を並列に復号
+  // 各行の subject/body を並列に復号。
+  // 1 件の破損 / 旧鍵で送信履歴一覧全体が 500 にならないよう safe 版(失敗は空文字)。
   const decrypted = await Promise.all(
     data.map(async (row) => {
       const subject = row.encrypted_subject
-        ? ((await decryptField(row.encrypted_subject)) ?? "")
+        ? ((await decryptFieldSafe(row.encrypted_subject)) ?? "")
         : "";
-      const body = row.encrypted_body ? ((await decryptField(row.encrypted_body)) ?? "") : "";
+      const body = row.encrypted_body ? ((await decryptFieldSafe(row.encrypted_body)) ?? "") : "";
       const log: SendLog = {
         id: row.id,
         organizationId: row.organization_id,
