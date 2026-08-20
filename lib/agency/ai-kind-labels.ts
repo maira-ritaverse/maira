@@ -70,7 +70,7 @@ export const AI_KIND_UNIT_COST_USD: Record<string, number> = {
   agency_ma_segment_generation: 0.03, // Claude 構造 化 (約 2k input + 1k output 想定)
   agency_ma_flow_improvement: 0.06, // Flow 全体 を レビュー (約 4k input + 2k output 想定)
   agency_client_document_extract: 0.13, // Claude vision PDF/画像、 求人抽出 と 同等
-  agency_interview_prep: 0.075, // 面接対策(5k input + 2k output 想定、推薦文と同等)
+  agency_interview_prep: 0.0375, // 面接対策。1 生成 = 2 行計上のため、1 行あたり = 実コスト(約0.075)/2
 };
 
 export function estimateCostUsd(byKind: Record<string, number>): number {

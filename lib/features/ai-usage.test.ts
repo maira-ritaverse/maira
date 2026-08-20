@@ -392,6 +392,23 @@ describe("recordAiUsage: 重み付け", () => {
     });
   });
 
+  it("units=2 は 2 行 INSERT する(面接対策=1 生成 2 消費)", async () => {
+    const { supabase, insert } = makeMockClient();
+    await recordAiUsage(supabase, "user-1", "agency_interview_prep", { referral_id: "ref1" }, 2);
+    expect(insert).toHaveBeenCalledWith([
+      {
+        user_id: "user-1",
+        kind: "agency_interview_prep",
+        metadata: { referral_id: "ref1", weight: 2, unit_index: 1, unit_total: 2 },
+      },
+      {
+        user_id: "user-1",
+        kind: "agency_interview_prep",
+        metadata: { referral_id: "ref1", weight: 2, unit_index: 2, unit_total: 2 },
+      },
+    ]);
+  });
+
   it("INSERT が エラー を 返して も throw しない (warn ログ のみ)", async () => {
     const insert = vi.fn().mockResolvedValue({ error: { message: "db down" } });
     const from = vi.fn().mockReturnValue({ insert });

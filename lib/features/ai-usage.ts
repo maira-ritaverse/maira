@@ -701,27 +701,41 @@ export async function recordAiUsage(
   userId: string,
   kind: AiUsageKind,
   metadata?: Record<string, unknown>,
+  /**
+   * この 1 回 の 呼出 を 何 「回分」 の 利用 として 計上 するか (既定 1)。
+   * 面接対策 の よう に 「1 生成 = 2 回 消費」 と したい kind で 2 以上 を 渡す。
+   * units 行 を INSERT する ので、 kind 別 上限・組織総量 の 両方 に units 分 計上 される。
+   */
+  units = 1,
 ): Promise<void> {
   const weight = getAiKindWeight(kind);
-  const row = {
-    user_id: userId,
-    kind,
-    // weight を metadata に 記録 (weight=1 の 場合 は 省略 して data を コンパクト化)
-    metadata: weight === 1 ? (metadata ?? null) : { ...(metadata ?? {}), weight },
-  };
+  const baseMeta = weight === 1 ? (metadata ?? null) : { ...(metadata ?? {}), weight };
+  const count = Math.max(1, Math.floor(units));
+
+  // count=1 は従来どおり単一オブジェクト、count>1 は units 行を配列で INSERT する
+  // (既存の挙動・テストを維持しつつ、面接対策のような「2 回消費」に対応)。
+  const payload =
+    count === 1
+      ? { user_id: userId, kind, metadata: baseMeta }
+      : Array.from({ length: count }, (_, index) => ({
+          user_id: userId,
+          kind,
+          metadata: { ...(baseMeta ?? {}), unit_index: index + 1, unit_total: count },
+        }));
 
   try {
-    const { error } = await supabase.from("ai_usage_events").insert(row);
+    const { error } = await supabase.from("ai_usage_events").insert(payload);
     if (error) {
       console.warn("[ai-usage] insert failed", {
         kind,
         userId,
         weight,
+        count,
         message: error.message,
       });
     }
   } catch (err) {
-    console.warn("[ai-usage] insert threw", { kind, userId, weight, err });
+    console.warn("[ai-usage] insert threw", { kind, userId, weight, count, err });
   }
 }
 

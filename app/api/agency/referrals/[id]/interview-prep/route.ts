@@ -102,12 +102,19 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       prompt,
     });
 
-    // AI 呼出は成功したので利用量を記録(保存の成否に関わらず課金対象のため先に記録)
-    await recordAiUsage(supabase, user.id, "agency_interview_prep", {
-      referral_id: referral.id,
-      job_posting_id: job.id,
-      client_record_id: client.id,
-    });
+    // AI 呼出は成功したので利用量を記録(保存の成否に関わらず課金対象のため先に記録)。
+    // 面接対策は長文生成のため 1 生成 = 2 回消費(units=2)として計上する。
+    await recordAiUsage(
+      supabase,
+      user.id,
+      "agency_interview_prep",
+      {
+        referral_id: referral.id,
+        job_posting_id: job.id,
+        client_record_id: client.id,
+      },
+      2,
+    );
 
     const content = parseInterviewPrepOutput(result.text);
 
