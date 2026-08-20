@@ -102,6 +102,20 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       prompt,
     });
 
+    // AI が実質空の応答を返したときは課金・保存せず再試行を促す。
+    // 「保存の成否に関わらず課金」の方針は維持しつつ、空文字がそのまま面接対策として
+    // 2 消費で保存・表示されるフェイルオープン(=中身ゼロなのに課金される)だけを塞ぐ。
+    if (result.text.trim().length === 0) {
+      return NextResponse.json(
+        {
+          error: "empty_generation",
+          message: "面接対策の生成結果が空でした。お手数ですが、もう一度生成してください。",
+          retryable: true,
+        },
+        { status: 502 },
+      );
+    }
+
     // AI 呼出は成功したので利用量を記録(保存の成否に関わらず課金対象のため先に記録)。
     // 面接対策は長文生成のため 1 生成 = 2 回消費(units=2)として計上する。
     await recordAiUsage(
