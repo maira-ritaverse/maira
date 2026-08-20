@@ -23,6 +23,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { findFriendsBySegmentFilter } from "@/lib/ma/segment-queries";
 import type { SegmentFilter } from "@/lib/ma/segment-dsl";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 
 export type BroadcastTargetKind = "all" | "linked" | "unlinked";
 
@@ -43,16 +44,22 @@ export async function resolveBroadcastTargetLineUserIds(
   args: ResolveTargetsArgs,
 ): Promise<string[]> {
   // タグ 指定 時 は 該当 タグ が 付いて いる line_user_id を 先 に 取得
+  // (max_rows 1000 で 頭打ち に なると 大 規模 組織 で タグ 対象 が 静かに 欠落 する ため
+  //  fetchAllRows で 全件 取得。 order は 一意 な (line_user_id, tag_id) で 安定化)。
   let tagFilterSet: Set<string> | null = null;
   if (args.tagIds && args.tagIds.length > 0) {
-    const { data: matched } = await admin
-      .from("line_conversation_tag_assignments")
-      .select("line_user_id")
-      .eq("organization_id", args.organizationId)
-      .in("tag_id", args.tagIds);
-    tagFilterSet = new Set(
-      ((matched ?? []) as Array<{ line_user_id: string }>).map((r) => r.line_user_id),
+    const tagIds = args.tagIds;
+    const { rows: matched } = await fetchAllRows<{ line_user_id: string }>((from, to) =>
+      admin
+        .from("line_conversation_tag_assignments")
+        .select("line_user_id")
+        .eq("organization_id", args.organizationId)
+        .in("tag_id", tagIds)
+        .order("line_user_id", { ascending: true })
+        .order("tag_id", { ascending: true })
+        .range(from, to),
     );
+    tagFilterSet = new Set(matched.map((r) => r.line_user_id));
     if (tagFilterSet.size === 0) return [];
   }
 
@@ -86,23 +93,28 @@ export async function resolveBroadcastTargetLineUserIds(
     allowedLineUserIds = tagFilterSet ?? segmentFilterSet;
   }
 
-  let query = admin
-    .from("line_user_links")
-    .select("line_user_id, client_record_id")
-    .eq("organization_id", args.organizationId)
-    .is("unfollowed_at", null);
-
-  if (args.target === "linked") {
-    query = query.not("client_record_id", "is", null);
-  } else if (args.target === "unlinked") {
-    query = query.is("client_record_id", null);
-  }
-
-  if (allowedLineUserIds) {
-    query = query.in("line_user_id", Array.from(allowedLineUserIds));
-  }
-
-  const { data } = await query;
+  // 友達 一覧 を 全件 取得(max_rows 1000 で 頭打ち に なると 1000 人 超 の 組織 で
+  // 未配信 + 過少 カウント が 起きる ため fetchAllRows)。 tag/segment フィルタ は
+  // 巨大 な .in(UUID 配列) で URL が 長く なり ゼロ 配信 に なる リスク を 避ける ため、
+  // ここでは 絞込 を かけず 全件 取得 して JS 側 の Set で 突合 する。
+  // order は 組織 内 で 一意 な line_user_id で 安定化。
   type Row = { line_user_id: string; client_record_id: string | null };
-  return ((data ?? []) as Row[]).map((r) => r.line_user_id);
+  const { rows: linkRows } = await fetchAllRows<Row>((from, to) => {
+    let query = admin
+      .from("line_user_links")
+      .select("line_user_id, client_record_id")
+      .eq("organization_id", args.organizationId)
+      .is("unfollowed_at", null);
+
+    if (args.target === "linked") {
+      query = query.not("client_record_id", "is", null);
+    } else if (args.target === "unlinked") {
+      query = query.is("client_record_id", null);
+    }
+
+    return query.order("line_user_id", { ascending: true }).range(from, to);
+  });
+
+  const ids = linkRows.map((r) => r.line_user_id);
+  return allowedLineUserIds ? ids.filter((id) => allowedLineUserIds.has(id)) : ids;
 }

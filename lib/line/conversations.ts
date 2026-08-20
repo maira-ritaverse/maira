@@ -62,11 +62,21 @@ export type ConversationMessage = {
  * 規模 < 数百件 を 想定 (それ以上 は 後日 pagination 追加)。
  */
 export async function listConversations(supabase: SupabaseClient): Promise<ConversationListItem[]> {
+  // 友達数が max_rows(1000)を超える組織では、order 無しだと「どの 1000 件が返るか」が
+  // 非決定的になり、未読/対応中の会話が一覧から静かに欠落しうる。last_activity_at 降順
+  // (NULL は末尾)+ line_user_id で安定させ、上限に当たっても「直近アクティブな 1000 件」を
+  // 決定的に残す(=未読/直近やり取りが優先的に表示される)。
+  // NOTE: 1000 件超の完全表示は「友達ごとの最終メッセージ+未読数」を 1 クエリで返す
+  //   RPC 集約が必要(現状は 1 友達 = 2 クエリの N+1 のため素の全件取得はタイムアウト懸念)。
+  //   本修正は非決定的欠落の解消に留め、全件対応は RPC 化の follow-up とする。
   const { data: linkData } = await supabase
     .from("line_user_links")
     .select(
       "line_user_id, client_record_id, display_name, custom_name, picture_url, unfollowed_at, handled_at, last_activity_at",
-    );
+    )
+    .order("last_activity_at", { ascending: false, nullsFirst: false })
+    .order("line_user_id", { ascending: true })
+    .limit(1000);
 
   type LinkRow = {
     line_user_id: string;
