@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { fireReferralConversionFlow } from "@/lib/ma/conversion-events";
 import { fireInAppNotification, fireSeekerNotification } from "@/lib/notifications/in-app";
+import { assertNotArchived } from "@/lib/api/auth-guards";
 import { getUserRole } from "@/lib/organizations/queries";
 import { getReferralStatusConfig, updateReferralRequestSchema } from "@/lib/referrals/types";
 import type { ReferralStatus } from "@/lib/referrals/types";
@@ -40,6 +41,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   if (role.accountType !== "organization_member" || !role.organization || !role.member) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  // 停止(archived)済みユーザー / 組織のセッション直叩きを塞ぐ(多層防御)
+  const archived = await assertNotArchived(supabase, user.id, role.organization.id);
+  if (archived) return archived;
 
   let body: unknown;
   try {

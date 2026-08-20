@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { assertNotArchived } from "@/lib/api/auth-guards";
 import { getUserRole } from "@/lib/organizations/queries";
 import { PERMISSION_KEYS } from "@/lib/permissions/types";
 
@@ -47,6 +48,11 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     callerRole.member.role !== "admin"
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  // 停止(archived)済みユーザー / 組織のセッション直叩きを塞ぐ(多層防御)
+  if (callerRole.organization) {
+    const archived = await assertNotArchived(supabase, user.id, callerRole.organization.id);
+    if (archived) return archived;
   }
 
   let body: unknown;

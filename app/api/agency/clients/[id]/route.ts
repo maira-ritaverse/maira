@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { encryptField } from "@/lib/crypto/field-encryption";
+import { assertNotArchived } from "@/lib/api/auth-guards";
 import { getUserRole } from "@/lib/organizations/queries";
 import { updateClientRequestSchema } from "@/lib/clients/types";
 import { logClientChanges } from "@/lib/audit/client-audit-log";
@@ -34,6 +35,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   if (role.accountType !== "organization_member" || !role.organization) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  // 停止(archived)済みユーザー / 組織のセッション直叩きを塞ぐ(requireOrgMember と同等の多層防御)
+  const archived = await assertNotArchived(supabase, user.id, role.organization.id);
+  if (archived) return archived;
 
   let body: unknown;
   try {

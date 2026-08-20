@@ -166,6 +166,35 @@ export async function requireOrgMember(): Promise<OrgMemberContext | AuthFail> {
 }
 
 /**
+ * archived(運営者による停止)ガードだけを行う軽量ヘルパー。
+ *
+ * requireOrgMember / requireOrgAdmin を経由せず「生 getUserRole」で認可している
+ * 既存ルート(clients/referrals/interviews/members/invite など)は、requireOrgMember
+ * が持つ archived チェックを通らず、停止済みユーザー / 組織でもセッションが生きている間は
+ * API を直接叩けてしまう。requireOrgMember 相当の archived 判定だけを切り出し、既存の
+ * allow ロジックを変えずに追加防御として差し込むためのヘルパー。
+ *
+ * 返り値: archived なら 403 の NextResponse、問題なければ null。
+ */
+export async function assertNotArchived(
+  supabase: SupabaseServerClient,
+  userId: string,
+  organizationId: string,
+): Promise<NextResponse | null> {
+  const [{ data: profileRow }, { data: orgRow }] = await Promise.all([
+    supabase.from("profiles").select("archived_at").eq("id", userId).maybeSingle(),
+    supabase.from("organizations").select("archived_at").eq("id", organizationId).maybeSingle(),
+  ]);
+  if ((profileRow as { archived_at: string | null } | null)?.archived_at) {
+    return NextResponse.json({ error: "archived" }, { status: 403 });
+  }
+  if ((orgRow as { archived_at: string | null } | null)?.archived_at) {
+    return NextResponse.json({ error: "organization_archived" }, { status: 403 });
+  }
+  return null;
+}
+
+/**
  * 組織メンバー + admin であることを保証する。
  */
 export async function requireOrgAdmin(): Promise<OrgMemberContext | AuthFail> {

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendClientInvitationEmail } from "@/lib/email/client-invitation";
+import { assertNotArchived } from "@/lib/api/auth-guards";
 import { getUserRole } from "@/lib/organizations/queries";
 import {
   defaultInvitationExpiresAt,
@@ -98,6 +99,12 @@ async function ensureAgencyMember() {
       ok: false as const,
       response: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
     };
+  }
+
+  // 停止(archived)済みユーザー / 組織のセッション直叩きを塞ぐ(多層防御)
+  const archived = await assertNotArchived(supabase, user.id, role.organization.id);
+  if (archived) {
+    return { ok: false as const, response: archived };
   }
 
   return { ok: true as const, supabase, user, role };

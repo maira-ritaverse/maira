@@ -8,6 +8,7 @@ import { after, NextResponse } from "next/server";
 
 import { updateInterviewRequestSchema } from "@/lib/interviews/types";
 import { fireInterviewConversionFlow } from "@/lib/ma/conversion-events";
+import { assertNotArchived } from "@/lib/api/auth-guards";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -25,6 +26,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   if (role.accountType !== "organization_member" || !role.organization) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  // 停止(archived)済みユーザー / 組織のセッション直叩きを塞ぐ(多層防御)
+  const archived = await assertNotArchived(supabase, user.id, role.organization.id);
+  if (archived) return archived;
 
   let body: unknown;
   try {
@@ -109,6 +113,9 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
   if (role.accountType !== "organization_member" || !role.organization) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  // 停止(archived)済みユーザー / 組織のセッション直叩きを塞ぐ(多層防御)
+  const archived = await assertNotArchived(supabase, user.id, role.organization.id);
+  if (archived) return archived;
 
   const { error } = await supabase
     .from("interviews")
