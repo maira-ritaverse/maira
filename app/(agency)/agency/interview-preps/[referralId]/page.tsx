@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { Card } from "@/components/ui/card";
+import { getCareerProfile } from "@/lib/career/conversations";
 import { getClientRecord } from "@/lib/clients/queries";
 import { getInterviewPrepByReferral } from "@/lib/interview-preps/queries";
 import { getJobPosting } from "@/lib/jobs/queries";
@@ -53,6 +54,12 @@ export default async function InterviewPrepPage({ params }: RouteParams) {
     getInterviewPrepByReferral(referralId, role.organization.id),
   ]);
   if (!client || !job) notFound();
+
+  // 求職者本人のキャリア棚卸しが実施済みか。未実施なら「棚卸しを依頼すると精度が上がる」
+  // 案内をパネルに出す(棚卸し利用の促進 + 精度向上の期待値をエージェントに伝える)。
+  const careerProfileDone = client.linkedUserId
+    ? Boolean(await getCareerProfile(client.linkedUserId))
+    : false;
 
   const salary = formatSalary(job.salaryMin, job.salaryMax);
 
@@ -108,6 +115,7 @@ export default async function InterviewPrepPage({ params }: RouteParams) {
         <InterviewPrepPanel
           referralId={referralId}
           clientName={client.name}
+          careerProfileDone={careerProfileDone}
           initialContent={prep?.content ?? null}
           initialGeneratedAt={prep?.generatedAt ?? null}
         />

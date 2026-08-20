@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { Check, Copy, Lightbulb, Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,8 @@ import type { InterviewPrepContent } from "@/lib/interview-preps/types";
 type Props = {
   referralId: string;
   clientName: string;
+  /** 求職者本人のキャリア棚卸しが実施済みか。未実施なら棚卸し依頼を促す案内を出す。 */
+  careerProfileDone: boolean;
   initialContent: InterviewPrepContent | null;
   initialGeneratedAt: string | null;
 };
@@ -37,6 +39,7 @@ function toPlainText(content: InterviewPrepContent): string {
 export function InterviewPrepPanel({
   referralId,
   clientName,
+  careerProfileDone,
   initialContent,
   initialGeneratedAt,
 }: Props) {
@@ -114,9 +117,18 @@ export function InterviewPrepPanel({
       </div>
 
       <p className="text-muted-foreground text-xs">
-        {clientName}さんの棚卸し結果とこの求人内容をもとに、面接対策を生成します。内容は AI
+        {clientName}さんのプロフィールとこの求人内容をもとに、面接対策を生成します。内容は AI
         による提案です。事前に事実確認のうえご活用ください。
       </p>
+
+      {!careerProfileDone && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          <Lightbulb className="mt-0.5 size-4 shrink-0" />
+          <p>
+            この候補者はまだキャリア棚卸しをしていません。今回はエージェントが入力したプロフィールをもとに作成しています。棚卸しを依頼すると、本人の強み・価値観・志向がより正確に反映され、面接対策の精度が上がります。
+          </p>
+        </div>
+      )}
 
       {error && <p className="text-destructive text-sm">{error}</p>}
 
