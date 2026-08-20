@@ -548,9 +548,9 @@ function InterviewPrepEntry({ referralId }: { referralId: string }) {
       <h4 className="text-muted-foreground text-xs font-medium">面接対策(AI)</h4>
       <Button
         type="button"
-        variant="outline"
         size="sm"
         onClick={() => router.push(`/agency/interview-preps/${referralId}`)}
+        className="border-transparent bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-500"
       >
         <Sparkles className="size-3.5" />
         面接対策を開く

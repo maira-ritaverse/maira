@@ -9,6 +9,7 @@ import { getUserRole } from "@/lib/organizations/queries";
 import { getReferral } from "@/lib/referrals/queries";
 import { createClient } from "@/lib/supabase/server";
 
+import { InterviewPrepBackButton } from "./interview-prep-back-button";
 import { InterviewPrepPanel } from "./interview-prep-panel";
 
 /**
@@ -69,12 +70,7 @@ export default async function InterviewPrepPage({ params }: RouteParams) {
   return (
     <div className="mx-auto w-full max-w-7xl px-4 pb-6 lg:px-6">
       <div className="mb-4">
-        <Link
-          href={`/agency/clients/${client.id}`}
-          className="text-muted-foreground text-sm hover:underline"
-        >
-          ← {client.name}さんのページに戻る
-        </Link>
+        <InterviewPrepBackButton clientId={client.id} clientName={client.name} />
         <h1 className="mt-2 text-xl font-bold">面接対策</h1>
         <p className="text-muted-foreground text-sm">
           {client.name}さん × {job.companyName}({job.position})

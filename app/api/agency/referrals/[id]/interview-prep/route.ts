@@ -10,7 +10,13 @@ import {
 import { recordAnthropic429Event } from "@/lib/ai/rate-limit-monitor";
 import { requireOrgMember } from "@/lib/api/auth-guards";
 import { getCareerProfile } from "@/lib/career/conversations";
-import { getClientRecord } from "@/lib/clients/queries";
+import type { CareerProfile } from "@/lib/career/profile-schema";
+import { getClientRecordWithDecrypted } from "@/lib/clients/queries";
+import {
+  type ClientRecordWithDecrypted,
+  clientEmploymentTypeLabels,
+  clientFinalEducationLabels,
+} from "@/lib/clients/types";
 import { checkAiUsageLimit, recordAiUsage } from "@/lib/features/ai-usage";
 import { upsertInterviewPrep } from "@/lib/interview-preps/queries";
 import { getJobPosting } from "@/lib/jobs/queries";
@@ -56,35 +62,17 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
     return NextResponse.json({ error: "Referral not found" }, { status: 404 });
   }
 
-  const client = await getClientRecord(referral.clientRecordId);
+  // 棚卸し(career_profile)は不要。エージェントが CRM に入力したプロフィール
+  // (client_records)を主な根拠にする。求職者アカウント連携済みで棚卸しがあれば補強に使う。
+  const client = await getClientRecordWithDecrypted(referral.clientRecordId);
   if (!client) {
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
-  // 候補者がユーザーアカウント未連携(手動登録の名簿のみ)なら career_profile が無い。
-  if (!client.linkedUserId) {
-    return NextResponse.json(
-      {
-        error: "Client is not linked to a seeker account",
-        code: "not_linked",
-        message:
-          "この候補者はまだ求職者アカウントと連携していません。連携を完了してから面接対策を生成してください。",
-      },
-      { status: 400 },
-    );
-  }
-
-  const profileData = await getCareerProfile(client.linkedUserId);
-  if (!profileData) {
-    return NextResponse.json(
-      {
-        error: "No career profile",
-        code: "no_career_profile",
-        message:
-          "この候補者のキャリア棚卸しがまだ完了していません。先に棚卸しを完了してから面接対策を生成してください。",
-      },
-      { status: 400 },
-    );
+  let careerProfile: CareerProfile | null = null;
+  if (client.linkedUserId) {
+    const profileData = await getCareerProfile(client.linkedUserId);
+    careerProfile = profileData?.profile ?? null;
   }
 
   const job = await getJobPosting(referral.jobPostingId);
@@ -94,7 +82,7 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
 
   try {
     const { system, prompt } = buildInterviewPrepPrompt({
-      profile: profileData.profile,
+      candidate: buildCandidateInfo(client, careerProfile),
       jobPosting: {
         companyName: job.companyName,
         position: job.position,
@@ -151,4 +139,80 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       { status: aiErrorToStatusCode(info.category) },
     );
   }
+}
+
+/**
+ * 面接対策プロンプトに渡す「候補者について分かっている情報」を、CRM の client_records
+ * (エージェント入力・復号済み)から組み立てる。空 / 未入力の項目は入れない
+ * (プロンプト側で創作させないため)。棚卸し(career_profile)があれば補強として加える。
+ *
+ * 氏名・連絡先・住所・生年月日など個人特定に直結する情報は面接対策に不要なので渡さない。
+ * 内部ステータス管理メモ(status_memo / close_reason_note)も対象外(面接対策の根拠にしない)。
+ */
+function buildCandidateInfo(
+  client: ClientRecordWithDecrypted,
+  careerProfile: CareerProfile | null,
+): Record<string, unknown> {
+  const candidateInfo: Record<string, unknown> = {};
+  const addStr = (key: string, value: string | null | undefined) => {
+    if (typeof value === "string" && value.trim().length > 0) candidateInfo[key] = value.trim();
+  };
+  const addNum = (key: string, value: number | null | undefined) => {
+    if (typeof value === "number") candidateInfo[key] = value;
+  };
+  const addArr = (key: string, value: string[] | null | undefined) => {
+    if (Array.isArray(value) && value.length > 0) candidateInfo[key] = value;
+  };
+
+  // エージェントが CRM に入力したプロフィール(client_records)。
+  // enum は生コード(full_time 等)でなく日本語ラベルに変換して渡す(AI の誤読防止)。
+  addStr(
+    "現在の雇用形態",
+    client.currentEmploymentType ? clientEmploymentTypeLabels[client.currentEmploymentType] : null,
+  );
+  addNum("現年収(万円)", client.currentAnnualIncome);
+  addStr(
+    "最終学歴",
+    client.finalEducation ? clientFinalEducationLabels[client.finalEducation] : null,
+  );
+  addStr("学歴詳細", client.educationDetail);
+  addArr("経験業種", client.experienceIndustries);
+  addArr("経験職種", client.experienceOccupations);
+  addStr("保有スキル・資格", client.skills);
+  addStr("転職理由", client.jobChangeReason);
+  addArr("希望業種", client.desiredIndustries);
+  addArr("希望職種", client.desiredOccupations);
+  addArr("希望勤務地", client.desiredLocations);
+  addNum("希望年収(万円)", client.desiredAnnualIncome);
+  addStr("希望条件(詳細)", client.desiredConditions);
+  addStr("エージェントの推薦コメント", client.recommendationComment);
+  addStr("面談所感(エージェントの所感)", client.meetingNotes);
+  addStr("備考", client.notes);
+
+  // 棚卸し(求職者本人が実施済みなら補強として加える)
+  if (careerProfile) {
+    addStr("棚卸し:要約", careerProfile.summary);
+    if (Array.isArray(careerProfile.strengths) && careerProfile.strengths.length > 0) {
+      candidateInfo["棚卸し:強み"] = careerProfile.strengths;
+    }
+    if (Array.isArray(careerProfile.values) && careerProfile.values.length > 0) {
+      candidateInfo["棚卸し:価値観"] = careerProfile.values;
+    }
+    // wants は配列ではなくオブジェクト({industries, role_types, company_sizes})。
+    // 中身が空でないときだけ、日本語ラベルの構造化オブジェクトとして渡す。
+    const wants = careerProfile.wants;
+    if (
+      wants.industries.length > 0 ||
+      wants.role_types.length > 0 ||
+      wants.company_sizes.length > 0
+    ) {
+      candidateInfo["棚卸し:志向"] = {
+        希望業界: wants.industries,
+        希望職種: wants.role_types,
+        希望企業規模: wants.company_sizes,
+      };
+    }
+  }
+
+  return candidateInfo;
 }
