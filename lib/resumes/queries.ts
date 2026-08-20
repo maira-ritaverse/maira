@@ -49,7 +49,20 @@ export async function listResumes(userId: string): Promise<Resume[]> {
     throw new Error(`Failed to list resumes: ${error.message}`);
   }
 
-  return Promise.all((data ?? []).map(mapResumeRow));
+  // 1 件の復号失敗(破損 / 旧鍵)で一覧全体が 500 になり、他の正常な履歴書も表示
+  // できなくなるのを防ぐ。行単位で try/catch し、復号できない行だけ落として続行する。
+  // 単一取得(getResume)は mapResumeRow の fail-closed 方針をそのまま維持する。
+  const mapped = await Promise.all(
+    ((data ?? []) as ResumeRow[]).map(async (row) => {
+      try {
+        return await mapResumeRow(row);
+      } catch {
+        console.warn("[resumes] listResumes: 復号できない行をスキップしました", { id: row.id });
+        return null;
+      }
+    }),
+  );
+  return mapped.filter((r): r is Resume => r !== null);
 }
 
 // ============================================
@@ -103,24 +116,24 @@ export async function createResume(
 ): Promise<string> {
   const supabase = await createClient();
 
-  // 複製の 場合 source が 自分の 履歴書 か を 確認 (他人の id を 偽装 して
-  // クォータ回避 する 抜け道 を 塞ぐ)。
-  const isDuplicate = !!sourceResumeId;
-  if (isDuplicate) {
+  // 複製によるクォータ免除は「自分の履歴書を複製したとき」に限る。
+  // sourceResumeId を付けるだけ(他人の / 存在しない id でも)で isDuplicate=true になり
+  // クォータを回避できる抜け道があった(旧実装は if(!src){} が空ブロックで、
+  // 「自分のものでない → 新規作成扱い」を実際には行っていなかった)。
+  // src が自分の行として実在するときだけ免除する。
+  let confirmedOwnDuplicate = false;
+  if (sourceResumeId) {
     const { data: src } = await supabase
       .from("resumes")
       .select("id")
       .eq("id", sourceResumeId)
       .eq("user_id", userId)
       .maybeSingle();
-    if (!src) {
-      // 自分の もので ない or 存在しない id → 安全側で 新規作成 として 扱う
-      // (=クォータ カウント)
-    }
+    confirmedOwnDuplicate = !!src;
   }
 
-  // 新規作成の 場合 のみ クォータ check
-  const shouldCountQuota = !isDuplicate;
+  // 新規作成(= 自分の複製以外)の場合のみクォータ check
+  const shouldCountQuota = !confirmedOwnDuplicate;
   if (shouldCountQuota) {
     const usage = await checkAiUsageLimit(supabase, userId, "seeker_resume_create");
     if (!usage.allowed) {

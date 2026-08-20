@@ -47,7 +47,19 @@ export async function listCvs(userId: string): Promise<Cv[]> {
     throw new Error(`Failed to list cvs: ${error.message}`);
   }
 
-  return Promise.all((data ?? []).map(mapCvRow));
+  // 1 件の復号失敗(破損 / 旧鍵)で一覧全体が 500 になるのを防ぐ。行単位で try/catch し、
+  // 復号できない行だけ落として続行する(単一取得は fail-closed のまま維持)。
+  const mapped = await Promise.all(
+    ((data ?? []) as CvRow[]).map(async (row) => {
+      try {
+        return await mapCvRow(row);
+      } catch {
+        console.warn("[cvs] listCvs: 復号できない行をスキップしました", { id: row.id });
+        return null;
+      }
+    }),
+  );
+  return mapped.filter((c): c is Cv => c !== null);
 }
 
 // ============================================
@@ -96,21 +108,22 @@ export async function createCv(
 ): Promise<string> {
   const supabase = await createClient();
 
-  const isDuplicate = !!sourceCvId;
-  if (isDuplicate) {
-    // 自分の CV か 検証
+  // 複製によるクォータ免除は「自分の職務経歴書を複製したとき」に限る。
+  // sourceCvId を付けるだけ(他人の / 存在しない id でも)で回避できる抜け道があった
+  // (旧実装は if(!src){} が空ブロックで新規作成扱いにしていなかった)。
+  // src が自分の行として実在するときだけ免除する。
+  let confirmedOwnDuplicate = false;
+  if (sourceCvId) {
     const { data: src } = await supabase
       .from("cvs")
       .select("id")
       .eq("id", sourceCvId)
       .eq("user_id", userId)
       .maybeSingle();
-    if (!src) {
-      // 自分の もので ない or 存在しない id → 安全側で 新規作成扱い (=クォータ カウント)
-    }
+    confirmedOwnDuplicate = !!src;
   }
 
-  const shouldCountQuota = !isDuplicate;
+  const shouldCountQuota = !confirmedOwnDuplicate;
   if (shouldCountQuota) {
     const usage = await checkAiUsageLimit(supabase, userId, "seeker_cv_create");
     if (!usage.allowed) {

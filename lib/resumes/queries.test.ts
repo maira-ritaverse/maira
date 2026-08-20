@@ -457,10 +457,34 @@ describe("queries.ts - blob-only 読み取り", () => {
     expect(resumes[0].email).toBe("list@example.com");
   });
 
-  it("listResumes は NULL 行があれば throw する(fail-closed)", async () => {
+  it("listResumes は復号できない行をスキップして正常な行だけ返す(一覧の耐性)", async () => {
+    // 一覧は 1 件の破損(復号不能 / 空 encrypted_pii)で全体が 500 にならないよう、
+    // 該当行だけ落として続行する。単一取得(getResume)は fail-closed のまま。
+    const { encryptField } = await import("@/lib/crypto/field-encryption");
+    const { serializeResumePii, pickResumePii } = await import("./pii-fields");
     const { listResumes } = await import("./queries");
 
+    const encryptedPii = await encryptField(
+      serializeResumePii(
+        pickResumePii({
+          name: "正常 ユーザ",
+          email: "ok@example.com",
+          education_history: [],
+          licenses: [],
+        }),
+      ),
+    );
+
     state.selectedRows = [
+      {
+        id: "ok-1",
+        user_id: "u-1",
+        title: "正常",
+        document_date: null,
+        encrypted_pii: encryptedPii,
+        created_at: "2026-06-01T00:00:00Z",
+        updated_at: "2026-06-01T00:00:00Z",
+      },
       {
         id: "broken-3",
         user_id: "u-1",
@@ -472,6 +496,8 @@ describe("queries.ts - blob-only 読み取り", () => {
       },
     ];
 
-    await expect(listResumes("u-1")).rejects.toThrow(/broken-3/);
+    const resumes = await listResumes("u-1");
+    expect(resumes).toHaveLength(1);
+    expect(resumes[0].name).toBe("正常 ユーザ");
   });
 });
