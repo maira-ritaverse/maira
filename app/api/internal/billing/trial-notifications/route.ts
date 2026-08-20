@@ -124,7 +124,11 @@ export async function POST(request: Request) {
       toEmail,
       organizationName,
       daysRemaining: target.daysRemaining,
-      trialEndsOn: new Date(target.plan.trial_ends_at).toLocaleDateString("ja-JP"),
+      // JST で整形しないと Vercel の UTC ランタイムで日付が 1 日ずれる
+      // (例: trial_ends_at=…T15:00:00Z = JST 翌日 0:00 → UTC だと前日表示になる)。
+      trialEndsOn: new Date(target.plan.trial_ends_at).toLocaleDateString("ja-JP", {
+        timeZone: "Asia/Tokyo",
+      }),
       billingUrl: `${siteUrl}/agency/settings/billing`,
     });
 
