@@ -431,7 +431,7 @@ async function getAgencyRecordingQuota(
 
   // Solo 系 (Phase 1 で 追加) は トライアル 中 でも tier 別 上限 を そのまま 使う。
   // 「Trial = Team 系 50 件 相当」 を Solo に 適用 する と 14 日 間 で 原価 ¥2,900
-  // (Whisper + Claude) が 発生 し、 Solo 月額 ¥5,980 の 50% を トライアル 中 に
+  // (Whisper + Claude) が 発生 し、 Solo 月額 ¥10,000 の 約 29% を トライアル 中 に
   // 消費 する 経路 に なる ため 禁止。 Team 系 は 従来通り Pro 相当 の 50 件 試せる。
   if (row.status === "trialing" && row.trial_ends_at) {
     if (new Date(row.trial_ends_at).getTime() > now.getTime()) {
@@ -687,8 +687,8 @@ export function getAiKindWeight(kind: AiUsageKind): number {
  *   ・kind 別 上限 は 元 々 「呼出 回数」 を 意図 した 数値 な の で、 常に 1 行 =
  *     1 呼出 が 正しい
  *   ・Solo プラン の 経済 保護 は 「総量 100 回」 の 上限 で 十分 (Solo user が
- *     全部 Vision 系 100 回 使い切って も 原価 ¥2,015 = 月額 ¥5,980 の 34% で
- *     粗利 66% は 確保)
+ *     全部 Vision 系 100 回 使い切って も 原価 ¥2,015 = 月額 ¥10,000 の 約 20% で
+ *     粗利 80% は 確保)
  *   ・weight は metadata に 残す こと で、 将来 「metadata->weight を SUM
  *     する 集計 RPC」 で 重み 込み 判定 に 移行 可能 な 設計 を 維持
  *

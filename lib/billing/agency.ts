@@ -92,8 +92,8 @@ export const TIER_UPGRADE_MONTHLY: Record<PlanTier, number> = {
  * Phase 1 で は 参照 用 のみ、 UI / Stripe 連携 は Phase 2 で 実装。
  */
 export const SOLO_MONTHLY_PRICE: Record<(typeof SOLO_TIERS)[number], number> = {
-  solo: 5_980,
-  solo_pro: 9_800,
+  solo: 10_000,
+  solo_pro: 15_000,
 };
 
 // ============================================================

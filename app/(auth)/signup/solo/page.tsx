@@ -7,9 +7,9 @@ import { SoloSignupForm } from "./solo-signup-form";
  * Solo プラン セルフサーブ サインアップ ページ (Server Component)。
  *
  * URL:
- *   /signup/solo               → デフォルト は Solo プラン (¥5,980) を 選択済 で 表示
- *   /signup/solo?plan=solo_pro → Solo Pro プラン (¥9,800) を 選択済 で 表示
- *   /signup/solo?cycle=yearly  → 年払い を 選択済 で 表示 (Solo yearly = ¥59,800、 10 ヶ月分)
+ *   /signup/solo               → デフォルト は Solo プラン (¥10,000) を 選択済 で 表示
+ *   /signup/solo?plan=solo_pro → Solo Pro プラン (¥15,000) を 選択済 で 表示
+ *   /signup/solo?cycle=yearly  → 年払い を 選択済 で 表示 (Solo yearly = ¥100,000、 10 ヶ月分)
  *
  * ゲート:
  *   isSoloSignupEnabled() が false なら /login?reason=signup_closed に redirect。

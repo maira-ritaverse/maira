@@ -22,8 +22,8 @@
  *   standard / standard_rec / standard_pro / standard_premium
  *
  * Solo 系 (1 席固定、 base 課金 なし、 セルフサーブ 想定):
- *   solo (¥5,980/月、 AI 100 回)
- *   solo_pro (¥9,800/月、 AI 200 回 + 付加機能)
+ *   solo (¥10,000/月、 AI 100 回)
+ *   solo_pro (¥15,000/月、 AI 200 回 + 付加機能)
  */
 export type PlanTierValue =
   | "standard"

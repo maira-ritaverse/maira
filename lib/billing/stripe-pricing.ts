@@ -23,21 +23,21 @@ export const STRIPE_YEARLY_MONTHS = 10 as const;
 export const STRIPE_CYCLE_MONTHS = 12 as const;
 
 /**
- * Solo プラン (1 席 固定、 個人事業主 / フリー 向け) の 月額。
+ * Solo プラン (1 席 固定、 個人事業主 / フリー 向け) の 月額 (税別)。
  * Team 系 と 違い base + seat + boost の 組合せ で なく、 単一 Price で 決済。
  */
-export const STRIPE_SOLO_MONTHLY_JPY = 5_980 as const;
+export const STRIPE_SOLO_MONTHLY_JPY = 10_000 as const;
 
 /**
- * Solo Pro プラン (1 席 固定、 Solo + 付加機能) の 月額。
+ * Solo Pro プラン (1 席 固定、 Solo + 付加機能) の 月額 (税別)。
  * Solo との 差別化 は AI 200 回 / CSV / 詳細レポート / 録音 5 回 / 24h サポート。
  */
-export const STRIPE_SOLO_PRO_MONTHLY_JPY = 9_800 as const;
+export const STRIPE_SOLO_PRO_MONTHLY_JPY = 15_000 as const;
 
 /**
  * Solo 系 も 年払い は 10 ヶ月 分 (Team 系 と 同じ 割引率)。
- * ・Solo yearly ≒ ¥59,800 (実質 ¥4,983 / 月)
- * ・Solo Pro yearly ≒ ¥98,000 (実質 ¥8,166 / 月)
+ * ・Solo yearly ≒ ¥100,000 (実質 ¥8,333 / 月)
+ * ・Solo Pro yearly ≒ ¥150,000 (実質 ¥12,500 / 月)
  */
 
 export type StripeTier = "standard" | "standard_pro" | "solo" | "solo_pro";

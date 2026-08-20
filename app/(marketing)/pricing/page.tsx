@@ -21,7 +21,7 @@ import { buttonVariants } from "@/components/ui/button";
 export const metadata: Metadata = {
   title: "料金プラン | Myaira",
   description:
-    "Myaira の料金プラン一覧。個人事業主向け Solo (¥5,980/月) から 5 人までの Team Growth (¥45,000/月) まで、稼働規模に合わせて選べます。",
+    "Myaira の料金プラン一覧。個人事業主向け Solo (¥10,000/月) から 5 人までの Team Growth (¥45,000/月) まで、稼働規模に合わせて選べます。",
 };
 
 type FeatureRow = {
