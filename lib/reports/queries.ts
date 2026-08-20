@@ -156,8 +156,10 @@ export async function getMemberScopedClientIds(
     .select("id")
     .eq("organization_id", organizationId)
     .eq("assigned_member_id", memberId);
-  if (error || !data) return [];
-  return (data as Array<{ id: string }>).map((r) => r.id);
+  // DB エラー時に [] を返すと「担当0件」と区別できず、レポートが無言でゼロ表示になる。
+  // 一時障害はエラーとして伝播させ、画面のエラー境界で再試行を促す(誤ゼロより明示エラー)。
+  if (error) throw new Error(`担当クライアントの取得に失敗しました: ${error.message}`);
+  return ((data ?? []) as Array<{ id: string }>).map((r) => r.id);
 }
 
 /**
@@ -183,8 +185,9 @@ async function getMemberScopedReferralIds(
     .select("id")
     .eq("organization_id", organizationId)
     .in("client_record_id", scopedClientIds);
-  if (error || !data) return [];
-  return (data as Array<{ id: string }>).map((r) => r.id);
+  // 同上:DB エラーは throw して伝播させる(無言のゼロ表示を防ぐ)。
+  if (error) throw new Error(`担当している応募情報の取得に失敗しました: ${error.message}`);
+  return ((data ?? []) as Array<{ id: string }>).map((r) => r.id);
 }
 
 // ============================================
