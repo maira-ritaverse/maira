@@ -115,6 +115,8 @@ export default async function InterviewPrepPage({ params }: RouteParams) {
         <InterviewPrepPanel
           referralId={referralId}
           clientName={client.name}
+          companyName={job.companyName}
+          position={job.position}
           careerProfileDone={careerProfileDone}
           initialContent={prep?.content ?? null}
           initialGeneratedAt={prep?.generatedAt ?? null}

@@ -10,6 +10,9 @@ import type { InterviewPrepContent } from "@/lib/interview-preps/types";
 type Props = {
   referralId: string;
   clientName: string;
+  /** コピー(LINE 共有等)のタイトル用。 */
+  companyName: string;
+  position: string;
   /** 求職者本人のキャリア棚卸しが実施済みか。未実施なら棚卸し依頼を促す案内を出す。 */
   careerProfileDone: boolean;
   initialContent: InterviewPrepContent | null;
@@ -29,16 +32,23 @@ function formatJst(iso: string): string {
   }).format(new Date(iso));
 }
 
-/** セクション配列をコピー用のプレーンテキストに整形。 */
-function toPlainText(content: InterviewPrepContent): string {
-  return content.sections
-    .map((s) => `■ ${s.heading}\n${s.items.map((i) => `・${i}`).join("\n")}`)
+/**
+ * セクション配列をコピー用のプレーンテキストに整形する。
+ * LINE 等でそのまま送れるよう、タイトル + 番号付きセクション + 箇条書きの読みやすい形にする。
+ */
+function toPlainText(content: InterviewPrepContent, clientName: string, jobLabel: string): string {
+  const header = `【面接対策】${clientName}さん × ${jobLabel}`;
+  const body = content.sections
+    .map((s, i) => `${i + 1}. ${s.heading}\n${s.items.map((it) => `・${it}`).join("\n")}`)
     .join("\n\n");
+  return `${header}\n\n${body}`;
 }
 
 export function InterviewPrepPanel({
   referralId,
   clientName,
+  companyName,
+  position,
   careerProfileDone,
   initialContent,
   initialGeneratedAt,
@@ -77,7 +87,9 @@ export function InterviewPrepPanel({
   const handleCopy = async () => {
     if (!content) return;
     try {
-      await navigator.clipboard.writeText(toPlainText(content));
+      await navigator.clipboard.writeText(
+        toPlainText(content, clientName, `${companyName}(${position})`),
+      );
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -148,16 +160,23 @@ export function InterviewPrepPanel({
       )}
 
       {hasContent && (
-        <div className="space-y-5">
+        <div className="space-y-3">
           {content.sections.map((section, idx) => (
-            <section key={idx}>
-              <h3 className="border-border mb-1.5 border-b pb-1 text-sm font-semibold">
+            <section key={idx} className="border-border/70 bg-muted/20 rounded-lg border p-4">
+              <h3 className="mb-2.5 flex items-center gap-2 text-[0.95rem] leading-snug font-semibold">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white">
+                  {idx + 1}
+                </span>
                 {section.heading}
               </h3>
-              <ul className="ml-4 list-disc space-y-1 text-sm leading-relaxed">
+              <ul className="space-y-2.5 text-sm leading-relaxed">
                 {section.items.map((item, i) => (
-                  <li key={i} className="whitespace-pre-wrap">
-                    {item}
+                  <li key={i} className="flex gap-2">
+                    <span
+                      className="mt-2 size-1.5 shrink-0 rounded-full bg-violet-500"
+                      aria-hidden
+                    />
+                    <span className="whitespace-pre-wrap">{item}</span>
                   </li>
                 ))}
               </ul>
