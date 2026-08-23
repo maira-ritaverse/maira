@@ -32,6 +32,7 @@ export type InAppPayload =
   | SeekerApplicationRequestPayload
   | ReferralStatusChangeForSeekerPayload
   | RecommendationLetterFinalizedForSeekerPayload
+  | DocumentDraftFromAgencyForSeekerPayload
   | MeetingInvitedPayload
   | MeetingReminderPayload
   | MeetingCanceledPayload
@@ -112,6 +113,21 @@ export type RecommendationLetterFinalizedForSeekerPayload = {
   recommendationLetterId: string;
   referralId: string;
   jobLabel: string;
+  organizationName: string;
+};
+
+/**
+ * 求職者本人向け:エージェントが作成した履歴書 / 職務経歴書が送付(受領待ち)されたことを通知。
+ * 本文は機密なので載せず、href の /app/agent-drafts で受領/辞退を行う。
+ */
+export type DocumentDraftFromAgencyForSeekerPayload = {
+  kind: "document_draft_from_agency_for_seeker";
+  /** UI 一覧用見出し(例:「エージェントから履歴書が届きました(株式会社 X)」) */
+  title: string;
+  /** 求職者向け遷移先(/app/agent-drafts) */
+  href: string;
+  draftId: string;
+  documentType: "resume" | "cv";
   organizationName: string;
 };
 
@@ -249,6 +265,7 @@ export async function fireInAppNotification(params: FireParams): Promise<void> {
     // 本人向け通知は org メンバー prefs と無関係なので null
     referral_status_change_for_seeker: null,
     recommendation_letter_finalized_for_seeker: null,
+    document_draft_from_agency_for_seeker: null,
     // 面談関連は組織メンバー全員が見たいケースが多い(代理対応・チーム共有)
     // ただしホスト本人は excludeUserId 経由で外す。prefs gate は当面なし。
     meeting_invited: null,

@@ -105,6 +105,8 @@ export async function createCv(
   userId: string,
   input: SaveCvRequest,
   sourceCvId?: string | null,
+  // エージェント送付ドラフトの「受領」経路はクォータを消費しない(受領=取込)。
+  skipQuota?: boolean,
 ): Promise<string> {
   const supabase = await createClient();
 
@@ -123,7 +125,7 @@ export async function createCv(
     confirmedOwnDuplicate = !!src;
   }
 
-  const shouldCountQuota = !confirmedOwnDuplicate;
+  const shouldCountQuota = !confirmedOwnDuplicate && !skipQuota;
   if (shouldCountQuota) {
     const usage = await checkAiUsageLimit(supabase, userId, "seeker_cv_create");
     if (!usage.allowed) {

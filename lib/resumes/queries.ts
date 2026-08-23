@@ -113,6 +113,9 @@ export async function createResume(
   input: SaveResumeRequest,
   carryOver?: { photo_url?: string | null },
   sourceResumeId?: string | null,
+  // エージェント送付ドラフトの「受領」で本人の履歴書を作る経路は、本人の新規作成では
+  // ないためクォータを消費しない(受領=取込であり作成ではない、という運用判断)。
+  skipQuota?: boolean,
 ): Promise<string> {
   const supabase = await createClient();
 
@@ -132,8 +135,8 @@ export async function createResume(
     confirmedOwnDuplicate = !!src;
   }
 
-  // 新規作成(= 自分の複製以外)の場合のみクォータ check
-  const shouldCountQuota = !confirmedOwnDuplicate;
+  // 新規作成(= 自分の複製以外)の場合のみクォータ check(受領取込は skipQuota で免除)
+  const shouldCountQuota = !confirmedOwnDuplicate && !skipQuota;
   if (shouldCountQuota) {
     const usage = await checkAiUsageLimit(supabase, userId, "seeker_resume_create");
     if (!usage.allowed) {

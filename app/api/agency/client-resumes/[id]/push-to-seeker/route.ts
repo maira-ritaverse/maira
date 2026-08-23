@@ -6,6 +6,7 @@ import {
   getAgencyClientResume,
   updateAgencyClientResume,
 } from "@/lib/agency-client-documents/queries";
+import { fireSeekerNotification } from "@/lib/notifications/in-app";
 import { z } from "zod";
 
 /**
@@ -62,7 +63,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // client_record が linked 状態か確認
   const { data: cr } = await supabase
     .from("client_records")
-    .select("link_status, organization_id")
+    .select("link_status, organization_id, linked_user_id")
     .eq("id", resume.clientRecordId)
     .maybeSingle();
   if (
@@ -136,6 +137,29 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .update({ pushed_to_draft_id: (inserted as { id: string }).id })
     .eq("id", resume.id)
     .eq("organization_id", organization.id);
+
+  // 求職者本人に「履歴書が届いた」通知を送る(通知が無いと本人が気付けない)。
+  // 失敗しても送付自体は成功として返す(通知は best-effort)。
+  const linkedUserId = (cr as { linked_user_id: string | null }).linked_user_id;
+  if (linkedUserId) {
+    try {
+      await fireSeekerNotification({
+        userId: linkedUserId,
+        payload: {
+          kind: "document_draft_from_agency_for_seeker",
+          title: `エージェントから履歴書が届きました(${organization.name})`,
+          href: "/app/agent-drafts",
+          draftId: (inserted as { id: string }).id,
+          documentType: "resume",
+          organizationName: organization.name,
+        },
+      });
+    } catch (err) {
+      console.error("[client-resumes/push-to-seeker] 通知失敗", {
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
   return NextResponse.json({ ok: true, draft_id: (inserted as { id: string }).id });
 }

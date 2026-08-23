@@ -4,6 +4,7 @@ import { z } from "zod";
 import { readJsonBody, requireOrgMember } from "@/lib/api/auth-guards";
 import { encryptField } from "@/lib/crypto/field-encryption";
 import { getAgencyClientCv } from "@/lib/agency-client-documents/queries";
+import { fireSeekerNotification } from "@/lib/notifications/in-app";
 
 /**
  * POST /api/agency/client-cvs/[id]/push-to-seeker
@@ -46,7 +47,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { data: cr } = await supabase
     .from("client_records")
-    .select("link_status, organization_id")
+    .select("link_status, organization_id, linked_user_id")
     .eq("id", cv.clientRecordId)
     .maybeSingle();
   if (
@@ -98,6 +99,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .update({ pushed_to_draft_id: (inserted as { id: string }).id })
     .eq("id", cv.id)
     .eq("organization_id", organization.id);
+
+  // 求職者本人に「職務経歴書が届いた」通知を送る(best-effort)。
+  const linkedUserId = (cr as { linked_user_id: string | null }).linked_user_id;
+  if (linkedUserId) {
+    try {
+      await fireSeekerNotification({
+        userId: linkedUserId,
+        payload: {
+          kind: "document_draft_from_agency_for_seeker",
+          title: `エージェントから職務経歴書が届きました(${organization.name})`,
+          href: "/app/agent-drafts",
+          draftId: (inserted as { id: string }).id,
+          documentType: "cv",
+          organizationName: organization.name,
+        },
+      });
+    } catch (err) {
+      console.error("[client-cvs/push-to-seeker] 通知失敗", {
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
   return NextResponse.json({ ok: true, draft_id: (inserted as { id: string }).id });
 }
