@@ -108,7 +108,9 @@ export function ConditionEditor({
           className="border-input bg-background flex-1 rounded border px-2 py-1 text-xs"
         >
           {KIND_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
+            // 未実装(PG 側で常に false)の kind は選択不可にする。保存しても対象0件/分岐は
+            // 常に「いいえ」になり、黙って機能しない設定を作らせないため。実装済みになれば自動解禁。
+            <option key={o.value} value={o.value} disabled={!isPhase1ImplementedKind(o.value)}>
               [{o.group}] {o.label}
             </option>
           ))}

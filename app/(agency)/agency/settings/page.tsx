@@ -294,6 +294,57 @@ export default async function SettingsPage() {
               </Link>
             </Card>
           )}
+
+          {isAdmin && (
+            <Card className="p-4">
+              <Link
+                href="/agency/settings/email-templates"
+                className="hover:bg-accent -m-4 flex items-center gap-3 rounded-md p-4 transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">メールテンプレート(管理者向け)</p>
+                  <p className="text-muted-foreground text-xs">
+                    一斉送信 / 個別送信で使うメール文面を組織共通で作成・編集する
+                  </p>
+                </div>
+                <span className="text-muted-foreground text-sm">→</span>
+              </Link>
+            </Card>
+          )}
+
+          {isAdmin && (
+            <Card className="p-4">
+              <Link
+                href="/agency/settings/custom-fields"
+                className="hover:bg-accent -m-4 flex items-center gap-3 rounded-md p-4 transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">カスタムフィールド(管理者向け)</p>
+                  <p className="text-muted-foreground text-xs">
+                    顧客リストに独自の入力項目を追加・管理する
+                  </p>
+                </div>
+                <span className="text-muted-foreground text-sm">→</span>
+              </Link>
+            </Card>
+          )}
+
+          {isAdmin && (
+            <Card className="p-4">
+              <Link
+                href="/agency/settings/intake-forms"
+                className="hover:bg-accent -m-4 flex items-center gap-3 rounded-md p-4 transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">埋め込みフォーム(管理者向け)</p>
+                  <p className="text-muted-foreground text-xs">
+                    Web サイトに埋め込む応募 / 問い合わせフォームを作成し、公開 URL を発行する
+                  </p>
+                </div>
+                <span className="text-muted-foreground text-sm">→</span>
+              </Link>
+            </Card>
+          )}
         </div>
       </div>
     </div>

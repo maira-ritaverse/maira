@@ -51,11 +51,12 @@ type Props = {
   channel: string;
 };
 
-const ACTION_TYPES = [
+const ACTION_TYPES: { value: string; label: string; disabled?: boolean }[] = [
   { value: "send_message", label: "メッセージを送る" },
   { value: "assign_tag", label: "タグをつける" },
   { value: "remove_tag", label: "タグを外す" },
-  { value: "add_score", label: "スコアを加算(準備中)" },
+  // add_score は実行側が未実装(no-op)。選択しても何も起きないため、実装までは選択不可にする。
+  { value: "add_score", label: "スコアを加算(現在ご利用いただけません)", disabled: true },
   { value: "set_field", label: "自由項目を更新" },
   { value: "wait", label: "待つだけ" },
   { value: "branch", label: "条件で分岐" },
@@ -152,7 +153,7 @@ export function StepConfigPanel({
           onChange={(e) => onChange({ action_type: e.target.value })}
         >
           {ACTION_TYPES.map((a) => (
-            <option key={a.value} value={a.value}>
+            <option key={a.value} value={a.value} disabled={a.disabled}>
               {a.label}
             </option>
           ))}

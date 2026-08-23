@@ -84,10 +84,17 @@ export const SEEKER_NAV_ITEMS: ItemDescriptor[] = [
   },
   { id: "interview", href: "/app/interview", icon: "bot", defaultLabel: "面接練習" },
   { id: "connections", href: "/app/connections", icon: "link", defaultLabel: "エージェント連携" },
+  {
+    id: "messages",
+    href: "/app/messages",
+    icon: "message",
+    defaultLabel: "メッセージ",
+    dataAttr: "nav-messages",
+  },
 ];
 
 const DEFAULT_LAYOUT: SidebarLayout = {
-  topLevelItemIds: ["dashboard", "interview", "connections"],
+  topLevelItemIds: ["dashboard", "messages", "interview", "connections"],
   groups: [
     {
       id: "prep",
