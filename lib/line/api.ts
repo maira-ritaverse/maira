@@ -437,9 +437,22 @@ export async function multicastMessage(
 }
 
 /**
+ * LINE API 呼び出しの上限時間。
+ *
+ * fetch にタイムアウトを付けないと、ハングしたソケットが呼び出し元を無限にブロックする。
+ * 特に MA フローの dispatcher は 1 tick 内でこの push を await するため、ハングした 1 件が
+ * バッチ(最大 200 件)全体を止め、さらに二重ディスパッチ防止リース(CLAIM_LEASE_SECONDS
+ * = 300 秒)を超えると別 invocation に再確保されて二重送信 / 二重課金を招く。
+ * それより十分短い値で必ず打ち切る(通常の LINE API 応答は数秒以内)。
+ */
+const LINE_API_TIMEOUT_MS = 20_000;
+
+/**
  * 共通 POST + Auth + JSON
  */
 async function postJson<T>(url: string, accessToken: string, body: unknown): Promise<Result<T>> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LINE_API_TIMEOUT_MS);
   try {
     const res = await fetch(url, {
       method: "POST",
@@ -448,6 +461,7 @@ async function postJson<T>(url: string, accessToken: string, body: unknown): Pro
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
     if (!res.ok) {
       const bodyText = await res.text().catch(() => "");
@@ -460,11 +474,17 @@ async function postJson<T>(url: string, accessToken: string, body: unknown): Pro
     const json = (await res.json().catch(() => ({}))) as T;
     return { ok: true, data: json };
   } catch (err) {
-    return {
-      ok: false,
-      status: 0,
-      message: err instanceof Error ? err.message : "network_error",
-    };
+    // AbortError(タイムアウト)も含め、失敗は既存の ok:false 契約に載せて返す。
+    // 呼び出し側は status:0 = ネットワーク層失敗として既にハンドリング済み。
+    const message =
+      err instanceof Error
+        ? err.name === "AbortError"
+          ? `timeout_after_${LINE_API_TIMEOUT_MS}ms`
+          : err.message
+        : "network_error";
+    return { ok: false, status: 0, message };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

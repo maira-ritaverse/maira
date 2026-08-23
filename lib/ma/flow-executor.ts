@@ -87,10 +87,47 @@ export type TickResult =
 // ────────────────────────────────────────
 // 主関数 : 1 subscription を 1 ステップ 進める
 // ────────────────────────────────────────
+
+/**
+ * 二重ディスパッチ防止のリース時間。
+ *
+ * dispatcher は「status='active' AND next_action_at <= now()」で 200 件を掴んでから
+ * 各 tick を直列処理する。バッチが 1 分以上かかる / Vercel cron が二重発火すると、
+ * 別 invocation が同じ subscription を再取得し、send_message を二重送信し得た
+ * (LINE push は従量課金なので二重請求に直結)。tick 冒頭で対象行を一旦この秒数だけ
+ * 先へリースして排他確保する。正常時は tick 末尾で next_action_at を最終値へ上書きするため、
+ * このリースが実際に効くのは「送信後にプロセスが落ちた」等の異常時のみ(その場合はリース
+ * 満了後に再試行される)。
+ */
+const CLAIM_LEASE_SECONDS = 5 * 60;
+
 export async function executeSubscriptionTick(
   supabase: SupabaseClient,
   sub: SubscriptionRow,
 ): Promise<TickResult> {
+  const now = new Date();
+
+  // 0. 二重ディスパッチ防止(compare-and-swap リース)
+  //    「dispatcher が読み取った next_action_at と一致する active 行」だけをリース時刻へ
+  //    前進させて排他確保する。0 行更新 = 別ワーカーが既に確保済み → skipped で降りる。
+  //    これにより cron のオーバーラップ / 二重発火でも同一ステップの二重送信を防ぐ。
+  const leaseUntil = new Date(now.getTime() + CLAIM_LEASE_SECONDS * 1000).toISOString();
+  const { data: claimed, error: claimErr } = await supabase
+    .from("ma_flow_subscriptions")
+    .update({ next_action_at: leaseUntil })
+    .eq("id", sub.id)
+    .eq("status", "active")
+    .eq("next_action_at", sub.next_action_at)
+    .select("id");
+  if (claimErr) {
+    // 確保に失敗(DB 一時エラー等)。subscription 側の失敗ではないので tick_failure_count は
+    // 増やさず、行も触らない(next_action_at 据え置き)→ 次 tick で自然に再試行される。
+    return { kind: "failed", error: `claim_failed:${claimErr.message}` };
+  }
+  if (!claimed || (claimed as unknown[]).length === 0) {
+    return { kind: "skipped", reason: "already_claimed" };
+  }
+
   // 1. Flow + Step を 取得
   const { data: flowData, error: flowErr } = await supabase
     .from("ma_flows")
@@ -115,7 +152,6 @@ export async function executeSubscriptionTick(
   }
   const step = stepData as FlowStepRow;
 
-  const now = new Date();
   const window = parseSendTimeWindow(flow.send_time_window_json);
 
   // 2. 送信 時間帯 制約 チェック (send_message のみ)
