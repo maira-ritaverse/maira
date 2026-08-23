@@ -75,6 +75,7 @@ export function FormsScreen({ initialForms, isAdmin }: Props) {
 
   async function togglePublish(form: FormRow) {
     const next = !form.is_published;
+    setError(null);
     setForms((prev) => prev.map((f) => (f.id === form.id ? { ...f, is_published: next } : f)));
     const res = await fetch(`/api/agency/forms/${form.id}`, {
       method: "PATCH",
@@ -82,15 +83,27 @@ export function FormsScreen({ initialForms, isAdmin }: Props) {
       body: JSON.stringify({ is_published: next }),
     });
     if (!res.ok) {
+      // 失敗時は楽観更新を戻すだけでなく理由を通知する。公開状態は候補者向け URL の
+      // 生死に直結するため、黙って戻ると「公開したつもりが非公開」等を誤認する。
       setForms((prev) => prev.map((f) => (f.id === form.id ? { ...f, is_published: !next } : f)));
+      setError(
+        next
+          ? "フォームを公開できませんでした。時間を置いて再度お試しください。"
+          : "フォームを非公開にできませんでした。時間を置いて再度お試しください。",
+      );
     }
   }
 
   async function remove(form: FormRow) {
     if (!window.confirm(`「${form.title}」を削除します。送信履歴も一緒に消えます。よろしいですか?`))
       return;
+    setError(null);
     const res = await fetch(`/api/agency/forms/${form.id}`, { method: "DELETE" });
-    if (res.ok) await refetch();
+    if (res.ok) {
+      await refetch();
+    } else {
+      setError("フォームを削除できませんでした。時間を置いて再度お試しください。");
+    }
   }
 
   function copyPublicUrl(token: string) {

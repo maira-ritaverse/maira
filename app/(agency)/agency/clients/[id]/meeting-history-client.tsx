@@ -14,6 +14,7 @@ import { FileText, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { MeetingActionMenu } from "@/components/features/meetings/meeting-action-menu";
+import { useToast } from "@/lib/admin/toast/store";
 import { useDialog } from "@/lib/ui/use-dialog";
 
 import type { MeetingHistoryEntry } from "./meeting-history-section";
@@ -64,6 +65,7 @@ export function MeetingHistoryClient({ entries, lineUserId, currentUserId, isAdm
   const [transcriptEntry, setTranscriptEntry] = useState<MeetingHistoryEntry | null>(null);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [sendErrorId, setSendErrorId] = useState<{ id: string; message: string } | null>(null);
+  const { showToast } = useToast();
   const refresh = () => router.refresh();
 
   const onSendLine = async (m: MeetingHistoryEntry) => {
@@ -84,6 +86,9 @@ export function MeetingHistoryClient({ entries, lineUserId, currentUserId, isAdm
         const body = (await res.json().catch(() => null)) as { message?: string } | null;
         throw new Error(body?.message ?? `HTTP ${res.status}`);
       }
+      // 成功を明示する。無反応だと「送れたか不明」で再クリック→二重送信(LINE 従量課金)に
+      // つながるため必ずフィードバックする。
+      showToast("success", "LINE で会議 URL を送信しました");
     } catch (e) {
       setSendErrorId({ id: m.id, message: e instanceof Error ? e.message : "送信 失敗" });
     } finally {

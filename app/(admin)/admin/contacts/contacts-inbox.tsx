@@ -155,6 +155,9 @@ export function ContactsInbox() {
       });
     } catch (err) {
       setError(getErrorMessage(err));
+      // 保存失敗時は楽観更新をサーバー値へ戻す(他ハンドラと同様)。黙って「保存済み」に
+      // 見えたまま次回リロードで消える、を防ぐ。
+      void fetchMessages(filter, categoryFilter, statusFilter, query);
     }
   };
 

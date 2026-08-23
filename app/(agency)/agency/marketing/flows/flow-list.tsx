@@ -15,6 +15,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useToast } from "@/lib/admin/toast/store";
 import { formatUpdatedAtJa, labelForTriggerType } from "@/lib/ma/flow-labels";
 import type { FlowListItem } from "@/lib/ma/flow-queries";
 
@@ -50,6 +51,7 @@ export function FlowList({ initialFlows, isAdmin }: Props) {
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  const { showToast } = useToast();
 
   async function toggle(flow: FlowListItem, next: boolean) {
     if (!isAdmin) return;
@@ -61,7 +63,15 @@ export function FlowList({ initialFlows, isAdmin }: Props) {
       body: JSON.stringify({ id: flow.id, is_active: next }),
     });
     if (!res.ok) {
+      // 失敗時は楽観更新を戻すだけでなく、必ず理由を通知する(黙って戻ると
+      // 「動かした/停止したつもりが変わっていない」状態を誤認するため)。
       setFlows((prev) => prev.map((f) => (f.id === flow.id ? { ...f, is_active: !next } : f)));
+      showToast(
+        "error",
+        next
+          ? "フローを開始できませんでした。時間を置いて再度お試しください。"
+          : "フローを停止できませんでした。時間を置いて再度お試しください。",
+      );
     }
     setBusyId(null);
   }
