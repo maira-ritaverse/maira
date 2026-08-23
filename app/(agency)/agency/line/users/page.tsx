@@ -34,6 +34,8 @@ export default async function LineUsersPage() {
   if (role.accountType !== "organization_member" || !role.organization || !role.member) {
     redirect("/app");
   }
+  // 一括プロフィール更新は admin 限定(/api/agency/line/refresh-profile/all が requireOrgAdmin)。
+  const isAdmin = role.member.role === "admin";
 
   const channel = await getMyLineChannel(supabase);
   if (!channel) {
@@ -75,7 +77,7 @@ export default async function LineUsersPage() {
           </p>
         </div>
 
-        <LineUsersClient clientOptions={clientOptions} />
+        <LineUsersClient clientOptions={clientOptions} isAdmin={isAdmin} />
       </div>
     </div>
   );

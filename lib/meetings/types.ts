@@ -39,6 +39,8 @@ export type MeetingScheduleRow = {
 /** UI / API レスポンスで扱う形(agenda は復号済み) */
 export type MeetingScheduleView = {
   id: string;
+  /** 主催者(この面談を作成したメンバー)の user_id。再スケジュール/キャンセルの権限判定に使う。 */
+  hostUserId: string;
   provider: MeetingProvider;
   title: string;
   agenda: string;

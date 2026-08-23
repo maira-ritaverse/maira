@@ -22,6 +22,9 @@ type Props = {
   entries: MeetingHistoryEntry[];
   /** LINE 友達 紐付け 済 の line_user_id (= LINE で URL 送信 可能 か どうか の 判定) */
   lineUserId: string | null;
+  /** 閲覧者の user_id と admin 判定。再スケジュール/キャンセルは主催者本人 or admin のみ。 */
+  currentUserId: string;
+  isAdmin: boolean;
 };
 
 function fmt(iso: string): string {
@@ -56,7 +59,7 @@ function statusBadge(m: MeetingHistoryEntry): { label: string; tone: string } {
   return { label: "予約済", tone: "bg-blue-100 text-blue-700" };
 }
 
-export function MeetingHistoryClient({ entries, lineUserId }: Props) {
+export function MeetingHistoryClient({ entries, lineUserId, currentUserId, isAdmin }: Props) {
   const router = useRouter();
   const [transcriptEntry, setTranscriptEntry] = useState<MeetingHistoryEntry | null>(null);
   const [sendingId, setSendingId] = useState<string | null>(null);
@@ -144,7 +147,11 @@ export function MeetingHistoryClient({ entries, lineUserId }: Props) {
                     {sendingId === m.id ? "送信中..." : "LINE 送信"}
                   </Button>
                 )}
-                <MeetingActionMenu meeting={m} onChanged={refresh} />
+                <MeetingActionMenu
+                  meeting={m}
+                  onChanged={refresh}
+                  canManage={isAdmin || m.hostUserId === currentUserId}
+                />
               </div>
               {sendErrorId?.id === m.id && (
                 <p className="ml-2 text-[10px] text-red-700">{sendErrorId.message}</p>

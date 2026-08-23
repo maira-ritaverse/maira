@@ -466,11 +466,18 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
             "intake-upload": "AI ヒアリング",
           }}
           sections={{
-            meetings: <MeetingHistorySection clientRecordId={client.id} />,
+            meetings: (
+              <MeetingHistorySection
+                clientRecordId={client.id}
+                currentUserId={user.id}
+                isAdmin={role.member.role === "admin"}
+              />
+            ),
             "hearing-sheets": (
               <HearingSheetsSection
                 organizationId={role.organization.id}
                 clientRecordId={client.id}
+                isAdmin={role.member.role === "admin"}
               />
             ),
             "intake-upload": (
@@ -552,6 +559,7 @@ export default async function ClientDetailPage({ params, searchParams }: RoutePa
               <AgencyApplicationsSection
                 organizationId={role.organization.id}
                 clientRecordId={client.id}
+                isAdmin={role.member.role === "admin"}
               />
             ),
             matching: (

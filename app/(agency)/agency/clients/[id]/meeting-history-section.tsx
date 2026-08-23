@@ -18,6 +18,8 @@ import { MeetingHistoryClient } from "./meeting-history-client";
 
 type Props = {
   clientRecordId: string;
+  currentUserId: string;
+  isAdmin: boolean;
 };
 
 export type MeetingHistoryEntry = MeetingScheduleView & {
@@ -25,7 +27,7 @@ export type MeetingHistoryEntry = MeetingScheduleView & {
   transcriptText: string | null;
 };
 
-export async function MeetingHistorySection({ clientRecordId }: Props) {
+export async function MeetingHistorySection({ clientRecordId, currentUserId, isAdmin }: Props) {
   const supabase = await createClient();
   const [meetings, lineLinkRes] = await Promise.all([
     listMeetingsByClientRecord(supabase, clientRecordId),
@@ -88,7 +90,12 @@ export async function MeetingHistorySection({ clientRecordId }: Props) {
         <h2 className="text-base font-semibold">面談履歴</h2>
         <span className="text-muted-foreground text-xs">{entries.length} 件</span>
       </div>
-      <MeetingHistoryClient entries={entries} lineUserId={lineUserId} />
+      <MeetingHistoryClient
+        entries={entries}
+        lineUserId={lineUserId}
+        currentUserId={currentUserId}
+        isAdmin={isAdmin}
+      />
     </Card>
   );
 }

@@ -24,6 +24,7 @@ async function rowToView(row: MeetingScheduleRow): Promise<MeetingScheduleView> 
   const agenda = row.encrypted_agenda ? ((await decryptFieldSafe(row.encrypted_agenda)) ?? "") : "";
   return {
     id: row.id,
+    hostUserId: row.host_user_id,
     provider: row.provider,
     title: row.title,
     agenda,

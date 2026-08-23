@@ -38,9 +38,11 @@ type Tab = "unlinked" | "linked" | "unfollowed";
 
 type Props = {
   clientOptions: Array<{ id: string; name: string }>;
+  /** 一括プロフィール更新は admin 限定(API が requireOrgAdmin のため advisor には出さない)。 */
+  isAdmin: boolean;
 };
 
-export function LineUsersClient({ clientOptions }: Props) {
+export function LineUsersClient({ clientOptions, isAdmin }: Props) {
   const [links, setLinks] = useState<LinkRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -115,7 +117,7 @@ export function LineUsersClient({ clientOptions }: Props) {
         <TabButton active={tab === "unfollowed"} onClick={() => setTab("unfollowed")}>
           解除 ({unfollowedCount})
         </TabButton>
-        <BulkRefreshButton onDone={reload} />
+        {isAdmin && <BulkRefreshButton onDone={reload} />}
       </div>
 
       {filtered.length === 0 ? (

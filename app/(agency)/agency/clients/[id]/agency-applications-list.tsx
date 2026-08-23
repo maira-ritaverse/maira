@@ -28,9 +28,11 @@ type ReferralRow = {
 type Props = {
   clientRecordId: string;
   referrals: ReferralRow[];
+  /** 削除は管理者のみ(DELETE ルートが admin 限定のため、advisor には出さない)。 */
+  isAdmin: boolean;
 };
 
-export function AgencyApplicationsList({ clientRecordId, referrals }: Props) {
+export function AgencyApplicationsList({ clientRecordId, referrals, isAdmin }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +91,7 @@ export function AgencyApplicationsList({ clientRecordId, referrals }: Props) {
               {r.existingApplication && (
                 <ApplicationEditor
                   application={r.existingApplication}
+                  isAdmin={isAdmin}
                   onChange={(updated) =>
                     setRows((prev) =>
                       prev.map((row) =>
@@ -115,10 +118,12 @@ export function AgencyApplicationsList({ clientRecordId, referrals }: Props) {
 
 function ApplicationEditor({
   application,
+  isAdmin,
   onChange,
   onDelete,
 }: {
   application: AgencyApplication;
+  isAdmin: boolean;
   onChange: (updated: AgencyApplication) => void;
   onDelete: () => void;
 }) {
@@ -234,9 +239,11 @@ function ApplicationEditor({
           {savedAt ? `${savedAt.toLocaleTimeString("ja-JP")} に保存しました` : ""}
         </p>
         <div className="flex flex-wrap gap-2">
-          <Button variant="ghost" size="sm" onClick={handleDelete} disabled={pending}>
-            記録を削除
-          </Button>
+          {isAdmin && (
+            <Button variant="ghost" size="sm" onClick={handleDelete} disabled={pending}>
+              記録を削除
+            </Button>
+          )}
           <Button size="sm" onClick={save} disabled={pending}>
             {pending ? "保存中…" : "保存"}
           </Button>

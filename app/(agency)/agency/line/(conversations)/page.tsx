@@ -1,13 +1,25 @@
 import Link from "next/link";
 import { MessageCircle } from "lucide-react";
 
+import { getUserRole } from "@/lib/organizations/queries";
+import { createClient } from "@/lib/supabase/server";
+
 /**
  * /agency/line (index) — トーク 未選択 時 の 空状態
  *
  * 左 の サイドバー から 会話 を 選ぶ と /agency/line/[lineUserId] が 中央 + 右 に
  * 表示 される。 ここ は その 前 の 状態。
  */
-export default function AgencyLineEmptyState() {
+export default async function AgencyLineEmptyState() {
+  // 過去履歴 取込 は admin 限定(/agency/line/import が非管理者を redirect する)。
+  // advisor には辿れないリンクを出さない。
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const role = user ? await getUserRole(user.id) : null;
+  const isAdmin = role?.member?.role === "admin";
+
   return (
     <div className="flex flex-1 items-center justify-center bg-slate-100">
       <div className="max-w-xs space-y-3 text-center">
@@ -25,9 +37,11 @@ export default function AgencyLineEmptyState() {
           <Link href="/agency/line/broadcasts" className="hover:text-foreground underline">
             一斉配信
           </Link>
-          <Link href="/agency/line/import" className="hover:text-foreground underline">
-            過去履歴 取込
-          </Link>
+          {isAdmin && (
+            <Link href="/agency/line/import" className="hover:text-foreground underline">
+              過去履歴 取込
+            </Link>
+          )}
         </div>
       </div>
     </div>

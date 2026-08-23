@@ -8,6 +8,7 @@ import { AgencyApplicationsList } from "./agency-applications-list";
 type Props = {
   organizationId: string;
   clientRecordId: string;
+  isAdmin: boolean;
 };
 
 /**
@@ -19,7 +20,11 @@ type Props = {
  *   ・既存の応募がある referral は「応募済み」表示、無い referral は
  *     「+ 代行応募を記録」ボタンを表示
  */
-export async function AgencyApplicationsSection({ organizationId, clientRecordId }: Props) {
+export async function AgencyApplicationsSection({
+  organizationId,
+  clientRecordId,
+  isAdmin,
+}: Props) {
   const [referrals, applications, allJobs] = await Promise.all([
     listReferralsByClient(clientRecordId),
     listAgencyApplications(clientRecordId, organizationId),
@@ -44,6 +49,7 @@ export async function AgencyApplicationsSection({ organizationId, clientRecordId
       ) : (
         <AgencyApplicationsList
           clientRecordId={clientRecordId}
+          isAdmin={isAdmin}
           referrals={referrals.map((r) => ({
             id: r.id,
             jobPostingId: r.jobPostingId,

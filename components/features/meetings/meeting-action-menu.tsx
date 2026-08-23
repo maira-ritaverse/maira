@@ -24,6 +24,12 @@ import type { MeetingScheduleView } from "@/lib/meetings/types";
 type Props = {
   meeting: MeetingScheduleView;
   onChanged: () => void;
+  /**
+   * 再スケジュール/キャンセルを出すか。API(PATCH/DELETE)は主催者本人 or 組織 admin のみ
+   * 通す(それ以外は 403)。それに合わせ、権限が無い閲覧者にはメニューを出さない
+   * (「参加」ボタンは誰でも使えるので別途表示)。
+   */
+  canManage: boolean;
 };
 
 /**
@@ -50,7 +56,7 @@ function localToIso(local: string): string {
   return new Date(local).toISOString();
 }
 
-export function MeetingActionMenu({ meeting, onChanged }: Props) {
+export function MeetingActionMenu({ meeting, onChanged, canManage }: Props) {
   const [showReschedule, setShowReschedule] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -133,8 +139,8 @@ export function MeetingActionMenu({ meeting, onChanged }: Props) {
           </Button>
         )}
 
-        {/* メニュー(再スケジュール / キャンセル) */}
-        {!isPast && meeting.status === "scheduled" && (
+        {/* メニュー(再スケジュール / キャンセル)。権限がある場合のみ表示。 */}
+        {!isPast && meeting.status === "scheduled" && canManage && (
           <>
             <Button
               ref={triggerRef}

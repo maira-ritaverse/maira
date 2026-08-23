@@ -20,6 +20,9 @@ type Props = {
   upcoming: MeetingScheduleView[];
   past: MeetingScheduleView[];
   clientNames: Record<string, string>;
+  /** 閲覧者の user_id と admin 判定。再スケジュール/キャンセルは主催者本人 or admin のみ。 */
+  currentUserId: string;
+  isAdmin: boolean;
 };
 
 function fmt(iso: string): string {
@@ -53,7 +56,7 @@ function statusBadge(m: MeetingScheduleView): { label: string; tone: string } {
   return { label: "予約済", tone: "bg-blue-100 text-blue-700" };
 }
 
-export function MeetingsListClient({ upcoming, past, clientNames }: Props) {
+export function MeetingsListClient({ upcoming, past, clientNames, currentUserId, isAdmin }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
   const meetings = tab === "upcoming" ? upcoming : past;
@@ -139,7 +142,11 @@ export function MeetingsListClient({ upcoming, past, clientNames }: Props) {
                     )}
                   </div>
                 </div>
-                <MeetingActionMenu meeting={m} onChanged={refresh} />
+                <MeetingActionMenu
+                  meeting={m}
+                  onChanged={refresh}
+                  canManage={isAdmin || m.hostUserId === currentUserId}
+                />
               </div>
             );
           })}

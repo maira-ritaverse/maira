@@ -19,13 +19,15 @@ import { useToast } from "@/lib/admin/toast/store";
 type Props = {
   clientRecordId: string;
   initialItems: HearingSheet[];
+  /** 削除は管理者のみ(DELETE ルートが admin 限定のため、advisor には出さない)。 */
+  isAdmin: boolean;
 };
 
 /**
  * ヒアリングシート一覧 + インライン編集。
  * 面談中の素早い入力を最優先に、設問単位の textarea を縦に並べる。
  */
-export function HearingSheetsList({ clientRecordId, initialItems }: Props) {
+export function HearingSheetsList({ clientRecordId, initialItems, isAdmin }: Props) {
   const router = useRouter();
   const [items, setItems] = useState<HearingSheet[]>(initialItems);
   const [pending, startTransition] = useTransition();
@@ -65,6 +67,7 @@ export function HearingSheetsList({ clientRecordId, initialItems }: Props) {
             <li key={it.id}>
               <HearingSheetEditor
                 sheet={it}
+                isAdmin={isAdmin}
                 onChange={(updated) =>
                   setItems((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
                 }
@@ -80,10 +83,12 @@ export function HearingSheetsList({ clientRecordId, initialItems }: Props) {
 
 function HearingSheetEditor({
   sheet,
+  isAdmin,
   onChange,
   onDelete,
 }: {
   sheet: HearingSheet;
+  isAdmin: boolean;
   onChange: (updated: HearingSheet) => void;
   onDelete: () => void;
 }) {
@@ -234,9 +239,16 @@ function HearingSheetEditor({
           {savedAt ? `${savedAt.toLocaleTimeString("ja-JP")} に保存しました` : ""}
         </p>
         <div className="flex flex-wrap gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setConfirmOpen(true)} disabled={pending}>
-            削除
-          </Button>
+          {isAdmin && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setConfirmOpen(true)}
+              disabled={pending}
+            >
+              削除
+            </Button>
+          )}
           {sheet.status === "draft" ? (
             <>
               <Button variant="outline" size="sm" onClick={() => save()} disabled={pending}>

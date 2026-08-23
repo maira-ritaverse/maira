@@ -66,7 +66,13 @@ export default async function MeetingsPage() {
           </p>
         </Card>
       ) : (
-        <MeetingsListClient upcoming={upcoming} past={past} clientNames={clientNames} />
+        <MeetingsListClient
+          upcoming={upcoming}
+          past={past}
+          clientNames={clientNames}
+          currentUserId={user.id}
+          isAdmin={role.member?.role === "admin"}
+        />
       )}
     </div>
   );
