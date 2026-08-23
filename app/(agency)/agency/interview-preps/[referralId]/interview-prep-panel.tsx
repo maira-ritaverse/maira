@@ -147,7 +147,7 @@ export function InterviewPrepPanel({
       {loading && !hasContent && (
         <div className="text-muted-foreground flex items-center gap-2 py-8 text-sm">
           <Loader2 className="size-4 animate-spin" />
-          面接対策を生成しています(20〜40 秒ほどかかります)…
+          面接対策を生成しています(30〜90 秒ほどかかります)…
         </div>
       )}
 

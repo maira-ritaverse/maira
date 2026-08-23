@@ -31,8 +31,13 @@ import { getReferral } from "@/lib/referrals/queries";
  *
  * フロー:認証 + 組織メンバー → 月次 AI 上限チェック → referral / client /
  *   career_profile / job を取得 → Claude 生成 → 利用量記録 → 暗号化保存 → 返却。
+ *
+ * maxDuration:面接対策は 7 セクションの長文生成で出力トークンが多く、実データ
+ *   (求人票 + 候補者情報)では生成が 60 秒を超えて関数タイムアウト → クライアントで
+ *   「生成に失敗しました」になっていた。他の重い AI 生成(棚卸し要約 / 書類生成等)と
+ *   同じ 120 秒に引き上げてタイムアウトを防ぐ(Vercel プランは 300 秒まで対応)。
  */
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export async function POST(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: referralId } = await ctx.params;
