@@ -34,6 +34,8 @@ import { createServiceClient } from "@/lib/supabase/service";
 const bodySchema = z.object({
   tier: z.enum(["standard", "standard_pro", "solo", "solo_pro"]),
   cycle: z.enum(["monthly", "yearly"]),
+  // トライアル日数。省略時はプラン既定(Solo=14 / Team=30)。0 = トライアルなし(即課金)。
+  trialDays: z.number().int().min(0).max(90).optional(),
 });
 
 export const dynamic = "force-dynamic";
@@ -65,6 +67,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   }
   const tier = parsed.data.tier as OrgTier;
   const cycle = parsed.data.cycle;
+  const trialDays = parsed.data.trialDays;
 
   // 3. Stripe 設定
   const config = getOrgStripeConfig();
@@ -141,7 +144,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   }
 
   // 7. Checkout Session 発行(Solo / Team で分岐)。冪等キーで再送時の二重発行を防ぐ。
-  const idempotencyKey = `admin-checkout-link:${id}:${tier}:${cycle}:${Math.floor(Date.now() / 60000)}`;
+  const idempotencyKey = `admin-checkout-link:${id}:${tier}:${cycle}:t${trialDays ?? "def"}:${Math.floor(Date.now() / 60000)}`;
   try {
     let url: string | null;
     if (isSoloTierValue(tier)) {
@@ -150,6 +153,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         tier,
         cycle,
         adminEmail,
+        trialDays,
         existingCustomerId: existingPlan?.stripe_customer_id ?? null,
         idempotencyKey,
       });
@@ -163,6 +167,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         cycle,
         seatCount,
         adminEmail,
+        trialDays,
         existingCustomerId: existingPlan?.stripe_customer_id ?? null,
         idempotencyKey,
       });

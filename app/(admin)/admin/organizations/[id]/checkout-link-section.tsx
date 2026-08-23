@@ -28,6 +28,8 @@ const TIER_OPTIONS: { value: string; label: string; kind: "Team" | "Solo" }[] = 
 export function CheckoutLinkSection({ organizationId }: Props) {
   const [tier, setTier] = useState("solo");
   const [cycle, setCycle] = useState<"monthly" | "yearly">("monthly");
+  // "" = プラン既定(Solo=14日 / Team=30日)、"0" = トライアルなし(即課金)、その他は日数。
+  const [trial, setTrial] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState<string | null>(null);
@@ -40,10 +42,11 @@ export function CheckoutLinkSection({ organizationId }: Props) {
     setUrl(null);
     setCopied(false);
     try {
+      const trialDays = trial === "" ? undefined : Number(trial);
       const res = await fetch(`/api/admin/organizations/${organizationId}/checkout-link`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tier, cycle }),
+        body: JSON.stringify({ tier, cycle, ...(trialDays !== undefined ? { trialDays } : {}) }),
       });
       const body = (await res.json().catch(() => null)) as {
         url?: string;
@@ -113,6 +116,21 @@ export function CheckoutLinkSection({ organizationId }: Props) {
             >
               <option value="monthly">月払い</option>
               <option value="yearly">年払い(2ヶ月分お得)</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-slate-700">無料トライアル</label>
+            <select
+              value={trial}
+              onChange={(e) => setTrial(e.target.value)}
+              disabled={loading}
+              className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+            >
+              <option value="">プラン既定(Solo=14日 / Team=30日)</option>
+              <option value="0">なし(即課金)</option>
+              <option value="7">7日</option>
+              <option value="14">14日</option>
+              <option value="30">30日</option>
             </select>
           </div>
           <Button size="sm" onClick={issue} disabled={loading}>

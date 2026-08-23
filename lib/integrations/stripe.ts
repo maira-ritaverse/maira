@@ -355,6 +355,12 @@ export type CreateOrgCheckoutParams = {
   adminEmail: string;
   existingCustomerId?: string | null;
   /**
+   * トライアル 日数。 省略 時 は 既定 (Team=30 日)。 0 を 渡す と トライアル 無し
+   * (即 課金)。 Stripe は trial_period_days=0 を 許容 しない ため、 0 以下 の 場合 は
+   * パラメータ 自体 を 送ら ない。
+   */
+  trialDays?: number;
+  /**
    * 冪等 key。 呼び出し 側 で「organization_id + tier + cycle + 日時 bucket」
    * などで 生成 する。 省略 時 は 生成 しない。
    */
@@ -397,8 +403,12 @@ export function createOrgCheckoutSession(
     body.set(`line_items[${idx}][quantity]`, String(item.quantity));
   });
 
-  // 30 日 トライアル + subscription 側 metadata
-  body.set("subscription_data[trial_period_days]", "30");
+  // トライアル 日数 (既定 30 日)。 0 以下 なら trial を 付けず 即 課金 に する
+  // (Stripe は trial_period_days=0 を 許容 しない ため、 その 場合 は 送ら ない)。
+  const teamTrialDays = params.trialDays ?? 30;
+  if (teamTrialDays > 0) {
+    body.set("subscription_data[trial_period_days]", String(teamTrialDays));
+  }
   body.set("subscription_data[metadata][organization_id]", params.organizationId);
   body.set("subscription_data[metadata][tier]", params.tier);
   body.set("subscription_data[metadata][cycle]", params.cycle);
@@ -447,6 +457,11 @@ export type CreateSoloCheckoutParams = {
   cycle: BillingCycle;
   adminEmail: string;
   existingCustomerId?: string | null;
+  /**
+   * トライアル 日数。 省略 時 は 既定 (Solo=14 日)。 0 を 渡す と トライアル 無し
+   * (即 課金)。 Stripe は trial_period_days=0 を 許容 しない ため 0 以下 は 送ら ない。
+   */
+  trialDays?: number;
   idempotencyKey?: string;
 };
 
@@ -482,8 +497,12 @@ export function createSoloCheckoutSession(
     body.set(`line_items[${idx}][quantity]`, String(item.quantity));
   });
 
-  // 14 日 トライアル + subscription 側 metadata
-  body.set("subscription_data[trial_period_days]", "14");
+  // トライアル 日数 (既定 14 日)。 0 以下 なら trial を 付けず 即 課金 に する
+  // (Stripe は trial_period_days=0 を 許容 しない ため、 その 場合 は 送ら ない)。
+  const soloTrialDays = params.trialDays ?? 14;
+  if (soloTrialDays > 0) {
+    body.set("subscription_data[trial_period_days]", String(soloTrialDays));
+  }
   body.set("subscription_data[metadata][organization_id]", params.organizationId);
   body.set("subscription_data[metadata][tier]", params.tier);
   body.set("subscription_data[metadata][cycle]", params.cycle);
