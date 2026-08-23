@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/lib/admin/toast/store";
 import { apiFetch, getErrorMessage } from "@/lib/api/client-fetch";
+import { PLAN_TIER_LABEL, PLAN_TIERS, SOLO_TIERS } from "@/lib/billing/agency";
+
+const TIER_LABEL = PLAN_TIER_LABEL as Record<string, string>;
 
 type CreateResponse = {
   ok: boolean;
@@ -36,6 +39,8 @@ export function CreateOrganizationForm() {
   const fromContactId = searchParams.get("fromContact") ?? "";
   const [companyName, setCompanyName] = useState(initialCompany);
   const [adminEmail, setAdminEmail] = useState(initialEmail);
+  // 登録時に選択するプラン種別(Team 系 / Solo 系)。既定は Standard。
+  const [tier, setTier] = useState<string>("standard");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<CreateResponse | null>(null);
@@ -67,6 +72,7 @@ export function CreateOrganizationForm() {
         json: {
           companyName: companyName.trim(),
           adminEmail: adminEmail.trim(),
+          tier,
           fromContactId: fromContactId || undefined,
         },
       });
@@ -144,6 +150,38 @@ export function CreateOrganizationForm() {
         </p>
       </div>
 
+      <div className="space-y-1">
+        <Label htmlFor="tier">
+          プラン種別 <span className="text-red-600">*</span>
+        </Label>
+        <select
+          id="tier"
+          value={tier}
+          onChange={(e) => setTier(e.target.value)}
+          disabled={submitting}
+          className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+        >
+          <optgroup label="チームプラン(法人)">
+            {PLAN_TIERS.map((t) => (
+              <option key={t} value={t}>
+                {TIER_LABEL[t] ?? t}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Solo プラン(個人事業主)">
+            {SOLO_TIERS.map((t) => (
+              <option key={t} value={t}>
+                {TIER_LABEL[t] ?? t}
+              </option>
+            ))}
+          </optgroup>
+        </select>
+        <p className="text-muted-foreground text-[11px]">
+          チーム(法人・複数席)か Solo(個人事業主・1
+          席)を選びます。登録後も組織詳細から変更できます。
+        </p>
+      </div>
+
       {error && <p className="text-destructive text-xs">{mapErrorMessage(error)}</p>}
 
       {success && (
@@ -181,6 +219,7 @@ export function CreateOrganizationForm() {
         <ConfirmModal
           companyName={companyName.trim()}
           adminEmail={adminEmail.trim()}
+          tierLabel={TIER_LABEL[tier] ?? tier}
           onCancel={() => setShowConfirm(false)}
           onConfirm={() => void handleConfirm()}
         />
@@ -192,11 +231,13 @@ export function CreateOrganizationForm() {
 function ConfirmModal({
   companyName,
   adminEmail,
+  tierLabel,
   onCancel,
   onConfirm,
 }: {
   companyName: string;
   adminEmail: string;
+  tierLabel: string;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -223,6 +264,10 @@ function ConfirmModal({
           <div>
             <dt className="text-muted-foreground text-xs">管理者メールアドレス</dt>
             <dd className="font-mono text-xs">{adminEmail}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground text-xs">プラン種別</dt>
+            <dd className="font-semibold">{tierLabel}</dd>
           </div>
         </dl>
         <p className="text-muted-foreground mt-3 text-[11px]">

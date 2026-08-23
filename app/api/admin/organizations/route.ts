@@ -5,6 +5,7 @@ import { findAuthUserByEmail } from "@/lib/admin/auth-users";
 import { isMairaAdmin } from "@/lib/announcements/platform-queries";
 import { recordAuditLog } from "@/lib/audit/audit-log";
 import { readJsonBody, requireUser } from "@/lib/api/auth-guards";
+import { PLAN_TIERS, SOLO_TIERS } from "@/lib/billing/agency";
 import { getSiteUrl } from "@/lib/config/site-url";
 import { sendAgencyAdminInviteEmail } from "@/lib/email/agency-admin-invite";
 import { PLATFORM_AI_TOTAL_FREE_MONTHLY } from "@/lib/features/ai-usage";
@@ -227,9 +228,14 @@ export async function GET(request: Request) {
 //     日本語化するのは別作業(運用 TODO)
 // =====================================================================
 
+// 登録時に選べるプラン種別(Team 系 + Solo 系)。既定は Standard(従来挙動)。
+const ALL_TIERS = [...PLAN_TIERS, ...SOLO_TIERS] as unknown as [string, ...string[]];
+
 const createOrgSchema = z.object({
   companyName: z.string().min(1).max(200),
   adminEmail: z.string().email().max(254),
+  // 発行時に選択するプラン種別。省略時は standard(旧クライアント互換)。
+  tier: z.enum(ALL_TIERS).optional().default("standard"),
   // 受信箱の「この企業を発行する」ボタンから来た場合、起点となった
   // contact_messages.id を渡してもらう。audit_log でリード由来の発行を追跡。
   fromContactId: z.string().uuid().optional(),
@@ -250,7 +256,7 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "validation_failed" }, { status: 400 });
   }
-  const { companyName, adminEmail, fromContactId } = parsed.data;
+  const { companyName, adminEmail, tier, fromContactId } = parsed.data;
 
   const admin = createServiceClient();
 
@@ -380,14 +386,16 @@ export async function POST(request: Request) {
     );
   }
 
-  // 8. 無料 トライアル を 自動 開始 (Standard + 全機能 試せる 状態 30 日)
+  // 8. 無料 トライアル を 自動 開始 (選択 プラン + 全機能 試せる 状態 30 日)
   //    Stripe 契約 前 でも 動かす ため、 service_role で 直接 INSERT する。
   //    失敗しても 巻き戻し は しない (organization 自体は 維持。 後で 手動投入 可能)。
+  //    ai_boost_enabled は CHECK 制約 (tier='standard_pro' <=> ai_boost=true) に合わせる。
   const trialStartedAt = new Date();
   const trialEndsAt = new Date(trialStartedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
   const { error: planErr } = await admin.from("organization_plans").insert({
     organization_id: organizationId,
-    tier: "standard",
+    tier,
+    ai_boost_enabled: tier === "standard_pro",
     cycle: "monthly",
     status: "trialing",
     trial_started_at: trialStartedAt.toISOString(),
