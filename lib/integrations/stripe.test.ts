@@ -11,6 +11,7 @@ import {
 const CONFIG: OrgStripeConfig = {
   secretKey: "sk_test_dummy",
   siteUrl: "https://www.example.com",
+  taxRateId: null,
   prices: {
     standardBaseMonthly: "price_base_m",
     standardBaseYearly: "price_base_y",

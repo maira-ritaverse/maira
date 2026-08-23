@@ -143,6 +143,12 @@ export function createPortalSession(
 export type OrgStripeConfig = {
   secretKey: string;
   siteUrl: string;
+  /**
+   * 消費税(外税)用の Stripe Tax Rate ID(例: txr_...)。env STRIPE_TAX_RATE_JP。
+   * 設定されていれば Checkout の subscription 明細に default_tax_rates として適用し、
+   * 表示価格(税別)に 10% を上乗せして請求する。未設定なら税を付けない(後方互換)。
+   */
+  taxRateId: string | null;
   prices: {
     standardBaseMonthly: string;
     standardBaseYearly: string;
@@ -192,6 +198,8 @@ export function getOrgStripeConfig(): OrgStripeConfig | null {
   return {
     secretKey,
     siteUrl: siteUrl.replace(/\/$/, ""),
+    // 消費税率(外税)。未設定なら null = 税を付けない。
+    taxRateId: process.env.STRIPE_TAX_RATE_JP || null,
     prices: {
       standardBaseMonthly,
       standardBaseYearly,
@@ -409,6 +417,10 @@ export function createOrgCheckoutSession(
   if (teamTrialDays > 0) {
     body.set("subscription_data[trial_period_days]", String(teamTrialDays));
   }
+  // 消費税(外税)。税率が設定されていれば subscription の全明細に適用(表示価格 + 10%)。
+  if (config.taxRateId) {
+    body.set("subscription_data[default_tax_rates][0]", config.taxRateId);
+  }
   body.set("subscription_data[metadata][organization_id]", params.organizationId);
   body.set("subscription_data[metadata][tier]", params.tier);
   body.set("subscription_data[metadata][cycle]", params.cycle);
@@ -502,6 +514,10 @@ export function createSoloCheckoutSession(
   const soloTrialDays = params.trialDays ?? 14;
   if (soloTrialDays > 0) {
     body.set("subscription_data[trial_period_days]", String(soloTrialDays));
+  }
+  // 消費税(外税)。税率が設定されていれば subscription の全明細に適用(表示価格 + 10%)。
+  if (config.taxRateId) {
+    body.set("subscription_data[default_tax_rates][0]", config.taxRateId);
   }
   body.set("subscription_data[metadata][organization_id]", params.organizationId);
   body.set("subscription_data[metadata][tier]", params.tier);
