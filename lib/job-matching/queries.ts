@@ -10,7 +10,7 @@ import { generateText } from "ai";
 import { getModel, MODELS } from "@/lib/ai/client";
 import { decodeCareerProfileBlob } from "@/lib/career/conversations";
 import { extractJsonFromText } from "@/lib/career-intake/extract-json";
-import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
+import { decryptFieldSafe, encryptField } from "@/lib/crypto/field-encryption";
 import { createClient } from "@/lib/supabase/server";
 import type { JobPosting } from "@/lib/jobs/types";
 
@@ -91,7 +91,8 @@ export async function getCachedRecommendation(args: {
     .maybeSingle();
   if (error || !data) return null;
   const row = data as CacheRow;
-  const decrypted = await decryptField(row.encrypted_rankings);
+  // キャッシュ復号は失敗時 null → キャッシュミス扱いで再計算に倒す(500 にしない)。
+  const decrypted = await decryptFieldSafe(row.encrypted_rankings);
   if (!decrypted) return null;
   let parsed: unknown;
   try {

@@ -12,7 +12,7 @@ import { Card } from "@/components/ui/card";
 import { listMeetingsByClientRecord } from "@/lib/meetings/queries";
 import type { MeetingScheduleView } from "@/lib/meetings/types";
 import { createClient } from "@/lib/supabase/server";
-import { decryptField } from "@/lib/crypto/field-encryption";
+import { decryptFieldSafe } from "@/lib/crypto/field-encryption";
 
 import { MeetingHistoryClient } from "./meeting-history-client";
 
@@ -65,7 +65,9 @@ export async function MeetingHistorySection({ clientRecordId }: Props) {
       const decoded = await Promise.all(
         typed.map(async (r) => {
           if (!r.encrypted_transcript) return null;
-          const text = await decryptField(r.encrypted_transcript);
+          // 1 件の復号失敗(破損 / 旧鍵)で面談履歴セクション全体が落ちないよう safe 版。
+          // 失敗した文字起こしはその面談だけ非表示(null)にして続行する。
+          const text = await decryptFieldSafe(r.encrypted_transcript);
           return text ? ([r.id, text] as const) : null;
         }),
       );

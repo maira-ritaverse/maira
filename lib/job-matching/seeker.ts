@@ -13,7 +13,7 @@ import { generateText } from "ai";
 import { getModel, MODELS } from "@/lib/ai/client";
 import { decodeCareerProfileBlob } from "@/lib/career/conversations";
 import { extractJsonFromText } from "@/lib/career-intake/extract-json";
-import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
+import { decryptFieldSafe, encryptField } from "@/lib/crypto/field-encryption";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import type { JobPosting } from "@/lib/jobs/types";
@@ -167,7 +167,7 @@ export async function getSeekerJobRecommendations(
       .eq("user_id", user.id)
       .maybeSingle();
     if (cacheRow?.inputs_hash === inputsHash && cacheRow.encrypted_rankings) {
-      const decrypted = await decryptField(cacheRow.encrypted_rankings);
+      const decrypted = await decryptFieldSafe(cacheRow.encrypted_rankings);
       if (decrypted) {
         try {
           const parsed = JSON.parse(decrypted) as unknown;

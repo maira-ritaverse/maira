@@ -3,7 +3,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { decryptField } from "@/lib/crypto/field-encryption";
+import { decryptFieldSafe } from "@/lib/crypto/field-encryption";
 
 export type InterviewShareView = {
   id: string;
@@ -38,8 +38,10 @@ type ShareRow = {
 };
 
 async function rowToView(client: SupabaseClient, row: ShareRow): Promise<InterviewShareView> {
+  // reviewMessage は表示専用の任意メモ。復号失敗(破損 / 旧鍵)でも throw せず空文字に
+  // フォールバックし、共有行(面談タイトル / 期限 / 状態)は保持する(一覧全滅を防ぐ)。
   const reviewMessage = row.encrypted_review_message
-    ? ((await decryptField(row.encrypted_review_message)) ?? "")
+    ? ((await decryptFieldSafe(row.encrypted_review_message)) ?? "")
     : "";
   // host / organization の表示名を取得
   let hostDisplayName = "担当アドバイザー";
@@ -105,5 +107,7 @@ export async function listPendingSharesForSeeker(
       recording: Array.isArray(rec) ? (rec[0] ?? null) : rec,
     };
   }) as ShareRow[];
-  return Promise.all(rows.map((r) => rowToView(client, r)));
+  // reviewMessage の復号は rowToView 内でフィールド単位フォールバック(空文字)するため、
+  // 1 件の暗号列破損で一覧全体が 500 になることはない。
+  return await Promise.all(rows.map((r) => rowToView(client, r)));
 }

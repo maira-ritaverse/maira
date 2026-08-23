@@ -35,6 +35,33 @@ import {
   agencyApplicationDetailsSchema,
 } from "./types";
 
+/**
+ * 一覧用の安全マップ。1 件の復号失敗(破損 / 旧鍵)で一覧全体が 500 に
+ * ならないよう、行単位で try/catch し失敗行だけ落とす(単一取得の getter は
+ * マッパーの throw をそのまま維持 = fail-closed)。
+ */
+async function mapRowsSafe<Row extends { id: string }, T>(
+  rows: Row[],
+  mapper: (row: Row) => Promise<T>,
+  label: string,
+): Promise<T[]> {
+  const mapped: (T | null)[] = await Promise.all(
+    rows.map((row) =>
+      mapper(row).catch(() => {
+        console.warn(`[agency-client-documents] ${label}: 復号できない行をスキップしました`, {
+          id: row.id,
+        });
+        return null;
+      }),
+    ),
+  );
+  const out: T[] = [];
+  for (const v of mapped) {
+    if (v !== null) out.push(v);
+  }
+  return out;
+}
+
 // ───────────────────────────────────────────────────────────────────
 // マッパー
 // ───────────────────────────────────────────────────────────────────
@@ -186,7 +213,7 @@ export async function listAgencyClientResumes(
     .eq("organization_id", organizationId)
     .order("created_at", { ascending: false });
   if (error || !data) return [];
-  return Promise.all((data as AgencyClientResumeRow[]).map(rowToResume));
+  return mapRowsSafe(data as AgencyClientResumeRow[], rowToResume, "resumes");
 }
 
 export async function getAgencyClientResume(
@@ -315,7 +342,7 @@ export async function listAgencyClientCvs(
     .eq("organization_id", organizationId)
     .order("created_at", { ascending: false });
   if (error || !data) return [];
-  return Promise.all((data as AgencyClientCvRow[]).map(rowToCv));
+  return mapRowsSafe(data as AgencyClientCvRow[], rowToCv, "cvs");
 }
 
 export async function getAgencyClientCv(
@@ -455,7 +482,7 @@ export async function listHearingSheets(
     .eq("organization_id", organizationId)
     .order("created_at", { ascending: false });
   if (error || !data) return [];
-  return Promise.all((data as HearingSheetRow[]).map(rowToHearingSheet));
+  return mapRowsSafe(data as HearingSheetRow[], rowToHearingSheet, "hearing-sheets");
 }
 
 export async function getHearingSheet(
@@ -568,7 +595,7 @@ export async function listAgencyApplications(
     .eq("organization_id", organizationId)
     .order("created_at", { ascending: false });
   if (error || !data) return [];
-  return Promise.all((data as AgencyApplicationRow[]).map(rowToAgencyApplication));
+  return mapRowsSafe(data as AgencyApplicationRow[], rowToAgencyApplication, "agency-applications");
 }
 
 export async function getAgencyApplicationByReferral(

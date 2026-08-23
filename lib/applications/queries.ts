@@ -59,9 +59,19 @@ export async function listApplications(
     throw new Error(`Failed to list applications: ${error.message}`);
   }
 
-  // 復号は並列で進める(各レコード独立)
+  // 復号は並列で進める(各レコード独立)。1 件の復号失敗(破損 / 旧鍵)で一覧全体が
+  // 500 にならないよう行単位で try/catch し、その行だけ落として続行する
+  // (単一取得 getApplication は fail-closed のまま)。
   const rows = (data ?? []) as ApplicationRow[];
-  return await Promise.all(rows.map(mapApplicationRow));
+  const mapped = await Promise.all(
+    rows.map((row) =>
+      mapApplicationRow(row).catch(() => {
+        console.warn("[applications] 復号できない応募行をスキップしました", { id: row.id });
+        return null;
+      }),
+    ),
+  );
+  return mapped.filter((a): a is Application => a !== null);
 }
 
 /**
@@ -219,6 +229,10 @@ type ApplicationRow = {
 async function mapApplicationRow(row: ApplicationRow): Promise<Application> {
   let details: ApplicationDetails = PARSE_ERROR_DETAILS;
 
+  // 単一取得(getApplication)は fail-closed(復号失敗で throw)を維持する。応募内容は
+  // AI 生成(pr-customization)や書類化(save-as-document)の書き込み経路で使われるため、
+  // 復号できないデータで処理を続行させない。一覧の耐性は listApplications 側の行単位
+  // try/catch で担保する(1 件破損で一覧全滅にならないようにする)。
   const detailsJson = await decryptField(row.encrypted_details_v2);
   if (detailsJson) {
     try {

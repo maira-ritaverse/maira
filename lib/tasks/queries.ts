@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
+import { decryptFieldSafe, encryptField } from "@/lib/crypto/field-encryption";
 import type { CreateTaskRequest, Task, TaskPriority, TaskStatus, UpdateTaskRequest } from "./types";
 
 /**
@@ -168,14 +168,16 @@ type TaskRow = {
 };
 
 /**
- * decryptField は "v{n}:..." 暗号文も バックフィル前の平文も同じ I/F で返す
- * (プレフィックス無しはそのまま返す仕様)。title は NOT NULL の論理セマンティクス
- * なので、null / undefined のときは空文字でフォールバック。
+ * decryptFieldSafe は "v{n}:..." 暗号文も バックフィル前の平文も同じ I/F で返し、
+ * 復号失敗(破損 / 旧鍵)時は throw せず null を返す。ここでフィールド単位に
+ * フォールバックすることで、暗号列が 1 つ壊れても行(期限 / 状態 / 優先度)は保持する。
+ * これは催促・進捗管理の要であるタスクを「1 フィールド破損で丸ごと消える」ことから守る狙い。
+ * title は NOT NULL の論理セマンティクスなので、null / undefined のときは空文字でフォールバック。
  */
 async function mapTaskRow(row: TaskRow): Promise<Task> {
-  const title = (await decryptField(row.encrypted_title_v2)) ?? "";
+  const title = (await decryptFieldSafe(row.encrypted_title_v2)) ?? "";
   const description = row.encrypted_description_v2
-    ? ((await decryptField(row.encrypted_description_v2)) ?? null)
+    ? ((await decryptFieldSafe(row.encrypted_description_v2)) ?? null)
     : null;
 
   return {

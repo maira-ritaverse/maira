@@ -9,13 +9,19 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { decryptField, encryptField } from "@/lib/crypto/field-encryption";
+import { decryptFieldSafe, encryptField } from "@/lib/crypto/field-encryption";
 
 import type { CreateMeetingInput, MeetingScheduleRow, MeetingScheduleView } from "./types";
 
-/** row → view 変換(agenda 復号) */
+/**
+ * row → view 変換(agenda 復号)。
+ *
+ * agenda は表示専用の任意メモ。復号失敗(破損 / 旧鍵)でも throw せず空文字にフォールバック
+ * することで、暗号列が 1 つ壊れても予定行(日時 / 状態 / 参加 URL)は保持する。
+ * これにより一覧全滅も単一取得の 500 も防ぎ、面談リマインダー等の非暗号データを守る。
+ */
 async function rowToView(row: MeetingScheduleRow): Promise<MeetingScheduleView> {
-  const agenda = row.encrypted_agenda ? ((await decryptField(row.encrypted_agenda)) ?? "") : "";
+  const agenda = row.encrypted_agenda ? ((await decryptFieldSafe(row.encrypted_agenda)) ?? "") : "";
   return {
     id: row.id,
     provider: row.provider,
@@ -137,7 +143,7 @@ export async function listUpcomingMeetingsForHost(
     .limit(limit);
   if (error) throw new Error(`meeting_schedules list failed: ${error.message}`);
   if (!data) return [];
-  return Promise.all((data as MeetingScheduleRow[]).map(rowToView));
+  return await Promise.all((data as MeetingScheduleRow[]).map(rowToView));
 }
 
 /**
@@ -161,7 +167,7 @@ export async function listUpcomingMeetingsForSeeker(
     .limit(limit);
   if (error) throw new Error(`meeting_schedules seeker list failed: ${error.message}`);
   if (!data) return [];
-  return Promise.all((data as MeetingScheduleRow[]).map(rowToView));
+  return await Promise.all((data as MeetingScheduleRow[]).map(rowToView));
 }
 
 /**
@@ -191,7 +197,7 @@ export async function listOrgMeetings(
   const { data, error } = await filtered.limit(limit);
   if (error) throw new Error(`meeting_schedules org list failed: ${error.message}`);
   if (!data) return [];
-  return Promise.all((data as MeetingScheduleRow[]).map(rowToView));
+  return await Promise.all((data as MeetingScheduleRow[]).map(rowToView));
 }
 
 /**
@@ -236,7 +242,7 @@ export async function listMeetingsByClientRecord(
     .order("starts_at", { ascending: false });
   if (error) throw new Error(`meeting_schedules list by client failed: ${error.message}`);
   if (!data) return [];
-  return Promise.all((data as MeetingScheduleRow[]).map(rowToView));
+  return await Promise.all((data as MeetingScheduleRow[]).map(rowToView));
 }
 
 /**

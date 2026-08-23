@@ -60,7 +60,19 @@ export async function listMyRecordings(): Promise<IntakeRecording[]> {
     .order("created_at", { ascending: false });
   if (error || !data) return [];
 
-  return Promise.all((data as IntakeRecordingRow[]).map(rowToRecording));
+  // 1 件の復号失敗(破損 / 旧鍵)で一覧全体が 500 にならないよう、行単位で try/catch。
+  // 単一取得 getMyRecording は rowToRecording の throw をそのまま維持する。
+  const mapped = await Promise.all(
+    (data as IntakeRecordingRow[]).map(async (row) => {
+      try {
+        return await rowToRecording(row);
+      } catch {
+        console.warn("[career-intake] 復号できない録音行をスキップしました", { id: row.id });
+        return null;
+      }
+    }),
+  );
+  return mapped.filter((r): r is IntakeRecording => r !== null);
 }
 
 /** 1 件取得(本人確認込) */
