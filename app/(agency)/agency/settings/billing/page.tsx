@@ -123,11 +123,11 @@ export default async function AgencyBillingPage() {
               </AlertDescription>
             </Alert>
           </Card>
-          <PlanSelectForm currentSeatCount={seatCountForCheckout} />
+          <PlanSelectForm currentSeatCount={seatCountForCheckout} currentTier={null} />
         </>
       ) : !plan.stripe_subscription_id ? (
-        // 未 契約: Checkout に 誘導
-        <PlanSelectForm currentSeatCount={seatCountForCheckout} />
+        // 未 契約: Checkout に 誘導(組織の tier が Solo なら Solo を提示)
+        <PlanSelectForm currentSeatCount={seatCountForCheckout} currentTier={plan.tier} />
       ) : (
         <>
           <PlanStatusCard
@@ -144,7 +144,7 @@ export default async function AgencyBillingPage() {
           />
 
           {plan.status === "canceled" ? (
-            <PlanSelectForm currentSeatCount={seatCountForCheckout} />
+            <PlanSelectForm currentSeatCount={seatCountForCheckout} currentTier={plan.tier} />
           ) : plan.status === "incomplete" ? (
             // 初回 決済 未 完了 (SCA 未 通過 / カード 拒否 等)。 この 状態 で は
             // Boost 追加 / 期末 解約 は Stripe が 400 を 返す。 Portal で 決済 を

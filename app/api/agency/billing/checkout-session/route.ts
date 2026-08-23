@@ -24,7 +24,13 @@ import {
   countOrganizationSeats,
   isCheckoutBlockedByStatus,
 } from "@/lib/billing/org-checkout";
-import { createOrgCheckoutSession, getOrgStripeConfig } from "@/lib/integrations/stripe";
+import {
+  createOrgCheckoutSession,
+  createSoloCheckoutSession,
+  getOrgStripeConfig,
+  isSoloTierValue,
+  type OrgTier,
+} from "@/lib/integrations/stripe";
 
 export const dynamic = "force-dynamic";
 
@@ -42,13 +48,15 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: "invalid_body",
-        message: "tier は standard / standard_pro、 cycle は monthly / yearly の いずれか。",
+        message:
+          "tier は standard / standard_pro / solo / solo_pro、 cycle は monthly / yearly の いずれか。",
         issues: bodyResult.error.issues,
       },
       { status: 400 },
     );
   }
-  const { tier, cycle } = bodyResult.data;
+  const tier = bodyResult.data.tier as OrgTier;
+  const { cycle } = bodyResult.data;
 
   // 3. Stripe 設定 チェック
   const config = getOrgStripeConfig();
@@ -102,16 +110,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // 6. seat 数 集計
-  let seatCount = 3;
-  try {
-    seatCount = await countOrganizationSeats(supabase, organization.id);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: "seat_count_failed", message: msg }, { status: 500 });
-  }
-
-  // 7. Checkout Session 作成
+  // 6. email チェック(customer_email に使う)
   if (!user.email) {
     return NextResponse.json(
       { error: "no_email", message: "ログイン ユーザー に email が 紐付いて い ません。" },
@@ -119,7 +118,29 @@ export async function POST(request: Request) {
     );
   }
 
+  // 7. Checkout Session 作成(Solo / Team で分岐)
+  const idempotencyKey = `org-checkout:${organization.id}:${tier}:${cycle}:${Math.floor(Date.now() / 60000)}`;
   try {
+    // Solo 系は 1 席固定で席数集計は不要。Team 系のみ seat 数を集計して line_items を組む。
+    if (isSoloTierValue(tier)) {
+      const session = await createSoloCheckoutSession(config, {
+        organizationId: organization.id,
+        tier,
+        cycle,
+        adminEmail: user.email,
+        existingCustomerId: existingPlan?.stripe_customer_id ?? null,
+        idempotencyKey,
+      });
+      return NextResponse.json({ url: session.url, id: session.id });
+    }
+
+    let seatCount = 3;
+    try {
+      seatCount = await countOrganizationSeats(supabase, organization.id);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return NextResponse.json({ error: "seat_count_failed", message: msg }, { status: 500 });
+    }
     const session = await createOrgCheckoutSession(config, {
       organizationId: organization.id,
       tier,
@@ -127,7 +148,7 @@ export async function POST(request: Request) {
       seatCount,
       adminEmail: user.email,
       existingCustomerId: existingPlan?.stripe_customer_id ?? null,
-      idempotencyKey: `org-checkout:${organization.id}:${tier}:${cycle}:${Math.floor(Date.now() / 60000)}`,
+      idempotencyKey,
     });
     return NextResponse.json({ url: session.url, id: session.id });
   } catch (err) {

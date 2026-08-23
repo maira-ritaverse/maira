@@ -5,6 +5,7 @@ import { getBillingExemption } from "@/lib/billing/exemption";
 import { createServiceClient } from "@/lib/supabase/service";
 
 import { BillingExemptSection } from "./billing-exempt-section";
+import { CheckoutLinkSection } from "./checkout-link-section";
 import { NdaRequestSection } from "./nda-request-section";
 import { OrganizationDetail } from "./organization-detail";
 import { PlanTierSection } from "./plan-tier-section";
@@ -76,6 +77,9 @@ export default async function OrganizationDetailPage({
           initialTier={currentTier}
           memberCount={memberCount ?? 0}
         />
+      </Card>
+      <Card className="p-6">
+        <CheckoutLinkSection organizationId={id} />
       </Card>
       <Card className="p-6">
         <NdaRequestSection

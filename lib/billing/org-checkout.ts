@@ -14,12 +14,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 /**
  * POST /api/agency/billing/checkout-session の body。
  *
- * tier は 販売 中 の 2 種類 (standard / standard_pro) のみ 受理。
- * standard_rec / standard_premium は 現時点 未 販売 の ため、 UI からも
- * 選択 不可 だが 念のため サーバー でも 拒否 する。
+ * tier は 販売 中 の 4 種類 (Team: standard / standard_pro、 Solo: solo / solo_pro)
+ * を 受理。 standard_rec / standard_premium は 専用 Price が 無い ため 対象外
+ * (UI からも 選択 不可 だが 念のため サーバー でも 拒否 する)。
  */
 export const checkoutBodySchema = z.object({
-  tier: z.enum(["standard", "standard_pro"]),
+  tier: z.enum(["standard", "standard_pro", "solo", "solo_pro"]),
   cycle: z.enum(["monthly", "yearly"]),
 });
 

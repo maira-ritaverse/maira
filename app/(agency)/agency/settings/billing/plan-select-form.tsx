@@ -6,10 +6,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { getErrorMessage } from "@/lib/api/client-fetch";
+import { SOLO_MONTHLY_PRICE } from "@/lib/billing/agency";
 import {
   computeStripePrice,
   STRIPE_EXTRA_SEAT_MONTHLY_JPY,
   STRIPE_INCLUDED_SEATS,
+  STRIPE_YEARLY_MONTHS,
   type StripeCycle,
   type StripeTier,
 } from "@/lib/billing/stripe-pricing";
@@ -28,16 +30,25 @@ import {
  */
 type Props = {
   currentSeatCount: number;
+  /**
+   * 組織に割り当て済みの tier(organization_plans.tier)。solo / solo_pro の場合は
+   * Team のプラン選択ではなく Solo のプランを提示する(運営者が Solo に設定した組織が
+   * 誤って Team Standard で契約してしまうのを防ぐ)。未設定 / Team 系なら Team を提示。
+   */
+  currentTier?: string | null;
 };
 
-export function PlanSelectForm({ currentSeatCount }: Props) {
-  const [tier, setTier] = useState<StripeTier>("standard");
+type SoloTierValue = "solo" | "solo_pro";
+function isSoloTier(t: string | null | undefined): t is SoloTierValue {
+  return t === "solo" || t === "solo_pro";
+}
+
+export function PlanSelectForm({ currentSeatCount, currentTier }: Props) {
+  const soloMode = isSoloTier(currentTier);
+  const [tier, setTier] = useState<string>(soloMode ? (currentTier as string) : "standard");
   const [cycle, setCycle] = useState<StripeCycle>("monthly");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const price = computeStripePrice({ tier, seatCount: currentSeatCount, cycle });
-  const extraSeats = Math.max(0, currentSeatCount - STRIPE_INCLUDED_SEATS);
 
   const startCheckout = async () => {
     setLoading(true);
@@ -62,6 +73,100 @@ export function PlanSelectForm({ currentSeatCount }: Props) {
       setLoading(false);
     }
   };
+
+  // Solo 系: 席数課金なしの単一料金。Team とは料金モデルが異なるため別 UI で提示する。
+  if (soloMode) {
+    const soloTier: SoloTierValue = isSoloTier(tier) ? tier : "solo";
+    const soloMonthly = SOLO_MONTHLY_PRICE[soloTier];
+    const soloYearly = soloMonthly * STRIPE_YEARLY_MONTHS;
+    const soloTotal = cycle === "monthly" ? soloMonthly : soloYearly;
+    return (
+      <Card className="p-6">
+        <h2 className="text-base font-semibold">プランに加入する(Solo)</h2>
+        <p className="text-muted-foreground mt-1 text-xs">
+          14日間の無料期間付き。1席・個人向けプランです。
+        </p>
+
+        <div className="mt-4 space-y-3">
+          <TierOption
+            value="solo"
+            selected={tier === "solo"}
+            onSelect={() => setTier("solo")}
+            title="Solo"
+            description="AI 100 回 / 月 & 主要機能"
+          />
+          <TierOption
+            value="solo_pro"
+            selected={tier === "solo_pro"}
+            onSelect={() => setTier("solo_pro")}
+            title="Solo Pro"
+            description="AI 200 回 / 月 & 録音お試し"
+          />
+        </div>
+
+        <div className="mt-6">
+          <div className="text-muted-foreground mb-2 text-xs">課金 サイクル</div>
+          <div className="grid grid-cols-2 gap-2">
+            <CycleOption
+              selected={cycle === "monthly"}
+              onSelect={() => setCycle("monthly")}
+              title="月払い"
+              sub="毎月 請求"
+            />
+            <CycleOption
+              selected={cycle === "yearly"}
+              onSelect={() => setCycle("yearly")}
+              title="年払い"
+              sub="2 ヶ月 分 割引"
+            />
+          </div>
+        </div>
+
+        <hr className="my-6" />
+
+        <div className="space-y-2 text-sm">
+          {cycle === "monthly" ? (
+            <div className="flex items-center justify-between border-t pt-2">
+              <span className="font-semibold">月額 合計 (税別)</span>
+              <span className="text-base font-bold text-emerald-700">
+                ¥{soloTotal.toLocaleString()}
+              </span>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between border-t pt-2">
+                <span className="font-semibold">年額 合計 (税別)</span>
+                <span className="text-base font-bold text-emerald-700">
+                  ¥{soloTotal.toLocaleString()}
+                </span>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                月 単価 相当 ¥{Math.round(soloYearly / 12).toLocaleString()} (月払い 比 で 2 ヶ月 分
+                お得)
+              </p>
+            </>
+          )}
+        </div>
+
+        {error && (
+          <Alert variant="destructive" className="mt-4">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        <div className="mt-6 flex justify-end">
+          <Button onClick={startCheckout} disabled={loading}>
+            {loading ? "遷移中…" : "決済する"}
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+
+  // Team 系: Base(3席込み)+ Extra Seat + AI Boost の料金モデル。
+  const teamTier = (tier === "standard_pro" ? "standard_pro" : "standard") as StripeTier;
+  const price = computeStripePrice({ tier: teamTier, seatCount: currentSeatCount, cycle });
+  const extraSeats = Math.max(0, currentSeatCount - STRIPE_INCLUDED_SEATS);
 
   return (
     <Card className="p-6">
