@@ -78,11 +78,20 @@ export function MatchingSection({ client, openJobs, alreadyAppliedJobIds }: Matc
       </div>
 
       {matches.length === 0 ? (
-        <p className="text-muted-foreground py-6 text-center text-sm">
-          現時点でマッチする求人がありません。
-          <br />
-          顧客の希望条件(勤務地・年収・職種)や求人情報の入力状況をご確認ください。
-        </p>
+        <div className="text-muted-foreground space-y-2 py-6 text-center text-sm">
+          <p>
+            現時点でマッチする求人がありません。
+            <br />
+            顧客の希望条件(勤務地・年収・職種)や求人情報の入力状況をご確認ください。
+          </p>
+          <p>
+            まだ求人を登録していない場合は、
+            <Link href="/agency/jobs/new" className="text-primary font-medium underline">
+              求人を登録
+            </Link>
+            してください。
+          </p>
+        </div>
       ) : (
         <ul className="divide-foreground/10 divide-y">
           {matches.map((m) => {

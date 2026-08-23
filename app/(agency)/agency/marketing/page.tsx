@@ -12,6 +12,7 @@ import {
 } from "@/lib/ma/queries";
 import { getLineMaKpi, type KpiPeriod } from "@/lib/ma/line-kpi";
 import { CURRENT_EMAIL_MA_CONSENT_VERSION, CURRENT_LINE_MA_CONSENT_VERSION } from "@/lib/ma/types";
+import { getMyLineChannel } from "@/lib/line/queries";
 import { MarketingScreen } from "./scenario-list";
 
 /**
@@ -97,6 +98,11 @@ export default async function MarketingPage({ searchParams }: { searchParams?: S
   const envConfigured = Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
   const resendConfigured = orgConfigured || envConfigured;
 
+  // LINE 未接続診断。LINE 系のシナリオ / Flow / セグメントは送信先(LINE 公式アカウント)が
+  // 無いと保存できても実際には配信されないため、未接続なら警告して設定へ誘導する。
+  const lineChannel = await getMyLineChannel(supabase);
+  const lineConnected = Boolean(lineChannel);
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       {/* Resend 未設定の場合は警告バナーを出す。
@@ -120,6 +126,29 @@ export default async function MarketingPage({ searchParams }: { searchParams?: S
               メール送信設定を開く
             </a>
             から自社の Resend アカウントを登録してください。
+          </p>
+        </div>
+      )}
+
+      {/* LINE 未接続の警告。LINE シナリオ / Flow / セグメントは配信先が無いと機能しないため、
+          保存できても送られない状態を事前に知らせる(email 専用運用なら無視して差し支えない)。 */}
+      {!lineConnected && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <p className="inline-flex items-center gap-1.5 font-semibold">
+            <AlertTriangle className="size-4" aria-hidden />
+            LINE 公式アカウントが未接続です
+          </p>
+          <p className="mt-1">
+            LINE のシナリオ・Flow・セグメント配信は、接続済みの LINE
+            公式アカウントが無いと実際には送信されません。
+            <br />
+            <a
+              href="/agency/settings/integrations/line"
+              className="text-primary font-medium underline underline-offset-2"
+            >
+              LINE 連携設定を開く
+            </a>
+            から接続してください(メールのみで運用する場合はこの警告は無視して構いません)。
           </p>
         </div>
       )}

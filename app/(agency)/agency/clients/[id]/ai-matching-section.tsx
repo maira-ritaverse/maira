@@ -159,9 +159,16 @@ export function AiMatchingSection({ clientRecordId, openJobs }: Props) {
       )}
 
       {data && data.items.length === 0 && (
-        <p className="text-muted-foreground py-6 text-center text-sm">
-          {data.note ?? "AI 推薦の候補が見つかりませんでした。"}
-        </p>
+        <div className="text-muted-foreground space-y-2 py-6 text-center text-sm">
+          <p>{data.note ?? "AI 推薦の候補が見つかりませんでした。"}</p>
+          <p>
+            まだ求人を登録していない場合は、
+            <Link href="/agency/jobs/new" className="text-primary font-medium underline">
+              求人を登録
+            </Link>
+            してください。
+          </p>
+        </div>
       )}
 
       {data && data.items.length > 0 && (

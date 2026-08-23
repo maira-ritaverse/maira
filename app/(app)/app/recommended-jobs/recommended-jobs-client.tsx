@@ -179,10 +179,17 @@ export function RecommendedJobsClient() {
       )}
 
       {data && data.totalOpenJobs === 0 && (
-        <Card className="text-muted-foreground p-6 text-center text-sm">
-          現在、連携エージェンシーで公開中の求人はありません。
-          <br />
-          エージェンシーが新しい求人を追加するとここに表示されます。
+        <Card className="text-muted-foreground space-y-2 p-6 text-center text-sm">
+          <p>表示できる求人がまだありません。</p>
+          <p>
+            AI 求人推薦は、連携しているエージェントが登録した求人から表示されます。
+            <br />
+            エージェントと連携済みの場合は、担当者が求人を追加するとここに表示されます。まだ連携していない場合は、
+            <Link href="/app/connections" className="text-primary font-medium underline">
+              エージェント連携
+            </Link>
+            から連携してください。
+          </p>
         </Card>
       )}
 
