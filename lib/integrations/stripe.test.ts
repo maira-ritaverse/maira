@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildOrgLineItems,
   buildSoloLineItems,
+  buildSwapSubscriptionItems,
   isSoloStripeConfigured,
   type OrgStripeConfig,
 } from "./stripe";
@@ -167,5 +168,56 @@ describe("isSoloStripeConfigured (Phase 2)", () => {
 
     const partial = { ...CONFIG, prices: { ...CONFIG.prices, soloProYearly: "" } };
     expect(isSoloStripeConfigured(partial)).toBe(false);
+  });
+});
+
+describe("buildSwapSubscriptionItems", () => {
+  const deletedKeys = (p: URLSearchParams) =>
+    [...p.keys()].filter((k) => /\[deleted\]$/.test(k)).length;
+  const priceKeys = (p: URLSearchParams) =>
+    [...p.keys()].filter((k) => /\[price\]$/.test(k)).length;
+
+  it("Team → Solo: 現行 item を全て deleted にし、Solo 単一 item を追加する", () => {
+    const params = buildSwapSubscriptionItems(
+      ["si_base", "si_seat", "si_boost"],
+      [{ price: "price_solo_m", quantity: 1 }],
+      "none",
+    );
+    // 現行 3 item が deleted
+    expect(params.get("items[0][id]")).toBe("si_base");
+    expect(params.get("items[0][deleted]")).toBe("true");
+    expect(params.get("items[2][id]")).toBe("si_boost");
+    // 新 item は現行の後ろ(index 3)に price + quantity で積まれる
+    expect(params.get("items[3][price]")).toBe("price_solo_m");
+    expect(params.get("items[3][quantity]")).toBe("1");
+    expect(params.get("proration_behavior")).toBe("none");
+    expect(deletedKeys(params)).toBe(3);
+    expect(priceKeys(params)).toBe(1);
+  });
+
+  it("Solo → Team: 単一 item を削除し、Team の複数 item を追加する", () => {
+    const newItems = buildOrgLineItems(CONFIG, {
+      tier: "standard_pro",
+      cycle: "monthly",
+      seatCount: 5,
+    });
+    const params = buildSwapSubscriptionItems(["si_solo"], newItems, "none");
+    expect(deletedKeys(params)).toBe(1);
+    expect(priceKeys(params)).toBe(newItems.length);
+    // base + extra seat(2) + ai boost = 3 item
+    expect(newItems.length).toBe(3);
+  });
+
+  it("proration_behavior を反映する", () => {
+    const params = buildSwapSubscriptionItems(
+      ["si_x"],
+      [{ price: "p", quantity: 1 }],
+      "create_prorations",
+    );
+    expect(params.get("proration_behavior")).toBe("create_prorations");
+  });
+
+  it("新 item が空なら throw(サブスクには最低 1 item 必要)", () => {
+    expect(() => buildSwapSubscriptionItems(["si_x"], [], "none")).toThrow();
   });
 });

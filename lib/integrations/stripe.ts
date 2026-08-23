@@ -788,3 +788,97 @@ export function buildSoloLineItems(
 
   return [{ price, quantity: 1 }];
 }
+
+// -------------------------------------------------------------------
+// tier 入れ替え (Team ⇄ Solo / Team 内 tier 変更)
+//
+// 既存サブスクの line_items を目標 tier の構成に「原子的に」差し替える。
+// Team(base + seat + boost の複数 item)と Solo(単一 Price)は構造が異なるため、
+// 個別の add/remove を重ねると「item ゼロ」の不正な中間状態を作り得る。そこで
+// subscription 更新 1 回で「現行 item を全て deleted + 新 item を追加」する。
+// cycle(月/年)は現行サブスクの請求間隔を継承する(ここでは月↔年は変えない)。
+//
+// 差し替え後は Stripe が customer.subscription.updated を発火し、Webhook の
+// parseOrgSubscription が新 tier を判定して DB(tier/seat/boost)を同期する。
+// -------------------------------------------------------------------
+
+export type SwapSubscriptionTierParams = {
+  subscriptionId: string;
+  /** 目標 tier。Solo 系は単一 Price、Team 系は base+seat+boost。 */
+  tier: OrgTier;
+  /** Team 系へ切り替える際の総席数(最低 3)。Solo 系では無視(常に 1 席)。 */
+  seatCount: number;
+  /** 既定は "none"(運営者オーバーライドでの想定外の日割り請求を避ける)。 */
+  prorationBehavior?: ProrationBehavior;
+  /** 同一変更の二重適用を防ぐ冪等キー(タイムアウト再送時の重複差し替え防止)。 */
+  idempotencyKey?: string;
+};
+
+/**
+ * 現行 item(id 配列)と新 item から、subscription 更新用の body を組み立てる純関数。
+ * 「全 item を deleted + 新 item を追加」の原子的置換。テスト容易性のため分離。
+ */
+export function buildSwapSubscriptionItems(
+  currentItemIds: string[],
+  newItems: OrgLineItem[],
+  prorationBehavior: ProrationBehavior,
+): URLSearchParams {
+  if (newItems.length === 0) {
+    throw new Error("swap 後の line_items が空です(サブスクには最低 1 item 必要)");
+  }
+  const body = new URLSearchParams();
+  let idx = 0;
+  for (const id of currentItemIds) {
+    body.append(`items[${idx}][id]`, id);
+    body.append(`items[${idx}][deleted]`, "true");
+    idx += 1;
+  }
+  for (const item of newItems) {
+    body.append(`items[${idx}][price]`, item.price);
+    body.append(`items[${idx}][quantity]`, String(item.quantity));
+    idx += 1;
+  }
+  body.append("proration_behavior", prorationBehavior);
+  return body;
+}
+
+export async function swapSubscriptionTier(
+  config: OrgStripeConfig,
+  params: SwapSubscriptionTierParams,
+): Promise<StripeSubscription> {
+  const sub = await retrieveSubscription(config, params.subscriptionId);
+  const current = sub.items.data;
+  if (current.length === 0) {
+    throw new Error(`サブスク ${params.subscriptionId} に line_item がありません`);
+  }
+
+  // 現行 cycle を継承(recurring を持つ item の interval から判定。year のみ yearly)。
+  const interval = current.find((i) => i.price.recurring)?.price.recurring?.interval ?? "month";
+  const cycle: BillingCycle = interval === "year" ? "yearly" : "monthly";
+
+  const newItems = isSoloTierValue(params.tier)
+    ? buildSoloLineItems(config, { tier: params.tier, cycle })
+    : buildOrgLineItems(config, {
+        tier: params.tier,
+        cycle,
+        seatCount: Math.max(3, params.seatCount),
+      });
+
+  const body = buildSwapSubscriptionItems(
+    current.map((i) => i.id),
+    newItems,
+    params.prorationBehavior ?? "none",
+  );
+
+  const headers: Record<string, string> = {};
+  if (params.idempotencyKey) {
+    headers["Idempotency-Key"] = params.idempotencyKey;
+  }
+
+  return stripePostWithHeaders<StripeSubscription>(
+    config.secretKey,
+    `/subscriptions/${encodeURIComponent(params.subscriptionId)}`,
+    body,
+    headers,
+  );
+}
