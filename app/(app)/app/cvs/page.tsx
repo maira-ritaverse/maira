@@ -14,10 +14,7 @@ import { DuplicateCvButton } from "./duplicate-cv-button";
  * 職務経歴書 一覧(本人所有)
  *
  * 既存の /app/resumes(履歴書)とは別画面。
- * こちらは JIS様式 想定の構造化データ(Phase 2 でプレビュー、Phase 3 で PDF 出力予定)。
- *
- * AI下書き(Phase 4)もここから派生する想定だが、Phase 1 では純粋に
- * 「保存・編集・削除ができる土台」のみ。
+ * こちらは JIS様式 想定の構造化データ。プレビュー・PDF 出力・AI 下書きに対応済み。
  */
 export default async function CvsListPage() {
   const supabase = await createClient();
@@ -39,7 +36,7 @@ export default async function CvsListPage() {
       <div>
         <h1 className="text-2xl font-bold">職務経歴書</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          JIS様式 想定の職務経歴書を作成・管理します(プレビュー / PDF / AI下書きは順次対応)
+          JIS様式 想定の職務経歴書を作成・管理します(プレビュー / PDF 出力 / AI 下書きに対応)
         </p>
       </div>
 

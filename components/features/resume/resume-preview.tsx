@@ -81,7 +81,7 @@ export function ResumePreview({ resume, photoSignedUrl }: Props) {
       </div>
 
       <p className="mt-4 text-center text-xs text-neutral-600 print:hidden">
-        この見た目で PDF 出力(近日対応)
+        この見た目のまま「PDF をダウンロード」から出力できます
       </p>
     </div>
   );

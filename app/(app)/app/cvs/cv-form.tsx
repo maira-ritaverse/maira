@@ -38,7 +38,7 @@ import {
  * - mode="edit"   → PATCH /api/cvs/[id]、成功はフォームに留まる
  * - mode="edit" のみ「削除」ボタンを表示(window.confirm の二段ガード)
  *
- * Phase 1 では AI下書き / プレビュー / PDF は無し。Phase 2 以降で追加。
+ * AI下書き / プレビュー / PDF に対応(Phase 4 で追加)。
  *
  * Phase 4-c でスキル候補生成、4-d で全項目に AI 下書きボタンを追加:
  * - 職務要約 / 自己PR / 各職歴(行ごと)/ スキル候補 の 4 種類のボタン
