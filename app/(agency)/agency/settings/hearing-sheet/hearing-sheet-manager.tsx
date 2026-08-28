@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/lib/admin/toast/store";
 import {
   HEARING_PII_TARGET_LABELS,
   HEARING_PII_TARGETS,
@@ -19,7 +20,7 @@ type Props = {
   initialQuestions: HearingQuestionDefinition[];
 };
 
-/** 質問フォームの編集可能フィールド(key は作成時のみ・編集不可)。 */
+/** 質問フォームの編集可能フィールド(項目 ID は作成時のみ・編集不可)。 */
 type QuestionFormValues = {
   label: string;
   helpText: string;
@@ -49,10 +50,15 @@ const EMPTY_FORM: QuestionFormValues = {
   displayOrder: "0",
 };
 
+/** 新規追加時の既定の表示順(既存の最大 + 10。無ければ 10)。末尾に並ぶようにする。 */
+function nextDisplayOrder(questions: HearingQuestionDefinition[]): number {
+  if (questions.length === 0) return 10;
+  return Math.max(...questions.map((q) => q.displayOrder)) + 10;
+}
+
 export function HearingSheetManager({ initialTitle, initialQuestions }: Props) {
   const [questions, setQuestions] = useState<HearingQuestionDefinition[]>(initialQuestions);
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   // ---- タイトル ----
   const [title, setTitle] = useState(initialTitle);
@@ -62,12 +68,10 @@ export function HearingSheetManager({ initialTitle, initialQuestions }: Props) {
   const saveTitle = async () => {
     const trimmed = title.trim();
     if (trimmed.length === 0) {
-      setError("タイトルを入力してください");
+      showToast("error", "タイトルを入力してください");
       return;
     }
     setSavingTitle(true);
-    setError(null);
-    setMessage(null);
     try {
       const res = await fetch("/api/agency/hearing-sheet-settings", {
         method: "PATCH",
@@ -79,9 +83,9 @@ export function HearingSheetManager({ initialTitle, initialQuestions }: Props) {
         throw new Error(json.error ?? `HTTP ${res.status}`);
       }
       setSavedTitle(trimmed);
-      setMessage("タイトルを保存しました");
+      showToast("success", "タイトルを保存しました");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "不明なエラー");
+      showToast("error", err instanceof Error ? err.message : "不明なエラー");
     } finally {
       setSavingTitle(false);
     }
@@ -93,19 +97,19 @@ export function HearingSheetManager({ initialTitle, initialQuestions }: Props) {
   const [createForm, setCreateForm] = useState<QuestionFormValues>(EMPTY_FORM);
   const [creating, setCreating] = useState(false);
 
-  const resetCreate = () => {
+  const openCreate = () => {
     setNewKey("");
-    setCreateForm(EMPTY_FORM);
+    // 表示順は既存の末尾に並ぶ値を初期値にする(全部 0 になって並びが曖昧になるのを防ぐ)。
+    setCreateForm({ ...EMPTY_FORM, displayOrder: String(nextDisplayOrder(questions)) });
+    setShowCreate(true);
   };
 
   const create = async () => {
     if (!newKey.trim() || !createForm.label.trim()) {
-      setError("key と ラベル を入力してください");
+      showToast("error", "項目 ID とラベルを入力してください");
       return;
     }
     setCreating(true);
-    setError(null);
-    setMessage(null);
     try {
       const res = await fetch("/api/agency/hearing-sheet-questions", {
         method: "POST",
@@ -131,10 +135,11 @@ export function HearingSheetManager({ initialTitle, initialQuestions }: Props) {
         );
       }
       setShowCreate(false);
-      resetCreate();
-      setMessage("質問を追加しました");
+      setNewKey("");
+      setCreateForm(EMPTY_FORM);
+      showToast("success", "質問を追加しました");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "不明なエラー");
+      showToast("error", err instanceof Error ? err.message : "不明なエラー");
     } finally {
       setCreating(false);
     }
@@ -148,17 +153,14 @@ export function HearingSheetManager({ initialTitle, initialQuestions }: Props) {
   const startEdit = (q: HearingQuestionDefinition) => {
     setEditingId(q.id);
     setEditForm(toFormValues(q));
-    setError(null);
-    setMessage(null);
   };
 
   const saveEdit = async (q: HearingQuestionDefinition) => {
     if (!editForm.label.trim()) {
-      setError("ラベルを入力してください");
+      showToast("error", "ラベルを入力してください");
       return;
     }
     setSavingEdit(true);
-    setError(null);
     try {
       const patch = {
         label: editForm.label.trim(),
@@ -195,30 +197,36 @@ export function HearingSheetManager({ initialTitle, initialQuestions }: Props) {
           .sort((a, b) => a.displayOrder - b.displayOrder),
       );
       setEditingId(null);
-      setMessage("質問を更新しました");
+      showToast("success", "質問を更新しました");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "不明なエラー");
+      showToast("error", err instanceof Error ? err.message : "不明なエラー");
     } finally {
       setSavingEdit(false);
     }
   };
 
+  // ---- 削除 ----
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const remove = async (q: HearingQuestionDefinition) => {
+    if (deletingId) return; // 実行中は二重発火させない
     if (
       !confirm(
-        `「${q.label}」(${q.key})を削除しますか?\n既存ヒアリングシートに入力済みの回答データ自体は残ります(再追加すれば再表示)。`,
+        `「${q.label}」を削除しますか?\n既存ヒアリングシートに入力済みの回答データ自体は残ります(再追加すれば再表示)。`,
       )
     ) {
       return;
     }
-    setError(null);
+    setDeletingId(q.id);
     try {
       const res = await fetch(`/api/agency/hearing-sheet-questions/${q.id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setQuestions((prev) => prev.filter((x) => x.id !== q.id));
-      setMessage(`「${q.label}」を削除しました`);
+      showToast("success", `「${q.label}」を削除しました`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "不明なエラー");
+      showToast("error", err instanceof Error ? err.message : "不明なエラー");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -226,13 +234,6 @@ export function HearingSheetManager({ initialTitle, initialQuestions }: Props) {
 
   return (
     <div className="space-y-6">
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50/50 p-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
-          {error}
-        </div>
-      )}
-      {message && <div className="text-xs text-emerald-600 dark:text-emerald-300">{message}</div>}
-
       {/* タイトル設定 */}
       <Card className="space-y-2 p-4">
         <h2 className="text-sm font-semibold">シートのタイトル</h2>
@@ -259,7 +260,7 @@ export function HearingSheetManager({ initialTitle, initialQuestions }: Props) {
             <h2 className="text-sm font-semibold">質問項目</h2>
             <span className="text-muted-foreground text-xs">{questions.length} 件</span>
           </div>
-          <Button size="sm" onClick={() => setShowCreate(true)} disabled={showCreate}>
+          <Button size="sm" onClick={openCreate} disabled={showCreate}>
             + 質問を追加
           </Button>
         </div>
@@ -268,7 +269,9 @@ export function HearingSheetManager({ initialTitle, initialQuestions }: Props) {
           <Card className="space-y-3 p-3">
             <h3 className="text-sm font-medium">新規質問</h3>
             <div className="space-y-1">
-              <Label className="text-xs">key(英小文字始まり・英数字と _。回答データの識別子)</Label>
+              <Label className="text-xs">
+                項目 ID(英小文字で始まる英数字と _。回答データの識別子で、後から変更できません)
+              </Label>
               <Input
                 placeholder="例:family_status"
                 value={newKey}
@@ -286,8 +289,8 @@ export function HearingSheetManager({ initialTitle, initialQuestions }: Props) {
                 variant="outline"
                 onClick={() => {
                   setShowCreate(false);
-                  resetCreate();
-                  setError(null);
+                  setNewKey("");
+                  setCreateForm(EMPTY_FORM);
                 }}
               >
                 キャンセル
@@ -309,9 +312,6 @@ export function HearingSheetManager({ initialTitle, initialQuestions }: Props) {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2 text-sm">
                       <span className="font-medium">{q.label}</span>
-                      <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 font-mono text-[10px]">
-                        {q.key}
-                      </span>
                       <span className="text-muted-foreground text-[10px]">
                         {q.inputType === "text" ? "1 行" : "複数行"} ・ 最大 {q.maxLength} 字
                       </span>
@@ -332,12 +332,18 @@ export function HearingSheetManager({ initialTitle, initialQuestions }: Props) {
                     <Button
                       size="sm"
                       variant="outline"
+                      disabled={deletingId === q.id}
                       onClick={() => (editingId === q.id ? setEditingId(null) : startEdit(q))}
                     >
                       {editingId === q.id ? "閉じる" : "編集"}
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => remove(q)}>
-                      削除
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={deletingId === q.id}
+                      onClick={() => remove(q)}
+                    >
+                      {deletingId === q.id ? "削除中…" : "削除"}
                     </Button>
                   </div>
                 </div>
@@ -364,7 +370,7 @@ export function HearingSheetManager({ initialTitle, initialQuestions }: Props) {
   );
 }
 
-/** 作成 / 編集で共通の入力フィールド群(key は含まない)。 */
+/** 作成 / 編集で共通の入力フィールド群(項目 ID は含まない)。 */
 function QuestionFormFields({
   values,
   onChange,

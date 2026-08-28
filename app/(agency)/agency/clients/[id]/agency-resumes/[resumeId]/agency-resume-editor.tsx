@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiClientError, apiFetch, getErrorMessage } from "@/lib/api/client-fetch";
+import { useToast } from "@/lib/admin/toast/store";
 import type {
   AgencyClientResume,
   EducationItem,
@@ -119,6 +120,7 @@ export function AgencyResumeEditor({
   hearingFillCount = 0,
 }: Props) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
@@ -153,6 +155,14 @@ export function AgencyResumeEditor({
       return;
     }
     setPii((prev) => ({ ...prev, ...hearingFillPatch }));
+    // 反映は画面下の項目にも及ぶため、何件入ったかを明示する(まだ未保存であることも伝える)。
+    showToast("success", `ヒアリングシートから ${hearingFillCount} 項目を反映しました(未保存)`);
+    // 住所を反映したがフリガナが空の場合は、通常の onBlur 経路を通らないので手動で生成する。
+    const filledAddress = hearingFillPatch.address?.trim();
+    const kanaAfter = (hearingFillPatch.address_kana ?? pii.address_kana ?? "").trim();
+    if (filledAddress && kanaAfter.length === 0) {
+      void generateAddressKana(filledAddress, { silent: true });
+    }
   };
 
   // 住所フリガナの生成。手動(「住所から生成」ボタン)と自動(住所欄の onBlur / 開いた時)から共用する。

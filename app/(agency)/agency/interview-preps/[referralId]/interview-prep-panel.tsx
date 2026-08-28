@@ -143,7 +143,7 @@ export function InterviewPrepPanel({
             <p className="text-muted-foreground text-xs">生成日時:{formatJst(generatedAt)}</p>
           )}
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {hasContent && (
             <Button type="button" variant="outline" size="sm" onClick={() => void handleCopy()}>
               {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
@@ -186,7 +186,7 @@ export function InterviewPrepPanel({
       {hasContent && sharedAt && (
         <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
           <Check className="size-3.5" />
-          求職者に共有済み({formatJst(sharedAt)})— 求職者は Myaira の「面談対策」で閲覧できます
+          求職者に共有済み({formatJst(sharedAt)})— 求職者は Myaira の「面接対策」で閲覧できます
         </p>
       )}
       {hasContent && !sharedAt && seekerLinked && (

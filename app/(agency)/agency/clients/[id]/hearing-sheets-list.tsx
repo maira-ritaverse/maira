@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch, getErrorMessage } from "@/lib/api/client-fetch";
@@ -178,7 +179,7 @@ function HearingSheetEditor({
 
       {questions.length === 0 ? (
         <p className="text-muted-foreground text-sm">
-          質問項目が設定されていません。設定 → ヒアリングシート設定 から項目を追加してください。
+          質問項目が設定されていません。設定 →「ヒアリングシート設定」から項目を追加してください。
         </p>
       ) : (
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -189,7 +190,7 @@ function HearingSheetEditor({
               helpText={q.helpText}
               value={content[q.key] ?? ""}
               maxLength={q.maxLength}
-              rows={q.inputType === "text" ? 1 : 3}
+              singleLine={q.inputType === "text"}
               onChange={(v) => update(q.key, v)}
             />
           ))}
@@ -237,7 +238,7 @@ function HearingSheetEditor({
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title="このヒアリングシートを削除しますか?"
-        description="この操作は取り消せません。 記録した内容は復元できなくなります。"
+        description="この操作は取り消せません。記録した内容は復元できなくなります。"
         confirmLabel="削除"
         destructive
         pending={pending}
@@ -252,26 +253,31 @@ function Question({
   helpText,
   value,
   onChange,
-  rows = 3,
+  singleLine = false,
   maxLength,
 }: {
   label: string;
   helpText?: string | null;
   value: string;
   onChange: (v: string) => void;
-  rows?: number;
+  /** 1 行入力(text 型)は Input、複数行(textarea 型)は Textarea で描画する。 */
+  singleLine?: boolean;
   maxLength?: number;
 }) {
   return (
     <div className="space-y-1">
       <Label>{label}</Label>
       {helpText && <p className="text-muted-foreground text-xs">{helpText}</p>}
-      <Textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        rows={rows}
-        maxLength={maxLength}
-      />
+      {singleLine ? (
+        <Input value={value} onChange={(e) => onChange(e.target.value)} maxLength={maxLength} />
+      ) : (
+        <Textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          rows={3}
+          maxLength={maxLength}
+        />
+      )}
     </div>
   );
 }

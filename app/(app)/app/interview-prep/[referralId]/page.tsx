@@ -9,7 +9,7 @@ import { getSharedInterviewPrepForSeeker } from "@/lib/interview-preps/queries";
 /**
  * /app/interview-prep/[referralId]
  *
- * 求職者本人向け:1 件の共有済み面談対策の詳細(本文込み)。
+ * 求職者本人向け:1 件の共有済み面接対策の詳細(本文込み)。
  *
  * 認可は lib/interview-preps/queries.ts の getSharedInterviewPrepForSeeker に集約:
  *   1. requireUser
@@ -53,9 +53,9 @@ export default async function SeekerInterviewPrepDetailPage({ params }: RoutePar
           {prep.organizationName} ・ {prep.jobLabel}
           {prep.sharedAt && <> ・ {formatJst(prep.sharedAt)} 共有</>}
         </div>
-        <h1 className="text-2xl font-bold">面談対策</h1>
+        <h1 className="text-2xl font-bold">面接対策</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          担当エージェントがあなたのために作成した面談対策です。内容は AI
+          担当エージェントがあなたのために作成した面接対策です。内容は AI
           による提案を含みます。事前に事実確認のうえご活用ください。
         </p>
       </div>

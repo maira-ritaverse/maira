@@ -118,14 +118,14 @@ export type RecommendationLetterFinalizedForSeekerPayload = {
 };
 
 /**
- * 求職者本人向け:エージェントが作成した面談対策(interview_preps)が共有されたことを通知。
+ * 求職者本人向け:エージェントが作成した面接対策(interview_preps)が共有されたことを通知。
  *
  * 本文(想定質問 / 回答例)は機微なので通知ペイロードには載せず、href の遷移先
  * (/app/interview-prep/[referralId])で復号して見せる。
  */
 export type InterviewPrepSharedForSeekerPayload = {
   kind: "interview_prep_shared_for_seeker";
-  /** UI 一覧用見出し(例:「面談対策が届きました(株式会社 X / PdM)」)*/
+  /** UI 一覧用見出し(例:「面接対策が届きました(株式会社 X / PdM)」)*/
   title: string;
   /** 求職者向け遷移先(/app/interview-prep/[referralId]) */
   href: string;

@@ -1,11 +1,11 @@
 /**
- * 面談対策(interview_preps)関連の通知発火ヘルパー
+ * 面接対策(interview_preps)関連の通知発火ヘルパー
  *
  * recommendation-letters/notify.ts と同型。referral → client_records /
  * job_postings / organizations の解決を API ルートから引き剥がして集約する。
  *
  * 通知の方針:
- *   ・面談対策の本文(想定質問 / 回答例)は機微なので通知ペイロードには載せない。
+ *   ・面接対策の本文(想定質問 / 回答例)は機微なので通知ペイロードには載せない。
  *     遷移先(/app/interview-prep/[referralId])で復号して表示する。
  *   ・求職者(client_records.linked_user_id)が連携済の場合のみ通知。
  *     未連携クライアントは通知を受け取らない(届ける先がそもそも無い)。
@@ -27,7 +27,7 @@ type ReferralLookupRow = {
 };
 
 /**
- * 面談対策が求職者へ共有された通知を求職者本人に送る。
+ * 面接対策が求職者へ共有された通知を求職者本人に送る。
  * 通知失敗は throw せず console.error にとどめる(共有処理の主更新はすでに
  * 完了しているので、通知が落ちても致命ではない)。
  */
@@ -88,7 +88,7 @@ export async function notifyInterviewPrepShared(args: {
     userId: clientRecord.linked_user_id,
     payload: {
       kind: "interview_prep_shared_for_seeker",
-      title: `面談対策が届きました(${organizationName} / ${jobLabel})`,
+      title: `面接対策が届きました(${organizationName} / ${jobLabel})`,
       href: `/app/interview-prep/${args.referralId}`,
       referralId: args.referralId,
       jobLabel,

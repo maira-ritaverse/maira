@@ -212,7 +212,7 @@ export async function PATCH(_request: Request, ctx: { params: Promise<{ id: stri
       return NextResponse.json(
         {
           error: "not_generated",
-          message: "先に面談対策を生成してから共有してください。",
+          message: "先に面接対策を生成してから共有してください。",
         },
         { status: 404 },
       );

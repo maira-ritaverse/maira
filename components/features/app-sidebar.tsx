@@ -86,7 +86,7 @@ export const SEEKER_NAV_ITEMS: ItemDescriptor[] = [
     id: "interview-prep",
     href: "/app/interview-prep",
     icon: "lightbulb",
-    defaultLabel: "面談対策",
+    defaultLabel: "面接対策",
     dataAttr: "nav-interview-prep",
   },
   { id: "interview", href: "/app/interview", icon: "bot", defaultLabel: "面接練習" },

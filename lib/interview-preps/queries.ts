@@ -182,7 +182,7 @@ function jobLabelOf(jp: SeekerReferralRow["job_postings"]): string {
 }
 
 /**
- * 求職者本人に共有済みの面談対策一覧(shared_at not null のみ)。
+ * 求職者本人に共有済みの面接対策一覧(shared_at not null のみ)。
  * 連携済 client_records → referrals → interview_preps を辿る。
  */
 export async function listSharedInterviewPrepsForSeeker(
@@ -256,7 +256,7 @@ export type SharedInterviewPrepDetail = {
 };
 
 /**
- * 求職者本人に共有済みの面談対策 1 件(本文込み)を取得。
+ * 求職者本人に共有済みの面接対策 1 件(本文込み)を取得。
  * 認可:referral → client_record の linked_user_id === userId かつ linked、
  * かつ interview_preps.shared_at not null。いずれか欠けたら null(存在を隠す)。
  */
