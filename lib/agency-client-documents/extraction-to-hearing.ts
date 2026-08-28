@@ -74,11 +74,14 @@ export function mergeExtractionIntoHearing(
   const skills = describeSkills(extraction);
 
   // 既存の回答(カスタム項目含む)は全て温存し、標準キーの空欄だけ埋める。
+  // 1 項目の上限(hearingSheetContentSchema と同じ 8000 字)でクランプし、長大な
+  // 職歴要約などで後段の parse が 500 になるのを防ぐ。
+  const MAX_FIELD_CHARS = 8000;
   const result: HearingSheetContent = { ...current };
   const setIfEmpty = (key: string, next: string) => {
     const existing = (result[key] ?? "").trim();
     if (existing.length === 0 && next.trim().length > 0) {
-      result[key] = next;
+      result[key] = next.slice(0, MAX_FIELD_CHARS);
     }
   };
 

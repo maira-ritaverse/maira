@@ -244,8 +244,16 @@ export type HearingSheetRow = {
  * 会議録音の AI 抽出(extraction-to-hearing)がこれらのキーに書き込む。
  *
  * 1 項目あたり最大 8000 字(暗号文全体の 64000 字上限は DB 側の check で担保)。
+ * キーは質問定義の key と同じ形式(英小文字始まり + 英数 / _、最大 50 字)に限定し、
+ * 任意文字列キーの混入(旧 z.object は未知キーを落としていた)を防ぐ。
  */
-export const hearingSheetContentSchema = z.record(z.string(), z.string().max(8000));
+export const hearingSheetContentSchema = z.record(
+  z
+    .string()
+    .regex(/^[a-z][a-z0-9_]*$/)
+    .max(50),
+  z.string().max(8000),
+);
 export type HearingSheetContent = z.infer<typeof hearingSheetContentSchema>;
 
 export type HearingSheet = {

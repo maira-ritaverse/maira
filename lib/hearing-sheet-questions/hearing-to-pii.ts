@@ -41,19 +41,24 @@ function normalizeBirthDate(raw: string): string | null {
 
 /**
  * 自由記述の性別を ResumePii の enum に best-effort 変換。
- * 「女(性)」→female /「男(性)」→male /「その他 / other」→other。判定不能なら null。
+ * 「女性」を含む or 完全一致「女」→female /「男性」を含む or 完全一致「男」→male /
+ * 「その他 / other」→other。判定不能なら null。
+ *
+ * 「女」「男」の部分一致は使わない(「長女」「彼女」「男女比」等の誤判定を避けるため、
+ * 完全一致 or 「女性 / 男性」という語での判定に限定する)。
  */
 function normalizeGender(raw: string): ResumePii["gender"] | null {
   const s = raw.trim();
-  if (/女/.test(s)) return "female";
-  if (/男/.test(s)) return "male";
-  if (/その他|other/i.test(s)) return "other";
+  if (/女性/.test(s) || s === "女" || /^female$/i.test(s)) return "female";
+  if (/男性/.test(s) || s === "男" || /^male$/i.test(s)) return "male";
+  if (/その他/.test(s) || /^other$/i.test(s)) return "other";
   return null;
 }
 
 /**
  * ヒアリング回答 → ResumePii の部分パッチを作る。
- * count は「実際に値が入った項目数」(0 なら流し込むものが無い)。
+ * count は「実際に値が入った ResumePii 項目数」(= patch のキー数)。複数の質問が
+ * 同じ maps_to_pii を指していても、最終的に埋まる項目数で数える(水増ししない)。
  */
 export function hearingSheetToResumePii(
   questions: HearingQuestionDefinition[],
@@ -62,7 +67,6 @@ export function hearingSheetToResumePii(
   if (!content) return { patch: {}, count: 0 };
 
   const patch: Partial<ResumePii> = {};
-  let count = 0;
 
   for (const q of questions) {
     if (!q.mapsToPii) continue;
@@ -72,22 +76,15 @@ export function hearingSheetToResumePii(
     const target = q.mapsToPii;
     if (target === "gender") {
       const g = normalizeGender(raw);
-      if (g) {
-        patch.gender = g;
-        count += 1;
-      }
+      if (g) patch.gender = g;
     } else if (target === "birth_date") {
       const d = normalizeBirthDate(raw);
-      if (d) {
-        patch.birth_date = d;
-        count += 1;
-      }
+      if (d) patch.birth_date = d;
     } else {
       // 文字列系:最大長でクランプして流し込む
       patch[target] = raw.slice(0, STRING_PII_MAX[target]);
-      count += 1;
     }
   }
 
-  return { patch, count };
+  return { patch, count: Object.keys(patch).length };
 }

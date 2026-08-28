@@ -9,7 +9,7 @@ import {
 import { getAgencyClientResume, listHearingSheets } from "@/lib/agency-client-documents/queries";
 import { getClientRecord } from "@/lib/clients/queries";
 import { hearingSheetToResumePii } from "@/lib/hearing-sheet-questions/hearing-to-pii";
-import { listHearingSheetQuestionsForSheet } from "@/lib/hearing-sheet-questions/queries";
+import { listHearingSheetQuestions } from "@/lib/hearing-sheet-questions/queries";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient } from "@/lib/supabase/server";
 
@@ -72,12 +72,14 @@ export default async function AgencyResumeEditPage({ params }: RouteParams) {
   // 該当が無ければ count=0 でボタンは出さない。
   const [hearingSheets, hearingQuestions] = await Promise.all([
     listHearingSheets(clientRecordId, role.organization.id),
-    listHearingSheetQuestionsForSheet(role.organization.id),
+    listHearingSheetQuestions(role.organization.id),
   ]);
-  const { patch: hearingFillPatch, count: hearingFillCount } = hearingSheetToResumePii(
-    hearingQuestions,
-    hearingSheets[0]?.content ?? null,
-  );
+  const hearingFill = hearingSheetToResumePii(hearingQuestions, hearingSheets[0]?.content ?? null);
+  const hearingFillPatch = { ...hearingFill.patch };
+  // 自己PR欄オフの組織では保存時に self_pr が空へ強制されるため、流し込み対象から除外する
+  //(反映したのに保存で消える不整合と、件数の水増しを防ぐ)。
+  if (!selfPrEnabled) delete hearingFillPatch.self_pr;
+  const hearingFillCount = Object.keys(hearingFillPatch).length;
 
   // 写真の署名 URL は SSR で発行(エージェントセッションで Storage RLS を通す)。
   // 発行失敗時はプレースホルダにフォールバック。

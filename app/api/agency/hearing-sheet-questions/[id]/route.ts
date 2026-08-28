@@ -34,6 +34,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
   const result = await updateHearingSheetQuestion(id, organization.id, parsed.data);
   if ("error" in result) {
+    if (result.error === "not_found") {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
     return NextResponse.json({ error: "Failed to update", message: result.error }, { status: 500 });
   }
   return NextResponse.json({ success: true });
@@ -48,6 +51,9 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
 
   const result = await deleteHearingSheetQuestion(id, organization.id);
   if ("error" in result) {
+    if (result.error === "not_found") {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
     return NextResponse.json({ error: "Failed to delete", message: result.error }, { status: 500 });
   }
   return NextResponse.json({ success: true });

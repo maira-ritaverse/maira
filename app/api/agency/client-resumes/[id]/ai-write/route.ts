@@ -6,7 +6,7 @@ import { generateResumeText } from "@/lib/agency-client-documents/ai-write";
 import { getAgencyClientResume, listHearingSheets } from "@/lib/agency-client-documents/queries";
 import { getClientRecord } from "@/lib/clients/queries";
 import { checkAiUsageLimit, recordAiUsage } from "@/lib/features/ai-usage";
-import { listHearingSheetQuestionsForSheet } from "@/lib/hearing-sheet-questions/queries";
+import { listHearingSheetQuestions } from "@/lib/hearing-sheet-questions/queries";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -78,7 +78,7 @@ export async function POST(request: Request, { params }: RouteParams) {
   const hearingSheets = await listHearingSheets(resume.clientRecordId, organization.id);
   const hearing = hearingSheets[0]?.content ?? null;
   // 組織のヒアリング質問定義(ラベル)でプロンプトを組み立てるため取得
-  const questions = await listHearingSheetQuestionsForSheet(organization.id);
+  const questions = await listHearingSheetQuestions(organization.id);
 
   const result = await generateResumeText({
     clientName: client.name,

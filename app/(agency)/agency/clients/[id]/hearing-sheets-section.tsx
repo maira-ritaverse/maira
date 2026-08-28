@@ -2,7 +2,7 @@ import { Card } from "@/components/ui/card";
 import { listHearingSheets } from "@/lib/agency-client-documents/queries";
 import {
   getHearingSheetTitle,
-  listHearingSheetQuestionsForSheet,
+  listHearingSheetQuestions,
 } from "@/lib/hearing-sheet-questions/queries";
 
 import { HearingSheetsList } from "./hearing-sheets-list";
@@ -25,7 +25,7 @@ type Props = {
 export async function HearingSheetsSection({ organizationId, clientRecordId, isAdmin }: Props) {
   const [items, questions, title] = await Promise.all([
     listHearingSheets(clientRecordId, organizationId),
-    listHearingSheetQuestionsForSheet(organizationId),
+    listHearingSheetQuestions(organizationId),
     getHearingSheetTitle(organizationId),
   ]);
   return (

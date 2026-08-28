@@ -15,30 +15,16 @@ import {
   type HearingQuestionDefinition,
   type HearingQuestionRow,
   rowToHearingQuestion,
-  STANDARD_HEARING_QUESTIONS,
   type UpdateHearingQuestionInput,
 } from "./types";
 
-/** DB が空(未 materialize)のときに合成して返す標準定義。 */
-function synthesizeStandardDefinitions(organizationId: string): HearingQuestionDefinition[] {
-  return STANDARD_HEARING_QUESTIONS.map((q) => ({
-    id: `default:${q.key}`,
-    organizationId,
-    key: q.key,
-    label: q.label,
-    helpText: null,
-    inputType: q.inputType,
-    maxLength: q.maxLength,
-    mapsToPii: null,
-    displayOrder: q.displayOrder,
-    createdAt: "",
-    updatedAt: "",
-  }));
-}
-
 /**
- * 組織の質問定義(実在行のみ)を display_order 昇順で取得。
- * 管理画面(編集 / 削除は実 id が必要)や CRUD の基点で使う。0 件なら空配列。
+ * 組織の質問定義を display_order 昇順で取得。
+ *
+ * 標準 11 項目はマイグレーション(backfill + 新規 org の seed トリガー)で必ず
+ * materialize 済みなので、通常は空にならない。admin が全項目を削除した等で 0 件に
+ * なった場合は空配列を返す(描画側は「未設定」を表示)。合成フォールバックはしない
+ * ―― 管理者が意図的に空にした状態を、勝手に標準項目で復活させないため。
  */
 export async function listHearingSheetQuestions(
   organizationId: string,
@@ -53,18 +39,6 @@ export async function listHearingSheetQuestions(
 
   if (error || !data) return [];
   return (data as HearingQuestionRow[]).map(rowToHearingQuestion);
-}
-
-/**
- * ヒアリングシートの描画 / 本人情報流し込み用。
- * 実在行が 0 件のときだけ標準 11 項目を合成して返す(シートが空にならないよう二重防御)。
- * 合成行の id は "default:*" で実在しないので、編集 / 削除の対象にはしないこと。
- */
-export async function listHearingSheetQuestionsForSheet(
-  organizationId: string,
-): Promise<HearingQuestionDefinition[]> {
-  const rows = await listHearingSheetQuestions(organizationId);
-  return rows.length > 0 ? rows : synthesizeStandardDefinitions(organizationId);
 }
 
 /** 組織のヒアリングシートタイトル(行が無ければ既定)。 */
@@ -122,7 +96,10 @@ export async function createHearingSheetQuestion(
   return rowToHearingQuestion(data as HearingQuestionRow);
 }
 
-/** 質問を更新(key 以外)。admin のみ(RLS)。organization_id でも明示フィルタ。 */
+/**
+ * 質問を更新(key 以外)。admin のみ(RLS)。organization_id でも明示フィルタ。
+ * 対象が無い(別 org / 削除済み id)ときは not_found を返す(黙って成功にしない)。
+ */
 export async function updateHearingSheetQuestion(
   id: string,
   organizationId: string,
@@ -141,28 +118,35 @@ export async function updateHearingSheetQuestion(
 
   if (Object.keys(patch).length === 0) return { ok: true };
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("hearing_sheet_question_definitions")
     .update(patch)
     .eq("id", id)
-    .eq("organization_id", organizationId);
+    .eq("organization_id", organizationId)
+    .select("id");
 
   if (error) return { error: error.message };
+  if (!data || data.length === 0) return { error: "not_found" };
   return { ok: true };
 }
 
-/** 質問を削除。admin のみ(RLS)。既存回答(暗号化 JSON)側の該当キーは残る(無害)。 */
+/**
+ * 質問を削除。admin のみ(RLS)。既存回答(暗号化 JSON)側の該当キーは残る(無害)。
+ * 対象が無いときは not_found を返す。
+ */
 export async function deleteHearingSheetQuestion(
   id: string,
   organizationId: string,
 ): Promise<{ ok: true } | { error: string }> {
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("hearing_sheet_question_definitions")
     .delete()
     .eq("id", id)
-    .eq("organization_id", organizationId);
+    .eq("organization_id", organizationId)
+    .select("id");
 
   if (error) return { error: error.message };
+  if (!data || data.length === 0) return { error: "not_found" };
   return { ok: true };
 }

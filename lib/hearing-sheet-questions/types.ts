@@ -121,11 +121,11 @@ export type UpdateHearingQuestionInput = z.infer<typeof updateHearingQuestionSch
 /**
  * 標準 11 項目(会議録音の抽出キー = extraction-to-hearing の出力キーと一致)。
  *
- * 用途:定義が 0 件の org でもヒアリングシートが空にならないよう、
- * listHearingSheetQuestions が DB 空のときにこれを合成して返す(二重防御。
- * 通常はマイグレーションの backfill / seed トリガーで DB に materialize 済み)。
- *
- * DB のマイグレーション(20260828000002)の seed と同じ内容を保つこと。
+ * DB のマイグレーション(20260828000002)の backfill / seed トリガーが挿入する
+ * 標準項目のドキュメント兼パリティ用の定数。実データは常に DB(定義テーブル)を
+ * 参照する ―― この定数からアプリ側で定義を合成することはしない
+ * (admin が意図的に項目を削除した状態を勝手に復活させないため)。
+ * マイグレーションの seed 内容と一致させて保守すること。
  */
 export const STANDARD_HEARING_QUESTIONS: ReadonlyArray<{
   key: string;
