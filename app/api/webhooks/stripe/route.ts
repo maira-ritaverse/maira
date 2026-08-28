@@ -57,7 +57,22 @@ type StripeSubscriptionItem = {
   id: string;
   quantity: number;
   price: { id: string };
+  // Stripe API 2025-03-31.basil 以降、請求期間は subscription 直下ではなく item 側に入る。
+  current_period_start?: number | null;
+  current_period_end?: number | null;
 };
+
+/**
+ * 請求期間(current_period_*)を解決する。Stripe API の新しめのバージョンでは
+ * subscription 直下から subscription item へ移動したため、直下が無ければ先頭 item から
+ * 読む(旧・新どちらの API バージョンでも next_billed_at 等が欠落しないようにする)。
+ */
+function resolvePeriodStart(sub: StripeSubscription): number | null {
+  return sub.current_period_start ?? sub.items?.data?.[0]?.current_period_start ?? null;
+}
+function resolvePeriodEnd(sub: StripeSubscription): number | null {
+  return sub.current_period_end ?? sub.items?.data?.[0]?.current_period_end ?? null;
+}
 
 type StripeSubscription = {
   id: string;
@@ -504,7 +519,7 @@ async function handleSubscriptionSync(
   const toIso = (unix: number | null): string | null =>
     unix ? new Date(unix * 1000).toISOString() : null;
 
-  const nextBilledAt = sub.cancel_at_period_end ? null : toIso(sub.current_period_end);
+  const nextBilledAt = sub.cancel_at_period_end ? null : toIso(resolvePeriodEnd(sub));
 
   // seat_count は 「管理者 含めた 総 席 数」 で、 line item の quantity は
   // Extra Seat = seat_count - 3 (Base に 3 席 込 み)。 DB に は 総 席 数 を 保存 する。
@@ -528,8 +543,8 @@ async function handleSubscriptionSync(
     p_stripe_item_base: parsed.itemIds.base,
     p_stripe_item_extra_seat: parsed.itemIds.extraSeat,
     p_stripe_item_ai_boost: parsed.itemIds.aiBoost,
-    p_current_period_start: toIso(sub.current_period_start),
-    p_current_period_end: toIso(sub.current_period_end),
+    p_current_period_start: toIso(resolvePeriodStart(sub)),
+    p_current_period_end: toIso(resolvePeriodEnd(sub)),
     p_next_billed_at: nextBilledAt,
     p_canceled_at: deleted ? new Date().toISOString() : toIso(sub.canceled_at),
   });
@@ -726,9 +741,8 @@ async function handleAddonSubscription(
           ? "past_due"
           : "canceled";
 
-  const currentPeriodEnd = sub.current_period_end
-    ? new Date(sub.current_period_end * 1000).toISOString()
-    : null;
+  const periodEndUnix = resolvePeriodEnd(sub);
+  const currentPeriodEnd = periodEndUnix ? new Date(periodEndUnix * 1000).toISOString() : null;
 
   // 順序ガード:直近に適用したイベントの created より古いイベントは無視する。
   // Stripe の順不同配信で canceled の後に古い active が届いても status を巻き戻さない
