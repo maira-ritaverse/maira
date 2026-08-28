@@ -335,6 +335,81 @@ export function htmlToText(rawHtml: string): string {
   return withTitle.slice(0, JOB_URL_MAX_TEXT_CHARS);
 }
 
+/**
+ * 埋め込み JSON(SPA の初期データ / 構造化データ)から文字列を抽出する。
+ *
+ * 近年の求人サイトは Next.js 等の SPA が多く、本文は JavaScript 描画で
+ * HTML のタグ除去では空になる。ただし多くは
+ *   ・<script id="__NEXT_DATA__" type="application/json">(Next.js の初期 props)
+ *   ・<script type="application/ld+json">(schema.org JobPosting 等の構造化データ)
+ * に求人データ(職種名・給与・勤務地・応募資格・会社情報 等)を JSON で埋め込んでいる。
+ * これらを parse して日本語/英数の文字列値を平坦化し、AI 抽出へ渡すテキストに含める。
+ * 外部ライブラリは使わず、単一パスの正規表現 + 再帰走査で行う(SSRF 対策済みの取得後に実行)。
+ */
+export function extractEmbeddedJsonText(rawHtml: string): string {
+  const blobs: string[] = [];
+  const nextData = /<script\s+id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i.exec(rawHtml);
+  if (nextData) blobs.push(nextData[1]);
+  const ldRe = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let ld: RegExpExecArray | null;
+  let ldCount = 0;
+  while ((ld = ldRe.exec(rawHtml)) !== null && ldCount < 10) {
+    blobs.push(ld[1]);
+    ldCount++;
+  }
+  if (blobs.length === 0) return "";
+
+  const out: string[] = [];
+  const seen = new Set<string>();
+  let budget = JOB_URL_MAX_TEXT_CHARS;
+  const collect = (o: unknown, depth: number): void => {
+    if (budget <= 0 || depth > 8 || o == null) return;
+    if (typeof o === "string") {
+      const s = o.trim();
+      // ノイズ除去:短すぎ / 長すぎ / URL / data URI / id・token・base64 っぽい連続英数字。
+      if (s.length < 4 || s.length > 4000) return;
+      if (/^https?:\/\//i.test(s) || /^data:/i.test(s)) return;
+      if (/^[A-Za-z0-9_-]{20,}$/.test(s)) return;
+      if (seen.has(s)) return;
+      seen.add(s);
+      out.push(s);
+      budget -= s.length + 1;
+      return;
+    }
+    if (Array.isArray(o)) {
+      for (const v of o) collect(v, depth + 1);
+      return;
+    }
+    if (typeof o === "object") {
+      for (const v of Object.values(o as Record<string, unknown>)) collect(v, depth + 1);
+    }
+  };
+  for (const blob of blobs) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(blob.trim());
+    } catch {
+      continue;
+    }
+    collect(parsed, 0);
+    if (budget <= 0) break;
+  }
+  return out.join("\n");
+}
+
+/**
+ * 取得した HTML を AI 抽出用テキストに整形する。
+ * タグ除去テキストに加え、SPA / 構造化データの埋め込み JSON からも文字列を拾い、
+ * JS 描画の求人ページ(Next.js SPA 等)でも本文が取れるようにする。
+ * 構造化データを先に置く(ノイズが少なく AI が拾いやすい)。全体は上限で切り詰める。
+ */
+export function buildJobTextFromHtml(rawHtml: string): string {
+  const embedded = extractEmbeddedJsonText(rawHtml);
+  const stripped = htmlToText(rawHtml);
+  const parts = [embedded, stripped].filter((s) => s.trim().length > 0);
+  return parts.join("\n\n").slice(0, JOB_URL_MAX_TEXT_CHARS);
+}
+
 function safeFromCodePoint(cp: number): string {
   if (!Number.isFinite(cp) || cp < 0 || cp > 0x10ffff) return "";
   try {
@@ -459,7 +534,8 @@ export async function fetchJobPageText(rawUrl: string): Promise<FetchJobUrlResul
       const body = await readBodyCapped(res, contentType);
       if (!body.ok) return body;
 
-      const text = htmlToText(body.text);
+      // タグ除去だけでなく、SPA の埋め込み JSON(__NEXT_DATA__ / ld+json)からも本文を拾う。
+      const text = buildJobTextFromHtml(body.text);
       if (text.length < 20) {
         return {
           ok: false,

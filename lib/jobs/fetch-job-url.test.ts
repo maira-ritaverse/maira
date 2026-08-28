@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { htmlToText, isBlockedIp, JOB_URL_MAX_TEXT_CHARS } from "./fetch-job-url";
+import {
+  buildJobTextFromHtml,
+  extractEmbeddedJsonText,
+  htmlToText,
+  isBlockedIp,
+  JOB_URL_MAX_TEXT_CHARS,
+} from "./fetch-job-url";
 
 /**
  * SSRF 対策の 中核 = isBlockedIp。ここが 緩むと 内部ネットワーク / メタデータ
@@ -123,5 +129,79 @@ describe("htmlToText", () => {
     const long = "あ".repeat(JOB_URL_MAX_TEXT_CHARS + 5000);
     const text = htmlToText(`<p>${long}</p>`);
     expect(text.length).toBeLessThanOrEqual(JOB_URL_MAX_TEXT_CHARS);
+  });
+});
+
+/**
+ * SPA(Next.js の __NEXT_DATA__)/ 構造化データ(ld+json)からの本文抽出。
+ * 近年の求人サイトは JS 描画でタグ除去だと空になるため、埋め込み JSON を拾えることを検証する。
+ */
+describe("extractEmbeddedJsonText", () => {
+  it("__NEXT_DATA__ の求人データ(日本語文字列)を平坦化して拾う", () => {
+    const html = `<html><body><div id="__next"></div>
+      <script id="__NEXT_DATA__" type="application/json">${JSON.stringify({
+        props: {
+          pageProps: {
+            publicJob: {
+              job: {
+                name: "リフォーム企画営業（経験者枠）",
+                minimumQualification: "営業経験1年以上",
+                company: { name: "株式会社テスト" },
+                id: "abcdefghijklmnopqrstuvwxyz012345", // token っぽい→除外される想定
+                url: "https://example.com/job/1", // URL→除外
+              },
+            },
+          },
+        },
+      })}</script></body></html>`;
+    const text = extractEmbeddedJsonText(html);
+    expect(text).toContain("リフォーム企画営業（経験者枠）");
+    expect(text).toContain("営業経験1年以上");
+    expect(text).toContain("株式会社テスト");
+    // ノイズ(token/URL)は拾わない
+    expect(text).not.toContain("abcdefghijklmnopqrstuvwxyz012345");
+    expect(text).not.toContain("https://example.com/job/1");
+  });
+
+  it("application/ld+json(JobPosting)からも拾う", () => {
+    const html = `<html><head>
+      <script type="application/ld+json">${JSON.stringify({
+        "@type": "JobPosting",
+        title: "フロントエンドエンジニア",
+        hiringOrganization: { name: "サンプル株式会社" },
+      })}</script></head><body></body></html>`;
+    const text = extractEmbeddedJsonText(html);
+    expect(text).toContain("フロントエンドエンジニア");
+    expect(text).toContain("サンプル株式会社");
+  });
+
+  it("埋め込み JSON が無ければ空文字を返す", () => {
+    expect(extractEmbeddedJsonText("<html><body><p>普通の本文</p></body></html>")).toBe("");
+  });
+
+  it("壊れた JSON では throw せず空になる", () => {
+    const html = `<script id="__NEXT_DATA__" type="application/json">{壊れ</script>`;
+    expect(extractEmbeddedJsonText(html)).toBe("");
+  });
+});
+
+describe("buildJobTextFromHtml", () => {
+  it("SPA(タグ除去では空)でも __NEXT_DATA__ から本文を復元する", () => {
+    const html = `<html><body><div id="__next"></div>
+      <script id="__NEXT_DATA__" type="application/json">${JSON.stringify({
+        props: { pageProps: { job: { name: "テスト職種", description: "テストの仕事内容です" } } },
+      })}</script></body></html>`;
+    const stripped = htmlToText(html);
+    const built = buildJobTextFromHtml(html);
+    // タグ除去だけではほぼ空だが、build では求人本文が入る
+    expect(stripped).not.toContain("テストの仕事内容です");
+    expect(built).toContain("テスト職種");
+    expect(built).toContain("テストの仕事内容です");
+  });
+
+  it("上限で切り詰める", () => {
+    const long = "あ".repeat(JOB_URL_MAX_TEXT_CHARS + 5000);
+    const html = `<p>${long}</p>`;
+    expect(buildJobTextFromHtml(html).length).toBeLessThanOrEqual(JOB_URL_MAX_TEXT_CHARS);
   });
 });
