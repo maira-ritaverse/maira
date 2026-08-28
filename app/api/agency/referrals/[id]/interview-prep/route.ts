@@ -1,5 +1,5 @@
 import { generateText } from "ai";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { getModel, MODELS } from "@/lib/ai/client";
 import { aiErrorToStatusCode, categorizeAIError } from "@/lib/ai/error-handler";
@@ -11,14 +11,15 @@ import { recordAnthropic429Event } from "@/lib/ai/rate-limit-monitor";
 import { requireOrgMember } from "@/lib/api/auth-guards";
 import { getCareerProfile } from "@/lib/career/conversations";
 import type { CareerProfile } from "@/lib/career/profile-schema";
-import { getClientRecordWithDecrypted } from "@/lib/clients/queries";
+import { getClientRecord, getClientRecordWithDecrypted } from "@/lib/clients/queries";
 import {
   type ClientRecordWithDecrypted,
   clientEmploymentTypeLabels,
   clientFinalEducationLabels,
 } from "@/lib/clients/types";
 import { checkAiUsageLimit, recordAiUsage } from "@/lib/features/ai-usage";
-import { upsertInterviewPrep } from "@/lib/interview-preps/queries";
+import { notifyInterviewPrepShared } from "@/lib/interview-preps/notify";
+import { shareInterviewPrep, upsertInterviewPrep } from "@/lib/interview-preps/queries";
 import { getJobPosting } from "@/lib/jobs/queries";
 import { getReferral } from "@/lib/referrals/queries";
 
@@ -165,6 +166,75 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       { status: aiErrorToStatusCode(info.category) },
     );
   }
+}
+
+/**
+ * PATCH /api/agency/referrals/[id]/interview-prep
+ *
+ * 生成済みの面接対策を求職者本人へ共有する(shared_at を現在時刻に設定)。
+ * 共有後は求職者の /app/interview-prep/[referralId] で閲覧可能になり、in-app 通知が飛ぶ。
+ *
+ * ・生成前(interview_preps 行が無い)referral では 404(先に生成が必要)。
+ * ・再生成すると upsertInterviewPrep 側で shared_at が null に戻るので、再共有が必要。
+ */
+export async function PATCH(_request: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id: referralId } = await ctx.params;
+
+  const guard = await requireOrgMember();
+  if (!guard.ok) return guard.response;
+  const { organization } = guard;
+
+  // referral が自社のものか確認(RLS でも保証されるが二重防御)
+  const referral = await getReferral(referralId);
+  if (!referral || referral.organizationId !== organization.id) {
+    return NextResponse.json({ error: "Referral not found" }, { status: 404 });
+  }
+
+  // 求職者アカウントが連携済みでないと共有しても本人は閲覧・通知を受け取れない。
+  // UI ではボタンを無効化しているが、直接 API を叩かれても shared_at が付かないよう
+  // サーバー側でも連携状態を必須にする(未連携のまま共有 → 後で連携時に古い内容が
+  // 見えてしまう staleness を防ぐ)。
+  const client = await getClientRecord(referral.clientRecordId);
+  if (!client || client.linkStatus !== "linked" || !client.linkedUserId) {
+    return NextResponse.json(
+      {
+        error: "seeker_not_linked",
+        message:
+          "この求職者はまだ Myaira アカウントを連携していないため、共有できません(連携後に共有可能になります)。",
+      },
+      { status: 409 },
+    );
+  }
+
+  const shared = await shareInterviewPrep(referralId, organization.id);
+  if ("error" in shared) {
+    if (shared.error === "not_found") {
+      return NextResponse.json(
+        {
+          error: "not_generated",
+          message: "先に面談対策を生成してから共有してください。",
+        },
+        { status: 404 },
+      );
+    }
+    return NextResponse.json({ error: "share_failed", message: shared.error }, { status: 500 });
+  }
+
+  // 応答後に求職者本人へ通知(未連携なら notify 側で無通知終了)。
+  // 通知失敗はログのみで本フローは成功扱い。
+  after(() =>
+    notifyInterviewPrepShared({
+      referralId,
+      organizationId: organization.id,
+    }).catch((err) => {
+      console.error("[interview-prep/PATCH] notify failed", {
+        referralId,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }),
+  );
+
+  return NextResponse.json({ prep: { sharedAt: shared.sharedAt } });
 }
 
 /**

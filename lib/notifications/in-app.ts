@@ -32,6 +32,7 @@ export type InAppPayload =
   | SeekerApplicationRequestPayload
   | ReferralStatusChangeForSeekerPayload
   | RecommendationLetterFinalizedForSeekerPayload
+  | InterviewPrepSharedForSeekerPayload
   | DocumentDraftFromAgencyForSeekerPayload
   | MeetingInvitedPayload
   | MeetingReminderPayload
@@ -111,6 +112,23 @@ export type RecommendationLetterFinalizedForSeekerPayload = {
   /** 求職者向け遷移先(/app/recommendation-letters/[id]) */
   href: string;
   recommendationLetterId: string;
+  referralId: string;
+  jobLabel: string;
+  organizationName: string;
+};
+
+/**
+ * 求職者本人向け:エージェントが作成した面談対策(interview_preps)が共有されたことを通知。
+ *
+ * 本文(想定質問 / 回答例)は機微なので通知ペイロードには載せず、href の遷移先
+ * (/app/interview-prep/[referralId])で復号して見せる。
+ */
+export type InterviewPrepSharedForSeekerPayload = {
+  kind: "interview_prep_shared_for_seeker";
+  /** UI 一覧用見出し(例:「面談対策が届きました(株式会社 X / PdM)」)*/
+  title: string;
+  /** 求職者向け遷移先(/app/interview-prep/[referralId]) */
+  href: string;
   referralId: string;
   jobLabel: string;
   organizationName: string;
@@ -265,6 +283,7 @@ export async function fireInAppNotification(params: FireParams): Promise<void> {
     // 本人向け通知は org メンバー prefs と無関係なので null
     referral_status_change_for_seeker: null,
     recommendation_letter_finalized_for_seeker: null,
+    interview_prep_shared_for_seeker: null,
     document_draft_from_agency_for_seeker: null,
     // 面談関連は組織メンバー全員が見たいケースが多い(代理対応・チーム共有)
     // ただしホスト本人は excludeUserId 経由で外す。prefs gate は当面なし。

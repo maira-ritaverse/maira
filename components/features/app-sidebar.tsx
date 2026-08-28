@@ -82,6 +82,13 @@ export const SEEKER_NAV_ITEMS: ItemDescriptor[] = [
     defaultLabel: "推薦文",
     dataAttr: "nav-recommendation-letters",
   },
+  {
+    id: "interview-prep",
+    href: "/app/interview-prep",
+    icon: "lightbulb",
+    defaultLabel: "面談対策",
+    dataAttr: "nav-interview-prep",
+  },
   { id: "interview", href: "/app/interview", icon: "bot", defaultLabel: "面接練習" },
   { id: "connections", href: "/app/connections", icon: "link", defaultLabel: "エージェント連携" },
   {
@@ -109,7 +116,13 @@ const DEFAULT_LAYOUT: SidebarLayout = {
     {
       id: "jobs",
       title: "求人・応募",
-      itemIds: ["recommended-jobs", "applications", "agent-referrals", "recommendation-letters"],
+      itemIds: [
+        "recommended-jobs",
+        "applications",
+        "agent-referrals",
+        "recommendation-letters",
+        "interview-prep",
+      ],
     },
   ],
   hiddenItemIds: [],

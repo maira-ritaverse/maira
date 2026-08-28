@@ -23,6 +23,7 @@ import {
   Files,
   Inbox,
   LayoutDashboard,
+  Lightbulb,
   Link2,
   type LucideIcon,
   Megaphone,
@@ -62,6 +63,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   link: Link2,
   bot: Bot,
   award: Award,
+  lightbulb: Lightbulb,
 };
 
 type Props = {

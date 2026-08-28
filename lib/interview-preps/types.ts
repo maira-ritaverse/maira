@@ -25,6 +25,8 @@ export type InterviewPrepRow = {
   model: string | null;
   generated_by_member_id: string | null;
   generated_at: string;
+  // 求職者へ共有した日時。not null なら共有済み(求職者が閲覧可能)。再生成でリセットされる。
+  shared_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -38,5 +40,7 @@ export type InterviewPrep = {
   model: string | null;
   generatedByMemberId: string | null;
   generatedAt: string;
+  // 求職者へ共有した日時。not null なら共有済み(求職者が閲覧可能)。再生成で null に戻る。
+  sharedAt: string | null;
   updatedAt: string;
 };

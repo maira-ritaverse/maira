@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy, Lightbulb, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { Check, Copy, Lightbulb, Loader2, RefreshCw, Send, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -15,8 +15,12 @@ type Props = {
   position: string;
   /** 求職者本人のキャリア棚卸しが実施済みか。未実施なら棚卸し依頼を促す案内を出す。 */
   careerProfileDone: boolean;
+  /** 求職者アカウントが連携済みか。未連携なら共有しても本人は閲覧・通知を受け取れない。 */
+  seekerLinked: boolean;
   initialContent: InterviewPrepContent | null;
   initialGeneratedAt: string | null;
+  /** 求職者へ共有済みの日時。null なら未共有(再生成でも null に戻る)。 */
+  initialSharedAt: string | null;
 };
 
 /** 生成日時を Asia/Tokyo で "YYYY/MM/DD HH:mm" 表示。 */
@@ -50,12 +54,16 @@ export function InterviewPrepPanel({
   companyName,
   position,
   careerProfileDone,
+  seekerLinked,
   initialContent,
   initialGeneratedAt,
+  initialSharedAt,
 }: Props) {
   const [content, setContent] = useState<InterviewPrepContent | null>(initialContent);
   const [generatedAt, setGeneratedAt] = useState<string | null>(initialGeneratedAt);
+  const [sharedAt, setSharedAt] = useState<string | null>(initialSharedAt);
   const [loading, setLoading] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -77,10 +85,37 @@ export function InterviewPrepPanel({
       }
       setContent(data.prep.content);
       setGeneratedAt(data.prep.generatedAt);
+      // 再生成するとサーバー側で shared_at が null に戻る(古い内容を誤って見せないため)。
+      // 画面上も未共有に戻し、再共有が必要なことを示す。
+      setSharedAt(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "生成に失敗しました");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleShare = async () => {
+    setSharing(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/agency/referrals/${referralId}/interview-prep`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        prep?: { sharedAt: string | null };
+        error?: string;
+        message?: string;
+      };
+      if (!res.ok || !data.prep) {
+        throw new Error(data.message ?? data.error ?? "共有に失敗しました");
+      }
+      setSharedAt(data.prep.sharedAt ?? new Date().toISOString());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "共有に失敗しました");
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -115,6 +150,25 @@ export function InterviewPrepPanel({
               {copied ? "コピーしました" : "コピー"}
             </Button>
           )}
+          {hasContent && (
+            <Button
+              type="button"
+              variant={sharedAt ? "outline" : "default"}
+              size="sm"
+              onClick={() => void handleShare()}
+              disabled={sharing || !seekerLinked}
+              title={
+                seekerLinked ? undefined : "求職者アカウントが連携されていないため共有できません"
+              }
+            >
+              {sharing ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Send className="size-3.5" />
+              )}
+              {sharing ? "共有中…" : sharedAt ? "再共有" : "求職者に共有"}
+            </Button>
+          )}
           <Button type="button" size="sm" onClick={() => void handleGenerate()} disabled={loading}>
             {loading ? (
               <Loader2 className="size-3.5 animate-spin" />
@@ -127,6 +181,26 @@ export function InterviewPrepPanel({
           </Button>
         </div>
       </div>
+
+      {/* 共有ステータス:共有済みなら日時を、未連携なら共有できない理由を出す */}
+      {hasContent && sharedAt && (
+        <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
+          <Check className="size-3.5" />
+          求職者に共有済み({formatJst(sharedAt)})— 求職者は Myaira の「面談対策」で閲覧できます
+        </p>
+      )}
+      {hasContent && !sharedAt && seekerLinked && (
+        <p className="text-muted-foreground text-xs">
+          「求職者に共有」を押すと、求職者本人が Myaira
+          で内容を閲覧できるようになります(内容を確認してから共有してください)。
+        </p>
+      )}
+      {hasContent && !seekerLinked && (
+        <p className="text-muted-foreground text-xs">
+          この求職者はまだ Myaira
+          アカウントを連携していないため、共有できません(連携後に共有可能になります)。
+        </p>
+      )}
 
       <p className="text-muted-foreground text-xs">
         {clientName}さんのプロフィールとこの求人内容をもとに、面接対策を生成します。内容は AI

@@ -118,8 +118,11 @@ export default async function InterviewPrepPage({ params }: RouteParams) {
           companyName={job.companyName}
           position={job.position}
           careerProfileDone={careerProfileDone}
+          // 求職者アカウントが連携済みでないと共有しても本人は閲覧・通知を受け取れない。
+          seekerLinked={client.linkStatus === "linked" && client.linkedUserId !== null}
           initialContent={prep?.content ?? null}
           initialGeneratedAt={prep?.generatedAt ?? null}
+          initialSharedAt={prep?.sharedAt ?? null}
         />
       </div>
     </div>
