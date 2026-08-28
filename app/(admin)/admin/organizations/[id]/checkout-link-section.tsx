@@ -28,8 +28,10 @@ const TIER_OPTIONS: { value: string; label: string; kind: "Team" | "Solo" }[] = 
 export function CheckoutLinkSection({ organizationId }: Props) {
   const [tier, setTier] = useState("solo");
   const [cycle, setCycle] = useState<"monthly" | "yearly">("monthly");
-  // "" = プラン既定(Solo=14日 / Team=30日)、"0" = トライアルなし(即課金)、その他は日数。
-  const [trial, setTrial] = useState<string>("");
+  // "0" = トライアルなし(即課金)、"" = プラン既定(Solo=14日 / Team=30日)、その他は日数。
+  // 既定は「なし(即課金)」。運営が既存顧客に発行するリンクは即課金が自然で、うっかり
+  // トライアルが付くのを防ぐ(トライアルを付けたい場合だけ明示的に選ぶ)。
+  const [trial, setTrial] = useState<string>("0");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState<string | null>(null);
@@ -126,8 +128,8 @@ export function CheckoutLinkSection({ organizationId }: Props) {
               disabled={loading}
               className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
             >
-              <option value="">プラン既定(Solo=14日 / Team=30日)</option>
               <option value="0">なし(即課金)</option>
+              <option value="">プラン既定(Solo=14日 / Team=30日)</option>
               <option value="7">7日</option>
               <option value="14">14日</option>
               <option value="30">30日</option>
