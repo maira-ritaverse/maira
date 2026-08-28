@@ -4,7 +4,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5";
+    PostgrestVersion: "14.17";
   };
   public: {
     Tables: {
@@ -1376,6 +1376,7 @@ export type Database = {
           email: string | null;
           email_distribution_enabled: boolean;
           email2: string | null;
+          encrypted_close_reason_note: string | null;
           encrypted_contact_method_preference: string | null;
           encrypted_desired_conditions: string | null;
           encrypted_education_detail: string | null;
@@ -1392,8 +1393,10 @@ export type Database = {
           first_meeting_date: string | null;
           gender: string | null;
           id: string;
+          inflow_job: string | null;
           intake_date: string | null;
           job_change_timing: string | null;
+          job_source: string | null;
           link_status: string;
           linked_at: string | null;
           linked_user_id: string | null;
@@ -1403,10 +1406,12 @@ export type Database = {
           nationality: string | null;
           notes: string | null;
           organization_id: string;
+          past_meeting_note: string | null;
           phone: string | null;
           phone2: string | null;
           postal_code: string | null;
           prefecture: string | null;
+          proposed_company: string | null;
           revoke_confirmed_via: string | null;
           revoke_deadline: string | null;
           revoke_requested_at: string | null;
@@ -1434,6 +1439,7 @@ export type Database = {
           email?: string | null;
           email_distribution_enabled?: boolean;
           email2?: string | null;
+          encrypted_close_reason_note?: string | null;
           encrypted_contact_method_preference?: string | null;
           encrypted_desired_conditions?: string | null;
           encrypted_education_detail?: string | null;
@@ -1450,8 +1456,10 @@ export type Database = {
           first_meeting_date?: string | null;
           gender?: string | null;
           id?: string;
+          inflow_job?: string | null;
           intake_date?: string | null;
           job_change_timing?: string | null;
+          job_source?: string | null;
           link_status?: string;
           linked_at?: string | null;
           linked_user_id?: string | null;
@@ -1461,10 +1469,12 @@ export type Database = {
           nationality?: string | null;
           notes?: string | null;
           organization_id: string;
+          past_meeting_note?: string | null;
           phone?: string | null;
           phone2?: string | null;
           postal_code?: string | null;
           prefecture?: string | null;
+          proposed_company?: string | null;
           revoke_confirmed_via?: string | null;
           revoke_deadline?: string | null;
           revoke_requested_at?: string | null;
@@ -1492,6 +1502,7 @@ export type Database = {
           email?: string | null;
           email_distribution_enabled?: boolean;
           email2?: string | null;
+          encrypted_close_reason_note?: string | null;
           encrypted_contact_method_preference?: string | null;
           encrypted_desired_conditions?: string | null;
           encrypted_education_detail?: string | null;
@@ -1508,8 +1519,10 @@ export type Database = {
           first_meeting_date?: string | null;
           gender?: string | null;
           id?: string;
+          inflow_job?: string | null;
           intake_date?: string | null;
           job_change_timing?: string | null;
+          job_source?: string | null;
           link_status?: string;
           linked_at?: string | null;
           linked_user_id?: string | null;
@@ -1519,10 +1532,12 @@ export type Database = {
           nationality?: string | null;
           notes?: string | null;
           organization_id?: string;
+          past_meeting_note?: string | null;
           phone?: string | null;
           phone2?: string | null;
           postal_code?: string | null;
           prefecture?: string | null;
+          proposed_company?: string | null;
           revoke_confirmed_via?: string | null;
           revoke_deadline?: string | null;
           revoke_requested_at?: string | null;
@@ -2063,6 +2078,56 @@ export type Database = {
         };
         Relationships: [];
       };
+      hearing_sheet_question_definitions: {
+        Row: {
+          created_at: string;
+          display_order: number;
+          help_text: string | null;
+          id: string;
+          input_type: string;
+          key: string;
+          label: string;
+          maps_to_pii: string | null;
+          max_length: number;
+          organization_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          display_order?: number;
+          help_text?: string | null;
+          id?: string;
+          input_type?: string;
+          key: string;
+          label: string;
+          maps_to_pii?: string | null;
+          max_length?: number;
+          organization_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          display_order?: number;
+          help_text?: string | null;
+          id?: string;
+          input_type?: string;
+          key?: string;
+          label?: string;
+          maps_to_pii?: string | null;
+          max_length?: number;
+          organization_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "hearing_sheet_question_definitions_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       hearing_sheets: {
         Row: {
           ai_extracted_at: string | null;
@@ -2223,6 +2288,67 @@ export type Database = {
             columns: ["session_id"];
             isOneToOne: false;
             referencedRelation: "interview_sessions";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      interview_preps: {
+        Row: {
+          created_at: string;
+          encrypted_content: string;
+          generated_at: string;
+          generated_by_member_id: string | null;
+          id: string;
+          model: string | null;
+          organization_id: string;
+          referral_id: string;
+          shared_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          encrypted_content: string;
+          generated_at?: string;
+          generated_by_member_id?: string | null;
+          id?: string;
+          model?: string | null;
+          organization_id: string;
+          referral_id: string;
+          shared_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          encrypted_content?: string;
+          generated_at?: string;
+          generated_by_member_id?: string | null;
+          id?: string;
+          model?: string | null;
+          organization_id?: string;
+          referral_id?: string;
+          shared_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "interview_preps_generated_by_member_id_fkey";
+            columns: ["generated_by_member_id"];
+            isOneToOne: false;
+            referencedRelation: "organization_members";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "interview_preps_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "interview_preps_referral_id_fkey";
+            columns: ["referral_id"];
+            isOneToOne: true;
+            referencedRelation: "referrals";
             referencedColumns: ["id"];
           },
         ];
@@ -3004,6 +3130,35 @@ export type Database = {
           },
           {
             foreignKeyName: "line_user_links_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      line_webhook_events: {
+        Row: {
+          event_type: string | null;
+          organization_id: string;
+          processed_at: string;
+          webhook_event_id: string;
+        };
+        Insert: {
+          event_type?: string | null;
+          organization_id: string;
+          processed_at?: string;
+          webhook_event_id: string;
+        };
+        Update: {
+          event_type?: string | null;
+          organization_id?: string;
+          processed_at?: string;
+          webhook_event_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "line_webhook_events_organization_id_fkey";
             columns: ["organization_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
@@ -4443,6 +4598,35 @@ export type Database = {
           },
         ];
       };
+      organization_hearing_sheet_settings: {
+        Row: {
+          created_at: string;
+          organization_id: string;
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          organization_id: string;
+          title?: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          organization_id?: string;
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "organization_hearing_sheet_settings_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: true;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       organization_invitations: {
         Row: {
           accepted_at: string | null;
@@ -4578,6 +4762,8 @@ export type Database = {
           stripe_subscription_item_id_extra_seat: string | null;
           tier: Database["public"]["Enums"]["organization_plan_tier"];
           trial_ends_at: string | null;
+          trial_notified_1d_at: string | null;
+          trial_notified_7d_at: string | null;
           trial_started_at: string | null;
           trial_upgrade_choice: Database["public"]["Enums"]["organization_plan_tier"] | null;
           updated_at: string;
@@ -4606,6 +4792,8 @@ export type Database = {
           stripe_subscription_item_id_extra_seat?: string | null;
           tier?: Database["public"]["Enums"]["organization_plan_tier"];
           trial_ends_at?: string | null;
+          trial_notified_1d_at?: string | null;
+          trial_notified_7d_at?: string | null;
           trial_started_at?: string | null;
           trial_upgrade_choice?: Database["public"]["Enums"]["organization_plan_tier"] | null;
           updated_at?: string;
@@ -4634,6 +4822,8 @@ export type Database = {
           stripe_subscription_item_id_extra_seat?: string | null;
           tier?: Database["public"]["Enums"]["organization_plan_tier"];
           trial_ends_at?: string | null;
+          trial_notified_1d_at?: string | null;
+          trial_notified_7d_at?: string | null;
           trial_started_at?: string | null;
           trial_upgrade_choice?: Database["public"]["Enums"]["organization_plan_tier"] | null;
           updated_at?: string;
@@ -4761,11 +4951,22 @@ export type Database = {
           id: string;
           ma_dispatch_engine: string;
           name: string;
+          nda_accepted_at: string | null;
+          nda_signer_ip: string | null;
+          nda_signer_name: string | null;
+          nda_signer_user_id: string | null;
+          nda_version: string | null;
           recording_upload_enabled: boolean;
           resend_api_key_encrypted: string | null;
           resume_self_pr_enabled: boolean;
           revoke_grace_days: number;
+          signing_org_address: string | null;
           slack_webhook_url: string | null;
+          terms_accepted_at: string | null;
+          terms_signer_ip: string | null;
+          terms_signer_name: string | null;
+          terms_signer_user_id: string | null;
+          terms_version: string | null;
           updated_at: string;
         };
         Insert: {
@@ -4776,11 +4977,22 @@ export type Database = {
           id?: string;
           ma_dispatch_engine?: string;
           name: string;
+          nda_accepted_at?: string | null;
+          nda_signer_ip?: string | null;
+          nda_signer_name?: string | null;
+          nda_signer_user_id?: string | null;
+          nda_version?: string | null;
           recording_upload_enabled?: boolean;
           resend_api_key_encrypted?: string | null;
           resume_self_pr_enabled?: boolean;
           revoke_grace_days?: number;
+          signing_org_address?: string | null;
           slack_webhook_url?: string | null;
+          terms_accepted_at?: string | null;
+          terms_signer_ip?: string | null;
+          terms_signer_name?: string | null;
+          terms_signer_user_id?: string | null;
+          terms_version?: string | null;
           updated_at?: string;
         };
         Update: {
@@ -4791,11 +5003,22 @@ export type Database = {
           id?: string;
           ma_dispatch_engine?: string;
           name?: string;
+          nda_accepted_at?: string | null;
+          nda_signer_ip?: string | null;
+          nda_signer_name?: string | null;
+          nda_signer_user_id?: string | null;
+          nda_version?: string | null;
           recording_upload_enabled?: boolean;
           resend_api_key_encrypted?: string | null;
           resume_self_pr_enabled?: boolean;
           revoke_grace_days?: number;
+          signing_org_address?: string | null;
           slack_webhook_url?: string | null;
+          terms_accepted_at?: string | null;
+          terms_signer_ip?: string | null;
+          terms_signer_name?: string | null;
+          terms_signer_user_id?: string | null;
+          terms_version?: string | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -5041,6 +5264,7 @@ export type Database = {
           encrypted_master_key_by_recovery: string;
           id: string;
           is_maira_admin: boolean;
+          last_seen_at: string | null;
           onboarded_at: string | null;
           onboarding_completed: boolean;
           password_salt: string;
@@ -5062,6 +5286,7 @@ export type Database = {
           encrypted_master_key_by_recovery?: string;
           id: string;
           is_maira_admin?: boolean;
+          last_seen_at?: string | null;
           onboarded_at?: string | null;
           onboarding_completed?: boolean;
           password_salt?: string;
@@ -5083,6 +5308,7 @@ export type Database = {
           encrypted_master_key_by_recovery?: string;
           id?: string;
           is_maira_admin?: boolean;
+          last_seen_at?: string | null;
           onboarded_at?: string | null;
           onboarding_completed?: boolean;
           password_salt?: string;
@@ -5818,6 +6044,7 @@ export type Database = {
           created_at: string;
           current_period_end: string | null;
           id: string;
+          last_event_created_at: string | null;
           status: string;
           stripe_customer_id: string | null;
           stripe_subscription_item_id: string | null;
@@ -5829,6 +6056,7 @@ export type Database = {
           created_at?: string;
           current_period_end?: string | null;
           id?: string;
+          last_event_created_at?: string | null;
           status?: string;
           stripe_customer_id?: string | null;
           stripe_subscription_item_id?: string | null;
@@ -5840,6 +6068,7 @@ export type Database = {
           created_at?: string;
           current_period_end?: string | null;
           id?: string;
+          last_event_created_at?: string | null;
           status?: string;
           stripe_customer_id?: string | null;
           stripe_subscription_item_id?: string | null;
@@ -6127,6 +6356,8 @@ export type Database = {
           stripe_subscription_item_id_extra_seat: string | null;
           tier: Database["public"]["Enums"]["organization_plan_tier"];
           trial_ends_at: string | null;
+          trial_notified_1d_at: string | null;
+          trial_notified_7d_at: string | null;
           trial_started_at: string | null;
           trial_upgrade_choice: Database["public"]["Enums"]["organization_plan_tier"] | null;
           updated_at: string;
@@ -6195,6 +6426,8 @@ export type Database = {
           stripe_subscription_item_id_extra_seat: string | null;
           tier: Database["public"]["Enums"]["organization_plan_tier"];
           trial_ends_at: string | null;
+          trial_notified_1d_at: string | null;
+          trial_notified_7d_at: string | null;
           trial_started_at: string | null;
           trial_upgrade_choice: Database["public"]["Enums"]["organization_plan_tier"] | null;
           updated_at: string;
@@ -6577,6 +6810,8 @@ export type Database = {
           stripe_subscription_item_id_extra_seat: string | null;
           tier: Database["public"]["Enums"]["organization_plan_tier"];
           trial_ends_at: string | null;
+          trial_notified_1d_at: string | null;
+          trial_notified_7d_at: string | null;
           trial_started_at: string | null;
           trial_upgrade_choice: Database["public"]["Enums"]["organization_plan_tier"] | null;
           updated_at: string;
@@ -6614,6 +6849,8 @@ export type Database = {
           stripe_subscription_item_id_extra_seat: string | null;
           tier: Database["public"]["Enums"]["organization_plan_tier"];
           trial_ends_at: string | null;
+          trial_notified_1d_at: string | null;
+          trial_notified_7d_at: string | null;
           trial_started_at: string | null;
           trial_upgrade_choice: Database["public"]["Enums"]["organization_plan_tier"] | null;
           updated_at: string;
@@ -6675,7 +6912,11 @@ export type Database = {
         | "admin_force_deleted_user"
         | "account_export_requested"
         | "privacy_policy_accepted"
-        | "admin_accessed_user";
+        | "admin_accessed_user"
+        | "nda_accepted"
+        | "nda_signature_requested"
+        | "terms_accepted"
+        | "platform_ai_quota_changed";
       line_message_direction: "inbound" | "outbound";
       line_message_type:
         | "text"
@@ -6862,6 +7103,10 @@ export const Constants = {
         "account_export_requested",
         "privacy_policy_accepted",
         "admin_accessed_user",
+        "nda_accepted",
+        "nda_signature_requested",
+        "terms_accepted",
+        "platform_ai_quota_changed",
       ],
       line_message_direction: ["inbound", "outbound"],
       line_message_type: [

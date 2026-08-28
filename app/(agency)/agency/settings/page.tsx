@@ -332,6 +332,23 @@ export default async function SettingsPage() {
           {isAdmin && (
             <Card className="p-4">
               <Link
+                href="/agency/settings/hearing-sheet"
+                className="hover:bg-accent -m-4 flex items-center gap-3 rounded-md p-4 transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">ヒアリングシート設定(管理者向け)</p>
+                  <p className="text-muted-foreground text-xs">
+                    ヒアリングシートのタイトルと質問項目を組織ごとに編集する
+                  </p>
+                </div>
+                <span className="text-muted-foreground text-sm">→</span>
+              </Link>
+            </Card>
+          )}
+
+          {isAdmin && (
+            <Card className="p-4">
+              <Link
                 href="/agency/settings/intake-forms"
                 className="hover:bg-accent -m-4 flex items-center gap-3 rounded-md p-4 transition-colors"
               >
