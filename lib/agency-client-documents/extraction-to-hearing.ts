@@ -17,11 +17,6 @@ import type { ExtractionResult } from "@/lib/career-intake/types";
 
 import type { HearingSheetContent } from "./types";
 
-const overrideIfEmpty = (current: string, next: string): string => {
-  if (current.trim().length > 0) return current;
-  return next;
-};
-
 const joinList = (items: string[] | undefined): string => (items ?? []).filter(Boolean).join("、");
 
 function describeWorkExperiences(extraction: ExtractionResult): string {
@@ -62,6 +57,14 @@ function formatPeriod(
 /**
  * AI 抽出結果を ヒアリングシート content にマージする。
  * 既存テキストがあるフィールドは温存し、空欄だけ AI で埋める。
+ *
+ * content は「定義 key → 回答」のレコード。抽出は標準キー(current_job など、
+ * seed 済みの標準 11 項目のキー)にのみ書き込む。組織が追加したカスタム項目や、
+ * 削除した標準項目の扱いは:
+ *   ・既存のキー(カスタム含む)はそのまま温存する。
+ *   ・標準キーは「空 or 未設定」のときだけ抽出値で埋める。
+ * 組織がその標準キーの定義を削除していても、ここでは content に書き込む
+ * (未定義キーは描画側で無視されるだけで無害)。
  */
 export function mergeExtractionIntoHearing(
   current: HearingSheetContent,
@@ -70,38 +73,36 @@ export function mergeExtractionIntoHearing(
   const workSummary = describeWorkExperiences(extraction);
   const skills = describeSkills(extraction);
 
-  return {
-    current_job: overrideIfEmpty(current.current_job, workSummary),
-    strengths: overrideIfEmpty(current.strengths, skills),
-    weaknesses: current.weaknesses, // AI からは抽出しない方針
-    desired_industry: overrideIfEmpty(
-      current.desired_industry,
-      joinList(extraction.desiredIndustries),
-    ),
-    desired_position: overrideIfEmpty(
-      current.desired_position,
-      joinList(extraction.desiredOccupations),
-    ),
-    desired_location: overrideIfEmpty(
-      current.desired_location,
-      joinList(extraction.desiredLocations),
-    ),
-    desired_salary: overrideIfEmpty(
-      current.desired_salary,
-      extraction.desiredAnnualIncome != null ? `${extraction.desiredAnnualIncome} 万円` : "",
-    ),
-    job_change_reason: current.job_change_reason, // AI 出力に明示マッピング項目なし
-    motivation: overrideIfEmpty(current.motivation, extraction.motivationNote ?? ""),
-    availability: current.availability,
-    notes: overrideIfEmpty(
-      current.notes,
-      [
-        extraction.nameKana ? `氏名カナ:${extraction.nameKana}` : "",
-        extraction.birthDate ? `生年月日:${extraction.birthDate}` : "",
-        extraction.selfPr ? `自己 PR:${extraction.selfPr}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    ),
+  // 既存の回答(カスタム項目含む)は全て温存し、標準キーの空欄だけ埋める。
+  const result: HearingSheetContent = { ...current };
+  const setIfEmpty = (key: string, next: string) => {
+    const existing = (result[key] ?? "").trim();
+    if (existing.length === 0 && next.trim().length > 0) {
+      result[key] = next;
+    }
   };
+
+  setIfEmpty("current_job", workSummary);
+  setIfEmpty("strengths", skills);
+  // weaknesses / job_change_reason / availability は AI 抽出の明示マッピングなし(温存)
+  setIfEmpty("desired_industry", joinList(extraction.desiredIndustries));
+  setIfEmpty("desired_position", joinList(extraction.desiredOccupations));
+  setIfEmpty("desired_location", joinList(extraction.desiredLocations));
+  setIfEmpty(
+    "desired_salary",
+    extraction.desiredAnnualIncome != null ? `${extraction.desiredAnnualIncome} 万円` : "",
+  );
+  setIfEmpty("motivation", extraction.motivationNote ?? "");
+  setIfEmpty(
+    "notes",
+    [
+      extraction.nameKana ? `氏名カナ:${extraction.nameKana}` : "",
+      extraction.birthDate ? `生年月日:${extraction.birthDate}` : "",
+      extraction.selfPr ? `自己 PR:${extraction.selfPr}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
+
+  return result;
 }

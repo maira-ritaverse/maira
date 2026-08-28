@@ -14,11 +14,14 @@ import {
   type HearingSheet,
   type HearingSheetContent,
 } from "@/lib/agency-client-documents/types";
+import type { HearingQuestionDefinition } from "@/lib/hearing-sheet-questions/types";
 import { useToast } from "@/lib/admin/toast/store";
 
 type Props = {
   clientRecordId: string;
   initialItems: HearingSheet[];
+  /** 組織のヒアリング質問定義(表示順・ラベル・入力欄種別)。 */
+  questions: HearingQuestionDefinition[];
   /** 削除は管理者のみ(DELETE ルートが admin 限定のため、advisor には出さない)。 */
   isAdmin: boolean;
 };
@@ -26,8 +29,9 @@ type Props = {
 /**
  * ヒアリングシート一覧 + インライン編集。
  * 面談中の素早い入力を最優先に、設問単位の textarea を縦に並べる。
+ * 質問項目は組織設定(hearing_sheet_question_definitions)から動的に描画する。
  */
-export function HearingSheetsList({ clientRecordId, initialItems, isAdmin }: Props) {
+export function HearingSheetsList({ clientRecordId, initialItems, questions, isAdmin }: Props) {
   const router = useRouter();
   const [items, setItems] = useState<HearingSheet[]>(initialItems);
   const [pending, startTransition] = useTransition();
@@ -67,6 +71,7 @@ export function HearingSheetsList({ clientRecordId, initialItems, isAdmin }: Pro
             <li key={it.id}>
               <HearingSheetEditor
                 sheet={it}
+                questions={questions}
                 isAdmin={isAdmin}
                 onChange={(updated) =>
                   setItems((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
@@ -83,11 +88,13 @@ export function HearingSheetsList({ clientRecordId, initialItems, isAdmin }: Pro
 
 function HearingSheetEditor({
   sheet,
+  questions,
   isAdmin,
   onChange,
   onDelete,
 }: {
   sheet: HearingSheet;
+  questions: HearingQuestionDefinition[];
   isAdmin: boolean;
   onChange: (updated: HearingSheet) => void;
   onDelete: () => void;
@@ -98,8 +105,7 @@ function HearingSheetEditor({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const { showToast } = useToast();
 
-  const update = (patch: Partial<HearingSheetContent>) =>
-    setContent((prev) => ({ ...prev, ...patch }));
+  const update = (key: string, value: string) => setContent((prev) => ({ ...prev, [key]: value }));
 
   const save = (nextStatus?: "draft" | "finalized") => {
     startTransition(async () => {
@@ -170,69 +176,25 @@ function HearingSheetEditor({
         </span>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <Question
-          label="現職"
-          value={content.current_job}
-          onChange={(v) => update({ current_job: v })}
-        />
-        <Question
-          label="転職理由"
-          value={content.job_change_reason}
-          onChange={(v) => update({ job_change_reason: v })}
-        />
-        <Question
-          label="強み"
-          value={content.strengths}
-          onChange={(v) => update({ strengths: v })}
-        />
-        <Question
-          label="弱み・課題"
-          value={content.weaknesses}
-          onChange={(v) => update({ weaknesses: v })}
-        />
-        <Question
-          label="希望業種"
-          value={content.desired_industry}
-          onChange={(v) => update({ desired_industry: v })}
-          rows={2}
-        />
-        <Question
-          label="希望職種"
-          value={content.desired_position}
-          onChange={(v) => update({ desired_position: v })}
-          rows={2}
-        />
-        <Question
-          label="希望勤務地"
-          value={content.desired_location}
-          onChange={(v) => update({ desired_location: v })}
-          rows={2}
-        />
-        <Question
-          label="希望年収"
-          value={content.desired_salary}
-          onChange={(v) => update({ desired_salary: v })}
-          rows={2}
-        />
-        <Question
-          label="動機・志望"
-          value={content.motivation}
-          onChange={(v) => update({ motivation: v })}
-        />
-        <Question
-          label="入社可能時期"
-          value={content.availability}
-          onChange={(v) => update({ availability: v })}
-          rows={2}
-        />
-      </div>
-      <Question
-        label="メモ(自由記述)"
-        value={content.notes}
-        onChange={(v) => update({ notes: v })}
-        rows={4}
-      />
+      {questions.length === 0 ? (
+        <p className="text-muted-foreground text-sm">
+          質問項目が設定されていません。設定 → ヒアリングシート設定 から項目を追加してください。
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {questions.map((q) => (
+            <Question
+              key={q.key}
+              label={q.label}
+              helpText={q.helpText}
+              value={content[q.key] ?? ""}
+              maxLength={q.maxLength}
+              rows={q.inputType === "text" ? 1 : 3}
+              onChange={(v) => update(q.key, v)}
+            />
+          ))}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
         <p className="text-muted-foreground text-xs">
@@ -287,19 +249,29 @@ function HearingSheetEditor({
 
 function Question({
   label,
+  helpText,
   value,
   onChange,
   rows = 3,
+  maxLength,
 }: {
   label: string;
+  helpText?: string | null;
   value: string;
   onChange: (v: string) => void;
   rows?: number;
+  maxLength?: number;
 }) {
   return (
     <div className="space-y-1">
       <Label>{label}</Label>
-      <Textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} />
+      {helpText && <p className="text-muted-foreground text-xs">{helpText}</p>}
+      <Textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={rows}
+        maxLength={maxLength}
+      />
     </div>
   );
 }

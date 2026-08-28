@@ -20,9 +20,28 @@
 import { generateText } from "ai";
 
 import { getModel, MODELS } from "@/lib/ai/client";
+import type { HearingQuestionDefinition } from "@/lib/hearing-sheet-questions/types";
 
 import type { AgencyClientResume } from "./types";
 import type { HearingSheetContent } from "./types";
+
+/**
+ * ヒアリング回答(定義 key → 回答)を、組織の質問定義のラベルで
+ * 「ラベル → 回答」オブジェクトに畳み込む(空回答は除外)。
+ * 組織が項目をカスタマイズしていても、定義に沿ってプロンプトへ渡せる。
+ */
+function hearingToLabeledObject(
+  questions: HearingQuestionDefinition[],
+  hearing: HearingSheetContent | null,
+): Record<string, string> {
+  if (!hearing) return {};
+  const out: Record<string, string> = {};
+  for (const q of questions) {
+    const value = (hearing[q.key] ?? "").trim();
+    if (value.length > 0) out[q.label] = value;
+  }
+  return out;
+}
 
 export type AiWriteKind = "motivation" | "self_pr" | "cv_summary" | "cv_body";
 
@@ -90,34 +109,18 @@ function buildUserPrompt(args: {
   clientName: string;
   resume: AgencyClientResume;
   hearing: HearingSheetContent | null;
+  questions: HearingQuestionDefinition[];
   kind: AiWriteKind;
 }): string {
-  const { clientName, resume, hearing, kind } = args;
+  const { clientName, resume, hearing, questions, kind } = args;
+  const labeled = hearingToLabeledObject(questions, hearing);
   const lines: string[] = [
     `【依頼種別】${kind === "motivation" ? "志望動機" : "自己 PR"}`,
     "",
     `【クライアント名】${clientName}`,
     "",
     "【ヒアリング内容(直近)】",
-    hearing
-      ? JSON.stringify(
-          {
-            現職: hearing.current_job,
-            強み: hearing.strengths,
-            弱み: hearing.weaknesses,
-            希望業種: hearing.desired_industry,
-            希望職種: hearing.desired_position,
-            希望勤務地: hearing.desired_location,
-            希望年収: hearing.desired_salary,
-            転職理由: hearing.job_change_reason,
-            動機: hearing.motivation,
-            入社可能時期: hearing.availability,
-            メモ: hearing.notes,
-          },
-          null,
-          2,
-        )
-      : "(ヒアリングシート未作成)",
+    Object.keys(labeled).length > 0 ? JSON.stringify(labeled, null, 2) : "(ヒアリングシート未作成)",
     "",
     "【履歴書既存項目】",
     JSON.stringify(
@@ -154,6 +157,7 @@ export async function generateResumeText(args: {
   clientName: string;
   resume: AgencyClientResume;
   hearing: HearingSheetContent | null;
+  questions: HearingQuestionDefinition[];
   kind: AiWriteKind;
 }): Promise<{ ok: true; text: string } | { ok: false; reason: string }> {
   const system = systemFor(args.kind);
@@ -168,36 +172,20 @@ export async function generateResumeText(args: {
 export async function generateCvText(args: {
   clientName: string;
   hearing: HearingSheetContent | null;
+  questions: HearingQuestionDefinition[];
   kind: "cv_summary" | "cv_body";
   /** 既存の summary / body(差分リライト用、空でもよい) */
   existing: { summary: string; body: string };
 }): Promise<{ ok: true; text: string } | { ok: false; reason: string }> {
   const system = systemFor(args.kind);
+  const labeled = hearingToLabeledObject(args.questions, args.hearing);
   const lines: string[] = [
     `【依頼種別】${args.kind === "cv_summary" ? "職務経歴書 要約" : "職務経歴書 本文"}`,
     "",
     `【クライアント名】${args.clientName}`,
     "",
     "【ヒアリング内容(直近)】",
-    args.hearing
-      ? JSON.stringify(
-          {
-            現職: args.hearing.current_job,
-            強み: args.hearing.strengths,
-            弱み: args.hearing.weaknesses,
-            希望業種: args.hearing.desired_industry,
-            希望職種: args.hearing.desired_position,
-            希望勤務地: args.hearing.desired_location,
-            希望年収: args.hearing.desired_salary,
-            転職理由: args.hearing.job_change_reason,
-            動機: args.hearing.motivation,
-            入社可能時期: args.hearing.availability,
-            メモ: args.hearing.notes,
-          },
-          null,
-          2,
-        )
-      : "(ヒアリングシート未作成)",
+    Object.keys(labeled).length > 0 ? JSON.stringify(labeled, null, 2) : "(ヒアリングシート未作成)",
     "",
     "【既存職務経歴書】",
     JSON.stringify({ 既存_要約: args.existing.summary, 既存_本文: args.existing.body }, null, 2),

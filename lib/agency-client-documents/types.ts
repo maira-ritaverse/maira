@@ -234,22 +234,18 @@ export type HearingSheetRow = {
 };
 
 /**
- * ヒアリングシートの構造化項目。
- * AI 抽出と人手修正の整合を取りやすいよう、設問単位で持つ。
+ * ヒアリングシートの回答本体。
+ *
+ * 質問項目は組織ごとに hearing_sheet_question_definitions で定義できる(増減・
+ * リネーム可能)ため、固定キーの構造体ではなく「定義の key → 回答文字列」の
+ * レコードで持つ。どの key を表示するかは定義側が決める(未知 key は無視される)。
+ *
+ * 標準 11 項目(current_job / strengths / ... / notes)は seed 済みのキーで、
+ * 会議録音の AI 抽出(extraction-to-hearing)がこれらのキーに書き込む。
+ *
+ * 1 項目あたり最大 8000 字(暗号文全体の 64000 字上限は DB 側の check で担保)。
  */
-export const hearingSheetContentSchema = z.object({
-  current_job: z.string().max(2000).default(""),
-  strengths: z.string().max(2000).default(""),
-  weaknesses: z.string().max(2000).default(""),
-  desired_industry: z.string().max(500).default(""),
-  desired_position: z.string().max(500).default(""),
-  desired_location: z.string().max(500).default(""),
-  desired_salary: z.string().max(200).default(""),
-  job_change_reason: z.string().max(2000).default(""),
-  motivation: z.string().max(2000).default(""),
-  availability: z.string().max(500).default(""),
-  notes: z.string().max(4000).default(""),
-});
+export const hearingSheetContentSchema = z.record(z.string(), z.string().max(8000));
 export type HearingSheetContent = z.infer<typeof hearingSheetContentSchema>;
 
 export type HearingSheet = {

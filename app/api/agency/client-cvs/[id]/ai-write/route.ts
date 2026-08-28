@@ -6,6 +6,7 @@ import { generateCvText } from "@/lib/agency-client-documents/ai-write";
 import { getAgencyClientCv, listHearingSheets } from "@/lib/agency-client-documents/queries";
 import { getClientRecord } from "@/lib/clients/queries";
 import { checkAiUsageLimit, recordAiUsage } from "@/lib/features/ai-usage";
+import { listHearingSheetQuestionsForSheet } from "@/lib/hearing-sheet-questions/queries";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -69,10 +70,12 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   const hearingSheets = await listHearingSheets(cv.clientRecordId, organization.id);
   const hearing = hearingSheets[0]?.content ?? null;
+  const questions = await listHearingSheetQuestionsForSheet(organization.id);
 
   const result = await generateCvText({
     clientName: client.name,
     hearing,
+    questions,
     kind: parsed.data.kind,
     existing: { summary: cv.body.summary, body: cv.body.body },
   });
