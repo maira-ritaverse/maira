@@ -6,8 +6,10 @@ import {
   AGENCY_PHOTO_SIGNED_URL_PREVIEW_EXPIRES_SEC,
   createAgencyClientPhotoSignedUrl,
 } from "@/lib/agency-client-documents/photo-signed-url";
-import { getAgencyClientResume } from "@/lib/agency-client-documents/queries";
+import { getAgencyClientResume, listHearingSheets } from "@/lib/agency-client-documents/queries";
 import { getClientRecord } from "@/lib/clients/queries";
+import { hearingSheetToResumePii } from "@/lib/hearing-sheet-questions/hearing-to-pii";
+import { listHearingSheetQuestionsForSheet } from "@/lib/hearing-sheet-questions/queries";
 import { getUserRole } from "@/lib/organizations/queries";
 import { createClient } from "@/lib/supabase/server";
 
@@ -64,6 +66,18 @@ export default async function AgencyResumeEditPage({ params }: RouteParams) {
     .eq("id", role.organization.id)
     .maybeSingle();
   const selfPrEnabled = Boolean(orgRow?.resume_self_pr_enabled);
+
+  // 「ヒアリングシートから反映」用:最新のヒアリング回答 + 組織の質問定義から、
+  // maps_to_pii が設定された項目を本人情報(ResumePii)の部分パッチに変換して渡す。
+  // 該当が無ければ count=0 でボタンは出さない。
+  const [hearingSheets, hearingQuestions] = await Promise.all([
+    listHearingSheets(clientRecordId, role.organization.id),
+    listHearingSheetQuestionsForSheet(role.organization.id),
+  ]);
+  const { patch: hearingFillPatch, count: hearingFillCount } = hearingSheetToResumePii(
+    hearingQuestions,
+    hearingSheets[0]?.content ?? null,
+  );
 
   // 写真の署名 URL は SSR で発行(エージェントセッションで Storage RLS を通す)。
   // 発行失敗時はプレースホルダにフォールバック。
@@ -129,6 +143,8 @@ export default async function AgencyResumeEditPage({ params }: RouteParams) {
         resume={resume}
         isAdmin={role.member.role === "admin"}
         selfPrEnabled={selfPrEnabled}
+        hearingFillPatch={hearingFillCount > 0 ? hearingFillPatch : null}
+        hearingFillCount={hearingFillCount}
       />
     </div>
   );

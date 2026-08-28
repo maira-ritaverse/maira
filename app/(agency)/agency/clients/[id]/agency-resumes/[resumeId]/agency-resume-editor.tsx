@@ -35,6 +35,13 @@ type Props = {
   isAdmin: boolean;
   /** 組織設定:履歴書エディタで自己PR欄を使うか(既定 false)。 */
   selfPrEnabled: boolean;
+  /**
+   * 最新ヒアリングシートから流し込める本人情報の部分パッチ(maps_to_pii 設定分)。
+   * 該当が無ければ null(ボタンを出さない)。
+   */
+  hearingFillPatch?: Partial<ResumePii> | null;
+  /** hearingFillPatch に含まれる項目数(ボタンの表示・文言用)。 */
+  hearingFillCount?: number;
 };
 
 // 年月は "YYYY/MM"(月なしは "YYYY")の文字列1本で保持する(agency-resume-mapper の
@@ -103,7 +110,14 @@ function useDragReorder<T>(setItems: (updater: (prev: T[]) => T[]) => void) {
   };
 }
 
-export function AgencyResumeEditor({ clientRecordId, resume, isAdmin, selfPrEnabled }: Props) {
+export function AgencyResumeEditor({
+  clientRecordId,
+  resume,
+  isAdmin,
+  selfPrEnabled,
+  hearingFillPatch = null,
+  hearingFillCount = 0,
+}: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -121,6 +135,25 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin, selfPrEnab
   const [licenses, setLicenses] = useState<LicenseItem[]>(resume.licenses);
 
   const updatePii = (patch: Partial<ResumePii>) => setPii((prev) => ({ ...prev, ...patch }));
+
+  // ヒアリングシートから本人情報を反映する。既に入力済みの項目がある場合は上書き確認を挟む。
+  const fillFromHearing = () => {
+    if (!hearingFillPatch) return;
+    const keys = Object.keys(hearingFillPatch) as (keyof ResumePii)[];
+    const willOverwrite = keys.some((k) => {
+      const cur = pii[k];
+      return typeof cur === "string" && cur.trim().length > 0;
+    });
+    if (
+      willOverwrite &&
+      !window.confirm(
+        "既に入力済みの本人情報を、ヒアリングシートの内容で上書きします。よろしいですか?",
+      )
+    ) {
+      return;
+    }
+    setPii((prev) => ({ ...prev, ...hearingFillPatch }));
+  };
 
   // 住所フリガナの生成。手動(「住所から生成」ボタン)と自動(住所欄の onBlur / 開いた時)から共用する。
   // opts.silent=true(自動)のときはエラーを画面に出さない(ベストエフォート。ボタンで再試行可能)。
@@ -316,7 +349,20 @@ export function AgencyResumeEditor({ clientRecordId, resume, isAdmin, selfPrEnab
 
       {/* 本人情報(PII) */}
       <Card className="space-y-4 p-6">
-        <h2 className="text-base font-semibold">本人情報</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-semibold">本人情報</h2>
+          {hearingFillCount > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={fillFromHearing}
+              disabled={pending}
+            >
+              ヒアリングシートから反映({hearingFillCount} 項目)
+            </Button>
+          )}
+        </div>
         <p className="text-muted-foreground text-xs">
           AES-256-GCM で暗号化して保存します。本ページ離脱後は復号した状態を保持しません。
         </p>
