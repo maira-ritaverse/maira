@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ResumePreview } from "@/components/features/resume/resume-preview";
-import type { Resume } from "@/lib/resumes/types";
+import type { Resume, ResumeBasicInfoOption } from "@/lib/resumes/types";
 import { ResumeForm } from "../resume-form";
 
 /**
@@ -24,12 +24,14 @@ export function ResumeTabs({
   resume,
   photoSignedUrl,
   hasCareerProfile,
+  otherResumes,
 }: {
   resume: Resume;
   // 写真の署名付き URL(private バケットのため img の src に直接 photoUrl は使えない)。
   // page.tsx(Server Component)で本人のセッション経由で発行された URL を受け取る。
   photoSignedUrl: string | null;
   hasCareerProfile: boolean;
+  otherResumes?: ResumeBasicInfoOption[];
 }) {
   const [tab, setTab] = useState<"edit" | "preview">("edit");
 
@@ -62,6 +64,7 @@ export function ResumeTabs({
           existing={resume}
           photoSignedUrl={photoSignedUrl}
           hasCareerProfile={hasCareerProfile}
+          otherResumes={otherResumes}
         />
       </div>
       <div className={tab === "preview" ? "" : "hidden"}>

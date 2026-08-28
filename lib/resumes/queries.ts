@@ -7,7 +7,7 @@ import {
   serializeResumePii,
   type ResumePii,
 } from "./pii-fields";
-import type { Resume, SaveResumeRequest } from "./types";
+import type { Resume, ResumeBasicInfoOption, SaveResumeRequest } from "./types";
 
 /**
  * resumes テーブルの CRUD ヘルパー
@@ -63,6 +63,37 @@ export async function listResumes(userId: string): Promise<Resume[]> {
     }),
   );
   return mapped.filter((r): r is Resume => r !== null);
+}
+
+/**
+ * 「旧履歴書から基本情報を埋める」用に、本人の他の履歴書の {id, title, 基本情報} を返す。
+ * excludeId(編集中の履歴書)は除外する。基本情報は復号済み(SSR で渡す前提)。
+ */
+export async function listResumeBasicInfoOptions(
+  userId: string,
+  excludeId?: string,
+): Promise<ResumeBasicInfoOption[]> {
+  const resumes = await listResumes(userId);
+  return resumes
+    .filter((r) => r.id !== excludeId)
+    .map((r) => ({
+      id: r.id,
+      title: r.title,
+      basicInfo: {
+        name: r.name ?? "",
+        name_kana: r.nameKana ?? "",
+        birth_date: r.birthDate ?? "",
+        gender: r.gender,
+        postal_code: r.postalCode ?? "",
+        address: r.address ?? "",
+        address_kana: r.addressKana ?? "",
+        phone: r.phone ?? "",
+        email: r.email ?? "",
+        contact_address: r.contactAddress ?? "",
+        contact_address_kana: r.contactAddressKana ?? "",
+        contact_phone: r.contactPhone ?? "",
+      },
+    }));
 }
 
 // ============================================

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCareerProfile } from "@/lib/career/conversations";
-import { getResume } from "@/lib/resumes/queries";
+import { getResume, listResumeBasicInfoOptions } from "@/lib/resumes/queries";
 import {
   createResumePhotoSignedUrl,
   PHOTO_SIGNED_URL_PREVIEW_EXPIRES_SEC,
@@ -33,9 +33,10 @@ export default async function EditResumePage({ params }: PageProps) {
 
   if (!user) redirect("/login");
 
-  const [resume, careerProfile] = await Promise.all([
+  const [resume, careerProfile, otherResumes] = await Promise.all([
     getResume(id, user.id),
     getCareerProfile(user.id),
+    listResumeBasicInfoOptions(user.id, id),
   ]);
   if (!resume) notFound();
 
@@ -61,6 +62,7 @@ export default async function EditResumePage({ params }: PageProps) {
         resume={resume}
         photoSignedUrl={photoSignedUrl}
         hasCareerProfile={hasCareerProfile}
+        otherResumes={otherResumes}
       />
 
       {/* AI 添削:履歴書の構造化データから改善点と具体的なリライト例を提案 */}

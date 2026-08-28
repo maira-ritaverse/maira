@@ -18,6 +18,7 @@ import {
   saveResumeRequestSchema,
   type Gender,
   type Resume,
+  type ResumeBasicInfoOption,
   type SaveResumeRequest,
 } from "@/lib/resumes/types";
 import { LicenseInput } from "./license-input";
@@ -32,6 +33,25 @@ const DRAFT_FIELD_LABEL: Record<DraftField, string> = {
   motivation_note: "志望の動機・アピールポイント",
   personal_requests: "本人希望記入欄",
 };
+
+/**
+ * 「旧履歴書から基本情報を埋める」で写す基本情報(本人の身元情報)の項目。
+ * 文書固有(学歴/資格/志望動機/写真/タイトル/作成日)は写さない。
+ */
+const BASIC_INFO_FIELDS = [
+  "name",
+  "name_kana",
+  "birth_date",
+  "gender",
+  "postal_code",
+  "address",
+  "address_kana",
+  "phone",
+  "email",
+  "contact_address",
+  "contact_address_kana",
+  "contact_phone",
+] as const;
 
 /**
  * 履歴書 新規作成・編集 フォーム(共通)
@@ -54,6 +74,11 @@ type Props = (
    * AI下書き生成ボタンを有効化するかの判定に使う(なければボタンは無効化)。
    */
   hasCareerProfile: boolean;
+  /**
+   * 本人が持つ他の履歴書(編集中のものは除外)。「旧履歴書から基本情報を埋める」の
+   * 選択候補。基本情報は SSR で復号済みを渡す(クライアントで復号しない)。
+   */
+  otherResumes?: ResumeBasicInfoOption[];
 };
 
 // 年月は数値入力欄で直接入力する(旧: 年月 select 用の YEAR_OPTIONS/MONTH_OPTIONS は廃止)
@@ -65,7 +90,7 @@ const GENDER_OPTIONS: { value: Gender; label: string }[] = [
 ];
 
 export function ResumeForm(props: Props) {
-  const { mode, existing, hasCareerProfile } = props;
+  const { mode, existing, hasCareerProfile, otherResumes } = props;
   // edit モードのみ写真の署名URLが渡ってくる。create モードは undefined。
   const photoSignedUrl = mode === "edit" ? props.photoSignedUrl : null;
   const router = useRouter();
@@ -75,6 +100,8 @@ export function ResumeForm(props: Props) {
   // AI下書き生成中のフィールド(同時押し防止と、押した側だけスピナーを出すため)
   const [draftingField, setDraftingField] = useState<DraftField | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
+  // 「旧履歴書から基本情報を埋める」で選んだ履歴書 id。
+  const [fillSourceId, setFillSourceId] = useState<string>("");
 
   const {
     register,
@@ -140,6 +167,41 @@ export function ResumeForm(props: Props) {
     } finally {
       setDraftingField(null);
     }
+  };
+
+  /**
+   * 選んだ旧履歴書の基本情報(12項目)を現在のフォームに反映する。
+   * いずれかの基本情報項目に入力があれば上書き確認する(AI下書きと同じ配慮)。
+   * 反映するだけで保存はしない(内容を確認して既存の「保存」を押してもらう)。
+   */
+  const handleFillBasicInfo = () => {
+    const src = otherResumes?.find((r) => r.id === fillSourceId);
+    if (!src) return;
+    const hasExisting = BASIC_INFO_FIELDS.some((f) => {
+      const v = getValues(f);
+      return typeof v === "string" ? v.trim().length > 0 : v != null;
+    });
+    if (hasExisting) {
+      const ok = window.confirm(
+        "基本情報の各項目を、選んだ履歴書の内容で上書きします。よろしいですか?\n\n(現在の基本情報の入力は失われます。学歴・資格・志望動機は変更しません)",
+      );
+      if (!ok) return;
+    }
+    const b = src.basicInfo;
+    const opt = { shouldDirty: true } as const;
+    setValue("name", b.name, opt);
+    setValue("name_kana", b.name_kana, opt);
+    setValue("birth_date", b.birth_date, opt);
+    setValue("gender", b.gender, opt);
+    setValue("postal_code", b.postal_code, opt);
+    setValue("address", b.address, opt);
+    setValue("address_kana", b.address_kana, opt);
+    setValue("phone", b.phone, opt);
+    setValue("email", b.email, opt);
+    setValue("contact_address", b.contact_address, opt);
+    setValue("contact_address_kana", b.contact_address_kana, opt);
+    setValue("contact_phone", b.contact_phone, opt);
+    setSaveMessage("旧履歴書から基本情報を反映しました。内容を確認して保存してください。");
   };
 
   const educationFieldArray = useFieldArray({
@@ -210,6 +272,39 @@ export function ResumeForm(props: Props) {
             必須はタイトルのみ。他は途中まで入力して保存できます(下書き)
           </p>
         </div>
+
+        {/* 旧履歴書から基本情報(氏名・住所・連絡先など)を反映。学歴/資格/志望動機は写さない。 */}
+        {otherResumes && otherResumes.length > 0 && (
+          <div className="bg-muted/30 flex flex-wrap items-end gap-2 rounded-md border border-dashed p-3">
+            <div className="min-w-0 flex-1 space-y-1">
+              <Label htmlFor="fill-source" className="text-xs">
+                旧履歴書から基本情報を埋める(氏名・住所・連絡先など)
+              </Label>
+              <select
+                id="fill-source"
+                value={fillSourceId}
+                onChange={(e) => setFillSourceId(e.target.value)}
+                className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+              >
+                <option value="">履歴書を選択…</option>
+                {otherResumes.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!fillSourceId}
+              onClick={handleFillBasicInfo}
+            >
+              基本情報を反映
+            </Button>
+          </div>
+        )}
 
         {/* 写真。新規作成時は resumeId が未確定のため、まず保存してから */}
         {mode === "edit" && (

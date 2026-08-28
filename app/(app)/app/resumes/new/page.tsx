@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCareerProfile } from "@/lib/career/conversations";
+import { listResumeBasicInfoOptions } from "@/lib/resumes/queries";
 import { createClient } from "@/lib/supabase/server";
 import { ResumeForm } from "../resume-form";
 
@@ -21,7 +22,10 @@ export default async function NewResumePage() {
 
   if (!user) redirect("/login");
 
-  const careerProfile = await getCareerProfile(user.id);
+  const [careerProfile, otherResumes] = await Promise.all([
+    getCareerProfile(user.id),
+    listResumeBasicInfoOptions(user.id),
+  ]);
   const hasCareerProfile = careerProfile !== null;
 
   return (
@@ -35,7 +39,7 @@ export default async function NewResumePage() {
         <h1 className="text-2xl font-bold">新しい履歴書を作成</h1>
       </div>
 
-      <ResumeForm mode="create" hasCareerProfile={hasCareerProfile} />
+      <ResumeForm mode="create" hasCareerProfile={hasCareerProfile} otherResumes={otherResumes} />
     </div>
   );
 }

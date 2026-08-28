@@ -131,3 +131,26 @@ export const saveResumeRequestSchema = z.object({
 });
 
 export type SaveResumeRequest = z.infer<typeof saveResumeRequestSchema>;
+
+/**
+ * 「旧履歴書から基本情報を埋める」で写す基本情報(本人の身元情報)だけの部分型。
+ * 文書固有(タイトル/作成日/学歴/資格/志望動機/写真)は含めない。
+ */
+export type ResumeBasicInfo = Pick<
+  SaveResumeRequest,
+  | "name"
+  | "name_kana"
+  | "birth_date"
+  | "gender"
+  | "postal_code"
+  | "address"
+  | "address_kana"
+  | "phone"
+  | "email"
+  | "contact_address"
+  | "contact_address_kana"
+  | "contact_phone"
+>;
+
+/** 履歴書ピッカーの選択肢(基本情報は SSR で復号済みを渡す)。 */
+export type ResumeBasicInfoOption = { id: string; title: string; basicInfo: ResumeBasicInfo };
