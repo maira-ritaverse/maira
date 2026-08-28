@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CheckCircle2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { RefreshButton } from "@/components/features/admin/refresh-button";
@@ -724,6 +725,7 @@ function TierBadge({ plan }: { plan: OrgPlan | null }) {
     standard: "bg-purple-100 text-purple-900 dark:bg-purple-950/40 dark:text-purple-200",
     standard_pro: "bg-purple-200 text-purple-950 dark:bg-purple-900/40 dark:text-purple-100",
   };
+  const isActive = plan.planStatus === "active";
   const isTrial = plan.planStatus === "trialing";
   const isPastDue = plan.planStatus === "past_due";
   const isCanceled = plan.planStatus === "canceled";
@@ -736,6 +738,13 @@ function TierBadge({ plan }: { plan: OrgPlan | null }) {
       >
         {label[plan.tier] ?? plan.tier}
       </span>
+      {isActive && (
+        // 契約完了(有料・課金中)を運営が一目で分かるようにオレンジのレ点で強調。
+        <span className="inline-flex items-center gap-0.5 rounded bg-orange-100 px-1.5 py-0.5 text-[9px] font-semibold text-orange-900 dark:bg-orange-950/40 dark:text-orange-200">
+          <CheckCircle2 className="size-3" aria-hidden />
+          契約完了
+        </span>
+      )}
       {isTrial && (
         <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
           Trial
