@@ -29,8 +29,15 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 
-/** fetch 全体の タイムアウト(ミリ秒)。AI 抽出とは 別で、取得のみの 上限。 */
-export const JOB_URL_FETCH_TIMEOUT_MS = 15_000;
+/**
+ * fetch 全体の タイムアウト(ミリ秒)。AI 抽出とは 別で、取得のみの 上限。
+ *
+ * SPA / 大型の 求人媒体は 本文が 大きく(最大 2.5MB)サーバー応答も 遅い ため、
+ * 15 秒 だと 長い 求人票で 取得が 途中で 打ち切られ 失敗する ことが 多かった。
+ * ルートの maxDuration は 300 秒 あり、AI 抽出(通常 15-90 秒)を 引いても 余裕が
+ * ある ので、取得の 上限を 45 秒 に 延ばして 取りこぼしを 減らす。
+ */
+export const JOB_URL_FETCH_TIMEOUT_MS = 45_000;
 /** 取得する HTML の 最大バイト数(2.5MB)。巨大ページで メモリを 食わない ように。 */
 export const JOB_URL_MAX_BYTES = 2_500_000;
 /** AI に 渡す 本文テキストの 最大文字数(トークンコストを 抑える)。 */

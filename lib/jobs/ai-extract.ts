@@ -73,6 +73,10 @@ async function runJobExtraction(messages: ModelMessage[]): Promise<ExtractJobOut
       model: getModel(MODELS.CONVERSATION),
       system: JOB_EXTRACTION_SYSTEM_PROMPT,
       messages,
+      // 長い 求人票(詳細な 仕事内容 / 応募資格 など)では 出力 JSON も 長く なる。
+      // 既定の 出力上限(約 4096 トークン)だと 途中で 打ち切られ、壊れた JSON →
+      // schema_error で 失敗して いた。上限を 引き上げて 取りこぼしを 防ぐ。
+      maxOutputTokens: 8000,
     });
     rawText = result.text;
 
