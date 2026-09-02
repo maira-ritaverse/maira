@@ -37,6 +37,9 @@ export async function sendInvitationEmail(args: SendInvitationArgs): Promise<Sen
   if (!from) return { sent: false, reason: "not_configured" };
 
   const expiresLabel = args.expiresAt.toLocaleString("ja-JP", {
+    // サーバーは UTC 稼働。明示しないと有効期限が 9 時間ずれて表示される
+    // (他の招待/面談メールと同様に JST 固定にする)。
+    timeZone: "Asia/Tokyo",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

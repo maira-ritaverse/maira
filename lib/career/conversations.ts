@@ -337,7 +337,11 @@ function parseAndValidateProfile(jsonString: string): CareerProfile | null {
   try {
     parsedJson = JSON.parse(jsonString);
   } catch (e) {
-    console.error("career_profiles: stored data is not valid JSON", e);
+    // セキュリティ:復号後の career_profile が混入し得るため、エラー本文
+    // (SyntaxError.message は入力の断片を含む)は出さず、種別のみログする。
+    console.error("career_profiles: stored data is not valid JSON", {
+      error: e instanceof Error ? e.name : "parse_error",
+    });
     return null;
   }
 

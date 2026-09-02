@@ -71,6 +71,20 @@ describe("hearingSheetToResumePii", () => {
     ).toBeUndefined();
   });
 
+  it("暦上あり得ない日はスキップ(2/31・4/31 など)", () => {
+    const questions = [q("bd", "birth_date")];
+    expect(
+      hearingSheetToResumePii(questions, { bd: "2000/2/31" }).patch.birth_date,
+    ).toBeUndefined();
+    expect(
+      hearingSheetToResumePii(questions, { bd: "2001/4/31" }).patch.birth_date,
+    ).toBeUndefined();
+    // うるう年は 2/29 を許可
+    expect(hearingSheetToResumePii(questions, { bd: "2000/2/29" }).patch.birth_date).toBe(
+      "2000-02-29",
+    );
+  });
+
   it("性別を enum に best-effort 変換", () => {
     const questions = [q("g", "gender")];
     expect(hearingSheetToResumePii(questions, { g: "女性" }).patch.gender).toBe("female");

@@ -33,10 +33,20 @@ function normalizeBirthDate(raw: string): string | null {
   const m = raw.match(/(\d{4})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})/);
   if (!m) return null;
   const [, y, mo, d] = m;
-  const month = String(Number(mo)).padStart(2, "0");
-  const day = String(Number(d)).padStart(2, "0");
-  if (Number(mo) < 1 || Number(mo) > 12 || Number(d) < 1 || Number(d) > 31) return null;
-  return `${y}-${month}-${day}`;
+  const yearN = Number(y);
+  const monthN = Number(mo);
+  const dayN = Number(d);
+  if (monthN < 1 || monthN > 12 || dayN < 1 || dayN > 31) return null;
+  // 実在する暦日かを検証する(2000-02-31 / 2000-04-31 などの不正日を弾く)。
+  const dt = new Date(Date.UTC(yearN, monthN - 1, dayN));
+  if (
+    dt.getUTCFullYear() !== yearN ||
+    dt.getUTCMonth() + 1 !== monthN ||
+    dt.getUTCDate() !== dayN
+  ) {
+    return null;
+  }
+  return `${y}-${String(monthN).padStart(2, "0")}-${String(dayN).padStart(2, "0")}`;
 }
 
 /**
