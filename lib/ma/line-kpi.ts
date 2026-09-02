@@ -13,6 +13,7 @@
  *                   Lite=200 等 プラン 依存。 現状 5000 固定 で 表示)
  */
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 
 // LINE 公式 アカウント の プラン 別 月次 配信通数 上限。
 // 現行 LINE の Communication / Light / Standard プラン に 対応。
@@ -76,23 +77,34 @@ export async function getLineMaKpi(
       .gte("created_at", start)
       .lt("created_at", end)
       .then((r) => (r as unknown as CountResult).count ?? 0),
-    // クリック 集計: 今月 作成 された ma_click_links の click_count を 合計
-    supabase
-      .from("ma_click_links")
-      .select("click_count")
-      .eq("organization_id", organizationId)
-      .gte("created_at", start)
-      .lt("created_at", end),
-    // 応募 attribution 用: 今月 配信 した client_record_id と sent_at を 取得
-    supabase
-      .from("ma_send_logs")
-      .select("recipient_client_record_id, sent_at")
-      .eq("organization_id", organizationId)
-      .eq("status", "sent")
-      .not("recipient_line_user_id", "is", null)
-      .not("recipient_client_record_id", "is", null)
-      .gte("sent_at", start)
-      .lt("sent_at", end),
+    // クリック 集計: 今月 作成 された ma_click_links の click_count を 合計。
+    // max_rows(1000)超えの取りこぼしを防ぐため id 昇順で全件分割取得する
+    // (1000 件で頭打ちだと配信数が多い組織で クリック 数が過少集計になる)。
+    fetchAllRows<ClickRow>((from, to) =>
+      supabase
+        .from("ma_click_links")
+        .select("id, click_count")
+        .eq("organization_id", organizationId)
+        .gte("created_at", start)
+        .lt("created_at", end)
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
+    // 応募 attribution 用: 今月 配信 した client_record_id と sent_at を 取得。
+    // 同様に id 昇順で全件取得(1000 件超の配信でも attribution を取りこぼさない)。
+    fetchAllRows<SentLogRow>((from, to) =>
+      supabase
+        .from("ma_send_logs")
+        .select("id, recipient_client_record_id, sent_at")
+        .eq("organization_id", organizationId)
+        .eq("status", "sent")
+        .not("recipient_line_user_id", "is", null)
+        .not("recipient_client_record_id", "is", null)
+        .gte("sent_at", start)
+        .lt("sent_at", end)
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
     // 配信通数 上限 用: 組織 の LINE プラン を 取得
     supabase
       .from("line_channels")
@@ -102,15 +114,12 @@ export async function getLineMaKpi(
   ]);
 
   type ClickRow = { click_count: number };
-  const clickCount = ((clickAggRes.data ?? []) as ClickRow[]).reduce(
-    (sum, r) => sum + (r.click_count ?? 0),
-    0,
-  );
+  const clickCount = clickAggRes.rows.reduce((sum, r) => sum + (r.click_count ?? 0), 0);
 
   // 応募 attribution: 配信 後 ATTRIBUTION_WINDOW_DAYS 日 以内 に referrals が
   // 作られた client_record_id の 一意 数 を カウント。
   type SentLogRow = { recipient_client_record_id: string | null; sent_at: string };
-  const sentLogs = (sentLogsForAttr.data ?? []) as SentLogRow[];
+  const sentLogs = sentLogsForAttr.rows;
   const applicationCount = await computeAttributedApplications(supabase, organizationId, sentLogs);
 
   // プラン 連動 の 月次 上限。 未設定 / 不正 値 は light (5000) を 既定 と する。
@@ -154,14 +163,19 @@ async function computeAttributedApplications(
   const clientIds = Array.from(clientToEarliestSentAt.keys());
   if (clientIds.length === 0) return 0;
 
-  // 該当 client の referrals を 一括 取得
-  const { data: refsData } = await supabase
-    .from("referrals")
-    .select("client_record_id, created_at")
-    .eq("organization_id", organizationId)
-    .in("client_record_id", clientIds);
+  // 該当 client の referrals を 一括 取得。
+  // max_rows(1000)超えの取りこぼしで attribution が過少にならないよう、
+  // id 昇順で全件分割取得する。
   type RefRow = { client_record_id: string; created_at: string };
-  const refs = (refsData ?? []) as RefRow[];
+  const { rows: refs } = await fetchAllRows<RefRow>((from, to) =>
+    supabase
+      .from("referrals")
+      .select("id, client_record_id, created_at")
+      .eq("organization_id", organizationId)
+      .in("client_record_id", clientIds)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 
   const windowMs = ATTRIBUTION_WINDOW_DAYS * 86400 * 1000;
   const attributed = new Set<string>();
