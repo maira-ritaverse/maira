@@ -69,7 +69,7 @@ describe("buildTermsHtml", () => {
       acceptedAt: null,
       ipAddress: null,
     });
-    // 第3条(禁止事項)の bullet が li で出る
+    // 第8条(禁止事項)の bullet が li で出る
     expect(html).toContain("<li>法令または公序良俗に違反する行為</li>");
   });
 });
