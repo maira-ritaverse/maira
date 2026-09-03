@@ -29,6 +29,16 @@ const SECURITY_HEADERS = [
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
 ];
 
+/**
+ * 認証必須エリア(/app /agency /admin)+ オンボーディングに付ける「インデックス禁止」ヘッダ。
+ *
+ * ・noindex,nofollow: 万一 URL が漏れても検索エンジンに載せない(コンテンツは元々
+ *   ログインの内側で、robots.txt でも disallow 済み。これは header レベルの二重防御)。
+ * ・noai,noimageai: AI 学習/画像 AI 学習への利用を拒否する意思表示(順法クローラー向け)。
+ * 公開マーケティングページ(/, /privacy, /terms 等)は SEO のため対象外にする。
+ */
+const NOINDEX_HEADERS = [{ key: "X-Robots-Tag", value: "noindex, nofollow, noai, noimageai" }];
+
 const nextConfig: NextConfig = {
   // PDF 生成で puppeteer-core + @sparticuz/chromium-min をサーバー側で使う。
   // Next.js の bundler に取り込ませると、内部の動的 require / ネイティブ参照が
@@ -42,6 +52,11 @@ const nextConfig: NextConfig = {
         source: "/:path*",
         headers: SECURITY_HEADERS,
       },
+      // 認証必須エリアは検索/AI にインデックスさせない(:path* は 0 セグメントも含むので /app 自体も対象)
+      { source: "/app/:path*", headers: NOINDEX_HEADERS },
+      { source: "/agency/:path*", headers: NOINDEX_HEADERS },
+      { source: "/admin/:path*", headers: NOINDEX_HEADERS },
+      { source: "/onboarding/:path*", headers: NOINDEX_HEADERS },
     ];
   },
 };
