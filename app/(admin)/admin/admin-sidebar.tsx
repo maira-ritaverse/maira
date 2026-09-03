@@ -44,6 +44,7 @@ const SECTIONS: NavSection[] = [
   {
     title: "顧客管理",
     items: [
+      { href: "/admin/deals", icon: "💼", label: "商談管理", prefix: true },
       { href: "/admin/users", icon: "👥", label: "ユーザ", prefix: true },
       { href: "/admin/seekers", icon: "🧑‍💼", label: "求職者", prefix: true },
       { href: "/admin/organizations", icon: "🏢", label: "企業", prefix: true },
