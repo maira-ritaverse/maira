@@ -33,6 +33,8 @@ export function buildSalesNextStepPrompt(args: {
   companyName: string;
   stageLabel: string;
   stageDescription: string;
+  /** この会社向けの営業方針・AIへの指示(全社プレイブックに優先して考慮する)。 */
+  companyPlaybook?: string | null;
   meetings: NextStepMeeting[];
 }): { system: string; prompt: string } {
   const history = args.meetings
@@ -43,10 +45,18 @@ export function buildSalesNextStepPrompt(args: {
     )
     .join("\n\n");
 
-  const prompt = `# 営業プレイブック
+  const companyPlaybook = (args.companyPlaybook ?? "").trim();
+  const companyBlock = companyPlaybook
+    ? `# この会社向けの方針・AIへの指示(全社プレイブックより優先して考慮)
+${companyPlaybook}
+
+`
+    : "";
+
+  const prompt = `# 営業プレイブック(全社共通)
 ${SALES_PLAYBOOK}
 
-# この商談
+${companyBlock}# この商談
 会社:${args.companyName}
 現在のステージ:${args.stageLabel} … ${args.stageDescription}
 

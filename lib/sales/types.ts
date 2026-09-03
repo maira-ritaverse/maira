@@ -114,6 +114,7 @@ export type SalesProspectRow = {
   stage: SalesStage;
   owner_user_id: string | null;
   notes: string | null;
+  ai_playbook: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -149,6 +150,8 @@ export type SalesProspect = {
   stage: SalesStage;
   ownerUserId: string | null;
   notes: string | null;
+  /** この会社向けの営業方針・AIへの指示(AI議事録/次アクション提案の前提に反映)。 */
+  aiPlaybook: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -188,6 +191,7 @@ export const createProspectSchema = z.object({
   contact_email: emailOrEmpty.optional().nullable(),
   stage: z.enum(SALES_STAGE_KEYS).optional(),
   notes: z.string().max(8000).optional().nullable(),
+  ai_playbook: z.string().max(8000).optional().nullable(),
 });
 export type CreateProspectInput = z.infer<typeof createProspectSchema>;
 
@@ -197,5 +201,6 @@ export const updateProspectSchema = z.object({
   contact_email: emailOrEmpty.nullable().optional(),
   stage: z.enum(SALES_STAGE_KEYS).optional(),
   notes: z.string().max(8000).nullable().optional(),
+  ai_playbook: z.string().max(8000).nullable().optional(),
 });
 export type UpdateProspectInput = z.infer<typeof updateProspectSchema>;

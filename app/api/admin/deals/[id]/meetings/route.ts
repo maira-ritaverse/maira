@@ -69,9 +69,12 @@ function normStage(v: unknown): SalesStage | null {
     : null;
 }
 
-/** 文字起こし / 貼り付けテキストから議事録を生成する。 */
-async function generateMinutes(sourceText: string): Promise<string> {
-  const { system, prompt } = buildSalesMinutesPrompt(sourceText.slice(0, 60000));
+/** 文字起こし / 貼り付けテキストから議事録を生成する(会社ごとの観点を反映)。 */
+async function generateMinutes(
+  sourceText: string,
+  companyContext?: string | null,
+): Promise<string> {
+  const { system, prompt } = buildSalesMinutesPrompt(sourceText.slice(0, 60000), companyContext);
   const res = await generateText({
     model: getModel(MODELS.CONVERSATION),
     system,
@@ -140,7 +143,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "create_failed", message: ins.error }, { status: 500 });
     }
     try {
-      const minutes = await generateMinutes(text);
+      const minutes = await generateMinutes(text, prospect.aiPlaybook);
       await saveMeetingResult(ins.id, {
         transcript: text,
         minutes,
@@ -250,7 +253,7 @@ export async function POST(request: Request, { params }: RouteParams) {
         statusMessage: "音声から文字を検出できませんでした(無音の可能性)",
       });
     } else {
-      const minutes = await generateMinutes(tr.text);
+      const minutes = await generateMinutes(tr.text, prospect.aiPlaybook);
       await saveMeetingResult(meetingId, {
         transcript: tr.text,
         minutes,

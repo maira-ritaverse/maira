@@ -30,6 +30,7 @@ function rowToProspect(r: SalesProspectRow): SalesProspect {
     stage: r.stage,
     ownerUserId: r.owner_user_id,
     notes: r.notes,
+    aiPlaybook: r.ai_playbook,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -70,6 +71,7 @@ export async function createProspect(
       stage: input.stage ?? "lead",
       owner_user_id: ownerUserId,
       notes: input.notes ?? null,
+      ai_playbook: input.ai_playbook ?? null,
     })
     .select("*")
     .single();
@@ -88,6 +90,7 @@ export async function updateProspect(
     patch.contact_email = input.contact_email ? input.contact_email : null;
   if (input.stage !== undefined) patch.stage = input.stage;
   if (input.notes !== undefined) patch.notes = input.notes;
+  if (input.ai_playbook !== undefined) patch.ai_playbook = input.ai_playbook;
   if (Object.keys(patch).length === 0) return { ok: true };
 
   const service = createServiceClient();

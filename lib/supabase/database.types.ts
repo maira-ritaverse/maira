@@ -5906,6 +5906,7 @@ export type Database = {
       };
       sales_prospects: {
         Row: {
+          ai_playbook: string | null;
           company_name: string;
           contact_email: string | null;
           contact_name: string | null;
@@ -5917,6 +5918,7 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          ai_playbook?: string | null;
           company_name: string;
           contact_email?: string | null;
           contact_name?: string | null;
@@ -5928,6 +5930,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          ai_playbook?: string | null;
           company_name?: string;
           contact_email?: string | null;
           contact_name?: string | null;

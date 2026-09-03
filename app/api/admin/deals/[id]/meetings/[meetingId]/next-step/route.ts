@@ -39,6 +39,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
     companyName: prospect.companyName,
     stageLabel: stageDef?.label ?? prospect.stage,
     stageDescription: stageDef?.description ?? "",
+    companyPlaybook: prospect.aiPlaybook,
     meetings: meetings.map((m) => ({
       meetingNo: m.meetingNo,
       stageLabel: m.stage ? (SALES_STAGES.find((s) => s.key === m.stage)?.label ?? null) : null,

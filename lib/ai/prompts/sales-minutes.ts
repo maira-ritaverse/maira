@@ -21,8 +21,13 @@ const SYSTEM = `あなたは営業ミーティングの議事録作成アシス�
 2. 箇条書き中心で簡潔に。固有名詞・数字・日付は正確に拾う。
 3. 出力は議事録の本文のみ。前置き・解説・コードブロック・マークダウンの見出し記号(#)は使わない。`;
 
-export function buildSalesMinutesPrompt(sourceText: string): { system: string; prompt: string } {
-  const prompt = `以下の内容から営業ミーティングの議事録を作成してください。
+export function buildSalesMinutesPrompt(
+  sourceText: string,
+  companyContext?: string | null,
+): { system: string; prompt: string } {
+  const ctx = (companyContext ?? "").trim();
+  const ctxBlock = ctx ? `# この会社について特に注目してほしい観点\n${ctx}\n\n` : "";
+  const prompt = `${ctxBlock}以下の内容から営業ミーティングの議事録を作成してください。
 
 ---
 ${sourceText}

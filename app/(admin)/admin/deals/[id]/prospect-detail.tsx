@@ -39,6 +39,7 @@ export function ProspectDetail({
   const [contactName, setContactName] = useState(prospect.contactName ?? "");
   const [contactEmail, setContactEmail] = useState(prospect.contactEmail ?? "");
   const [notes, setNotes] = useState(prospect.notes ?? "");
+  const [aiPlaybook, setAiPlaybook] = useState(prospect.aiPlaybook ?? "");
   const [editing, setEditing] = useState(false);
   const [savedNote, setSavedNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -239,6 +240,30 @@ export function ProspectDetail({
               disabled={busy}
             >
               メモを保存
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-1 border-t pt-3">
+          <Label className="text-xs">この会社向けの営業方針・AIへの指示(任意)</Label>
+          <p className="text-muted-foreground text-[11px]">
+            ここに書いた内容を、AIの議事録と次アクション提案の前提にします(全社の営業プレイブックに上乗せ)。
+          </p>
+          <Textarea
+            value={aiPlaybook}
+            onChange={(e) => setAiPlaybook(e.target.value)}
+            rows={3}
+            maxLength={8000}
+            placeholder="例:決裁者が別にいるので同席を促す / 価格に敏感なので先に ROI を示す / 競合◯◯を検討中"
+          />
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void patch({ ai_playbook: aiPlaybook }, "営業方針を保存しました")}
+              disabled={busy}
+            >
+              営業方針を保存
             </Button>
           </div>
         </div>
