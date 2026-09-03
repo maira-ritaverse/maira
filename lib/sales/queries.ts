@@ -176,6 +176,8 @@ export async function nextMeetingNo(prospectId: string): Promise<number> {
 }
 
 export type InsertMeetingParams = {
+  /** 事前に採番する場合の id(音声パスを id 基準にするため)。未指定なら DB 側で採番。 */
+  id?: string;
   prospectId: string;
   meetingNo: number;
   stage?: SalesStage | null;
@@ -197,6 +199,7 @@ export async function insertMeeting(
   const { data, error } = await service
     .from("sales_meetings")
     .insert({
+      ...(params.id ? { id: params.id } : {}),
       prospect_id: params.prospectId,
       meeting_no: params.meetingNo,
       stage: params.stage ?? null,

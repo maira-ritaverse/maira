@@ -18,6 +18,7 @@ import {
 } from "@/lib/sales/types";
 
 import { stageBadgeClass } from "../deals-client";
+import { MeetingAdd } from "./meeting-add";
 
 const fmtDate = (iso: string | null) => {
   if (!iso) return "—";
@@ -42,7 +43,45 @@ export function ProspectDetail({
   const [savedNote, setSavedNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [meetings] = useState<SalesMeeting[]>(initialMeetings);
+  const [meetings, setMeetings] = useState<SalesMeeting[]>(initialMeetings);
+  const [adviceBusyId, setAdviceBusyId] = useState<string | null>(null);
+
+  const generateAdvice = async (meetingId: string) => {
+    setAdviceBusyId(meetingId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/deals/${prospect.id}/meetings/${meetingId}/next-step`, {
+        method: "POST",
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        advice?: string;
+        message?: string;
+        error?: string;
+      };
+      if (!res.ok || !json.advice)
+        throw new Error(json.message ?? json.error ?? "生成に失敗しました");
+      setMeetings((prev) =>
+        prev.map((m) => (m.id === meetingId ? { ...m, advice: json.advice! } : m)),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "AI 提案の生成に失敗しました");
+    } finally {
+      setAdviceBusyId(null);
+    }
+  };
+
+  const deleteMeeting = async (meetingId: string) => {
+    if (!confirm("このミーティング(録音・議事録)を削除しますか?")) return;
+    try {
+      const res = await fetch(`/api/admin/deals/${prospect.id}/meetings/${meetingId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setMeetings((prev) => prev.filter((m) => m.id !== meetingId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "削除に失敗しました");
+    }
+  };
 
   const patch = async (body: Record<string, unknown>, note: string) => {
     setBusy(true);
@@ -205,13 +244,19 @@ export function ProspectDetail({
         </div>
       </Card>
 
-      {/* ミーティング(録音→議事録→AIアドバイス。Phase 3 で取り込み UI を追加) */}
+      {/* ミーティング(録音→議事録→AI次アクション) */}
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold">ミーティング</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">ミーティング</h2>
+          <MeetingAdd
+            prospectId={prospect.id}
+            onAdded={(m) => setMeetings((prev) => [m, ...prev])}
+          />
+        </div>
         {meetings.length === 0 ? (
           <Card className="text-muted-foreground p-6 text-sm">
-            まだミーティングがありません。録音の取り込み(→ 自動議事録 →
-            AI次アクション)は次のフェーズで追加します。
+            まだミーティングがありません。「+ ミーティングを追加」から録音をアップロード(または
+            テキストを貼り付け)すると、自動で議事録が作られます。
           </Card>
         ) : (
           <ul className="space-y-3">
@@ -231,18 +276,50 @@ export function ProspectDetail({
                       {fmtDate(m.meetingDate ?? m.createdAt)}
                     </span>
                   </div>
+
+                  {m.status === "failed" && (
+                    <p className="text-destructive text-xs">
+                      処理に失敗しました{m.statusMessage ? `:${m.statusMessage}` : ""}
+                    </p>
+                  )}
+
                   {m.minutes && (
                     <div>
                       <p className="text-muted-foreground text-xs font-semibold">議事録</p>
                       <p className="text-sm whitespace-pre-wrap">{m.minutes}</p>
                     </div>
                   )}
-                  {m.advice && (
+
+                  {m.advice ? (
                     <div className="rounded-md bg-amber-50 p-3">
                       <p className="text-xs font-semibold text-amber-800">AI 次アクション</p>
                       <p className="text-sm whitespace-pre-wrap">{m.advice}</p>
                     </div>
-                  )}
+                  ) : null}
+
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void generateAdvice(m.id)}
+                      disabled={adviceBusyId === m.id || !m.minutes}
+                      title={m.minutes ? undefined : "議事録が無いため提案できません"}
+                    >
+                      {adviceBusyId === m.id
+                        ? "生成中…"
+                        : m.advice
+                          ? "AI提案を再生成"
+                          : "AIに次アクションを聞く"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => void deleteMeeting(m.id)}
+                      className="text-red-600"
+                    >
+                      削除
+                    </Button>
+                  </div>
                 </Card>
               </li>
             ))}
