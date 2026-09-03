@@ -4,7 +4,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17";
+    PostgrestVersion: "14.5";
   };
   public: {
     Tables: {
@@ -5827,6 +5827,116 @@ export type Database = {
           phone?: string | null;
           role?: string | null;
           user_agent?: string | null;
+        };
+        Relationships: [];
+      };
+      sales_meetings: {
+        Row: {
+          created_at: string;
+          duration_seconds: number | null;
+          encrypted_advice: string | null;
+          encrypted_minutes: string | null;
+          encrypted_transcript: string | null;
+          id: string;
+          meeting_date: string | null;
+          meeting_no: number;
+          model: string | null;
+          original_filename: string | null;
+          prospect_id: string;
+          size_bytes: number | null;
+          source: string;
+          stage: string | null;
+          status: string;
+          status_message: string | null;
+          storage_path: string | null;
+          title: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          duration_seconds?: number | null;
+          encrypted_advice?: string | null;
+          encrypted_minutes?: string | null;
+          encrypted_transcript?: string | null;
+          id?: string;
+          meeting_date?: string | null;
+          meeting_no?: number;
+          model?: string | null;
+          original_filename?: string | null;
+          prospect_id: string;
+          size_bytes?: number | null;
+          source?: string;
+          stage?: string | null;
+          status?: string;
+          status_message?: string | null;
+          storage_path?: string | null;
+          title?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          duration_seconds?: number | null;
+          encrypted_advice?: string | null;
+          encrypted_minutes?: string | null;
+          encrypted_transcript?: string | null;
+          id?: string;
+          meeting_date?: string | null;
+          meeting_no?: number;
+          model?: string | null;
+          original_filename?: string | null;
+          prospect_id?: string;
+          size_bytes?: number | null;
+          source?: string;
+          stage?: string | null;
+          status?: string;
+          status_message?: string | null;
+          storage_path?: string | null;
+          title?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "sales_meetings_prospect_id_fkey";
+            columns: ["prospect_id"];
+            isOneToOne: false;
+            referencedRelation: "sales_prospects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      sales_prospects: {
+        Row: {
+          company_name: string;
+          contact_email: string | null;
+          contact_name: string | null;
+          created_at: string;
+          id: string;
+          notes: string | null;
+          owner_user_id: string | null;
+          stage: string;
+          updated_at: string;
+        };
+        Insert: {
+          company_name: string;
+          contact_email?: string | null;
+          contact_name?: string | null;
+          created_at?: string;
+          id?: string;
+          notes?: string | null;
+          owner_user_id?: string | null;
+          stage?: string;
+          updated_at?: string;
+        };
+        Update: {
+          company_name?: string;
+          contact_email?: string | null;
+          contact_name?: string | null;
+          created_at?: string;
+          id?: string;
+          notes?: string | null;
+          owner_user_id?: string | null;
+          stage?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };
