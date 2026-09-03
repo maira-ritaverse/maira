@@ -28,6 +28,8 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const MAX_BYTES = 25 * 1024 * 1024;
+const MAX_TEXT_CHARS = 100_000;
+const MAX_TITLE_CHARS = 200;
 const ALLOWED_MIME = new Set([
   "audio/mpeg",
   "audio/mp3",
@@ -42,6 +44,22 @@ const ALLOWED_MIME = new Set([
   "video/webm",
   "video/quicktime",
 ]);
+
+/**
+ * 拡張子 → MIME(bucket の allowed_mime_types に含まれる値)。
+ * Safari の MOV 等で file.type が空のとき、拡張子から contentType を決めるために使う
+ * (bucket に application/octet-stream が無く、空だとアップロードが弾かれるため)。
+ */
+const EXT_TO_MIME: Record<string, string> = {
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  webm: "audio/webm",
+  m4a: "audio/mp4",
+  mp4: "video/mp4",
+  ogg: "audio/ogg",
+  flac: "audio/flac",
+  mov: "video/quicktime",
+};
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -102,12 +120,18 @@ export async function POST(request: Request, { params }: RouteParams) {
     if (text.length === 0) {
       return NextResponse.json({ error: "text_required" }, { status: 400 });
     }
+    if (text.length > MAX_TEXT_CHARS) {
+      return NextResponse.json(
+        { error: "too_long", message: `テキストが長すぎます(最大 ${MAX_TEXT_CHARS} 文字)` },
+        { status: 413 },
+      );
+    }
 
     const ins = await insertMeeting({
       prospectId,
       meetingNo,
       source: "text",
-      title: body.title ?? null,
+      title: body.title ? body.title.slice(0, MAX_TITLE_CHARS) : null,
       meetingDate: body.meeting_date ?? null,
       stage: normStage(body.stage),
       status: "processing",
@@ -154,29 +178,33 @@ export async function POST(request: Request, { params }: RouteParams) {
       { status: 413 },
     );
   }
-  if (file.type && !ALLOWED_MIME.has(file.type)) {
-    return NextResponse.json(
-      { error: "unsupported", message: `非対応の形式です(${file.type})` },
-      { status: 415 },
-    );
-  }
   const filename = (form.get("filename") as string | null) ?? `meeting-${Date.now()}`;
-  const title = (form.get("title") as string | null) ?? null;
+  const rawTitle = (form.get("title") as string | null) ?? null;
+  const title = rawTitle ? rawTitle.slice(0, MAX_TITLE_CHARS) : null;
   const meetingDate = (form.get("meeting_date") as string | null) ?? null;
   const stage = normStage(form.get("stage"));
 
+  // 拡張子は英数字のみに正規化(パスに / 等が混ざらないように)
+  const rawExt = filename.includes(".") ? filename.split(".").pop()!.toLowerCase() : "";
+  const ext = /^[a-z0-9]+$/.test(rawExt) ? rawExt : "bin";
+  // contentType:file.type が空(Safari の MOV 等)のときは拡張子から決める。bucket の
+  // allowed_mime_types に無い値(application/octet-stream 等)は弾かれるため。
+  const uploadContentType = file.type || EXT_TO_MIME[ext] || "";
+  if (!uploadContentType || !ALLOWED_MIME.has(uploadContentType)) {
+    return NextResponse.json(
+      { error: "unsupported", message: `非対応の形式です(${file.type || ext})` },
+      { status: 415 },
+    );
+  }
+
   const meetingId = crypto.randomUUID();
-  const ext = filename.includes(".") ? filename.split(".").pop()!.toLowerCase() : "bin";
   const storagePath = `${prospectId}/${meetingId}.${ext}`;
 
   // Storage へアップロード(service_role。バケットは is_maira_admin 限定)
   const service = createServiceClient();
   const { error: upErr } = await service.storage
     .from("sales-meeting-audio")
-    .upload(storagePath, file, {
-      contentType: file.type || "application/octet-stream",
-      upsert: false,
-    });
+    .upload(storagePath, file, { contentType: uploadContentType, upsert: false });
   if (upErr) {
     return NextResponse.json({ error: "upload_failed", message: upErr.message }, { status: 500 });
   }
@@ -195,6 +223,8 @@ export async function POST(request: Request, { params }: RouteParams) {
     status: "processing",
   });
   if ("error" in ins) {
+    // 行の作成に失敗したら、アップロード済みの音声を削除(孤立ファイル防止)
+    await service.storage.from("sales-meeting-audio").remove([storagePath]);
     return NextResponse.json({ error: "create_failed", message: ins.error }, { status: 500 });
   }
 
@@ -213,6 +243,11 @@ export async function POST(request: Request, { params }: RouteParams) {
           tr.reason === "not_configured"
             ? "文字起こしAPIが未設定です(OPENAI_API_KEY)"
             : `文字起こしに失敗しました${tr.error ? `: ${tr.error}` : ""}`,
+      });
+    } else if (tr.text.trim().length === 0) {
+      await saveMeetingResult(meetingId, {
+        status: "failed",
+        statusMessage: "音声から文字を検出できませんでした(無音の可能性)",
       });
     } else {
       const minutes = await generateMinutes(tr.text);

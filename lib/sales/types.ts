@@ -199,10 +199,3 @@ export const updateProspectSchema = z.object({
   notes: z.string().max(8000).nullable().optional(),
 });
 export type UpdateProspectInput = z.infer<typeof updateProspectSchema>;
-
-/** ミーティングのメタ情報(録音アップロード時は multipart、テキスト時は JSON で受ける)。 */
-export const meetingMetaSchema = z.object({
-  title: z.string().max(200).optional().nullable(),
-  meeting_date: z.string().max(20).optional().nullable(),
-  stage: z.enum(SALES_STAGE_KEYS).optional().nullable(),
-});

@@ -29,7 +29,8 @@ export async function POST(_request: Request, { params }: RouteParams) {
     getMeeting(meetingId),
     listMeetings(prospectId),
   ]);
-  if (!prospect || !targetMeeting) {
+  // meetingId が URL の商談に属することを確認(取り違え防止)
+  if (!prospect || !targetMeeting || targetMeeting.prospectId !== prospectId) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
